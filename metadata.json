@@ -1,0 +1,5 @@
+{
+  "name": "FertCalc Pro",
+  "description": "Calculadora de preço de venda de fertilizantes com gestão de matérias-primas, histórico de precificação e relatórios gerenciais personalizáveis.",
+  "requestFramePermissions": []
+}
