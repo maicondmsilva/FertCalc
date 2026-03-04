@@ -298,7 +298,7 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                   </span>
                 </div>
                 <div className="mt-2 space-y-1">
-                  {pricing.calculations?.map((calc, idx) => (
+                  {p.calculations?.map((calc, idx) => (
                     <div key={idx} className="flex justify-between items-center bg-stone-50 px-2 py-1 rounded text-[10px] border border-stone-100">
                       <span className="font-bold text-stone-600">{calc.formula}</span>
                       <span className="text-emerald-600 font-mono">R$ {calc.summary?.finalPrice.toFixed(2)}</span>
