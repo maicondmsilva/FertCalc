@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Lock, Mail, Leaf } from 'lucide-react';
 import { User } from '../types';
-import { getUserByEmail } from '../services/db';
+import { getUserByEmail, requestPasswordReset } from '../services/db';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -10,6 +10,10 @@ interface LoginProps {
 export default function Login({ onLogin }: LoginProps) {
   const [view, setView] = useState<'login' | 'forgot'>('login');
   const [resetMessage, setResetMessage] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

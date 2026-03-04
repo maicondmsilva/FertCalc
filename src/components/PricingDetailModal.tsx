@@ -24,7 +24,7 @@ interface PricingDetailModalProps {
 
 export default function PricingDetailModal({
   selectedPricing, currentUser, onClose, onEdit, onDelete,
-  onUpdateStatus, onUpdateApproval, onSaveObservation,
+  onUpdateStatus, onUpdateApproval, onSaveObservation, onTransferSuccess,
   appSettings = { companyName: 'FertCalc Pro', companyLogo: '' }
 }: PricingDetailModalProps) {
   const { showSuccess, showError } = useToast();
