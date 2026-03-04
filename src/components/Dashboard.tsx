@@ -22,13 +22,13 @@ export default function Dashboard({ currentUser }: DashboardProps) {
   }, [currentUser]);
 
   const stats = {
-    totalValue: pricings.filter(p => p.status === 'Fechada').reduce((sum, p) => sum + (p.summary.totalSaleValue || 0), 0),
-    totalValueInProgress: pricings.filter(p => p.status === 'Em Andamento').reduce((sum, p) => sum + (p.summary.totalSaleValue || 0), 0),
+    totalValue: pricings.filter(p => p.status === 'Fechada').reduce((sum, p) => sum + (p.summary?.totalSaleValue || 0), 0),
+    totalValueInProgress: pricings.filter(p => p.status === 'Em Andamento').reduce((sum, p) => sum + (p.summary?.totalSaleValue || 0), 0),
     count: pricings.length,
     closedCount: pricings.filter(p => p.status === 'Fechada').length,
     inProgressCount: pricings.filter(p => p.status === 'Em Andamento').length,
     lostCount: pricings.filter(p => p.status === 'Perdida').length,
-    avgMargin: pricings.length > 0 ? pricings.reduce((sum, p) => sum + (p.factors.margin - p.factors.discount), 0) / pricings.length : 0
+    avgMargin: pricings.length > 0 ? pricings.reduce((sum, p) => sum + ((p.factors?.margin || 0) - (p.factors?.discount || 0)), 0) / pricings.length : 0
   };
 
   const currentMonth = new Date().getMonth() + 1;
@@ -69,7 +69,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
         const d = new Date(p.date);
         return p.status === 'Fechada' && (d.getMonth() + 1) === m.monthNum && d.getFullYear() === m.year;
       })
-      .reduce((sum, p) => sum + (p.summary.totalSaleValue || 0), 0);
+      .reduce((sum, p) => sum + (p.summary?.totalSaleValue || 0), 0);
   });
 
   return (
@@ -261,8 +261,8 @@ export default function Dashboard({ currentUser }: DashboardProps) {
                       p.status === 'Perdida' ? 'bg-red-500' : 'bg-blue-500'
                       }`} />
                     <div>
-                      <p className="text-xs font-bold">{p.factors.client.name}</p>
-                      <p className="text-[10px] text-stone-500">#{p.id} • {new Date(p.date).toLocaleDateString('pt-BR')}</p>
+                      <p className="text-xs font-bold">{p.factors?.client?.name || 'Cliente não identificado'}</p>
+                      <p className="text-[10px] text-stone-500">#{p.id.slice(0, 8)} • {new Date(p.date).toLocaleDateString('pt-BR')}</p>
                     </div>
                   </div>
                 ))}

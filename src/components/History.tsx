@@ -30,7 +30,7 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
     if (currentUser.role === 'master' || currentUser.role === 'admin' || currentUser.role === 'manager') {
       setPricings(data);
     } else {
-      setPricings(data.filter((p: PricingRecord) => p.userId === currentUser.id));
+      setPricings(data.filter((p: PricingRecord) => p.userId === currentUser.id || p.transferToUserId === currentUser.id));
     }
     if (savedSettings?.companyName) setAppSettings(savedSettings);
     setLoading(false);
@@ -89,7 +89,7 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
       p.factors?.client?.name || 'N/A',
       p.status,
       p.factors?.targetFormula || '---',
-      `R$ ${p.summary?.finalPrice?.toFixed(2) || '0.00'} `
+      `R$ ${p.summary?.finalPrice?.toFixed(2) || '0.00'}`
     ]);
 
     autoTable(doc, {
@@ -100,7 +100,7 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
       headStyles: { fillColor: [41, 37, 36] }
     });
 
-    const totalValue = filteredPricings.filter(p => p.status === 'Fechada').reduce((sum, p) => sum + p.summary.finalPrice, 0);
+    const totalValue = filteredPricings.filter(p => p.status === 'Fechada').reduce((sum, p) => sum + (p.summary?.finalPrice || 0), 0);
     const finalY = (doc as any).lastAutoTable.finalY + 10;
 
     doc.setFontSize(12);
@@ -247,49 +247,54 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredPricings.map(pricing => (
-          <div key={pricing.id} id={`pricing-card-${pricing.id}`} className="bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden hover:shadow-md transition-shadow cursor-pointer" onClick={() => setSelectedPricing(pricing)}>
+        {filteredPricings.map(p => (
+          <div key={p.id} id={`pricing-card-${p.id}`} className="bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden hover:shadow-md transition-shadow cursor-pointer relative" onClick={() => setSelectedPricing(p)}>
+            {p.transferToUserId && (
+              <div className="absolute top-0 right-0 bg-amber-500 text-white text-[10px] font-black px-3 py-1 uppercase tracking-tighter rounded-bl-lg shadow-sm z-10 animate-pulse">
+                {p.transferToUserId === currentUser.id ? 'PENDENTE ACEITE' : 'TRANSFERÊNCIA ENVIADA'}
+              </div>
+            )}
             <div className="p-5 border-b border-stone-100">
               <div className="flex justify-between items-start mb-2">
                 <div className="flex-1">
                   <h3 className="font-bold text-lg text-stone-800 flex items-center flex-wrap gap-1">
                     <User className="w-4 h-4 text-stone-400" />
-                    <span className="text-emerald-600 font-mono text-sm mr-1">#{pricing.factors.client.code}</span>
-                    {pricing.factors.client.name}
+                    <span className="text-emerald-600 font-mono text-sm mr-1">#{p.factors?.client?.code || '---'}</span>
+                    {p.factors?.client?.name || 'Cliente não identificado'}
                   </h3>
                   <div className="mt-1 space-y-0.5">
-                    <p className="text-[10px] font-bold text-stone-400 uppercase">IE: {pricing.factors.client.stateRegistration || '---'}</p>
-                    <p className="text-[10px] font-bold text-emerald-600 uppercase">Precificação: #{(pricing as any).cod || pricing.id.slice(0, 8)}</p>
+                    <p className="text-[10px] font-bold text-stone-400 uppercase">IE: {p.factors?.client?.stateRegistration || '---'}</p>
+                    <p className="text-[10px] font-bold text-emerald-600 uppercase">Precificação: {p.formattedCod}</p>
                   </div>
                 </div>
-                <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(pricing.status)}`}>
-                  {pricing.status}
+                <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(p.status)}`}>
+                  {p.status}
                 </span>
               </div>
               <div className="space-y-2 text-sm text-stone-600 mt-4">
                 <div className="flex items-center">
                   <Calendar className="w-4 h-4 mr-2 text-stone-400" />
-                  Geração: {new Date(pricing.date).toLocaleDateString('pt-BR')}
+                  Geração: {new Date(p.date).toLocaleDateString('pt-BR')}
                 </div>
                 <div className="flex items-center">
                   <Calendar className="w-4 h-4 mr-2 text-emerald-500" />
-                  Vencimento: <span className="ml-1 font-medium">{pricing.factors.dueDate ? new Date(pricing.factors.dueDate).toLocaleDateString('pt-BR') : '---'}</span>
+                  Vencimento: <span className="ml-1 font-medium">{p.factors?.dueDate ? new Date(p.factors.dueDate).toLocaleDateString('pt-BR') : '---'}</span>
                 </div>
                 <div className="flex items-center">
                   <Truck className="w-4 h-4 mr-2 text-stone-400" />
-                  Frete: <span className="ml-1 font-medium">{pricing.factors.freight > 0 ? `CIF (R$ ${pricing.factors.freight.toFixed(2)})` : 'FOB'}</span>
+                  Frete: <span className="ml-1 font-medium">{(p.factors?.freight || 0) > 0 ? `CIF (R$ ${p.factors?.freight?.toFixed(2)})` : 'FOB'}</span>
                 </div>
                 <div className="flex items-center">
                   <Tag className="w-4 h-4 mr-2 text-stone-400" />
-                  Aprovação: <span className={`ml-1 font-bold ${pricing.approvalStatus === 'Aprovada' ? 'text-emerald-600' :
-                    pricing.approvalStatus === 'Reprovada' ? 'text-red-600' :
+                  Aprovação: <span className={`ml-1 font-bold ${p.approvalStatus === 'Aprovada' ? 'text-emerald-600' :
+                    p.approvalStatus === 'Reprovada' ? 'text-red-600' :
                       'text-amber-600'
-                    }`}>{pricing.approvalStatus || 'Pendente'}</span>
+                    }`}>{p.approvalStatus || 'Pendente'}</span>
                 </div>
                 <div className="flex items-center">
                   <Tag className="w-4 h-4 mr-2 text-stone-400" />
                   Fórmulas: <span className="ml-1 font-bold text-emerald-600">
-                    {pricing.calculations?.length || 0} precificadas
+                    {p.calculations?.length || 0} precificadas
                   </span>
                 </div>
                 <div className="mt-2 space-y-1">
@@ -300,28 +305,28 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                     </div>
                   ))}
                 </div>
-                {pricing.factors.commercialObservation && (
+                {p.factors?.commercialObservation && (
                   <div className="flex items-start mt-2 p-2 bg-stone-50 rounded border border-stone-100 italic text-stone-500 text-[10px] line-clamp-2">
                     <Info className="w-3 h-3 mr-1 mt-0.5 flex-shrink-0" />
-                    {pricing.factors.commercialObservation}
+                    {p.factors.commercialObservation}
                   </div>
                 )}
               </div>
             </div>
             <div className="bg-stone-50 p-5 flex justify-between items-center">
               <div>
-                <p className="text-xs text-stone-500 font-medium uppercase tracking-wider mb-1">Venda Total ({pricing.factors.totalTons || 0}t)</p>
+                <p className="text-xs text-stone-500 font-medium uppercase tracking-wider mb-1">Venda Total ({p.factors?.totalTons || 0}t)</p>
                 <p className="text-xl font-bold text-emerald-600">
-                  R$ {(Number(pricing.summary.totalSaleValue) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  R$ {(Number(p.summary?.totalSaleValue) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
-                <p className="text-[10px] text-stone-400">R$ {Number(pricing.summary.finalPrice).toFixed(2) || '0.00'} / ton</p>
+                <p className="text-[10px] text-stone-400">R$ {Number(p.summary?.finalPrice || 0).toFixed(2)} / ton</p>
               </div>
               <div className="flex items-center gap-2">
-                {pricing.status === 'Em Andamento' && (currentUser.permissions as any)?.history_editPricing !== false && (
+                {p.status === 'Em Andamento' && (currentUser.permissions as any)?.history_editPricing !== false && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (onEdit) onEdit(pricing);
+                      if (onEdit) onEdit(p);
                     }}
                     className="p-2.5 hover:bg-blue-100 text-blue-600 rounded-full transition-all active:scale-95 bg-blue-50/50"
                     title="Editar"
@@ -332,8 +337,8 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    console.log('Deleting pricing:', pricing.id);
-                    deletePricing(pricing.id);
+                    console.log('Deleting pricing:', p.id);
+                    deletePricing(p.id);
                   }}
                   className="p-2.5 hover:bg-red-100 text-red-600 rounded-full transition-all active:scale-95 bg-red-50/50"
                   title="Excluir"
@@ -365,7 +370,8 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
           onDelete={deletePricing}
           onUpdateStatus={updateStatus}
           onUpdateApproval={updateApprovalStatus}
-          onSaveObservation={refreshPricings}
+          onSaveObservation={loadData}
+          onTransferSuccess={loadData}
           appSettings={appSettings}
         />
       )}

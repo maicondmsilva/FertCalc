@@ -301,15 +301,11 @@ export default function App() {
                 <div key={item.id}>
                   <button
                     onClick={() => {
-                      // Determine which expander to toggle based on item id
                       if (item.id === 'materials_group') {
                         setIsMaterialsExpanded(!isMaterialsExpanded);
-                        // Do NOT navigate — just expand the sub-menu
                       } else {
                         setIsReportsExpanded(!isReportsExpanded);
-                        // Also do NOT navigate for report group
                       }
-                      setIsMobileMenuOpen(false);
                     }}
                     className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-colors ${(item.id === 'materials_group' ? isMaterialsExpanded : isReportsExpanded) ? 'bg-emerald-50 text-emerald-700 font-medium' : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900'}`}
                     title={!isSidebarExpanded ? item.label : undefined}
@@ -322,34 +318,36 @@ export default function App() {
                       <ChevronDown className={`w-4 h-4 ml-auto transition-transform ${(item.id === 'materials_group' ? isMaterialsExpanded : isReportsExpanded) ? 'rotate-180' : ''}`} />
                     )}
                   </button>
-                  {(item.id === 'materials_group' ? isMaterialsExpanded : isReportsExpanded) && isSidebarExpanded && (
-                    <div className="ml-6 mt-1 space-y-1">
-                      {item.children?.filter(child => {
-                        if (currentUser.role === 'master' || currentUser.role === 'admin') return true;
-                        return (currentUser.permissions as any)?.[child.permission];
-                      }).map(child => {
-                        const ChildIcon = child.icon;
-                        const isChildActive = activeTab === child.id;
-                        return (
-                          <button
-                            key={child.id}
-                            onClick={() => {
-                              setActiveTab(child.id as any);
-                              setInitialFormulaContext({ formula: null, branchId: '', priceListId: '' });
-                              setIsMobileMenuOpen(false);
-                            }}
-                            className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-colors ${isChildActive ? 'bg-emerald-50 text-emerald-700 font-medium' : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900'}`}
-                            title={!isSidebarExpanded ? child.label : undefined}
-                          >
-                            <ChildIcon className={`w-5 h-5 flex-shrink-0 ${isChildActive ? 'text-emerald-600' : 'text-stone-400'}`} />
-                            {isSidebarExpanded && (
-                              <span className="ml-3 truncate">{child.label}</span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
+                  {
+                    (item.id === 'materials_group' ? isMaterialsExpanded : isReportsExpanded) && isSidebarExpanded && (
+                      <div className="ml-6 mt-1 space-y-1">
+                        {item.children?.filter(child => {
+                          if (currentUser.role === 'master' || currentUser.role === 'admin') return true;
+                          return (currentUser.permissions as any)?.[child.permission];
+                        }).map(child => {
+                          const ChildIcon = child.icon;
+                          const isChildActive = activeTab === child.id;
+                          return (
+                            <button
+                              key={child.id}
+                              onClick={() => {
+                                setActiveTab(child.id as any);
+                                setInitialFormulaContext({ formula: null, branchId: '', priceListId: '' });
+                                setIsMobileMenuOpen(false);
+                              }}
+                              className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-colors ${isChildActive ? 'bg-emerald-50 text-emerald-700 font-medium' : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900'}`}
+                              title={!isSidebarExpanded ? child.label : undefined}
+                            >
+                              <ChildIcon className={`w-5 h-5 flex-shrink-0 ${isChildActive ? 'text-emerald-600' : 'text-stone-400'}`} />
+                              {isSidebarExpanded && (
+                                <span className="ml-3 truncate">{child.label}</span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )
+                  }
                 </div>
               );
             } else {
@@ -501,6 +499,11 @@ export default function App() {
                 initialFormulaToLoad={initialFormulaContext.formula}
                 initialBranchId={initialFormulaContext.branchId}
                 initialPriceListId={initialFormulaContext.priceListId}
+                onSaveSuccess={(record) => {
+                  setEditingPricing(null);
+                  setActiveTab('history');
+                  handleClearEditing();
+                }}
                 onClearEditing={() => {
                   handleClearEditing();
                   setInitialFormulaContext({ formula: null, branchId: '', priceListId: '' });
@@ -540,7 +543,7 @@ export default function App() {
           </div>
         </main>
       </div>
-    </div>
+    </div >
   );
 }
 

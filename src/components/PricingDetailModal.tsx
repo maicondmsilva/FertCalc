@@ -5,8 +5,9 @@ import { generatePricingPDF } from '../utils/pdfGenerator';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { updatePricingRecord } from '../services/db';
+import { updatePricingRecord, getUsers, transferPricingRecord, acceptPricingTransfer } from '../services/db';
 import { useToast } from './Toast';
+import { Send, UserCheck, CheckCircle2 } from 'lucide-react';
 
 interface PricingDetailModalProps {
   selectedPricing: PricingRecord;
@@ -17,6 +18,7 @@ interface PricingDetailModalProps {
   onUpdateStatus?: (id: string, status: 'Em Andamento' | 'Fechada' | 'Perdida') => void;
   onUpdateApproval?: (id: string, status: 'Aprovada' | 'Reprovada') => void;
   onSaveObservation?: () => void;
+  onTransferSuccess?: () => void;
   appSettings?: AppSettings;
 }
 
@@ -26,8 +28,68 @@ export default function PricingDetailModal({
   appSettings = { companyName: 'FertCalc Pro', companyLogo: '' }
 }: PricingDetailModalProps) {
   const { showSuccess, showError } = useToast();
-  const [commercialObservation, setCommercialObservation] = useState(selectedPricing.factors.commercialObservation || '');
+  const [commercialObservation, setCommercialObservation] = useState(selectedPricing.factors?.commercialObservation || '');
   const [showAgentInPDF, setShowAgentInPDF] = useState(true);
+  const [isTransferring, setIsTransferring] = useState(false);
+  const [availableSellers, setAvailableSellers] = useState<User[]>([]);
+  const [selectedSellerId, setSelectedSellerId] = useState('');
+  const [loadingTransfer, setLoadingTransfer] = useState(false);
+
+  React.useEffect(() => {
+    if (isTransferring) {
+      loadSellers();
+    }
+  }, [isTransferring]);
+
+  const loadSellers = async () => {
+    try {
+      const users = await getUsers();
+      // Filter for sellers (role: user or similar, exclude current user)
+      setAvailableSellers(users.filter(u => u.id !== currentUser.id && (u.role === 'user' || u.role === 'manager')));
+    } catch {
+      showError('Erro ao carregar lista de vendedores.');
+    }
+  };
+
+  const handleTransfer = async () => {
+    if (!selectedSellerId) {
+      showError('Selecione um vendedor para transferir.');
+      return;
+    }
+
+    const seller = availableSellers.find(s => s.id === selectedSellerId);
+    if (!seller) return;
+
+    if (!confirm(`Deseja realmente transferir esta precificação para ${seller.name}? Você ainda poderá vê-la até que ele aceite, mas após o aceite ela sairá da sua lista.`)) return;
+
+    setLoadingTransfer(true);
+    try {
+      await transferPricingRecord(selectedPricing.id, seller.id, seller.name, currentUser);
+      showSuccess('Transferência iniciada com sucesso!');
+      setIsTransferring(false);
+      if (onTransferSuccess) onTransferSuccess();
+    } catch (err) {
+      showError('Erro ao processar transferência.');
+    } finally {
+      setLoadingTransfer(false);
+    }
+  };
+
+  const handleAcceptTransfer = async () => {
+    if (!confirm('Deseja aceitar esta precificação ? Ela será movida definitivamente para sua lista.')) return;
+
+    setLoadingTransfer(true);
+    try {
+      await acceptPricingTransfer(selectedPricing.id, currentUser);
+      showSuccess('Precificação aceita com sucesso!');
+      if (onTransferSuccess) onTransferSuccess();
+      onClose();
+    } catch (err) {
+      showError('Erro ao aceitar transferência.');
+    } finally {
+      setLoadingTransfer(false);
+    }
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -62,9 +124,9 @@ export default function PricingDetailModal({
       startY: 40,
       head: [['Item', 'Detalhe']],
       body: [
-        ['Cliente', pricing.factors.client.name],
-        ['Documento', pricing.factors.client.document || 'N/A'],
-        ['Agente', pricing.factors.agent.name],
+        ['Cliente', pricing.factors?.client?.name || 'N/A'],
+        ['Documento', pricing.factors?.client?.document || 'N/A'],
+        ['Agente', pricing.factors?.agent?.name || 'N/A'],
         ['Status', pricing.status],
         ['Aprovação', pricing.approvalStatus || 'Pendente']
       ],
@@ -161,7 +223,7 @@ export default function PricingDetailModal({
     const ws = XLSX.utils.aoa_to_sheet(wsData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Precificação');
-    XLSX.writeFile(wb, `Precificacao_${pricing.factors?.client?.name || 'Sem_Nome'}_${pricing.id}.xlsx`);
+    XLSX.writeFile(wb, `Precificacao_${pricing.factors?.client?.name || 'Sem_Nome'}_${pricing.formattedCod}.xlsx`);
   };
 
   return (
@@ -170,7 +232,7 @@ export default function PricingDetailModal({
         <div className="p-6 border-b border-stone-200 flex justify-between items-center bg-stone-50">
           <div>
             <h2 className="text-2xl font-bold text-stone-800">Detalhes da Precificação</h2>
-            <p className="text-sm text-stone-500">ID: {selectedPricing.id} | Data: {new Date(selectedPricing.date).toLocaleString('pt-BR')}</p>
+            <p className="text-sm text-stone-500">COD: <span className="font-bold text-emerald-600">{selectedPricing.formattedCod}</span> | Data: {new Date(selectedPricing.date).toLocaleString('pt-BR')}</p>
           </div>
           <div className="flex items-center gap-2">
             {selectedPricing.status === 'Em Andamento' && onEdit && (
@@ -196,7 +258,28 @@ export default function PricingDetailModal({
                 className="flex items-center gap-2 px-4 py-2 bg-red-100 text-red-600 font-bold rounded-lg hover:bg-red-200 transition-all active:scale-95"
                 title="Excluir"
               >
-                <Trash2 className="w-4 h-4" /> Excluir
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+
+            {/* Accept Transfer Button */}
+            {selectedPricing.transferToUserId === currentUser.id && (
+              <button
+                onClick={handleAcceptTransfer}
+                disabled={loadingTransfer}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition-all active:scale-95 shadow-lg shadow-emerald-200"
+              >
+                <CheckCircle2 className="w-4 h-4" /> Aceitar Transferência
+              </button>
+            )}
+
+            {/* Transfer Button */}
+            {selectedPricing.userId === currentUser.id && !selectedPricing.transferToUserId && (
+              <button
+                onClick={() => setIsTransferring(!isTransferring)}
+                className={`flex items-center gap-2 px-4 py-2 font-bold rounded-lg transition-all active:scale-95 ${isTransferring ? 'bg-amber-100 text-amber-700' : 'bg-stone-800 text-white hover:bg-stone-900'}`}
+              >
+                <Send className="w-4 h-4" /> Transferir
               </button>
             )}
             <button
@@ -207,6 +290,42 @@ export default function PricingDetailModal({
             </button>
           </div>
         </div>
+
+        {/* Transfer Selection Form */}
+        {isTransferring && (
+          <div className="bg-amber-50 p-6 border-b border-amber-200 animate-in slide-in-from-top-4 duration-300">
+            <div className="max-w-xl mx-auto flex flex-col md:flex-row items-end gap-4">
+              <div className="flex-1 space-y-2">
+                <label className="block text-sm font-bold text-amber-800 uppercase tracking-wider">Transferir para Vendedor</label>
+                <select
+                  value={selectedSellerId}
+                  onChange={(e) => setSelectedSellerId(e.target.value)}
+                  className="w-full px-4 py-2 bg-white border border-amber-300 rounded-lg outline-none focus:ring-2 focus:ring-amber-500 font-medium text-stone-700"
+                >
+                  <option value="">Selecione um vendedor...</option>
+                  {availableSellers.map(s => (
+                    <option key={s.id} value={s.id}>{s.name} ({s.customCode})</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleTransfer}
+                  disabled={loadingTransfer || !selectedSellerId}
+                  className="px-6 py-2 bg-amber-600 text-white font-bold rounded-lg hover:bg-amber-700 disabled:bg-amber-300 transition-all shadow-lg shadow-amber-200 active:scale-95"
+                >
+                  {loadingTransfer ? 'Transferindo...' : 'Confirmar Envio'}
+                </button>
+                <button
+                  onClick={() => setIsTransferring(false)}
+                  className="px-4 py-2 bg-white text-stone-600 font-bold rounded-lg border border-amber-300 hover:bg-amber-100 transition-all"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto p-6 space-y-8">
           {/* Approval Section for Managers */}
@@ -281,20 +400,20 @@ export default function PricingDetailModal({
             <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100">
               <h3 className="text-xs font-bold text-emerald-700 uppercase tracking-widest mb-3">Cliente</h3>
               <p className="text-lg font-bold text-stone-800 flex items-center gap-2">
-                <span className="text-emerald-600 font-mono text-sm">#{selectedPricing.factors.client.code}</span>
-                {selectedPricing.factors.client.name}
+                <span className="text-emerald-600 font-mono text-sm">#{selectedPricing.factors?.client?.code || '---'}</span>
+                {selectedPricing.factors?.client?.name || 'Cliente não identificado'}
               </p>
               <div className="mt-2 space-y-1">
-                <p className="text-sm text-stone-600">Documento: {selectedPricing.factors.client.document || 'N/A'}</p>
-                <p className="text-sm text-stone-600">IE: {selectedPricing.factors.client.stateRegistration || '---'}</p>
-                <p className="text-sm text-stone-600 font-medium">Fazenda: {selectedPricing.factors.client.fazenda || '---'}</p>
+                <p className="text-sm text-stone-600">Documento: {selectedPricing.factors?.client?.document || 'N/A'}</p>
+                <p className="text-sm text-stone-600">IE: {selectedPricing.factors?.client?.stateRegistration || '---'}</p>
+                <p className="text-sm text-stone-600 font-medium">Fazenda: {selectedPricing.factors?.client?.fazenda || '---'}</p>
               </div>
             </div>
             <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
               <h3 className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-3">Agente</h3>
-              <p className="text-lg font-bold text-stone-800">{selectedPricing.factors.agent.name}</p>
-              <p className="text-sm text-stone-600">Documento: {selectedPricing.factors.agent.document || 'N/A'}</p>
-              <p className="text-sm font-medium text-blue-600 mt-1">Comissão: {selectedPricing.factors.commission}% (R$ {selectedPricing.summary.commissionValue.toFixed(2)})</p>
+              <p className="text-lg font-bold text-stone-800">{selectedPricing.factors?.agent?.name || 'Agente não identificado'}</p>
+              <p className="text-sm text-stone-600">Documento: {selectedPricing.factors?.agent?.document || 'N/A'}</p>
+              <p className="text-sm font-medium text-blue-600 mt-1">Comissão: {selectedPricing.factors?.commission || 0}% (R$ {(selectedPricing.summary?.commissionValue || 0).toFixed(2)})</p>
             </div>
           </div>
 
@@ -521,7 +640,7 @@ export default function PricingDetailModal({
             Fechar Detalhes
           </button>
         </div>
-      </div>
-    </div>
+      </div >
+    </div >
   );
 }

@@ -316,6 +316,9 @@ export interface PricingRecord {
   calculations?: TargetFormula[];
   history?: PricingHistoryEntry[];
   commercialObservation?: string;
+  formattedCod?: string;
+  transferToUserId?: string;
+  transferToUserName?: string;
 }
 
 export interface Goal {
@@ -336,7 +339,7 @@ export interface Notification {
   message: string;
   date: string;
   read: boolean;
-  type: 'goal_change' | 'pricing_approval' | 'goal_approval';
+  type: 'goal_change' | 'pricing_approval' | 'goal_approval' | 'pricing_transfer';
   dataId?: string;
 }
 

@@ -592,6 +592,7 @@ export async function deletePricingRecord(id: string): Promise<void> {
   const { error } = await supabase.from('pricing_records').delete().eq('id', id);
   if (error) throw error;
 }
+
 function pricingRecordToDb(r: Partial<PricingRecord>) {
   const d: any = {};
   if (r.userId !== undefined) d.user_id = r.userId;
@@ -607,13 +608,24 @@ function pricingRecordToDb(r: Partial<PricingRecord>) {
   if (r.calculations !== undefined) d.calculations = r.calculations;
   if (r.history !== undefined) d.history = r.history;
   if (r.commercialObservation !== undefined) d.commercial_observation = r.commercialObservation;
+  if (r.transferToUserId !== undefined) d.transfer_to_user_id = r.transferToUserId;
+  if (r.transferToUserName !== undefined) d.transfer_to_user_name = r.transferToUserName;
   return d;
 }
 
-function mapPricingRecord(d: any): any {
+/**
+ * Formats a numeric COD into a string like #0001
+ */
+export function formatPricingCod(cod?: number): string {
+  if (!cod) return '---';
+  return `#${String(cod).padStart(4, '0')}`;
+}
+
+function mapPricingRecord(d: any): PricingRecord {
   return {
     id: d.id,
     cod: d.cod,
+    formattedCod: formatPricingCod(d.cod),
     userId: d.user_id,
     userName: d.user_name,
     userCode: d.user_code,
@@ -627,7 +639,73 @@ function mapPricingRecord(d: any): any {
     calculations: d.calculations || [],
     history: d.history || [],
     commercialObservation: d.commercial_observation,
+    transferToUserId: d.transfer_to_user_id,
+    transferToUserName: d.transfer_to_user_name,
   };
+}
+
+export async function transferPricingRecord(id: string, targetUserId: string, targetUserName: string, currentUser: User): Promise<void> {
+  const historyEntry: PricingHistoryEntry = {
+    date: new Date().toISOString(),
+    userId: currentUser.id,
+    userName: currentUser.name,
+    action: `Transferência iniciada para ${targetUserName}`
+  };
+
+  const { data: pricing, error: fetchError } = await supabase.from('pricing_records').select('history').eq('id', id).single();
+  if (fetchError) throw fetchError;
+
+  const newHistory = [...(pricing.history || []), historyEntry];
+
+  const { error } = await supabase
+    .from('pricing_records')
+    .update({
+      transfer_to_user_id: targetUserId,
+      transfer_to_user_name: targetUserName,
+      history: newHistory,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', id);
+
+  if (error) throw error;
+
+  // Create notification for target user
+  await createNotification({
+    userId: targetUserId,
+    title: 'Nova Transferência de Precificação',
+    message: `${currentUser.name} enviou uma precificação para você aceitar.`,
+    type: 'pricing_transfer',
+    dataId: id
+  });
+}
+
+export async function acceptPricingTransfer(id: string, user: User): Promise<void> {
+  const historyEntry: PricingHistoryEntry = {
+    date: new Date().toISOString(),
+    userId: user.id,
+    userName: user.name,
+    action: `Transferência aceita por ${user.name}`
+  };
+
+  const { data: pricing, error: fetchError } = await supabase.from('pricing_records').select('history').eq('id', id).single();
+  if (fetchError) throw fetchError;
+
+  const newHistory = [...(pricing.history || []), historyEntry];
+
+  const { error } = await supabase
+    .from('pricing_records')
+    .update({
+      user_id: user.id,
+      user_name: user.name,
+      user_code: user.customCode,
+      transfer_to_user_id: null,
+      transfer_to_user_name: null,
+      history: newHistory,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', id);
+
+  if (error) throw error;
 }
 
 // ============================================================
@@ -795,7 +873,6 @@ export async function createNotification(notification: Omit<Notification, 'id'>)
   if (error) throw error;
   return { id: data.id, userId: data.user_id, title: data.title, message: data.message, date: data.date, read: data.read, type: data.type, dataId: data.data_id };
 }
-
 export async function markNotificationsAsRead(userId: string): Promise<void> {
   const { error } = await supabase
     .from('notifications')
@@ -803,4 +880,26 @@ export async function markNotificationsAsRead(userId: string): Promise<void> {
     .eq('user_id', userId)
     .eq('read', false);
   if (error) throw error;
+}
+
+// ============================================================
+// PASSWORD RECOVERY
+// ============================================================
+
+/**
+ * Simulates a password reset request. 
+ * Since we don't have an email server configured yet, this will just check if user exists.
+ */
+export async function requestPasswordReset(email: string): Promise<{ success: boolean; message: string }> {
+  const user = await getUserByEmail(email);
+  if (!user) {
+    return { success: false, message: 'Usuário não encontrado.' };
+  }
+
+  // In a real scenario, here we would generate a token and send an email via Supabase Edge Functions
+  // For now, we simulate success
+  return {
+    success: true,
+    message: 'Um link de recuperação foi enviado para o seu e-mail (Simulado).'
+  };
 }
