@@ -24,6 +24,7 @@ import SavedFormulas from './components/SavedFormulas';
 import { LayoutDashboard, History as HistoryIcon, Database, Users, UserCheck, Building2, Settings, LogOut, Leaf, ShieldCheck, Menu, X, Target, Bell, Download, ChevronLeft, ChevronRight, Home as HomeIcon, BarChart3, ChevronDown, FileEdit, Tag, Package, AlertTriangle, Calculator as CalcIcon, Beaker } from 'lucide-react';
 import { PricingRecord, User, AppSettings, Notification, NavItem } from './types';
 import { getAppSettings, getNotifications, markNotificationsAsRead } from './services/db';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 import Approvals from './components/Approvals';
 import PrdModule from './components/PrdModule';
@@ -36,8 +37,22 @@ import ProductManager from './components/ProductManager';
 import IncompatibilityManager from './components/IncompatibilityManager';
 
 export default function App() {
-  const [activeModule, setActiveModule] = useState<'pricing' | 'config' | 'prd' | 'managementReports' | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'calculator' | 'saved_formulas' | 'history' | 'pricelists' | 'clients' | 'agents' | 'branches' | 'settings' | 'users' | 'goals' | 'approvals' | 'reports' | 'pricingReport' | 'commissionReport' | 'prd' | 'managementReports_dashboard' | 'managementReports_lancamentos' | 'managementReports_cadastros' | 'materials_macro' | 'materials_micro' | 'materials_brand' | 'products' | 'incompatibilities'>('dashboard');
+  const location = useLocation();
+  const navigate = useNavigate();
+  const pathParts = location.pathname.split('/').filter(Boolean);
+  const activeTab = pathParts[0] || '';
+
+  let activeModule: 'pricing' | 'config' | 'prd' | 'managementReports' | null = null;
+  if (['dashboard', 'calculator', 'saved_formulas', 'history', 'goals', 'approvals', 'reports', 'pricingReport', 'commissionReport', 'pricelists', 'materials_macro', 'materials_micro', 'materials_brand', 'products', 'incompatibilities', 'clients', 'agents'].includes(activeTab)) {
+    activeModule = 'pricing';
+  } else if (['branches', 'settings', 'users'].includes(activeTab)) {
+    activeModule = 'config';
+  } else if (activeTab === 'prd') {
+    activeModule = 'prd';
+  } else if (['managementReports_dashboard', 'managementReports_lancamentos', 'managementReports_cadastros'].includes(activeTab)) {
+    activeModule = 'managementReports';
+  }
+
   const [editingPricing, setEditingPricing] = useState<PricingRecord | null>(null);
   const [initialFormulaContext, setInitialFormulaContext] = useState<{ formula: SavedFormula | null; branchId: string; priceListId: string }>({ formula: null, branchId: '', priceListId: '' });
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -106,20 +121,19 @@ export default function App() {
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
-    setActiveModule(null); // Go to Home after login
+    navigate('/');
     localStorage.setItem('current_user', JSON.stringify(user));
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
-    setActiveModule(null);
+    navigate('/');
     localStorage.removeItem('current_user');
   };
 
   const handleEditPricing = (pricing: PricingRecord) => {
     setEditingPricing(pricing);
-    setActiveModule('pricing');
-    setActiveTab('calculator');
+    navigate('/calculator');
   };
 
   const handleClearEditing = () => {
@@ -272,7 +286,7 @@ export default function App() {
         {/* Back to Home Button */}
         <div className="p-2 border-b border-stone-100">
           <button
-            onClick={() => setActiveModule(null)}
+            onClick={() => navigate('/')}
             className={`w-full flex items-center px-3 py-2 rounded-lg text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition-colors`}
             title={!isSidebarExpanded ? "Voltar ao Início" : undefined}
           >
@@ -331,7 +345,7 @@ export default function App() {
                             <button
                               key={child.id}
                               onClick={() => {
-                                setActiveTab(child.id as any);
+                                navigate(`/${child.id}`);
                                 setInitialFormulaContext({ formula: null, branchId: '', priceListId: '' });
                                 setIsMobileMenuOpen(false);
                               }}
@@ -355,7 +369,7 @@ export default function App() {
                 <button
                   key={item.id}
                   onClick={() => {
-                    setActiveTab(item.id as any);
+                    navigate(`/${item.id}`);
                     if (item.id !== 'calculator') {
                       setInitialFormulaContext({ formula: null, branchId: '', priceListId: '' });
                     }
@@ -481,13 +495,13 @@ export default function App() {
               <Home
                 currentUser={currentUser}
                 onSelectModule={(moduleId) => {
-                  setActiveModule(moduleId);
-                  if (moduleId === 'pricing') setActiveTab('dashboard');
-                  if (moduleId === 'config') setActiveTab('users');
+                  if (moduleId === 'pricing') navigate('/dashboard');
+                  if (moduleId === 'config') navigate('/users');
                   if (moduleId === 'managementReports') {
-                    setActiveTab('managementReports_dashboard');
                     setIsReportsExpanded(true);
+                    navigate('/managementReports_dashboard');
                   }
+                  if (moduleId === 'prd') navigate('/prd');
                 }}
               />
             )}
@@ -501,7 +515,7 @@ export default function App() {
                 initialPriceListId={initialFormulaContext.priceListId}
                 onSaveSuccess={(record) => {
                   setEditingPricing(null);
-                  setActiveTab('history');
+                  navigate('/history');
                   handleClearEditing();
                 }}
                 onClearEditing={() => {
@@ -515,7 +529,7 @@ export default function App() {
                 currentUser={currentUser}
                 onSendToCalculator={(f, bId, plId) => {
                   setInitialFormulaContext({ formula: f, branchId: bId, priceListId: plId });
-                  setActiveTab('calculator');
+                  navigate('/calculator');
                 }}
               />
             )}

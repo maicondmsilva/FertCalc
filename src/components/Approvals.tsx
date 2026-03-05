@@ -24,9 +24,13 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
         getPricingRecords(), getGoals(), getAppSettings()
       ]);
       if (settings) setAppSettings(settings);
-      if (currentUser.role === 'master' || currentUser.role === 'admin' || currentUser.role === 'manager') {
+      if (currentUser.role === 'master' || currentUser.role === 'admin') {
         setPricings(allPricings.filter(p => p.approvalStatus === 'Pendente'));
         setGoals(allGoals.filter(g => g.status === 'Pendente'));
+      } else if (currentUser.role === 'manager') {
+        const managedIds = currentUser.managedUserIds || [];
+        setPricings(allPricings.filter(p => (p.userId === currentUser.id || managedIds.includes(p.userId)) && p.approvalStatus === 'Pendente'));
+        setGoals(allGoals.filter(g => (g.userId === currentUser.id || managedIds.includes(g.userId)) && g.status === 'Pendente'));
       } else {
         setPricings(allPricings.filter(p => p.userId === currentUser.id && p.approvalStatus === 'Pendente'));
         setGoals(allGoals.filter(g => g.userId === currentUser.id && g.status === 'Pendente'));

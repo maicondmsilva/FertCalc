@@ -15,7 +15,7 @@ export default function MicroManager({ currentUser }: MicroManagerProps) {
   const [name, setName] = useState('');
   const [formulaSuffix, setFormulaSuffix] = useState('');
   const [guarantees, setGuarantees] = useState<MicroGuarantee[]>([]);
-  const [categories, setCategories] = useState<('phosphated' | 'nitrogenous')[]>([]);
+  const [categories, setCategories] = useState<('phosphated' | 'nitrogenous' | 'fertigran_p')[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState(false);
 
@@ -36,7 +36,7 @@ export default function MicroManager({ currentUser }: MicroManagerProps) {
 
   const cancelEdit = () => { setName(''); setFormulaSuffix(''); setGuarantees([]); setCategories([]); setEditingId(null); setViewMode(false); };
 
-  const handleCategoryChange = (category: 'phosphated' | 'nitrogenous', checked: boolean) => {
+  const handleCategoryChange = (category: 'phosphated' | 'nitrogenous' | 'fertigran_p', checked: boolean) => {
     if (checked) setCategories([...categories, category]);
     else setCategories(categories.filter(c => c !== category));
   };
@@ -119,6 +119,10 @@ export default function MicroManager({ currentUser }: MicroManagerProps) {
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" checked={categories.includes('nitrogenous')} onChange={(e) => handleCategoryChange('nitrogenous', e.target.checked)} disabled={viewMode} className="rounded text-emerald-600 focus:ring-emerald-500 disabled:opacity-50" />
                   <span className="text-sm text-stone-700">Nitrogenada</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={categories.includes('fertigran_p')} onChange={(e) => handleCategoryChange('fertigran_p', e.target.checked)} disabled={viewMode} className="rounded text-emerald-600 focus:ring-emerald-500 disabled:opacity-50" />
+                  <span className="text-sm text-stone-700">Fertigran P</span>
                 </label>
               </div>
             </div>

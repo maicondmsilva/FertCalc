@@ -168,7 +168,7 @@ export default function PricingDetailModal({
         body: [
           ['Custo Base', `R$ ${calc.summary?.baseCost.toFixed(2) || pricing.summary.baseCost.toFixed(2)}`],
           ['Preço Final', `R$ ${calc.summary?.finalPrice.toFixed(2) || pricing.summary.finalPrice.toFixed(2)}`],
-          ['N-P-K Real', `${calc.summary?.resultingN.toFixed(1)}-${calc.summary?.resultingP.toFixed(1)}-${calc.summary?.resultingK.toFixed(1)}`],
+          ['N-P-K Real', `${calc.summary?.resultingN.toFixed(2)}-${calc.summary?.resultingP.toFixed(2)}-${calc.summary?.resultingK.toFixed(2)}`],
         ],
       });
 
@@ -529,23 +529,23 @@ export default function PricingDetailModal({
                   <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-center">
                     <div className="p-3 bg-stone-800 rounded-xl">
                       <p className="text-[10px] text-stone-500 font-bold mb-1">NITROGÊNIO (N)</p>
-                      <p className="text-xl font-mono font-bold">{Number(calc.summary?.resultingN).toFixed(1)}%</p>
+                      <p className="text-xl font-mono font-bold">{Number(calc.summary?.resultingN).toFixed(2)}%</p>
                     </div>
                     <div className="p-3 bg-stone-800 rounded-xl">
                       <p className="text-[10px] text-stone-500 font-bold mb-1">FÓSFORO (P)</p>
-                      <p className="text-xl font-mono font-bold">{Number(calc.summary?.resultingP).toFixed(1)}%</p>
+                      <p className="text-xl font-mono font-bold">{Number(calc.summary?.resultingP).toFixed(2)}%</p>
                     </div>
                     <div className="p-3 bg-stone-800 rounded-xl">
                       <p className="text-[10px] text-stone-500 font-bold mb-1">POTÁSSIO (K)</p>
-                      <p className="text-xl font-mono font-bold">{Number(calc.summary?.resultingK).toFixed(1)}%</p>
+                      <p className="text-xl font-mono font-bold">{Number(calc.summary?.resultingK).toFixed(2)}%</p>
                     </div>
                     <div className="p-3 bg-stone-800 rounded-xl">
                       <p className="text-[10px] text-stone-500 font-bold mb-1">ENXOFRE (S)</p>
-                      <p className="text-xl font-mono font-bold">{Number(calc.summary?.resultingS).toFixed(1)}%</p>
+                      <p className="text-xl font-mono font-bold">{Number(calc.summary?.resultingS).toFixed(2)}%</p>
                     </div>
                     <div className="p-3 bg-stone-800 rounded-xl">
                       <p className="text-[10px] text-stone-500 font-bold mb-1">CÁLCIO (Ca)</p>
-                      <p className="text-xl font-mono font-bold">{Number(calc.summary?.resultingCa).toFixed(1)}%</p>
+                      <p className="text-xl font-mono font-bold">{Number(calc.summary?.resultingCa).toFixed(2)}%</p>
                     </div>
                   </div>
                   {calc.summary?.resultingMicros && Object.keys(calc.summary.resultingMicros).length > 0 && (

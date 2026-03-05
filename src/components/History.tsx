@@ -27,8 +27,11 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
     setLoading(true);
     const [data, savedSettings] = await Promise.all([getPricingRecords(), getAppSettings()]);
     // Filter by user unless master/admin/manager
-    if (currentUser.role === 'master' || currentUser.role === 'admin' || currentUser.role === 'manager') {
+    if (currentUser.role === 'master' || currentUser.role === 'admin') {
       setPricings(data);
+    } else if (currentUser.role === 'manager') {
+      const managedIds = currentUser.managedUserIds || [];
+      setPricings(data.filter((p: PricingRecord) => p.userId === currentUser.id || p.transferToUserId === currentUser.id || managedIds.includes(p.userId)));
     } else {
       setPricings(data.filter((p: PricingRecord) => p.userId === currentUser.id || p.transferToUserId === currentUser.id));
     }

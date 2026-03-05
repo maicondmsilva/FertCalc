@@ -39,7 +39,7 @@ export interface RawMaterial {
   maxQty: number;
   selected: boolean;
   quantity: number;
-  categories?: ('phosphated' | 'nitrogenous')[];
+  categories?: ('phosphated' | 'nitrogenous' | 'fertigran_p')[];
   formulaSuffix?: string;
   isPremiumLine?: boolean;
 }
@@ -51,6 +51,7 @@ export interface User {
   customCode: string;
   password?: string;
   role: 'admin' | 'user' | 'manager' | 'master';
+  managedUserIds?: string[];
   permissions?: {
     // Módulos (acesso à página)
     dashboard: boolean;
@@ -220,7 +221,7 @@ export interface MacroMaterial {
   ca: number;
   microGuarantees: MicroGuarantee[];
   brandId: string;
-  categories?: ('phosphated' | 'nitrogenous')[];
+  categories?: ('phosphated' | 'nitrogenous' | 'fertigran_p')[];
   formulaSuffix?: string;
   isPremiumLine?: boolean;
 }
@@ -230,7 +231,7 @@ export interface MicroMaterial {
   code: string;
   name: string;
   microGuarantees: MicroGuarantee[];
-  categories?: ('phosphated' | 'nitrogenous')[];
+  categories?: ('phosphated' | 'nitrogenous' | 'fertigran_p')[];
   formulaSuffix?: string;
 }
 
@@ -238,7 +239,7 @@ export interface TargetFormula {
   id: string;
   formula: string;
   selected: boolean;
-  category?: 'phosphated' | 'nitrogenous' | 'all';
+  category?: 'phosphated' | 'nitrogenous' | 'fertigran_p' | 'all';
   factors: PricingFactors;
   summary?: PricingSummary;
   macros: RawMaterial[];

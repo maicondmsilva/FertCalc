@@ -14,7 +14,7 @@ const emptyForm = () => ({
   brandId: '',
   formulaSuffix: '',
   isPremiumLine: false,
-  categories: [] as ('phosphated' | 'nitrogenous')[],
+  categories: [] as ('phosphated' | 'nitrogenous' | 'fertigran_p')[],
 });
 
 interface MacroManagerProps {
@@ -72,7 +72,7 @@ export default function MacroManager({ currentUser }: MacroManagerProps) {
     setGuarantees(prev => prev.filter((_, idx) => idx !== i));
 
   // ── Categorias ─────────────────────────────────────────────
-  const toggleCategory = (cat: 'phosphated' | 'nitrogenous', checked: boolean) =>
+  const toggleCategory = (cat: 'phosphated' | 'nitrogenous' | 'fertigran_p', checked: boolean) =>
     setFormData(prev => ({
       ...prev,
       categories: checked
@@ -306,7 +306,7 @@ export default function MacroManager({ currentUser }: MacroManagerProps) {
                 Categorias de Compatibilidade
               </label>
               <div className="flex gap-6">
-                {(['phosphated', 'nitrogenous'] as const).map(cat => (
+                {(['phosphated', 'nitrogenous', 'fertigran_p'] as const).map(cat => (
                   <label key={cat} className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
@@ -316,7 +316,7 @@ export default function MacroManager({ currentUser }: MacroManagerProps) {
                       className="rounded text-blue-600 focus:ring-blue-500 disabled:opacity-50"
                     />
                     <span className="text-sm text-stone-700">
-                      {cat === 'phosphated' ? 'Fosfatada' : 'Nitrogenada'}
+                      {cat === 'phosphated' ? 'Fosfatada' : cat === 'nitrogenous' ? 'Nitrogenada' : 'Fertigran P'}
                     </span>
                   </label>
                 ))}

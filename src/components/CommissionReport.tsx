@@ -18,7 +18,12 @@ export default function CommissionReport({ currentUser }: CommissionReportProps)
       const data = await getPricingRecords();
       let filtered = data.filter(p => p.status === 'Fechada');
 
-      if (currentUser.role !== 'master' && currentUser.role !== 'admin' && currentUser.role !== 'manager') {
+      if (currentUser.role === 'master' || currentUser.role === 'admin') {
+        // Show all
+      } else if (currentUser.role === 'manager') {
+        const managedIds = currentUser.managedUserIds || [];
+        filtered = filtered.filter(p => p.userId === currentUser.id || managedIds.includes(p.userId));
+      } else {
         filtered = filtered.filter(p => p.userId === currentUser.id);
       }
 

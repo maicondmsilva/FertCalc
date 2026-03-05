@@ -15,6 +15,7 @@ export default function UserManager() {
     customCode: '',
     password: '',
     role: 'user' as 'master' | 'user' | 'manager' | 'admin',
+    managedUserIds: [] as string[],
     permissions: {
       dashboard: true,
       calculator: true,
@@ -104,6 +105,16 @@ export default function UserManager() {
 
   const saveUser = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!formData.name || !formData.email || !formData.role) {
+      showError('Nome, e-mail e nível de acesso são obrigatórios.');
+      return;
+    }
+    if (!editingId && !formData.password) {
+      showError('A senha é obrigatória para um novo usuário.');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -113,6 +124,7 @@ export default function UserManager() {
           email: formData.email,
           customCode: formData.customCode,
           role: formData.role,
+          managedUserIds: formData.role === 'manager' ? formData.managedUserIds : [],
           permissions: formData.permissions,
         };
         if (formData.password) payload.password = formData.password;
@@ -125,6 +137,7 @@ export default function UserManager() {
           customCode: formData.customCode,
           password: formData.password,
           role: formData.role,
+          managedUserIds: formData.role === 'manager' ? formData.managedUserIds : [],
           permissions: formData.permissions as any,
         });
       }
@@ -137,6 +150,7 @@ export default function UserManager() {
         customCode: '',
         password: '',
         role: 'user',
+        managedUserIds: [],
         permissions: getDefaultPermissions('user') as any
       });
     } catch (err) {
@@ -154,6 +168,7 @@ export default function UserManager() {
       customCode: user.customCode,
       password: '',
       role: user.role as any,
+      managedUserIds: user.managedUserIds || [],
       permissions: (user.permissions || getDefaultPermissions(user.role)) as any
     });
   };
@@ -166,6 +181,7 @@ export default function UserManager() {
       customCode: '',
       password: '',
       role: 'user',
+      managedUserIds: [],
       permissions: getDefaultPermissions('user') as any
     });
   };
@@ -258,6 +274,33 @@ export default function UserManager() {
               </select>
             </div>
           </div>
+
+          {formData.role === 'manager' && (
+            <div className="space-y-4 pt-4 border-t border-stone-200">
+              <label className="block text-sm font-bold text-stone-600">Vendedores Gerenciados</label>
+              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                {users.filter(u => u.role === 'user' && u.id !== editingId).map(u => (
+                  <label key={u.id} className="flex items-center space-x-2 p-2 rounded-lg border border-stone-200 hover:bg-stone-50 cursor-pointer transition-colors bg-white">
+                    <input
+                      type="checkbox"
+                      checked={formData.managedUserIds.includes(u.id)}
+                      onChange={(e) => {
+                        const newSelection = e.target.checked
+                          ? [...formData.managedUserIds, u.id]
+                          : formData.managedUserIds.filter(id => id !== u.id);
+                        setFormData({ ...formData, managedUserIds: newSelection });
+                      }}
+                      className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                    />
+                    <span className="text-sm font-medium text-stone-700 truncate" title={u.name}>{u.name}</span>
+                  </label>
+                ))}
+                {users.filter(u => u.role === 'user' && u.id !== editingId).length === 0 && (
+                  <span className="text-sm text-stone-500 italic col-span-full">Nenhum vendedor disponível</span>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* PERMISSÕES AGRUPADAS */}
           <div className="space-y-4">

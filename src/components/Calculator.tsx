@@ -209,12 +209,12 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
     const updatedCalculations = [...calculations];
 
     formulasToCalculate.forEach(calc => {
-      const match = calc.formula.match(/(\d+)[^\d]+(\d+)[^\d]+(\d+)/);
+      const match = calc.formula.match(/(\d+(?:[.,]\d+)?)[^\d]+(\d+(?:[.,]\d+)?)[^\d]+(\d+(?:[.,]\d+)?)/);
       if (!match) return;
 
-      const targetN = parseFloat(match[1]);
-      const targetP = parseFloat(match[2]);
-      const targetK = parseFloat(match[3]);
+      const targetN = parseFloat(match[1].replace(',', '.'));
+      const targetP = parseFloat(match[2].replace(',', '.'));
+      const targetK = parseFloat(match[3].replace(',', '.'));
 
       const reqN = targetN * 10;
       const reqP = targetP * 10;
@@ -224,9 +224,9 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
         optimize: "cost",
         opType: "min",
         constraints: {
-          n_eq: { min: reqN },
-          p_eq: { min: reqP },
-          k_eq: { min: reqK },
+          n_eq: { min: reqN, max: reqN + 9 },
+          p_eq: { min: reqP, max: reqP + 9 },
+          k_eq: { min: reqK, max: reqK + 9 },
           weight: { equal: 1000 },
         },
         variables: {},
@@ -238,7 +238,7 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
       // Filter by category
       if (calc.category && calc.category !== 'all') {
         availableMaterials = availableMaterials.filter(m =>
-          !m.categories || m.categories.length === 0 || m.categories.includes(calc.category as 'phosphated' | 'nitrogenous')
+          !m.categories || m.categories.length === 0 || m.categories.includes(calc.category as 'phosphated' | 'nitrogenous' | 'fertigran_p')
         );
       }
 
@@ -897,6 +897,7 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
                         <option value="all">Todas</option>
                         <option value="phosphated">Fosfatada</option>
                         <option value="nitrogenous">Nitrogenada</option>
+                        <option value="fertigran_p">Fertigran P</option>
                       </select>
                       <button
                         onClick={() => setExpandedCalc(expandedCalc === calc.id ? null : calc.id)}
@@ -1060,7 +1061,7 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
                         <div className="text-center border-x border-stone-100">
                           <p className="text-[8px] text-stone-400 uppercase font-bold">N-P-K Real</p>
                           <p className="text-xs font-bold text-indigo-600">
-                            {calc.summary.resultingN.toFixed(0)}-{calc.summary.resultingP.toFixed(0)}-{calc.summary.resultingK.toFixed(0)}
+                            {calc.summary.resultingN.toFixed(2)}-{calc.summary.resultingP.toFixed(2)}-{calc.summary.resultingK.toFixed(2)}
                           </p>
                         </div>
                         <div className="text-center">
@@ -1434,7 +1435,7 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
                   <div className="text-right">
                     <p className="text-[10px] text-stone-500 uppercase font-bold">N-P-K Real</p>
                     <p className="text-sm font-mono text-emerald-400">
-                      {calc.summary?.resultingN.toFixed(1)}-{calc.summary?.resultingP.toFixed(1)}-{calc.summary?.resultingK.toFixed(1)}
+                      {calc.summary?.resultingN.toFixed(2)}-{calc.summary?.resultingP.toFixed(2)}-{calc.summary?.resultingK.toFixed(2)}
                     </p>
                   </div>
                 </div>

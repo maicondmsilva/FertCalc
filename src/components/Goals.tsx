@@ -35,7 +35,11 @@ export default function Goals({ currentUser }: GoalsProps) {
   };
 
   const userGoals = useMemo(() => {
-    if (currentUser.role === 'master' || currentUser.role === 'admin' || currentUser.role === 'manager') return goals;
+    if (currentUser.role === 'master' || currentUser.role === 'admin') return goals;
+    if (currentUser.role === 'manager') {
+      const managedIds = currentUser.managedUserIds || [];
+      return goals.filter(g => g.userId === currentUser.id || managedIds.includes(g.userId));
+    }
     return goals.filter(g => g.userId === currentUser.id);
   }, [goals, currentUser]);
 
@@ -127,7 +131,7 @@ export default function Goals({ currentUser }: GoalsProps) {
                 <label className="block text-xs font-bold text-stone-500 mb-1">Vendedor</label>
                 <select value={newGoal.userId || ''} onChange={(e) => setNewGoal({ ...newGoal, userId: e.target.value })} className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm">
                   <option value="">Selecione...</option>
-                  {allUsers.filter(u => u.role === 'user').map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                  {allUsers.filter(u => u.role === 'user' && (currentUser.role !== 'manager' || (currentUser.managedUserIds || []).includes(u.id))).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                 </select>
               </div>
             )}
@@ -139,7 +143,7 @@ export default function Goals({ currentUser }: GoalsProps) {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-bold text-stone-500 mb-1">Valor Alvo (R$)</label>
+              <label className="block text-xs font-bold text-stone-500 mb-1">Valor Alvo (Toneladas)</label>
               <input type="number" value={newGoal.targetValue} onChange={(e) => setNewGoal({ ...newGoal, targetValue: Number(e.target.value) })} className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm" />
             </div>
             {newGoal.type === 'monthly' && (
