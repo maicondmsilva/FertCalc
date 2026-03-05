@@ -176,6 +176,17 @@ export async function createClient(client: Omit<Client, 'id'>): Promise<Client> 
   return mapClient(data);
 }
 
+export async function createClientsBulk(clients: Omit<Client, 'id'>[]): Promise<void> {
+  const dbClients = clients.map(clientToDb);
+  // Supabase limits bulk inserts to 1000 rows
+  const BATCH_SIZE = 1000;
+  for (let i = 0; i < dbClients.length; i += BATCH_SIZE) {
+    const batch = dbClients.slice(i, i + BATCH_SIZE);
+    const { error } = await supabase.from('clients').insert(batch);
+    if (error) throw error;
+  }
+}
+
 export async function updateClient(id: string, client: Partial<Client>): Promise<void> {
   const { error } = await supabase
     .from('clients')
@@ -241,6 +252,16 @@ export async function createAgent(agent: Omit<Agent, 'id'>): Promise<Agent> {
     .single();
   if (error) throw error;
   return mapAgent(data);
+}
+
+export async function createAgentsBulk(agents: Omit<Agent, 'id'>[]): Promise<void> {
+  const dbAgents = agents.map(agentToDb);
+  const BATCH_SIZE = 1000;
+  for (let i = 0; i < dbAgents.length; i += BATCH_SIZE) {
+    const batch = dbAgents.slice(i, i + BATCH_SIZE);
+    const { error } = await supabase.from('agents').insert(batch);
+    if (error) throw error;
+  }
 }
 
 export async function updateAgent(id: string, agent: Partial<Agent>): Promise<void> {

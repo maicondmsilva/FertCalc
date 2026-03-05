@@ -1,11 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { Settings, Save, Image as ImageIcon, Building, Download, Upload, Database, FileText } from 'lucide-react';
-import { AppSettings } from '../types';
-import { getAppSettings, saveAppSettings } from '../services/db';
+import React, { useState, useEffect, useRef } from 'react';
+import { Settings, Save, Image as ImageIcon, Building, Download, Upload, Database, FileText, Users, UserCheck } from 'lucide-react';
+import { AppSettings, Client, Agent } from '../types';
+import { getAppSettings, saveAppSettings, createClientsBulk, createAgentsBulk } from '../services/db';
 import { useToast } from './Toast';
+import * as XLSX from 'xlsx';
 
 export default function SettingsManager() {
-  const { showSuccess } = useToast();
+  const { showSuccess, showError } = useToast();
+  const [isImportingClients, setIsImportingClients] = useState(false);
+  const [isImportingAgents, setIsImportingAgents] = useState(false);
+
+  const clientInputRef = useRef<HTMLInputElement>(null);
+  const agentInputRef = useRef<HTMLInputElement>(null);
+
   const [settings, setSettings] = useState<AppSettings>({
     companyName: 'FertCalc Pro',
     companyLogo: ''
@@ -47,6 +54,152 @@ export default function SettingsManager() {
     link.click();
     document.body.removeChild(link);
     showSuccess('Exportação concluída. Acesse o painel Supabase para dados completos.');
+  };
+
+  const handleDownloadClientTemplate = () => {
+    const ws = XLSX.utils.json_to_sheet([{
+      'Razão Social / Nome*': '',
+      'CNPJ / CPF*': '',
+      'Código': '',
+      'E-mail': '',
+      'Telefone': '',
+      'Inscrição Estadual': '',
+      'Fazenda': '',
+      'CEP': '',
+      'Rua': '',
+      'Número': '',
+      'Bairro': '',
+      'Cidade': '',
+      'Estado (UF)': ''
+    }]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Clientes');
+    XLSX.writeFile(wb, 'modelo_importacao_clientes.xlsx');
+  };
+
+  const handleDownloadAgentTemplate = () => {
+    const ws = XLSX.utils.json_to_sheet([{
+      'Nome*': '',
+      'Documento*': '',
+      'Código': '',
+      'E-mail': '',
+      'Telefone': '',
+      'Inscrição Estadual': '',
+      'CEP': '',
+      'Rua': '',
+      'Número': '',
+      'Bairro': '',
+      'Cidade': '',
+      'Estado (UF)': ''
+    }]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Agentes');
+    XLSX.writeFile(wb, 'modelo_importacao_agentes.xlsx');
+  };
+
+  const handleImportClients = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsImportingClients(true);
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const json = XLSX.utils.sheet_to_json<any>(worksheet);
+
+      const clientsToImport: Omit<Client, 'id'>[] = [];
+
+      for (const row of json) {
+        if (!row['Razão Social / Nome*'] || !row['CNPJ / CPF*']) {
+          continue; // Skip invalid rows
+        }
+
+        clientsToImport.push({
+          name: String(row['Razão Social / Nome*']),
+          document: String(row['CNPJ / CPF*']),
+          code: row['Código'] ? String(row['Código']) : '',
+          email: row['E-mail'] ? String(row['E-mail']) : '',
+          phone: row['Telefone'] ? String(row['Telefone']) : '',
+          stateRegistration: row['Inscrição Estadual'] ? String(row['Inscrição Estadual']) : '',
+          fazenda: row['Fazenda'] ? String(row['Fazenda']) : '',
+          address: (row['CEP'] || row['Rua']) ? {
+            cep: row['CEP'] ? String(row['CEP']) : '',
+            street: row['Rua'] ? String(row['Rua']) : '',
+            number: row['Número'] ? String(row['Número']) : '',
+            neighborhood: row['Bairro'] ? String(row['Bairro']) : '',
+            city: row['Cidade'] ? String(row['Cidade']) : '',
+            state: row['Estado (UF)'] ? String(row['Estado (UF)']) : ''
+          } : undefined
+        });
+      }
+
+      if (clientsToImport.length > 0) {
+        await createClientsBulk(clientsToImport);
+        showSuccess(`${clientsToImport.length} clientes importados com sucesso!`);
+      } else {
+        showError('Nenhum cliente válido encontrado na planilha. Verifique se os campos com * estão preenchidos.');
+      }
+    } catch (err) {
+      console.error(err);
+      showError('Erro ao importar clientes. Verifique o formato do arquivo.');
+    } finally {
+      setIsImportingClients(false);
+      if (clientInputRef.current) clientInputRef.current.value = '';
+    }
+  };
+
+  const handleImportAgents = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsImportingAgents(true);
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const json = XLSX.utils.sheet_to_json<any>(worksheet);
+
+      const agentsToImport: Omit<Agent, 'id'>[] = [];
+
+      for (const row of json) {
+        if (!row['Nome*'] || !row['Documento*']) {
+          continue;
+        }
+
+        agentsToImport.push({
+          name: String(row['Nome*']),
+          document: String(row['Documento*']),
+          code: row['Código'] ? String(row['Código']) : '',
+          email: row['E-mail'] ? String(row['E-mail']) : '',
+          phone: row['Telefone'] ? String(row['Telefone']) : '',
+          ie: row['Inscrição Estadual'] ? String(row['Inscrição Estadual']) : '',
+          address: (row['CEP'] || row['Rua']) ? {
+            cep: row['CEP'] ? String(row['CEP']) : '',
+            street: row['Rua'] ? String(row['Rua']) : '',
+            number: row['Número'] ? String(row['Número']) : '',
+            neighborhood: row['Bairro'] ? String(row['Bairro']) : '',
+            city: row['Cidade'] ? String(row['Cidade']) : '',
+            state: row['Estado (UF)'] ? String(row['Estado (UF)']) : ''
+          } : undefined
+        });
+      }
+
+      if (agentsToImport.length > 0) {
+        await createAgentsBulk(agentsToImport);
+        showSuccess(`${agentsToImport.length} agentes importados com sucesso!`);
+      } else {
+        showError('Nenhum agente válido encontrado na planilha. Verifique se os campos com * estão preenchidos.');
+      }
+    } catch (err) {
+      console.error(err);
+      showError('Erro ao importar agentes. Verifique o formato do arquivo.');
+    } finally {
+      setIsImportingAgents(false);
+      if (agentInputRef.current) agentInputRef.current.value = '';
+    }
   };
 
   return (
@@ -196,6 +349,84 @@ export default function SettingsManager() {
               <Database className="w-4 h-4 mr-2" />
               Abrir Painel Supabase
             </a>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
+        <h2 className="text-xl font-bold text-stone-800 mb-6 flex items-center">
+          <Upload className="w-5 h-5 mr-2 text-stone-600" />
+          Importação de Dados
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="p-4 bg-emerald-50 rounded-lg border border-emerald-100 flex flex-col justify-between">
+            <div>
+              <h3 className="font-bold text-emerald-800 mb-2 flex items-center">
+                <Users className="w-4 h-4 mr-2" /> Importar Clientes
+              </h3>
+              <p className="text-sm text-emerald-700/80 mb-4 h-10">
+                Baixe o modelo, preencha as informações e importe a planilha para cadastrar clientes em lote.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={handleDownloadClientTemplate}
+                className="w-full bg-white hover:bg-emerald-100 text-emerald-700 border border-emerald-300 px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Baixar Modelo Excel
+              </button>
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                ref={clientInputRef}
+                onChange={handleImportClients}
+              />
+              <button
+                onClick={() => clientInputRef.current?.click()}
+                disabled={isImportingClients}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center cursor-pointer"
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                {isImportingClients ? 'Importando...' : 'Importar Planilha'}
+              </button>
+            </div>
+          </div>
+
+          <div className="p-4 bg-blue-50 rounded-lg border border-blue-100 flex flex-col justify-between">
+            <div>
+              <h3 className="font-bold text-blue-800 mb-2 flex items-center">
+                <UserCheck className="w-4 h-4 mr-2" /> Importar Agentes
+              </h3>
+              <p className="text-sm text-blue-700/80 mb-4 h-10">
+                Baixe o modelo, preencha as informações e importe a planilha para cadastrar agentes em lote.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={handleDownloadAgentTemplate}
+                className="w-full bg-white hover:bg-blue-100 text-blue-700 border border-blue-300 px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Baixar Modelo Excel
+              </button>
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                ref={agentInputRef}
+                onChange={handleImportAgents}
+              />
+              <button
+                onClick={() => agentInputRef.current?.click()}
+                disabled={isImportingAgents}
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center cursor-pointer"
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                {isImportingAgents ? 'Importando...' : 'Importar Planilha'}
+              </button>
+            </div>
           </div>
         </div>
       </div>
