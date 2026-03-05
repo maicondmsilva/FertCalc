@@ -24,7 +24,7 @@ import SavedFormulas from './components/SavedFormulas';
 import { LayoutDashboard, History as HistoryIcon, Database, Users, UserCheck, Building2, Settings, LogOut, Leaf, ShieldCheck, Menu, X, Target, Bell, Download, ChevronLeft, ChevronRight, Home as HomeIcon, BarChart3, ChevronDown, FileEdit, Tag, Package, AlertTriangle, Calculator as CalcIcon, Beaker } from 'lucide-react';
 import { PricingRecord, User, AppSettings, Notification, NavItem } from './types';
 import { getAppSettings, getNotifications, markNotificationsAsRead } from './services/db';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 
 import Approvals from './components/Approvals';
 import PrdModule from './components/PrdModule';
@@ -285,8 +285,8 @@ export default function App() {
 
         {/* Back to Home Button */}
         <div className="p-2 border-b border-stone-100">
-          <button
-            onClick={() => navigate('/')}
+          <Link
+            to="/"
             className={`w-full flex items-center px-3 py-2 rounded-lg text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition-colors`}
             title={!isSidebarExpanded ? "Voltar ao Início" : undefined}
           >
@@ -294,7 +294,7 @@ export default function App() {
             {isSidebarExpanded && (
               <span className="ml-3 font-bold text-xs uppercase tracking-widest">Início</span>
             )}
-          </button>
+          </Link>
         </div>
 
         {/* Navigation Links */}
@@ -342,10 +342,10 @@ export default function App() {
                           const ChildIcon = child.icon;
                           const isChildActive = activeTab === child.id;
                           return (
-                            <button
+                            <Link
                               key={child.id}
+                              to={`/${child.id}`}
                               onClick={() => {
-                                navigate(`/${child.id}`);
                                 setInitialFormulaContext({ formula: null, branchId: '', priceListId: '' });
                                 setIsMobileMenuOpen(false);
                               }}
@@ -356,7 +356,7 @@ export default function App() {
                               {isSidebarExpanded && (
                                 <span className="ml-3 truncate">{child.label}</span>
                               )}
-                            </button>
+                            </Link>
                           );
                         })}
                       </div>
@@ -366,10 +366,10 @@ export default function App() {
               );
             } else {
               return (
-                <button
+                <Link
                   key={item.id}
+                  to={`/${item.id}`}
                   onClick={() => {
-                    navigate(`/${item.id}`);
                     if (item.id !== 'calculator') {
                       setInitialFormulaContext({ formula: null, branchId: '', priceListId: '' });
                     }
@@ -385,7 +385,7 @@ export default function App() {
                   {isSidebarExpanded && (
                     <span className="ml-3 truncate">{item.label}</span>
                   )}
-                </button>
+                </Link>
               );
             }
           })}
