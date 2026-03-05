@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { PricingRecord, User, AppSettings } from '../types';
 import { X, Edit3, Trash2, Info, FileDown, Download, FileSpreadsheet, Tag } from 'lucide-react';
-import { generatePricingPDF } from '../utils/pdfGenerator';
+import { generatePricingPDF, generateSimplifiedPDF } from '../utils/pdfGenerator';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { formatNPK } from '../utils/formatters';
 import { updatePricingRecord, getUsers, transferPricingRecord, acceptPricingTransfer } from '../services/db';
 import { useToast } from './Toast';
 import { Send, UserCheck, CheckCircle2 } from 'lucide-react';
@@ -168,7 +169,7 @@ export default function PricingDetailModal({
         body: [
           ['Custo Base', `R$ ${calc.summary?.baseCost.toFixed(2) || pricing.summary.baseCost.toFixed(2)}`],
           ['Preço Final', `R$ ${calc.summary?.finalPrice.toFixed(2) || pricing.summary.finalPrice.toFixed(2)}`],
-          ['N-P-K Real', `${calc.summary?.resultingN.toFixed(2)}-${calc.summary?.resultingP.toFixed(2)}-${calc.summary?.resultingK.toFixed(2)}`],
+          ['N-P-K Real', formatNPK(calc.formula, calc.summary?.resultingN || 0, calc.summary?.resultingP || 0, calc.summary?.resultingK || 0)],
         ],
       });
 

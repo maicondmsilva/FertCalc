@@ -4,6 +4,7 @@ import { Plus, Trash2, Save, AlertTriangle, CheckCircle2, Calculator as Calculat
 import { RawMaterial, PricingFactors, PricingRecord, PricingSummary, Branch, PriceList, Client, Agent, User as AppUser, PricingHistoryEntry, TargetFormula, IncompatibilityRule, SavedFormula } from '../types';
 import { getClients, getAgents, getBranches, getPriceLists, getIncompatibilityRules, createPricingRecord, updatePricingRecord, createSavedFormula, getSavedFormulas, updateSavedFormula } from '../services/db';
 import { useToast } from './Toast';
+import { formatNPK } from '../utils/formatters';
 
 const defaultMacros: RawMaterial[] = [
   { id: 'm1', type: 'macro', name: 'Ureia', price: 2500, n: 45, p: 0, k: 0, s: 0, ca: 0, microGuarantees: [], minQty: 50, maxQty: 1000, selected: true, quantity: 0 },
@@ -1061,7 +1062,7 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
                         <div className="text-center border-x border-stone-100">
                           <p className="text-[8px] text-stone-400 uppercase font-bold">N-P-K Real</p>
                           <p className="text-xs font-bold text-indigo-600">
-                            {calc.summary.resultingN.toFixed(2)}-{calc.summary.resultingP.toFixed(2)}-{calc.summary.resultingK.toFixed(2)}
+                            {formatNPK(calc.formula, calc.summary.resultingN, calc.summary.resultingP, calc.summary.resultingK)}
                           </p>
                         </div>
                         <div className="text-center">
@@ -1435,7 +1436,7 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
                   <div className="text-right">
                     <p className="text-[10px] text-stone-500 uppercase font-bold">N-P-K Real</p>
                     <p className="text-sm font-mono text-emerald-400">
-                      {calc.summary?.resultingN.toFixed(2)}-{calc.summary?.resultingP.toFixed(2)}-{calc.summary?.resultingK.toFixed(2)}
+                      {formatNPK(calc.formula, calc.summary?.resultingN || 0, calc.summary?.resultingP || 0, calc.summary?.resultingK || 0)}
                     </p>
                   </div>
                 </div>

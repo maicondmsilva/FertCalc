@@ -39,7 +39,7 @@ export const formatCEP = (value: string) => {
 export const lookupCEP = async (cep: string) => {
   const cleanCEP = cep.replace(/\D/g, '');
   if (cleanCEP.length !== 8) return null;
-  
+
   // Try multiple providers for redundancy
   const providers = [
     {
@@ -73,6 +73,24 @@ export const lookupCEP = async (cep: string) => {
       console.warn(`CEP lookup failed for ${provider.url}:`, error);
     }
   }
-  
+
   return null;
+};
+
+export const formatNPK = (targetFormula: string, resultingN: number, resultingP: number, resultingK: number) => {
+  const parts = targetFormula.split(/[- ]/);
+  const tN = parts[0] || '0';
+  const tP = parts[1] || '0';
+  const tK = parts[2] || '0';
+
+  const formatPart = (targetPart: string, val: number) => {
+    const rounded = Number((val || 0).toFixed(2));
+    if (Number.isInteger(rounded)) {
+      if (Number(targetPart) === rounded) return targetPart;
+      return rounded.toString();
+    }
+    return rounded.toString().replace('.', ',');
+  };
+
+  return `${formatPart(tN, resultingN)}-${formatPart(tP, resultingP)}-${formatPart(tK, resultingK)}`;
 };
