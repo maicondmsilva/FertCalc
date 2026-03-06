@@ -40,28 +40,48 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
   }, [currentUser]);
 
   const handlePricingApproval = async (id: string, newStatus: 'Aprovada' | 'Reprovada') => {
-    if (!confirm(`Deseja realmente ${newStatus.toLowerCase()} esta precificação?`)) return;
+    let reason = '';
+    if (newStatus === 'Reprovada') {
+      reason = prompt('Por favor, informe o motivo da reprovação:') || '';
+      if (!reason.trim()) {
+        showError('É obrigatório informar o motivo da reprovação.');
+        return;
+      }
+    } else {
+      if (!confirm(`Deseja realmente aprovar esta precificação?`)) return;
+    }
+
     const pricing = pricings.find(p => p.id === id);
     if (!pricing) return;
+
     const historyEntry = {
-      date: new Date().toISOString(), userId: currentUser.id, userName: currentUser.name,
-      action: `Precificação ${newStatus}`
+      date: new Date().toISOString(),
+      userId: currentUser.id,
+      userName: currentUser.name,
+      action: `Precificação ${newStatus}${newStatus === 'Reprovada' ? `: ${reason}` : ''}`
     };
+
     try {
       await updatePricingRecord(id, {
         approvalStatus: newStatus,
         history: [...(pricing.history || []), historyEntry]
       } as any);
+
       await createNotification({
         userId: pricing.userId,
-        title: `Precificação ${newStatus.toLowerCase()}`,
-        message: `Sua precificação para ${pricing.factors.client.name} foi ${newStatus.toLowerCase()}.`,
-        date: new Date().toISOString(), read: false, type: 'pricing_approval',
+        title: `Precificação ${newStatus === 'Aprovada' ? 'Aprovada' : 'Reprovada'}`,
+        message: `Sua precificação para ${pricing.factors.client.name} foi ${newStatus.toLowerCase()}.${newStatus === 'Reprovada' ? ` Motivo: ${reason}` : ''}`,
+        date: new Date().toISOString(),
+        read: false,
+        type: 'pricing_approval',
       });
+
       setPricings(prev => prev.filter(p => p.id !== id));
       if (selectedPricing?.id === id) setSelectedPricing(null);
       showSuccess(`Precificação ${newStatus.toLowerCase()} com sucesso!`);
-    } catch { showError('Erro ao processar aprovação.'); }
+    } catch {
+      showError('Erro ao processar aprovação.');
+    }
   };
 
   const handleGoalApproval = async (id: string, newStatus: 'Aprovada' | 'Reprovada') => {

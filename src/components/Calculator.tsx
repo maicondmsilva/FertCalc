@@ -193,10 +193,10 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
   const removeMicro = (id: string) => setMicros(micros.filter(m => m.id !== id));
 
   const [expandedCalc, setExpandedCalc] = useState<string | null>(null);
+  const [microsInGear, setMicrosInGear] = useState<boolean>(true);
 
   const calculateFormula = (targetFormulaId?: string, overrideMacros?: RawMaterial[], overrideMicros?: RawMaterial[]) => {
     const currentMacros = overrideMacros || macros;
-    const currentMicros = overrideMicros || micros;
 
     const formulasToCalculate = targetFormulaId
       ? calculations.filter(c => c.id === targetFormulaId)
@@ -210,6 +210,9 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
     const updatedCalculations = [...calculations];
 
     formulasToCalculate.forEach(calc => {
+      // Use per-formula micros when microsInGear, otherwise global
+      const currentMicros = microsInGear ? (calc.micros.length > 0 ? calc.micros : micros) : (overrideMicros || micros);
+
       const match = calc.formula.match(/(\d+(?:[.,]\d+)?)[^\d]+(\d+(?:[.,]\d+)?)[^\d]+(\d+(?:[.,]\d+)?)/);
       if (!match) return;
 
@@ -228,6 +231,10 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
           n_eq: { min: reqN, max: reqN + 9 },
           p_eq: { min: reqP, max: reqP + 9 },
           k_eq: { min: reqK, max: reqK + 9 },
+
+          // CA/S targets from the formula's own state fields
+          ...(((calc.targetS || 0) > 0) ? { s_eq: { min: (calc.targetS! * 10), max: (calc.targetS! * 10) + 9 } } : {}),
+          ...(((calc.targetCa || 0) > 0) ? { ca_eq: { min: (calc.targetCa! * 10), max: (calc.targetCa! * 10) + 9 } } : {}),
           weight: { equal: 1000 },
         },
         variables: {},
@@ -255,6 +262,8 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
           n_eq: (Number(m.n) || 0) / 100,
           p_eq: (Number(m.p) || 0) / 100,
           k_eq: (Number(m.k) || 0) / 100,
+          s_eq: (Number(m.s) || 0) / 100,
+          ca_eq: (Number(m.ca) || 0) / 100,
           weight: 1,
           [minLiner]: 1,
           [maxLiner]: 1
@@ -447,6 +456,18 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
     setCalculations(calculations.map(c => c.id === id ? { ...c, [field]: value } : c));
   };
 
+  const handleCalcMicroChange = (calcId: string, microId: string, field: keyof RawMaterial, value: any) => {
+    setCalculations(calculations.map(c => {
+      if (c.id === calcId) {
+        return {
+          ...c,
+          micros: c.micros.map(m => m.id === microId ? { ...m, [field]: value } : m)
+        };
+      }
+      return c;
+    }));
+  };
+
   const updateCalculationFactors = (id: string, field: keyof PricingFactors, value: any) => {
     setCalculations(calculations.map(c => {
       if (c.id === id) {
@@ -461,36 +482,63 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
     }));
   };
 
-  const getDetailedFormulaName = (formulaName: string, macros: Material[], micros: Material[], resultingMicros: any) => {
-    // Extrai apenas a base da fórmula (NPK) caso ela já contenha sufixos ou micros de um salvamento anterior
+  const getDetailedFormulaName = (
+    formulaName: string,
+    macs: RawMaterial[],
+    mics: RawMaterial[],
+    resultingMicros: any,
+    targetCa?: number,
+    targetS?: number,
+    resultingCa?: number,
+    resultingS?: number
+  ) => {
     const baseFormula = formulaName.split(' C/')[0].split(' + ')[0];
-
     const suffixes: string[] = [];
-    macros.forEach(m => {
+    macs.forEach(m => {
       if (m.quantity > 0 && m.formulaSuffix) {
         const cleanSuffix = m.formulaSuffix.replace(/^[Cc]\/\s*/, '').trim();
         if (cleanSuffix) suffixes.push(cleanSuffix);
       }
     });
-    micros.forEach(m => {
+    mics.forEach(m => {
       if (m.quantity > 0 && m.formulaSuffix) {
         const cleanSuffix = m.formulaSuffix.replace(/^[Cc]\/\s*/, '').trim();
         if (cleanSuffix) suffixes.push(cleanSuffix);
       }
     });
+    const caParts: string[] = [];
+    if ((targetCa || 0) > 0 && (resultingCa || 0) > 0) caParts.push(`CA: ${(resultingCa!).toFixed(2)}%`);
+    if ((targetS || 0) > 0 && (resultingS || 0) > 0) caParts.push(`S: ${(resultingS!).toFixed(2)}%`);
+
+    let caStr = '';
+    if (caParts.length > 0) {
+      caStr = ` + ${caParts.join(' + ')}`;
+    }
 
     const microParts = Object.entries(resultingMicros || {})
       .filter(([_, val]) => (val as number) > 0)
       .map(([name, val]) => `${name}: ${(val as number).toFixed(2)}%`);
-    const microStr = microParts.length > 0 ? ` + ${microParts.join(', ')}` : '';
+
+    let microStr = '';
+    if (microParts.length > 0) {
+      microStr = ` + ${microParts.join(' + ')}`;
+    }
+
+    let finalName = baseFormula;
 
     if (suffixes.length > 0) {
-      const suffixPart = Array.from(new Set(suffixes)).join(' + ');
-      return `${baseFormula} C/ ${suffixPart}${microStr}`;
-    } else if (microStr) {
-      return `${baseFormula}${microStr}`;
+      finalName += ` C/ ${Array.from(new Set(suffixes)).join(' + ')}`;
     }
-    return baseFormula;
+
+    if (caStr) {
+      finalName += caStr;
+    }
+
+    if (microStr) {
+      finalName += microStr;
+    }
+
+    return finalName;
   };
 
   const savePricing = async () => {
@@ -512,7 +560,7 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
 
     const updatedCalculations = calculations.map(c => ({
       ...c,
-      formula: getDetailedFormulaName(c.formula, c.macros, c.micros, c.summary?.resultingMicros)
+      formula: getDetailedFormulaName(c.formula, c.macros, c.micros, c.summary?.resultingMicros, c.targetCa, c.targetS, c.summary?.resultingCa, c.summary?.resultingS)
     }));
 
     const record: PricingRecord = {
@@ -538,11 +586,23 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
 
     try {
       let savedRecord: PricingRecord;
+      const isNew = !initialData;
       if (initialData) {
         await updatePricingRecord(initialData.id, record);
         savedRecord = { ...record, id: initialData.id };
       } else {
         savedRecord = await createPricingRecord(record);
+        if (isNew) {
+          // Emit notification for new pricing
+          await createNotification({
+            userId: '', // Broad notification or handled by backend/logic to relevant roles
+            title: 'Nova Precificação Realizada',
+            message: `O vendedor ${currentUser.name} (${currentUser.customCode}) realizou uma nova precificação para ${factors.client.name}.`,
+            date: new Date().toISOString(),
+            read: false,
+            type: 'pricing_approval' // Reusing pricing_approval type for general pricing alerts
+          });
+        }
       }
       showSuccess('Precificação salva com sucesso!');
       setClientSearch('');
@@ -857,237 +917,420 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 pt-6 border-t border-stone-100">
-            <div>
-              <label className="block text-sm font-medium text-stone-600 mb-1">Status da Precificação</label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as any)}
-                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-              >
-                <option value="Em Andamento">Em Andamento</option>
-                <option value="Fechada">Fechada</option>
-                <option value="Perdida">Perdida</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-stone-600 mb-1">Fórmulas Alvo</label>
-              <div className="space-y-3">
-                {calculations.map((calc) => (
-                  <div key={calc.id} className="p-2 bg-stone-50 rounded-lg border border-stone-200 space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
+          {/* Status da Precifica\u00e7\u00e3o \u2014 full-width */}
+          <div className="mt-6 pt-6 border-t border-stone-100">
+            <label className="block text-sm font-medium text-stone-600 mb-1">Status da Precificação</label>
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value as any)}
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+            >
+              <option value="Em Andamento">Em Andamento</option>
+              <option value="Fechada">Fechada</option>
+              <option value="Perdida">Perdida</option>
+            </select>
+          </div>
+
+          {/* F\u00f3rmulas Alvo \u2014 full-width below status */}
+          <div className="mt-4 pt-4 border-t border-stone-100">
+            <label className="block text-sm font-medium text-stone-600 mb-2">Fórmulas Alvo</label>
+            <div className="space-y-3">
+              {calculations.map((calc) => (
+                <div key={calc.id} className="relative p-2 bg-stone-50 rounded-lg border border-stone-200 space-y-2">
+                  {/* Main row: checkbox + formula + CA/S + type + gear + calc + delete */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <input
+                      type="checkbox"
+                      checked={calc.selected}
+                      onChange={(e) => updateCalculation(calc.id, 'selected', e.target.checked)}
+                      className="w-4 h-4 text-emerald-600 rounded border-stone-300 focus:ring-emerald-500"
+                    />
+                    {/* Formula input */}
+                    <input
+                      type="text"
+                      value={calc.formula}
+                      onChange={(e) => updateCalculation(calc.id, 'formula', e.target.value)}
+                      placeholder="Ex: 04-14-08"
+                      className="flex-1 min-w-[90px] px-2 py-1 text-sm border border-stone-300 rounded focus:ring-2 focus:ring-emerald-500"
+                    />
+                    {/* CA% input */}
+                    <div className="flex items-center gap-0.5">
+                      <span className="text-[10px] font-bold text-amber-600">CA%</span>
                       <input
-                        type="checkbox"
-                        checked={calc.selected}
-                        onChange={(e) => updateCalculation(calc.id, 'selected', e.target.checked)}
-                        className="w-4 h-4 text-emerald-600 rounded border-stone-300 focus:ring-emerald-500"
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={(calc.targetCa || 0) === 0 ? '' : calc.targetCa}
+                        onChange={(e) => updateCalculation(calc.id, 'targetCa', e.target.value === '' ? 0 : Number(e.target.value))}
+                        placeholder="0"
+                        title="Cálcio alvo (%)"
+                        className="w-14 px-1.5 py-1 text-xs border border-amber-300 rounded focus:ring-1 focus:ring-amber-400 bg-amber-50"
                       />
-                      <input
-                        type="text"
-                        value={calc.formula}
-                        onChange={(e) => updateCalculation(calc.id, 'formula', e.target.value)}
-                        placeholder="Ex: 04-14-08"
-                        className="flex-1 px-2 py-1 text-sm border border-stone-300 rounded focus:ring-2 focus:ring-emerald-500"
-                      />
-                      <select
-                        value={calc.category || 'all'}
-                        onChange={(e) => updateCalculation(calc.id, 'category', e.target.value)}
-                        className="px-2 py-1 text-xs border border-stone-300 rounded focus:ring-2 focus:ring-emerald-500 w-28"
-                        title="Tipo de Fórmula"
-                      >
-                        <option value="all">Todas</option>
-                        <option value="phosphated">Fosfatada</option>
-                        <option value="nitrogenous">Nitrogenada</option>
-                        <option value="fertigran_p">Fertigran P</option>
-                      </select>
-                      <button
-                        onClick={() => setExpandedCalc(expandedCalc === calc.id ? null : calc.id)}
-                        className={`p-1.5 rounded transition-colors ${expandedCalc === calc.id ? 'bg-indigo-100 text-indigo-700' : 'text-indigo-600 hover:bg-indigo-50'}`}
-                        title="Fatores Comerciais"
-                      >
-                        <Settings className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => calculateFormula(calc.id)}
-                        className="p-1.5 bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-colors"
-                        title="Calcular esta fórmula"
-                      >
-                        <CalculatorIcon className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => removeTargetFormula(calc.id)}
-                        className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
                     </div>
+                    {/* S% input */}
+                    <div className="flex items-center gap-0.5">
+                      <span className="text-[10px] font-bold text-yellow-600">S%</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={(calc.targetS || 0) === 0 ? '' : calc.targetS}
+                        onChange={(e) => updateCalculation(calc.id, 'targetS', e.target.value === '' ? 0 : Number(e.target.value))}
+                        placeholder="0"
+                        title="Enxofre alvo (%)"
+                        className="w-14 px-1.5 py-1 text-xs border border-yellow-300 rounded focus:ring-1 focus:ring-yellow-400 bg-yellow-50"
+                      />
+                    </div>
+                    <select
+                      value={calc.category || 'all'}
+                      onChange={(e) => updateCalculation(calc.id, 'category', e.target.value)}
+                      className="px-2 py-1 text-xs border border-stone-300 rounded focus:ring-2 focus:ring-emerald-500 w-24"
+                      title="Tipo de Fórmula"
+                    >
+                      <option value="all">Todas</option>
+                      <option value="phosphated">Fosfatada</option>
+                      <option value="nitrogenous">Nitrogenada</option>
+                      <option value="fertigran_p">Fertigran P</option>
+                    </select>
+                    <button
+                      onClick={() => setExpandedCalc(expandedCalc === calc.id ? null : calc.id)}
+                      className={`p-1.5 rounded transition-colors ${expandedCalc === calc.id ? 'bg-indigo-100 text-indigo-700' : 'text-indigo-600 hover:bg-indigo-50'}`}
+                      title="Fatores e Micronutrientes"
+                    >
+                      <Settings className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => calculateFormula(calc.id)}
+                      className="p-1.5 bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-colors"
+                      title="Calcular esta fórmula"
+                    >
+                      <CalculatorIcon className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => removeTargetFormula(calc.id)}
+                      className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
 
-                    {expandedCalc === calc.id && (
-                      <div className="p-4 bg-white rounded-lg border border-stone-200 mt-2 space-y-4 animate-in fade-in slide-in-from-top-1">
-                        <div className="flex justify-between items-center border-b border-stone-100 pb-2">
-                          <h4 className="text-xs font-bold text-stone-500 uppercase">Fatores Comerciais - {calc.formula || 'Fórmula'}</h4>
-                          <button onClick={() => setExpandedCalc(null)} className="text-stone-400 hover:text-stone-600">
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
+                  {/* Expanded Gear Panel \u2014 absolute, extends right toward summary */}
+                  {expandedCalc === calc.id && (
+                    <div
+                      className="absolute left-0 z-40 p-3 bg-white rounded-lg border border-stone-300 shadow-xl space-y-4 animate-in fade-in slide-in-from-top-1"
+                      style={{ top: '100%', width: 'min(800px, calc(100vw - 2rem))', marginTop: '4px' }}
+                    >
+                      <div className="flex justify-between items-center border-b border-stone-100 pb-2">
+                        <h4 className="text-xs font-bold text-stone-500 uppercase">⚙ {calc.formula || 'Fórmula'}</h4>
+                        <button onClick={() => setExpandedCalc(null)} className="text-stone-400 hover:text-stone-600">
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
 
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      {/* Fatores Comerciais */}
+                      <div>
+                        <p className="text-[10px] font-bold text-stone-400 uppercase mb-2">Fatores Comerciais</p>
+                        <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
                           <div>
-                            <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">Fator (Mult.)</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={calc.factors.factor}
+                            <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">Fator (×)</label>
+                            <input type="number" step="0.01" value={calc.factors.factor}
                               onChange={(e) => updateCalculationFactors(calc.id, 'factor', Number(e.target.value))}
-                              className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500"
-                            />
+                              className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500" />
                           </div>
                           <div>
                             <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">Desconto (R$/t)</label>
-                            <input
-                              type="number"
-                              value={calc.factors.discount}
-                              onChange={(e) => updateCalculationFactors(calc.id, 'discount', Number(e.target.value))}
-                              className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500"
-                            />
+                            <input type="number" value={calc.factors.discount === 0 ? '' : calc.factors.discount}
+                              onChange={(e) => updateCalculationFactors(calc.id, 'discount', e.target.value === '' ? 0 : Number(e.target.value))}
+                              className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500" />
                           </div>
                           <div>
                             <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">Alíquota (%)</label>
-                            <input
-                              type="number"
-                              step="0.1"
-                              value={calc.factors.taxRate}
-                              onChange={(e) => updateCalculationFactors(calc.id, 'taxRate', Number(e.target.value))}
-                              className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500"
-                            />
+                            <input type="number" step="0.1" value={calc.factors.taxRate === 0 ? '' : calc.factors.taxRate}
+                              onChange={(e) => updateCalculationFactors(calc.id, 'taxRate', e.target.value === '' ? 0 : Number(e.target.value))}
+                              className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500" />
                           </div>
                           <div>
                             <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">Comissão (%)</label>
-                            <input
-                              type="number"
-                              step="0.1"
-                              value={calc.factors.commission}
-                              onChange={(e) => updateCalculationFactors(calc.id, 'commission', Number(e.target.value))}
-                              className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500"
-                            />
+                            <input type="number" step="0.1" value={calc.factors.commission === 0 ? '' : calc.factors.commission}
+                              onChange={(e) => updateCalculationFactors(calc.id, 'commission', e.target.value === '' ? 0 : Number(e.target.value))}
+                              className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500" />
                           </div>
                           <div>
                             <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">Frete (R$/t)</label>
-                            <input
-                              type="number"
-                              value={calc.factors.freight}
-                              onChange={(e) => updateCalculationFactors(calc.id, 'freight', Number(e.target.value))}
-                              className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500"
-                            />
+                            <input type="number" value={calc.factors.freight === 0 ? '' : calc.factors.freight}
+                              onChange={(e) => updateCalculationFactors(calc.id, 'freight', e.target.value === '' ? 0 : Number(e.target.value))}
+                              className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500" />
                           </div>
                           <div>
                             <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">Juros Mensal (%)</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={calc.factors.monthlyInterestRate}
-                              onChange={(e) => updateCalculationFactors(calc.id, 'monthlyInterestRate', Number(e.target.value))}
-                              className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500"
-                            />
+                            <input type="number" step="0.01" value={calc.factors.monthlyInterestRate === 0 ? '' : calc.factors.monthlyInterestRate}
+                              onChange={(e) => updateCalculationFactors(calc.id, 'monthlyInterestRate', e.target.value === '' ? 0 : Number(e.target.value))}
+                              className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500" />
                           </div>
                           <div>
                             <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">Qtd Total (Tons)</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={calc.factors.totalTons}
-                              onChange={(e) => updateCalculationFactors(calc.id, 'totalTons', Number(e.target.value))}
-                              className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500"
-                            />
+                            <input type="number" step="0.01" value={calc.factors.totalTons === 0 ? '' : calc.factors.totalTons}
+                              onChange={(e) => updateCalculationFactors(calc.id, 'totalTons', e.target.value === '' ? 0 : Number(e.target.value))}
+                              className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500" />
                           </div>
                           <div>
                             <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">Vencimento</label>
-                            <input
-                              type="date"
-                              value={calc.factors.dueDate || ''}
+                            <input type="date" value={calc.factors.dueDate || ''}
                               onChange={(e) => updateCalculationFactors(calc.id, 'dueDate', e.target.value)}
-                              className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500"
-                            />
+                              className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500" />
                           </div>
                           <div className="flex items-center pt-4">
-                            <input
-                              type="checkbox"
-                              id={`exempt-${calc.id}`}
-                              checked={calc.factors.exemptCurrentMonth}
+                            <input type="checkbox" id={`exempt-${calc.id}`} checked={calc.factors.exemptCurrentMonth}
                               onChange={(e) => updateCalculationFactors(calc.id, 'exemptCurrentMonth', e.target.checked)}
-                              className="rounded text-emerald-600 focus:ring-emerald-500 mr-2"
-                            />
+                              className="rounded text-emerald-600 focus:ring-emerald-500 mr-2" />
                             <label htmlFor={`exempt-${calc.id}`} className="text-[10px] font-bold text-stone-500 uppercase">Isentar juros mês atual</label>
                           </div>
                         </div>
-
-                        {/* Materials Used */}
-                        {calc.summary && (
-                          <div className="mt-4 pt-4 border-t border-stone-100">
-                            <h5 className="text-[10px] font-bold text-stone-400 uppercase mb-2">Matérias-Primas Utilizadas</h5>
-                            <div className="grid grid-cols-1 gap-1">
-                              {[...calc.macros, ...calc.micros].filter(m => m.quantity > 0).map(m => (
-                                <div key={m.id} className="flex justify-between text-[11px] bg-stone-50 px-2 py-1 rounded">
-                                  <span className="text-stone-600 font-medium">{m.name}</span>
-                                  <span className="text-emerald-600 font-bold">{m.quantity.toFixed(1)} kg</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Micro Guarantees */}
-                        {calc.summary?.resultingMicros && Object.keys(calc.summary.resultingMicros).length > 0 && (
-                          <div className="mt-4 pt-4 border-t border-stone-100">
-                            <h5 className="text-[10px] font-bold text-stone-400 uppercase mb-2">Garantias de Micros</h5>
-                            <div className="flex flex-wrap gap-2">
-                              {Object.entries(calc.summary.resultingMicros).map(([name, val]) => (
-                                <div key={name} className="flex items-center gap-1 bg-blue-50 px-2 py-1 rounded border border-blue-100">
-                                  <span className="text-[10px] font-bold text-stone-600">{name}:</span>
-                                  <span className="text-[10px] font-bold text-blue-600">{(val as number).toFixed(3)}%</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
                       </div>
-                    )}
 
-                    {calc.summary && (
-                      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-stone-200">
-                        <div className="text-center">
-                          <p className="text-[8px] text-stone-400 uppercase font-bold">Preço Final</p>
-                          <p className="text-xs font-bold text-emerald-600">R$ {calc.summary.finalPrice.toFixed(2)}</p>
+                      {/* Resultado Real */}
+                      {calc.summary && (
+                        <div className="pt-2 border-t border-stone-100">
+                          <p className="text-[10px] font-bold text-stone-400 uppercase mb-2">Resultado Real</p>
+                          <div className="flex flex-wrap gap-2">
+                            <span className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded text-xs font-bold">
+                              N-P-K: {formatNPK(calc.formula, calc.summary.resultingN, calc.summary.resultingP, calc.summary.resultingK)}
+                            </span>
+                            {(calc.summary.resultingCa || 0) > 0 && (
+                              <span className="px-2 py-1 bg-amber-50 text-amber-700 rounded text-xs font-bold">
+                                CA: {calc.summary.resultingCa.toFixed(2)}%
+                              </span>
+                            )}
+                            {(calc.summary.resultingS || 0) > 0 && (
+                              <span className="px-2 py-1 bg-yellow-50 text-yellow-700 rounded text-xs font-bold">
+                                S: {calc.summary.resultingS.toFixed(2)}%
+                              </span>
+                            )}
+                            <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded text-xs font-bold">
+                              R$ {calc.summary.finalPrice.toFixed(2)}/t
+                            </span>
+                          </div>
                         </div>
-                        <div className="text-center border-x border-stone-100">
-                          <p className="text-[8px] text-stone-400 uppercase font-bold">N-P-K Real</p>
-                          <p className="text-xs font-bold text-indigo-600">
-                            {formatNPK(calc.formula, calc.summary.resultingN, calc.summary.resultingP, calc.summary.resultingK)}
+                      )}
+
+                      {/* Matérias-Primas Utilizadas */}
+                      {calc.summary && (
+                        <div className="pt-2 border-t border-stone-100">
+                          <p className="text-[10px] font-bold text-stone-400 uppercase mb-2">Matérias-Primas Utilizadas</p>
+                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-1">
+                            {[...calc.macros, ...calc.micros].filter(m => m.quantity > 0).map(m => (
+                              <div key={m.id} className="flex justify-between text-[11px] bg-stone-50 px-2 py-1 rounded">
+                                <span className="text-stone-600 font-medium truncate pr-1">{m.name}</span>
+                                <span className="text-emerald-600 font-bold shrink-0">{m.quantity.toFixed(1)} kg</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Micro Guarantees */}
+                      {calc.summary?.resultingMicros && Object.keys(calc.summary.resultingMicros).length > 0 && (
+                        <div className="pt-2 border-t border-stone-100">
+                          <p className="text-[10px] font-bold text-stone-400 uppercase mb-2">Garantias de Micros</p>
+                          <div className="flex flex-wrap gap-2">
+                            {Object.entries(calc.summary.resultingMicros).map(([name, val]) => (
+                              <div key={name} className="flex items-center gap-1 bg-blue-50 px-2 py-1 rounded border border-blue-100">
+                                <span className="text-[10px] font-bold text-stone-600">{name}:</span>
+                                <span className="text-[10px] font-bold text-blue-600">{(val as number).toFixed(3)}%</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Micronutrients Table IN GEAR */}
+                      {microsInGear && calc.micros.length > 0 && (
+                        <div className="pt-4 border-t border-stone-200 mt-4">
+                          <div className="flex justify-between items-center mb-2">
+                            <p className="text-[12px] font-bold text-stone-700 flex items-center">
+                              <Building2 className="w-4 h-4 mr-1 text-stone-500" />
+                              Micronutrientes da Fórmula
+                            </p>
+                          </div>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs text-stone-600">
+                              <thead className="bg-stone-50 text-stone-500">
+                                <tr>
+                                  <th className="px-2 py-2 w-16">
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        type="checkbox"
+                                        checked={calc.micros.length > 0 && calc.micros.every(m => m.selected)}
+                                        onChange={(e) => updateCalculation(calc.id, 'micros', calc.micros.map(m => ({ ...m, selected: e.target.checked })))}
+                                        className={`rounded text-emerald-600 focus:ring-emerald-500 ${isLocked ? 'cursor-not-allowed' : ''}`}
+                                      />
+                                      <span>Usar</span>
+                                    </div>
+                                  </th>
+                                  <th className="px-2 py-2 min-w-[120px]">M. Prima</th>
+                                  <th className="px-2 py-2 w-20">Preço ({currency === 'BRL' ? 'R$' : 'US$'})</th>
+                                  <th className="px-2 py-2">Garantias Micros</th>
+                                  <th className="px-1 py-1 w-16">Min(kg)</th>
+                                  <th className="px-1 py-1 w-16">Max(kg)</th>
+                                  <th className="px-2 py-2 w-20">Qtd(kg)</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {calc.micros.map((m) => (
+                                  <tr key={m.id} className="border-b border-stone-100 hover:bg-stone-50/50">
+                                    <td className="px-2 py-1">
+                                      <input type="checkbox" checked={m.selected} disabled={isLocked} onChange={(e) => handleCalcMicroChange(calc.id, m.id, 'selected', e.target.checked)} className={`rounded text-emerald-600 focus:ring-emerald-500 ${isLocked ? 'cursor-not-allowed' : ''}`} />
+                                    </td>
+                                    <td className="px-2 py-1"><input type="text" value={m.name || ''} disabled={isLocked} onChange={(e) => handleCalcMicroChange(calc.id, m.id, 'name', e.target.value)} className={`w-full border-stone-200 rounded px-1 py-1 text-xs ${isLocked ? 'bg-stone-50 cursor-not-allowed' : ''}`} /></td>
+                                    <td className="px-2 py-1">
+                                      <input
+                                        type="number"
+                                        value={m.price === 0 ? '' : m.price}
+                                        placeholder="0"
+                                        disabled={isLocked}
+                                        onChange={(e) => handleCalcMicroChange(calc.id, m.id, 'price', e.target.value === '' ? 0 : Number(e.target.value))}
+                                        className={`w-full border-stone-200 rounded px-1 py-1 text-xs ${isLocked ? 'bg-stone-50 cursor-not-allowed' : ''}`}
+                                      />
+                                    </td>
+                                    <td className="px-2 py-1">
+                                      <div className="space-y-1">
+                                        {m.microGuarantees.map((g, idx) => (
+                                          <div key={idx} className="flex gap-1 items-center">
+                                            <input
+                                              type="text"
+                                              value={g.name || ''}
+                                              disabled={isLocked}
+                                              onChange={(e) => {
+                                                const newG = [...m.microGuarantees];
+                                                newG[idx].name = e.target.value;
+                                                handleCalcMicroChange(calc.id, m.id, 'microGuarantees', newG);
+                                              }}
+                                              style={getAutoWidth(g.name)}
+                                              className={`border-stone-200 rounded px-1 py-0.5 text-[10px] ${isLocked ? 'bg-stone-50 cursor-not-allowed' : ''}`}
+                                              placeholder="Nome"
+                                            />
+                                            <input
+                                              type="number"
+                                              value={g.value === 0 ? '' : g.value}
+                                              disabled={isLocked}
+                                              onChange={(e) => {
+                                                const newG = [...m.microGuarantees];
+                                                newG[idx].value = e.target.value === '' ? 0 : Number(e.target.value);
+                                                handleCalcMicroChange(calc.id, m.id, 'microGuarantees', newG);
+                                              }}
+                                              style={getAutoWidth(g.value)}
+                                              className={`border-stone-200 rounded px-1 py-0.5 text-[10px] ${isLocked ? 'bg-stone-50 cursor-not-allowed' : ''}`}
+                                              placeholder="%"
+                                            />
+                                            {!isLocked && (
+                                              <button
+                                                onClick={() => {
+                                                  const newG = m.microGuarantees.filter((_, i) => i !== idx);
+                                                  handleCalcMicroChange(calc.id, m.id, 'microGuarantees', newG);
+                                                }}
+                                                className="text-red-400 hover:text-red-600"
+                                              >
+                                                <Trash2 className="w-3 h-3" />
+                                              </button>
+                                            )}
+                                          </div>
+                                        ))}
+                                        {!isLocked && (
+                                          <button
+                                            onClick={() => {
+                                              const newG = [...m.microGuarantees, { name: '', value: 0 }];
+                                              handleCalcMicroChange(calc.id, m.id, 'microGuarantees', newG);
+                                            }}
+                                            className="text-[9px] text-emerald-600 hover:underline flex items-center"
+                                          >
+                                            <Plus className="w-2 h-2 mr-0.5" /> Adicionar
+                                          </button>
+                                        )}
+                                      </div>
+                                    </td>
+                                    <td className="px-2 py-1">
+                                      <input
+                                        type="number"
+                                        value={m.minQty === 0 ? '' : m.minQty}
+                                        placeholder="0"
+                                        disabled={isLocked}
+                                        onChange={(e) => handleCalcMicroChange(calc.id, m.id, 'minQty', e.target.value === '' ? 0 : Number(e.target.value))}
+                                        className={`w-full border-stone-200 rounded px-1 py-1 text-xs ${isLocked ? 'bg-stone-50 cursor-not-allowed' : ''}`}
+                                      />
+                                    </td>
+                                    <td className="px-2 py-1">
+                                      <input
+                                        type="number"
+                                        value={m.maxQty === 0 ? '' : m.maxQty}
+                                        placeholder="0"
+                                        disabled={isLocked}
+                                        onChange={(e) => handleCalcMicroChange(calc.id, m.id, 'maxQty', e.target.value === '' ? 0 : Number(e.target.value))}
+                                        className={`w-full border-stone-200 rounded px-1 py-1 text-xs ${isLocked ? 'bg-stone-50 cursor-not-allowed' : ''}`}
+                                      />
+                                    </td>
+                                    <td className="px-2 py-1">
+                                      <input
+                                        type="number"
+                                        value={m.quantity === 0 ? '' : m.quantity}
+                                        placeholder="0"
+                                        disabled={isLocked}
+                                        onChange={(e) => handleCalcMicroChange(calc.id, m.id, 'quantity', e.target.value === '' ? 0 : Number(e.target.value))}
+                                        className={`w-full border-emerald-300 rounded px-1 py-1 text-xs focus:ring-emerald-500 ${isLocked ? 'bg-stone-50 cursor-not-allowed' : ''}`}
+                                      />
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+
+                    </div>
+                  )}
+
+                  {/* Quick summary bar */}
+                  {calc.summary && (
+                    <div className="grid grid-cols-3 gap-2 pt-2 border-t border-stone-200">
+                      <div className="text-center">
+                        <p className="text-[8px] text-stone-400 uppercase font-bold">Preço Final</p>
+                        <p className="text-xs font-bold text-emerald-600">R$ {calc.summary.finalPrice.toFixed(2)}</p>
+                      </div>
+                      <div className="text-center border-x border-stone-100">
+                        <p className="text-[8px] text-stone-400 uppercase font-bold">N-P-K Real</p>
+                        <p className="text-xs font-bold text-indigo-600">
+                          {formatNPK(calc.formula, calc.summary.resultingN, calc.summary.resultingP, calc.summary.resultingK)}
+                        </p>
+                        {((calc.summary.resultingCa || 0) > 0 || (calc.summary.resultingS || 0) > 0) && (
+                          <p className="text-[9px] text-stone-500">
+                            {(calc.summary.resultingCa || 0) > 0 && `CA:${calc.summary.resultingCa.toFixed(1)}%`}
+                            {(calc.summary.resultingCa || 0) > 0 && (calc.summary.resultingS || 0) > 0 && ' '}
+                            {(calc.summary.resultingS || 0) > 0 && `S:${calc.summary.resultingS.toFixed(1)}%`}
                           </p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-[8px] text-stone-400 uppercase font-bold">Custo Base</p>
-                          <p className="text-xs font-bold text-stone-700">R$ {calc.summary.baseCost.toFixed(2)}</p>
-                        </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                ))}
+                      <div className="text-center">
+                        <p className="text-[8px] text-stone-400 uppercase font-bold">Custo Base</p>
+                        <p className="text-xs font-bold text-stone-700">R$ {calc.summary.baseCost.toFixed(2)}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+              <button
+                onClick={addTargetFormula}
+                className="w-full py-2 border-2 border-dashed border-stone-300 rounded-lg text-stone-500 hover:border-emerald-500 hover:text-emerald-600 transition-all text-xs font-bold flex items-center justify-center"
+              >
+                <Plus className="w-4 h-4 mr-1" /> Adicionar Fórmula Alvo
+              </button>
+              {calculations.some(c => c.selected) && (
                 <button
-                  onClick={addTargetFormula}
-                  className="w-full py-2 border-2 border-dashed border-stone-300 rounded-lg text-stone-500 hover:border-emerald-500 hover:text-emerald-600 transition-all text-xs font-bold flex items-center justify-center"
+                  onClick={() => calculateFormula()}
+                  className="w-full py-2 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 transition-colors shadow-sm text-sm"
                 >
-                  <Plus className="w-4 h-4 mr-1" /> Adicionar Fórmula Alvo
+                  Calcular Selecionadas
                 </button>
-                {calculations.some(c => c.selected) && (
-                  <button
-                    onClick={() => calculateFormula()}
-                    className="w-full py-2 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 transition-colors shadow-sm text-sm"
-                  >
-                    Calcular Selecionadas
-                  </button>
-                )}
-              </div>
+              )}
             </div>
           </div>
         </div>
@@ -1096,11 +1339,24 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
         <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200 overflow-x-auto">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold text-stone-800">Macronutrientes</h2>
-            {!isLocked && (
-              <button onClick={addMacro} className="text-sm bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg font-medium hover:bg-emerald-100 flex items-center">
-                <Plus className="w-4 h-4 mr-1" /> Adicionar
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setMicrosInGear(v => !v)}
+                title={microsInGear ? 'Micros na engrenagem (clique para tabela separada)' : 'Micros em tabela separada (clique para mover para engrenagem)'}
+                className={`text-xs px-2 py-1 rounded border font-bold transition-colors flex items-center gap-1 ${microsInGear
+                  ? 'bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100'
+                  : 'bg-stone-100 border-stone-300 text-stone-600 hover:bg-stone-200'
+                  }`}
+              >
+                <Settings className="w-3 h-3" />
+                {microsInGear ? 'Micros: ⚙' : 'Micros: tabela'}
               </button>
-            )}
+              {!isLocked && (
+                <button onClick={addMacro} className="text-sm bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg font-medium hover:bg-emerald-100 flex items-center">
+                  <Plus className="w-4 h-4 mr-1" /> Adicionar
+                </button>
+              )}
+            </div>
           </div>
           <table className="w-full text-sm text-left">
             <thead className="text-xs text-stone-500 uppercase bg-stone-50">
@@ -1438,6 +1694,16 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
                     <p className="text-sm font-mono text-emerald-400">
                       {formatNPK(calc.formula, calc.summary?.resultingN || 0, calc.summary?.resultingP || 0, calc.summary?.resultingK || 0)}
                     </p>
+                    {(calc.summary?.resultingCa || 0) > 0 && (
+                      <p className="text-[10px] font-mono text-amber-400 mt-1">
+                        CA: {calc.summary!.resultingCa.toFixed(2)}%
+                      </p>
+                    )}
+                    {(calc.summary?.resultingS || 0) > 0 && (
+                      <p className="text-[10px] font-mono text-yellow-500">
+                        S: {calc.summary!.resultingS.toFixed(2)}%
+                      </p>
+                    )}
                   </div>
                 </div>
 

@@ -244,6 +244,8 @@ export interface TargetFormula {
   summary?: PricingSummary;
   macros: RawMaterial[];
   micros: RawMaterial[];
+  targetCa?: number;
+  targetS?: number;
 }
 
 export interface SavedFormula {

@@ -34,7 +34,9 @@ export default function PricingDetailModal({
   const [isTransferring, setIsTransferring] = useState(false);
   const [availableSellers, setAvailableSellers] = useState<User[]>([]);
   const [selectedSellerId, setSelectedSellerId] = useState('');
-  const [loadingTransfer, setLoadingTransfer] = useState(false);
+  const [isRejecting, setIsRejecting] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [isAcceptingTransfer, setIsAcceptingTransfer] = useState(false);
 
   React.useEffect(() => {
     if (isTransferring) {
@@ -109,6 +111,50 @@ export default function PricingDetailModal({
       if (onSaveObservation) onSaveObservation();
     } catch {
       showError('Erro ao salvar observação.');
+    }
+  };
+
+  const handleUpdateApproval = async (status: 'Aprovada' | 'Reprovada') => {
+    if (status === 'Reprovada' && !isRejecting) {
+      setIsRejecting(true);
+      return;
+    }
+
+    if (status === 'Reprovada' && !rejectionReason.trim()) {
+      showError('Informe o motivo da reprovação.');
+      return;
+    }
+
+    if (onUpdateApproval) {
+      const historyEntry = {
+        date: new Date().toISOString(),
+        userId: currentUser.id,
+        userName: currentUser.name,
+        action: `Precificação ${status}${status === 'Reprovada' ? `: ${rejectionReason}` : ''}`
+      };
+
+      try {
+        await updatePricingRecord(selectedPricing.id, {
+          approvalStatus: status,
+          history: [...(selectedPricing.history || []), historyEntry]
+        } as any);
+
+        await createNotification({
+          userId: selectedPricing.userId,
+          title: `Precificação ${status === 'Aprovada' ? 'Aprovada' : 'Reprovada'}`,
+          message: `Sua precificação para ${selectedPricing.factors.client.name} foi ${status.toLowerCase()}.${status === 'Reprovada' ? ` Motivo: ${rejectionReason}` : ''}`,
+          date: new Date().toISOString(),
+          read: false,
+          type: 'pricing_approval',
+        });
+
+        showSuccess(`Precificação ${status === 'Aprovada' ? 'aprovada' : 'reprovada'} com sucesso!`);
+        onUpdateApproval(selectedPricing.id, status);
+        setIsRejecting(false);
+        setRejectionReason('');
+      } catch (err) {
+        showError('Erro ao atualizar status de aprovação.');
+      }
     }
   };
 
@@ -267,7 +313,7 @@ export default function PricingDetailModal({
             {selectedPricing.transferToUserId === currentUser.id && (
               <button
                 onClick={handleAcceptTransfer}
-                disabled={loadingTransfer}
+                disabled={isAcceptingTransfer}
                 className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition-all active:scale-95 shadow-lg shadow-emerald-200"
               >
                 <CheckCircle2 className="w-4 h-4" /> Aceitar Transferência
@@ -312,10 +358,10 @@ export default function PricingDetailModal({
               <div className="flex gap-2">
                 <button
                   onClick={handleTransfer}
-                  disabled={loadingTransfer || !selectedSellerId}
+                  disabled={isAcceptingTransfer || !selectedSellerId}
                   className="px-6 py-2 bg-amber-600 text-white font-bold rounded-lg hover:bg-amber-700 disabled:bg-amber-300 transition-all shadow-lg shadow-amber-200 active:scale-95"
                 >
-                  {loadingTransfer ? 'Transferindo...' : 'Confirmar Envio'}
+                  {isAcceptingTransfer ? 'Transferindo...' : 'Confirmar Envio'}
                 </button>
                 <button
                   onClick={() => setIsTransferring(false)}
@@ -333,32 +379,60 @@ export default function PricingDetailModal({
           {((currentUser.role === 'master' || currentUser.role === 'admin' || currentUser.role === 'manager') || (currentUser.permissions as any)?.history_changeStatus !== false) &&
             onUpdateApproval &&
             selectedPricing.approvalStatus === 'Pendente' && (
-              <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 flex items-center justify-between">
-                <div>
-                  <span className="text-sm font-bold text-amber-800 uppercase block">Aprovação do Gerente</span>
-                  <p className="text-xs text-amber-600">Esta ação é definitiva e não poderá ser alterada após o clique.</p>
+              <div className="bg-amber-50 p-4 rounded-xl border border-amber-200">
+                <div className="flex justify-between items-center mb-4">
+                  <div>
+                    <span className="text-sm font-bold text-amber-800 uppercase block">Aprovação do Gerente</span>
+                    <p className="text-xs text-amber-600">Esta ação é definitiva e não poderá ser alterada após o clique.</p>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => {
-                      if (confirm('Deseja realmente APROVAR esta precificação? Esta ação não pode ser desfeita.')) {
-                        onUpdateApproval(selectedPricing.id, 'Aprovada');
-                      }
-                    }}
-                    className="px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition-all active:scale-95 shadow-sm"
-                  >
-                    Aprovar Precificação
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (confirm('Deseja realmente REPROVAR esta precificação? Esta ação não pode ser desfeita.')) {
-                        onUpdateApproval(selectedPricing.id, 'Reprovada');
-                      }
-                    }}
-                    className="px-4 py-2 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700 transition-all active:scale-95 shadow-sm"
-                  >
-                    Reprovar Precificação
-                  </button>
+                <div className="flex flex-wrap gap-2">
+                  {!isRejecting ? (
+                    <>
+                      <button
+                        onClick={() => handleUpdateApproval('Aprovada')}
+                        className="flex-1 px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 flex items-center justify-center gap-2"
+                      >
+                        <CheckCircle className="w-4 h-4" /> Aprovar
+                      </button>
+                      <button
+                        onClick={() => handleUpdateApproval('Reprovada')}
+                        className="flex-1 px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 flex items-center justify-center gap-2"
+                      >
+                        <XCircle className="w-4 h-4" /> Reprovar
+                      </button>
+                    </>
+                  ) : (
+                    <div className="w-full space-y-3 animate-in fade-in slide-in-from-top-2">
+                      <div className="flex justify-between items-center">
+                        <label className="text-xs font-bold text-red-600 uppercase tracking-widest">Motivo da Reprovação</label>
+                        <button onClick={() => setIsRejecting(false)} className="text-stone-400 hover:text-stone-600">
+                          <XCircle className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <textarea
+                        value={rejectionReason}
+                        onChange={(e) => setRejectionReason(e.target.value)}
+                        placeholder="Descreva o motivo pelo qual esta precificação foi rejeitada..."
+                        className="w-full p-3 border-2 border-red-100 rounded-xl text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none min-h-[100px]"
+                        autoFocus
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setIsRejecting(false)}
+                          className="flex-1 px-4 py-2 bg-stone-100 text-stone-600 font-bold rounded-lg hover:bg-stone-200"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          onClick={() => handleUpdateApproval('Reprovada')}
+                          className="flex-2 px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700"
+                        >
+                          Confirmar Reprovação
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

@@ -45,13 +45,29 @@ export default function Goals({ currentUser }: GoalsProps) {
 
   const calculateProgress = (goal: Goal) => {
     const relevant = pricings.filter(p => {
+      // Must be the same user, closed, and approved
       if (p.userId !== goal.userId || p.status !== 'Fechada' || p.approvalStatus !== 'Aprovada') return false;
+
       const date = new Date(p.date);
-      if (goal.type === 'monthly') return date.getMonth() + 1 === goal.month && date.getFullYear() === goal.year;
-      return date.getFullYear() === goal.year;
+      const pricingYear = date.getFullYear();
+
+      if (goal.type === 'monthly') {
+        // For monthly goals, match month and year
+        return date.getMonth() + 1 === goal.month && pricingYear === goal.year;
+      } else {
+        // For annual goals, match year
+        return pricingYear === goal.year;
+      }
     });
+
     const current = relevant.reduce((sum, p) => sum + (p.factors?.totalTons || 0), 0);
-    return { current, percentage: Math.min((current / goal.targetValue) * 100, 100), remaining: Math.max(goal.targetValue - current, 0) };
+    const percentage = goal.targetValue > 0 ? Math.min((current / goal.targetValue) * 100, 100) : 0;
+
+    return {
+      current,
+      percentage,
+      remaining: Math.max(goal.targetValue - current, 0)
+    };
   };
 
   const handleAddGoal = async () => {
@@ -73,7 +89,7 @@ export default function Goals({ currentUser }: GoalsProps) {
         await createNotification({
           userId: '',
           title: 'Nova Meta Pendente',
-          message: `${currentUser.name} criou uma nova meta de ${Number(newGoal.targetValue).toLocaleString('pt-BR')} Toneladas.`,
+          message: `${currentUser.name} criou uma nova meta de ${Number(newGoal.targetValue).toLocaleString('pt-BR')} Toneladas (${newGoal.type === 'monthly' ? 'Mensal' : 'Anual'}).`,
           date: new Date().toISOString(),
           read: false,
           type: 'goal_approval'

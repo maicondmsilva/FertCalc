@@ -68,7 +68,9 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
     closed: pricings.filter(p => p.status === 'Fechada').length,
     lost: pricings.filter(p => p.status === 'Perdida').length,
     totalValue: pricings.filter(p => p.status === 'Fechada').reduce((sum, p) => sum + (p.summary.totalSaleValue || 0), 0),
-    totalValueInProgress: pricings.filter(p => p.status === 'Em Andamento').reduce((sum, p) => sum + (p.summary.totalSaleValue || 0), 0)
+    totalValueInProgress: pricings.filter(p => p.status === 'Em Andamento').reduce((sum, p) => sum + (p.summary.totalSaleValue || 0), 0),
+    totalTonsClosed: pricings.filter(p => p.status === 'Fechada').reduce((sum, p) => sum + (p.factors?.totalTons || 0), 0),
+    totalTonsInProgress: pricings.filter(p => p.status === 'Em Andamento').reduce((sum, p) => sum + (p.factors?.totalTons || 0), 0)
   };
 
   const exportConsolidatedReport = () => {
@@ -175,23 +177,23 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
           <p className="text-2xl font-black text-stone-800">{stats.total}</p>
         </div>
         <div className="bg-white p-4 rounded-xl shadow-sm border border-stone-200">
-          <p className="text-xs font-bold text-blue-500 uppercase tracking-wider mb-1">Em Aberto</p>
-          <p className="text-2xl font-black text-blue-600">{stats.inProgress}</p>
+          <p className="text-xs font-bold text-blue-500 uppercase tracking-wider mb-1">Em Aberto (Tons)</p>
+          <p className="text-2xl font-black text-blue-600">{stats.totalTonsInProgress.toLocaleString('pt-BR', { minimumFractionDigits: 1 })} t</p>
         </div>
         <div className="bg-white p-4 rounded-xl shadow-sm border border-stone-200">
-          <p className="text-xs font-bold text-emerald-500 uppercase tracking-wider mb-1">Fechadas</p>
-          <p className="text-2xl font-black text-emerald-600">{stats.closed}</p>
+          <p className="text-xs font-bold text-emerald-500 uppercase tracking-wider mb-1">Fechadas (Tons)</p>
+          <p className="text-2xl font-black text-emerald-600">{stats.totalTonsClosed.toLocaleString('pt-BR', { minimumFractionDigits: 1 })} t</p>
         </div>
         <div className="bg-white p-4 rounded-xl shadow-sm border border-stone-200">
           <p className="text-xs font-bold text-red-500 uppercase tracking-wider mb-1">Perdidas</p>
           <p className="text-2xl font-black text-red-600">{stats.lost}</p>
         </div>
         <div className="bg-white p-4 rounded-xl shadow-sm border border-stone-200">
-          <p className="text-xs font-bold text-blue-500 uppercase tracking-wider mb-1">Total Em Aberto</p>
+          <p className="text-xs font-bold text-blue-500 uppercase tracking-wider mb-1">Valor Em Aberto</p>
           <p className="text-xl font-black text-blue-600">R$ {stats.totalValueInProgress.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
         </div>
         <div className="bg-white p-4 rounded-xl shadow-sm border border-stone-200 col-span-2 md:col-span-1">
-          <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider mb-1">Venda Total (Fechada)</p>
+          <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider mb-1">Faturamento (Fechada)</p>
           <p className="text-xl font-black text-emerald-700">R$ {stats.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
         </div>
       </div>
@@ -318,11 +320,11 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
             </div>
             <div className="bg-stone-50 p-5 flex justify-between items-center">
               <div>
-                <p className="text-xs text-stone-500 font-medium uppercase tracking-wider mb-1">Venda Total ({p.factors?.totalTons || 0}t)</p>
+                <p className="text-xs text-stone-500 font-medium uppercase tracking-wider mb-1">Venda Total ({p.factors?.totalTons || 0} tons)</p>
                 <p className="text-xl font-bold text-emerald-600">
                   R$ {(Number(p.summary?.totalSaleValue) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
-                <p className="text-[10px] text-stone-400">R$ {Number(p.summary?.finalPrice || 0).toFixed(2)} / ton</p>
+                <p className="text-[10px] text-stone-400">Tonnage: {(p.factors?.totalTons || 0).toFixed(1)} t | R$ {Number(p.summary?.finalPrice || 0).toFixed(2)} / ton</p>
               </div>
               <div className="flex items-center gap-2">
                 {p.status === 'Em Andamento' && (currentUser.permissions as any)?.history_editPricing !== false && (

@@ -62,7 +62,10 @@ export default function Login({ onLogin }: LoginProps) {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-emerald-100 rounded-full mb-4">
             <Leaf className="w-8 h-8 text-emerald-600" />
           </div>
-          <h1 className="text-2xl font-bold text-stone-800">FertCalc Pro</h1>
+          <h1 className="text-3xl font-black text-stone-800 tracking-tight">
+            FertCalc <span className="text-emerald-600">Pro</span>
+          </h1>
+          <p className="text-stone-500 font-medium text-sm mt-1">fertcalc.vercel.app</p>
           <p className="text-stone-500 text-sm">
             {view === 'login' ? 'Entre com suas credenciais' : 'Recupere sua senha'}
           </p>
