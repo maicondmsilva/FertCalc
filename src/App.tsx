@@ -119,6 +119,19 @@ export default function App() {
     }
   };
 
+  const handleClearAllNotifications = async () => {
+    if (!currentUser) return;
+    if (!confirm('Deseja realmente excluir todas as suas notificações?')) return;
+
+    try {
+      const { deleteAllNotifications } = await import('./services/db');
+      await deleteAllNotifications(currentUser.id);
+      setNotifications([]);
+    } catch (err) {
+      console.error('Erro ao limpar notificações:', err);
+    }
+  };
+
   const handleLogin = (user: User) => {
     setCurrentUser(user);
     navigate('/');
@@ -463,7 +476,17 @@ export default function App() {
                 {isNotificationsOpen && (
                   <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-stone-200 z-50 overflow-hidden">
                     <div className="p-3 bg-stone-50 border-b border-stone-200 flex justify-between items-center">
-                      <span className="text-xs font-bold text-stone-600 uppercase">Notificações</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-stone-600 uppercase">Notificações</span>
+                        {notifications.length > 0 && (
+                          <button
+                            onClick={handleClearAllNotifications}
+                            className="text-[10px] font-bold text-red-500 hover:text-red-700 bg-red-50 px-2 py-0.5 rounded-full transition-colors"
+                          >
+                            Limpar Tudo
+                          </button>
+                        )}
+                      </div>
                       <button onClick={() => setIsNotificationsOpen(false)} className="text-stone-400 hover:text-stone-600">
                         <X className="w-4 h-4" />
                       </button>

@@ -631,6 +631,7 @@ function pricingRecordToDb(r: Partial<PricingRecord>) {
   if (r.commercialObservation !== undefined) d.commercial_observation = r.commercialObservation;
   if (r.transferToUserId !== undefined) d.transfer_to_user_id = r.transferToUserId;
   if (r.transferToUserName !== undefined) d.transfer_to_user_name = r.transferToUserName;
+  if (r.deletionRequest !== undefined) d.deletion_request = r.deletionRequest;
   return d;
 }
 
@@ -662,6 +663,7 @@ function mapPricingRecord(d: any): PricingRecord {
     commercialObservation: d.commercial_observation,
     transferToUserId: d.transfer_to_user_id,
     transferToUserName: d.transfer_to_user_name,
+    deletionRequest: d.deletion_request,
   };
 }
 
@@ -894,12 +896,23 @@ export async function createNotification(notification: Omit<Notification, 'id'>)
   if (error) throw error;
   return { id: data.id, userId: data.user_id, title: data.title, message: data.message, date: data.date, read: data.read, type: data.type, dataId: data.data_id };
 }
+if (error) throw error;
+}
+
 export async function markNotificationsAsRead(userId: string): Promise<void> {
   const { error } = await supabase
     .from('notifications')
     .update({ read: true })
     .eq('user_id', userId)
     .eq('read', false);
+  if (error) throw error;
+}
+
+export async function deleteAllNotifications(userId: string): Promise<void> {
+  const { error } = await supabase
+    .from('notifications')
+    .delete()
+    .eq('user_id', userId);
   if (error) throw error;
 }
 

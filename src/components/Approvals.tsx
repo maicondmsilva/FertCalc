@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PricingRecord, Goal, User as AppUser, AppSettings } from '../types';
-import { CheckCircle, XCircle, Clock, Shield, Target, Eye } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, Shield, Target, Eye, AlertTriangle } from 'lucide-react';
 import PricingDetailModal from './PricingDetailModal';
 import { getPricingRecords, getGoals, getAppSettings, updatePricingRecord, updateGoal, createNotification } from '../services/db';
 import { useToast } from './Toast';
@@ -11,7 +11,8 @@ interface ApprovalsProps {
 
 export default function Approvals({ currentUser }: ApprovalsProps) {
   const { showSuccess, showError } = useToast();
-  const [pricings, setPricings] = useState<PricingRecord[]>([]);
+  const [activeTab, setActiveTab] = useState<'pricings' | 'goals' | 'deletions'>('pricings');
+  const [allPricings, setAllPricings] = useState<PricingRecord[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [selectedPricing, setSelectedPricing] = useState<PricingRecord | null>(null);
   const [appSettings, setAppSettings] = useState<AppSettings>({
@@ -20,24 +21,33 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
 
   useEffect(() => {
     const loadData = async () => {
-      const [allPricings, allGoals, settings] = await Promise.all([
+      const [fetchedPricings, allGoals, settings] = await Promise.all([
         getPricingRecords(), getGoals(), getAppSettings()
       ]);
       if (settings) setAppSettings(settings);
+
+      let filteredPricings: PricingRecord[] = [];
+      let filteredGoals: Goal[] = [];
+
       if (currentUser.role === 'master' || currentUser.role === 'admin') {
-        setPricings(allPricings.filter(p => p.approvalStatus === 'Pendente'));
-        setGoals(allGoals.filter(g => g.status === 'Pendente'));
+        filteredPricings = fetchedPricings;
+        filteredGoals = allGoals.filter(g => g.status === 'Pendente');
       } else if (currentUser.role === 'manager') {
         const managedIds = currentUser.managedUserIds || [];
-        setPricings(allPricings.filter(p => (p.userId === currentUser.id || managedIds.includes(p.userId)) && p.approvalStatus === 'Pendente'));
-        setGoals(allGoals.filter(g => (g.userId === currentUser.id || managedIds.includes(g.userId)) && g.status === 'Pendente'));
+        filteredPricings = fetchedPricings.filter(p => (p.userId === currentUser.id || managedIds.includes(p.userId)));
+        filteredGoals = allGoals.filter(g => (g.userId === currentUser.id || managedIds.includes(g.userId)) && g.status === 'Pendente');
       } else {
-        setPricings(allPricings.filter(p => p.userId === currentUser.id && p.approvalStatus === 'Pendente'));
-        setGoals(allGoals.filter(g => g.userId === currentUser.id && g.status === 'Pendente'));
+        filteredPricings = fetchedPricings.filter(p => p.userId === currentUser.id);
+        filteredGoals = allGoals.filter(g => g.userId === currentUser.id && g.status === 'Pendente');
       }
+      setAllPricings(filteredPricings);
+      setGoals(filteredGoals);
     };
     loadData();
   }, [currentUser]);
+
+  const pendingPricings = allPricings.filter(p => p.approvalStatus === 'Pendente' && p.status !== 'Excluída');
+  const pendingDeletionRequests = allPricings.filter(p => p.deletionRequest?.status === 'Pendente');
 
   const handlePricingApproval = async (id: string, newStatus: 'Aprovada' | 'Reprovada') => {
     let reason = '';
@@ -51,7 +61,7 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
       if (!confirm(`Deseja realmente aprovar esta precificação?`)) return;
     }
 
-    const pricing = pricings.find(p => p.id === id);
+    const pricing = allPricings.find(p => p.id === id);
     if (!pricing) return;
 
     const historyEntry = {
@@ -76,11 +86,67 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
         type: 'pricing_approval',
       });
 
-      setPricings(prev => prev.filter(p => p.id !== id));
+      setAllPricings(prev => prev.map(p => p.id === id ? { ...p, approvalStatus: newStatus, history: [...(p.history || []), historyEntry] } : p));
       if (selectedPricing?.id === id) setSelectedPricing(null);
       showSuccess(`Precificação ${newStatus.toLowerCase()} com sucesso!`);
     } catch {
       showError('Erro ao processar aprovação.');
+    }
+  };
+
+  const handlePricingDeletionApproval = async (id: string, newStatus: 'Aprovada' | 'Reprovada') => {
+    let reason = '';
+    if (newStatus === 'Reprovada') {
+      reason = prompt('Por favor, informe o motivo da reprovação da exclusão:') || '';
+      if (!reason.trim()) {
+        showError('É obrigatório informar o motivo da reprovação da exclusão.');
+        return;
+      }
+    } else {
+      if (!confirm(`Deseja realmente aprovar a exclusão desta precificação?`)) return;
+    }
+
+    const pricing = allPricings.find(p => p.id === id);
+    if (!pricing || !pricing.deletionRequest) return;
+
+    const historyEntry = {
+      date: new Date().toISOString(),
+      userId: currentUser.id,
+      userName: currentUser.name,
+      action: `Solicitação de exclusão ${newStatus}${newStatus === 'Reprovada' ? `: ${reason}` : ''}`
+    };
+
+    try {
+      const updatedDeletionRequest = {
+        ...pricing.deletionRequest,
+        status: newStatus,
+        date: new Date().toISOString()
+      };
+
+      await updatePricingRecord(id, {
+        deletionRequest: updatedDeletionRequest,
+        status: newStatus === 'Aprovada' ? 'Excluída' : pricing.status,
+        history: [...(pricing.history || []), historyEntry]
+      } as any);
+
+      await createNotification({
+        userId: pricing.userId,
+        title: `Solicitação de Exclusão ${newStatus === 'Aprovada' ? 'Aprovada' : 'Reprovada'}`,
+        message: `Sua solicitação de exclusão para a precificação de ${pricing.factors.client.name} foi ${newStatus.toLowerCase()}.${newStatus === 'Reprovada' ? ` Motivo: ${reason}` : ''}`,
+        date: new Date().toISOString(),
+        read: false,
+        type: 'pricing_approval',
+      });
+
+      setAllPricings(prev => prev.map(p => p.id === id ? {
+        ...p,
+        deletionRequest: updatedDeletionRequest,
+        status: newStatus === 'Aprovada' ? 'Excluída' : p.status,
+        history: [...(p.history || []), historyEntry]
+      } : p));
+      showSuccess(`Solicitação de exclusão ${newStatus.toLowerCase()} com sucesso!`);
+    } catch {
+      showError('Erro ao processar aprovação da exclusão.');
     }
   };
 
@@ -115,73 +181,88 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
     <div className="space-y-8">
       <h1 className="text-3xl font-bold text-stone-800">Central de Aprovações</h1>
 
-      {/* Pricings Pending Approval */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
-        <h2 className="text-xl font-bold text-stone-800 mb-4 flex items-center">
-          <Clock className="w-5 h-5 mr-2 text-stone-500" />
-          Precificações Pendentes
-        </h2>
-        <div className="space-y-4">
-          {pricings.length > 0 ? pricings.map(p => (
-            <div key={p.id} className="p-4 border border-stone-200 rounded-lg flex justify-between items-center bg-stone-50">
-              <div>
-                <p className="font-bold text-stone-700 flex items-center gap-1">
-                  <span className="text-emerald-600 font-mono text-xs">#{p.factors.client.code}</span>
-                  {p.factors.client.name}
-                </p>
-                <div className="mt-0.5">
-                  <p className="text-[10px] font-bold text-stone-400 uppercase">IE: {p.factors.client.stateRegistration || '---'}</p>
-                  <p className="text-[10px] font-bold text-emerald-600 uppercase">Precificação: #{p.id}</p>
-                </div>
-                <p className="text-sm text-stone-500 mt-1">
-                  <span className="font-bold text-stone-600">Vendedor:</span> {p.userName || '---'} ({p.userCode || '---'}) |
-                  <span className="font-bold text-stone-600 ml-1">Agente:</span> {p.factors.agent.name}
-                </p>
-                <p className="text-sm text-stone-500">
-                  <span className="font-bold text-stone-600">Valor:</span> R$ {Number(p.summary.totalSaleValue).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </p>
-                {p.calculations && p.calculations.length > 0 ? (
-                  <p className="text-xs text-emerald-600 font-bold mt-1">
-                    {p.calculations.length} fórmulas precificadas
-                  </p>
-                ) : (
-                  <p className="text-xs text-stone-400">Ref: {p.factors.targetFormula}</p>
-                )}
-                {p.factors.commercialObservation && (
-                  <p className="text-[10px] text-stone-400 italic mt-1 line-clamp-1">Obs: {p.factors.commercialObservation}</p>
-                )}
-              </div>
-              <div className="flex gap-2 items-center">
-                <button onClick={() => setSelectedPricing(p)} className="p-2 text-stone-500 hover:bg-stone-200 rounded-full"><Eye className="w-4 h-4" /></button>
-                <button onClick={() => handlePricingApproval(p.id, 'Aprovada')} className="px-3 py-1 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700"><CheckCircle className="w-4 h-4 inline mr-1" />Aprovar</button>
-                <button onClick={() => handlePricingApproval(p.id, 'Reprovada')} className="px-3 py-1 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700"><XCircle className="w-4 h-4 inline mr-1" />Reprovar</button>
-              </div>
-            </div>
-          )) : <p className="text-stone-500">Nenhuma precificação pendente.</p>}
-        </div>
+      <div className="flex gap-2">
+        <button
+          onClick={() => setActiveTab('pricings')}
+          className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'pricings' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200' : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-50'}`}
+        >
+          Precificações ({pendingPricings.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('goals')}
+          className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'goals' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200' : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-50'}`}
+        >
+          Metas ({goals.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('deletions')}
+          className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'deletions' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200' : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-50'}`}
+        >
+          Exclusões ({pendingDeletionRequests.length})
+        </button>
       </div>
 
-      {/* Goals Pending Approval */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
-        <h2 className="text-xl font-bold text-stone-800 mb-4 flex items-center">
-          <Target className="w-5 h-5 mr-2 text-stone-500" />
-          Metas Pendentes
-        </h2>
+      {activeTab === 'pricings' && (
+        <div className="space-y-4">
+          {pendingPricings.length > 0 ? pendingPricings.map(p => (
+            <div key={p.id} className="p-4 border border-stone-200 rounded-lg flex justify-between items-center bg-stone-50">
+              <div>
+                <p className="font-bold text-stone-700">{p.factors.client.name}</p>
+                <p className="text-xs text-stone-500">Solicitado por: {p.userName} | Vendedor: {p.userCode}</p>
+                <p className="text-xs font-bold text-emerald-600 mt-1">Status: {p.status}</p>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setSelectedPricing(p)} className="p-2 text-stone-500 hover:bg-stone-200 rounded-full"><Eye className="w-4 h-4" /></button>
+                <button onClick={() => handlePricingApproval(p.id, 'Aprovada')} className="px-3 py-1 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700">Aprovar</button>
+                <button onClick={() => handlePricingApproval(p.id, 'Reprovada')} className="px-3 py-1 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700">Reprovar</button>
+              </div>
+            </div>
+          )) : <p className="text-stone-500 p-6 text-center bg-white rounded-xl border border-dashed">Nenhuma precificação pendente.</p>}
+        </div>
+      )}
+
+      {activeTab === 'goals' && (
         <div className="space-y-4">
           {goals.length > 0 ? goals.map(g => (
             <div key={g.id} className="p-4 border border-stone-200 rounded-lg flex justify-between items-center bg-stone-50">
               <div>
                 <p className="font-bold text-stone-700">{g.userName} - {g.type === 'monthly' ? `Mês ${g.month}/${g.year}` : `Ano ${g.year}`}</p>
-                <p className="text-sm text-stone-500">Valor da Meta: R$ {Number(g.targetValue).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                <p className="text-sm text-stone-500">Meta: {g.targetValue} toneladas</p>
               </div>
               <div className="flex gap-2">
-                <button onClick={() => handleGoalApproval(g.id, 'Aprovada')} className="px-3 py-1 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700"><CheckCircle className="w-4 h-4 inline mr-1" />Aprovar</button>
-                <button onClick={() => handleGoalApproval(g.id, 'Reprovada')} className="px-3 py-1 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700"><XCircle className="w-4 h-4 inline mr-1" />Reprovar</button>
+                <button onClick={() => handleGoalApproval(g.id, 'Aprovada')} className="px-3 py-1 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700">Aprovar</button>
+                <button onClick={() => handleGoalApproval(g.id, 'Reprovada')} className="px-3 py-1 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700">Reprovar</button>
               </div>
             </div>
-          )) : <p className="text-stone-500">Nenhuma meta pendente.</p>}
+          )) : <p className="text-stone-500 p-6 text-center bg-white rounded-xl border border-dashed">Nenhuma meta pendente.</p>}
         </div>
-      </div>
+      )}
+
+      {activeTab === 'deletions' && (
+        <div className="space-y-4">
+          {pendingDeletionRequests.length > 0 ? pendingDeletionRequests.map(p => (
+            <div key={p.id} className="p-6 rounded-xl border border-red-200 bg-red-50/30">
+              <div className="flex justify-between items-start mb-4">
+                <div className="flex-1">
+                  <h3 className="font-bold text-lg text-stone-800 flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-red-500" />
+                    Solicitação de Exclusão: {p.formattedCod}
+                  </h3>
+                  <div className="mt-2 p-3 bg-white border border-red-100 rounded-lg">
+                    <p className="text-xs font-bold text-red-700 uppercase mb-1">Motivo:</p>
+                    <p className="text-sm text-stone-600 italic">" {p.deletionRequest?.reason} "</p>
+                  </div>
+                  <p className="text-[10px] text-stone-400 mt-2 uppercase font-bold">Solicitado por: {p.deletionRequest?.userName} em {new Date(p.deletionRequest?.date || '').toLocaleDateString('pt-BR')}</p>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => handlePricingDeletionApproval(p.id, 'Aprovada')} className="px-4 py-2 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700">Aprovar Exclusão</button>
+                  <button onClick={() => handlePricingDeletionApproval(p.id, 'Reprovada')} className="px-4 py-2 bg-stone-800 text-white text-xs font-bold rounded-lg hover:bg-stone-900">Rejeitar Pedido</button>
+                </div>
+              </div>
+            </div>
+          )) : <p className="text-stone-500 p-6 text-center bg-white rounded-xl border border-dashed">Nenhuma solicitação de exclusão pendente.</p>}
+        </div>
+      )}
 
       {selectedPricing && (
         <PricingDetailModal

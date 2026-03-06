@@ -310,7 +310,7 @@ export interface PricingRecord {
   userName?: string;
   userCode?: string;
   date: string;
-  status: 'Em Andamento' | 'Fechada' | 'Perdida';
+  status: 'Em Andamento' | 'Fechada' | 'Perdida' | 'Excluída';
   approvalStatus: 'Pendente' | 'Aprovada' | 'Reprovada';
   macros: RawMaterial[];
   micros: RawMaterial[];
@@ -322,6 +322,13 @@ export interface PricingRecord {
   formattedCod?: string;
   transferToUserId?: string;
   transferToUserName?: string;
+  deletionRequest?: {
+    reason: string;
+    requestedBy: string; // userId
+    userName: string;
+    date: string;
+    status: 'Pendente' | 'Aprovada' | 'Reprovada';
+  };
 }
 
 export interface Goal {
@@ -342,7 +349,7 @@ export interface Notification {
   message: string;
   date: string;
   read: boolean;
-  type: 'goal_change' | 'pricing_approval' | 'goal_approval' | 'pricing_transfer';
+  type: 'goal_change' | 'pricing_approval' | 'goal_approval' | 'pricing_transfer' | 'pricing_deletion_request';
   dataId?: string;
 }
 
