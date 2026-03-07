@@ -42,11 +42,11 @@ export default function ProductManager() {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   // Macro form
-  const emptyMacro = () => ({ name: '', n: 0, p: 0, k: 0, s: 0, ca: 0, brandId: '', categories: [] as ('phosphated' | 'nitrogenous')[], microGuarantees: [] as MicroGuarantee[] });
+  const emptyMacro = () => ({ name: '', n: 0, p: 0, k: 0, s: 0, ca: 0, brandId: '', categories: [] as ('phosphated' | 'nitrogenous' | 'fertigran_p')[], microGuarantees: [] as MicroGuarantee[] });
   const [macroForm, setMacroForm] = useState(emptyMacro());
 
   // Micro form
-  const emptyMicro = () => ({ name: '', categories: [] as ('phosphated' | 'nitrogenous')[], microGuarantees: [] as MicroGuarantee[] });
+  const emptyMicro = () => ({ name: '', categories: [] as ('phosphated' | 'nitrogenous' | 'fertigran_p')[], microGuarantees: [] as MicroGuarantee[] });
   const [microForm, setMicroForm] = useState(emptyMicro());
 
   // Finished form

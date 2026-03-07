@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import { PricingRecord, User, AppSettings } from '../types';
 import { X, Edit3, Trash2, Info, FileDown, Download, FileSpreadsheet, Tag } from 'lucide-react';
-import { generatePricingPDF, generateSimplifiedPDF } from '../utils/pdfGenerator';
+import { generatePricingPDF } from '../utils/pdfGenerator';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { formatNPK } from '../utils/formatters';
-import { updatePricingRecord, getUsers, transferPricingRecord, acceptPricingTransfer } from '../services/db';
+import { updatePricingRecord, getUsers, transferPricingRecord, acceptPricingTransfer, createNotification } from '../services/db';
 import { useToast } from './Toast';
-import { Send, UserCheck, CheckCircle2 } from 'lucide-react';
+import { Send, UserCheck, CheckCircle2, CheckCircle, XCircle } from 'lucide-react';
 
 interface PricingDetailModalProps {
   selectedPricing: PricingRecord;
@@ -37,6 +37,7 @@ export default function PricingDetailModal({
   const [isRejecting, setIsRejecting] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
   const [isAcceptingTransfer, setIsAcceptingTransfer] = useState(false);
+  const [loadingTransfer, setLoadingTransfer] = useState(false);
 
   React.useEffect(() => {
     if (isTransferring) {

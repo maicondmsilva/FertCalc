@@ -17,6 +17,7 @@ import {
   IncompatibilityRule,
   PriceList,
   PricingRecord,
+  PricingHistoryEntry,
   Goal,
   Notification,
 } from '../types';
@@ -697,6 +698,8 @@ export async function transferPricingRecord(id: string, targetUserId: string, ta
     userId: targetUserId,
     title: 'Nova Transferência de Precificação',
     message: `${currentUser.name} enviou uma precificação para você aceitar.`,
+    date: new Date().toISOString(),
+    read: false,
     type: 'pricing_transfer',
     dataId: id
   });
@@ -895,8 +898,6 @@ export async function createNotification(notification: Omit<Notification, 'id'>)
     .single();
   if (error) throw error;
   return { id: data.id, userId: data.user_id, title: data.title, message: data.message, date: data.date, read: data.read, type: data.type, dataId: data.data_id };
-}
-if (error) throw error;
 }
 
 export async function markNotificationsAsRead(userId: string): Promise<void> {

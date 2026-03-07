@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import solver from 'javascript-lp-solver';
 import { Plus, Trash2, Save, AlertTriangle, CheckCircle2, Calculator as CalculatorIcon, Building2, Database, Search, User, UserCheck, Tag, LayoutDashboard, Settings, X, Beaker } from 'lucide-react';
 import { RawMaterial, PricingFactors, PricingRecord, PricingSummary, Branch, PriceList, Client, Agent, User as AppUser, PricingHistoryEntry, TargetFormula, IncompatibilityRule, SavedFormula } from '../types';
-import { getClients, getAgents, getBranches, getPriceLists, getIncompatibilityRules, createPricingRecord, updatePricingRecord, createSavedFormula, getSavedFormulas, updateSavedFormula } from '../services/db';
+import { getClients, getAgents, getBranches, getPriceLists, getIncompatibilityRules, createPricingRecord, updatePricingRecord, createSavedFormula, getSavedFormulas, updateSavedFormula, createNotification } from '../services/db';
 import { useToast } from './Toast';
 import { formatNPK } from '../utils/formatters';
 
@@ -77,7 +77,10 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
       setMacros(initialData.macros);
       setMicros(initialData.micros);
       setFactors(initialData.factors);
-      setStatus(initialData.status);
+      const validStatus = (['Em Andamento', 'Fechada', 'Perdida'] as const).includes(initialData.status as any)
+        ? initialData.status as 'Em Andamento' | 'Fechada' | 'Perdida'
+        : 'Em Andamento';
+      setStatus(validStatus);
       setClientSearch(initialData.factors.client.name);
       setAgentSearch(initialData.factors.agent.name);
       setCalculations(initialData.calculations || []);

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { PricingRecord, User as AppUser, AppSettings } from '../types';
-import { Search, FileText, Calendar, User, Tag, ChevronRight, Trash2, Edit3, Info, Truck } from 'lucide-react';
+import { Search, FileText, Calendar, User, Tag, ChevronRight, Trash2, Edit3, Info, Truck, AlertTriangle, XCircle } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import PricingDetailModal from './PricingDetailModal';
 import { generatePricingPDF } from '../utils/pdfGenerator';
-import { getPricingRecords, deletePricingRecord, updatePricingRecord, getAppSettings } from '../services/db';
+import { getPricingRecords, deletePricingRecord, updatePricingRecord, getAppSettings, createNotification } from '../services/db';
 import { useToast } from './Toast';
 
 interface HistoryProps {

@@ -22,7 +22,7 @@ import Home from './components/Home';
 import Dashboard from './components/Dashboard';
 import SavedFormulas from './components/SavedFormulas';
 import { LayoutDashboard, History as HistoryIcon, Database, Users, UserCheck, Building2, Settings, LogOut, Leaf, ShieldCheck, Menu, X, Target, Bell, Download, ChevronLeft, ChevronRight, Home as HomeIcon, BarChart3, ChevronDown, FileEdit, Tag, Package, AlertTriangle, Calculator as CalcIcon, Beaker } from 'lucide-react';
-import { PricingRecord, User, AppSettings, Notification, NavItem } from './types';
+import { PricingRecord, User, AppSettings, Notification, NavItem, SavedFormula } from './types';
 import { getAppSettings, getNotifications, markNotificationsAsRead } from './services/db';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 
