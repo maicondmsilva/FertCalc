@@ -87,10 +87,10 @@ export default function UserManager() {
     };
 
     if (role === 'master' || role === 'admin') {
-      return Object.keys(base).reduce((acc, key) => ({ ...acc, [key]: true }), {});
+      return Object.keys(base).reduce((acc, key) => ({ ...acc, [key]: true }), { approvals_canApprove: true });
     }
     if (role === 'manager') {
-      return { ...base, approvals: true, reports: true, pricingReport: true, commissionReport: true, goals: true, priceLists: true, branches: true };
+      return { ...base, approvals: true, approvals_canApprove: true, reports: true, pricingReport: true, commissionReport: true, goals: true, priceLists: true, branches: true };
     }
     return base;
   };
@@ -392,6 +392,27 @@ export default function UserManager() {
                     className={`flex items-center justify-between px-3 py-2 rounded-lg border transition-all text-xs font-bold ${(formData.permissions as any)[m.id] ? 'bg-purple-50 border-purple-300 text-purple-700' : 'bg-stone-50 border-stone-200 text-stone-400'}`}>
                     {m.name}
                     <div className={`w-2 h-2 rounded-full flex-shrink-0 ml-1 ${(formData.permissions as any)[m.id] ? 'bg-purple-500' : 'bg-stone-300'}`} />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Sub-permissões Aprovacões */}
+            <div className="border border-teal-200 rounded-xl overflow-hidden">
+              <div className="bg-teal-700 text-white px-4 py-2 text-xs font-bold uppercase tracking-wider">✅ Aprovações — Ações Permitidas</div>
+              <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {[
+                  { id: 'approvals_canApprove', name: 'Aprovar / Reprovar Precificações' },
+                ].map(m => (
+                  <button key={m.id} type="button"
+                    onClick={() => setFormData({ ...formData, permissions: { ...formData.permissions, [m.id]: !(formData.permissions as any)[m.id] } })}
+                    className={`flex items-center justify-between px-3 py-2 rounded-lg border transition-all text-xs font-bold ${
+                      (formData.permissions as any)[m.id]
+                        ? 'bg-teal-50 border-teal-300 text-teal-700'
+                        : 'bg-stone-50 border-stone-200 text-stone-400'
+                    }`}>
+                    {m.name}
+                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ml-1 ${(formData.permissions as any)[m.id] ? 'bg-teal-500' : 'bg-stone-300'}`} />
                   </button>
                 ))}
               </div>

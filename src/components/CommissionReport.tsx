@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { getPricingRecords } from '../services/db';
 import { User, PricingRecord } from '../types';
-import { DollarSign, Percent, TrendingUp, Calendar, User as UserIcon, Building, Download, BarChart3 } from 'lucide-react';
+import { DollarSign, Percent, TrendingUp, Calendar, User as UserIcon, Building, Download, BarChart3, Package } from 'lucide-react';
+import { getPricingTotalTons, getPricingTotalSaleValue, getPricingTotalCommission } from '../utils/pricingMetrics';
 
 interface CommissionReportProps {
   currentUser: User;
@@ -56,23 +57,26 @@ export default function CommissionReport({ currentUser }: CommissionReportProps)
   }, [pricings, timeRange]);
 
   const stats = useMemo(() => {
-    const totalComission = filteredPricings.reduce((sum, p) => sum + (p.summary.commissionValue || 0), 0);
-    const totalSales = filteredPricings.reduce((sum, p) => sum + (p.summary.totalSaleValue || 0), 0);
+    const totalComission = filteredPricings.reduce((sum, p) => sum + getPricingTotalCommission(p), 0);
+    const totalSales = filteredPricings.reduce((sum, p) => sum + getPricingTotalSaleValue(p), 0);
+    const totalTons = filteredPricings.reduce((sum, p) => sum + getPricingTotalTons(p), 0);
     const avgCommissionRate = totalSales > 0 ? (totalComission / totalSales) * 100 : 0;
+    const commissionPerTon = totalTons > 0 ? (totalComission / totalTons) : 0;
 
-    return { totalComission, totalSales, avgCommissionRate };
+    return { totalComission, totalSales, totalTons, avgCommissionRate, commissionPerTon };
   }, [filteredPricings]);
 
   const byAgent = useMemo(() => {
-    const map = new Map<string, { name: string; totalSales: number; totalCommission: number; count: number }>();
+    const map = new Map<string, { name: string; totalSales: number; totalCommission: number; totalTons: number; count: number }>();
 
     filteredPricings.forEach(p => {
       const agentId = p.factors.agent?.id || 'unknown';
       const agentName = p.factors.agent?.name || 'Sem Agente';
 
-      const current = map.get(agentId) || { name: agentName, totalSales: 0, totalCommission: 0, count: 0 };
-      current.totalSales += (p.summary.totalSaleValue || 0);
-      current.totalCommission += (p.summary.commissionValue || 0);
+      const current = map.get(agentId) || { name: agentName, totalSales: 0, totalCommission: 0, totalTons: 0, count: 0 };
+      current.totalSales += getPricingTotalSaleValue(p);
+      current.totalCommission += getPricingTotalCommission(p);
+      current.totalTons += getPricingTotalTons(p);
       current.count += 1;
       map.set(agentId, current);
     });
@@ -142,6 +146,18 @@ export default function CommissionReport({ currentUser }: CommissionReportProps)
         </div>
 
         <div className="bg-white p-6 rounded-xl border border-stone-200 shadow-sm flex items-center">
+          <div className="w-12 h-12 bg-amber-100 rounded-lg flex items-center justify-center mr-4">
+            <Package className="w-6 h-6 text-amber-600" />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-stone-500">Total Toneladas</p>
+            <p className="text-2xl font-bold text-stone-800">
+              {stats.totalTons.toLocaleString('pt-BR', { minimumFractionDigits: 1 })} t
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-xl border border-stone-200 shadow-sm flex items-center">
           <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mr-4">
             <Percent className="w-6 h-6 text-purple-600" />
           </div>
@@ -174,9 +190,10 @@ export default function CommissionReport({ currentUser }: CommissionReportProps)
                 <tr>
                   <th className="py-4 px-6">Agente</th>
                   <th className="py-4 px-6 text-right">Qtd. Negócios</th>
-                  <th className="py-4 px-6 text-right">Volume de Vendas</th>
+                  <th className="py-4 px-6 text-right">Toneladas</th>
+                  <th className="py-4 px-6 text-right">Volume Vendas</th>
                   <th className="py-4 px-6 text-right">Comissão Total</th>
-                  <th className="py-4 px-6 text-right">Taxa Média</th>
+                  <th className="py-4 px-6 text-right">Comissão/Ton</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
@@ -190,13 +207,16 @@ export default function CommissionReport({ currentUser }: CommissionReportProps)
                     </td>
                     <td className="py-4 px-6 text-right text-stone-600">{agent.count}</td>
                     <td className="py-4 px-6 text-right text-stone-600">
+                      {agent.totalTons.toLocaleString('pt-BR', { minimumFractionDigits: 1 })} t
+                    </td>
+                    <td className="py-4 px-6 text-right text-stone-600">
                       {agent.totalSales.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                     </td>
                     <td className="py-4 px-6 text-right font-bold text-emerald-600">
                       {agent.totalCommission.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                     </td>
-                    <td className="py-4 px-6 text-right text-stone-500">
-                      {agent.totalSales > 0 ? ((agent.totalCommission / agent.totalSales) * 100).toFixed(2) : '0.00'}%
+                    <td className="py-4 px-6 text-right font-bold text-stone-600">
+                      R$ {agent.totalTons > 0 ? (agent.totalCommission / agent.totalTons).toFixed(2) : '0.00'}/t
                     </td>
                   </tr>
                 ))}
@@ -220,9 +240,10 @@ export default function CommissionReport({ currentUser }: CommissionReportProps)
                 <th className="py-3 px-6">Data</th>
                 <th className="py-3 px-6">Cliente</th>
                 <th className="py-3 px-6">Agente</th>
+                <th className="py-3 px-6 text-right">Toneladas</th>
                 <th className="py-3 px-6 text-right">Venda Bruta</th>
-                <th className="py-3 px-6 text-right">Taxa %</th>
                 <th className="py-3 px-6 text-right">Comissão</th>
+                <th className="py-3 px-6 text-right">Comissão/Ton</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100">
@@ -234,13 +255,16 @@ export default function CommissionReport({ currentUser }: CommissionReportProps)
                   <td className="py-3 px-6 font-medium text-stone-800">{p.factors?.client?.name || 'N/A'}</td>
                   <td className="py-3 px-6 text-stone-600">{p.factors?.agent?.name || 'N/A'}</td>
                   <td className="py-3 px-6 text-right text-stone-600">
-                    {p.summary.totalSaleValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    {getPricingTotalTons(p).toLocaleString('pt-BR', { minimumFractionDigits: 1 })} t
                   </td>
-                  <td className="py-3 px-6 text-right text-stone-500">
-                    {p.factors.commission || 0}%
+                  <td className="py-3 px-6 text-right text-stone-600">
+                    {getPricingTotalSaleValue(p).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                   </td>
-                  <td className="py-3 px-6 text-right font-medium text-emerald-600">
-                    {(p.summary.commissionValue || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  <td className="py-3 px-6 text-right font-bold text-emerald-600">
+                    {getPricingTotalCommission(p).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </td>
+                  <td className="py-3 px-6 text-right font-bold text-stone-600">
+                    R$ {getPricingTotalTons(p) > 0 ? (getPricingTotalCommission(p) / getPricingTotalTons(p)).toFixed(2) : '0.00'}/t
                   </td>
                 </tr>
               ))}

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { PricingRecord, Goal, User as AppUser, AppSettings } from '../types';
-import { CheckCircle, XCircle, Clock, Shield, Target, Eye, AlertTriangle } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, Shield, Target, Eye, AlertTriangle, X } from 'lucide-react';
 import PricingDetailModal from './PricingDetailModal';
-import { getPricingRecords, getGoals, getAppSettings, updatePricingRecord, updateGoal, createNotification } from '../services/db';
+import { getPricingRecords, getGoals, getAppSettings, updatePricingRecord, updateGoal, createNotification, getUsers } from '../services/db';
 import { useToast } from './Toast';
 
 interface ApprovalsProps {
@@ -18,6 +18,20 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
   const [appSettings, setAppSettings] = useState<AppSettings>({
     companyName: 'FertCalc Pro', companyLogo: ''
   });
+
+  // Modal de reprovação de precificação
+  const [showRejectionModal, setShowRejectionModal] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [pendingRejectionId, setPendingRejectionId] = useState<string | null>(null);
+
+  // Modal de reprovação de exclusão
+  const [showDeletionRejectionModal, setShowDeletionRejectionModal] = useState(false);
+  const [deletionRejectionReason, setDeletionRejectionReason] = useState('');
+  const [pendingDeletionRejectionId, setPendingDeletionRejectionId] = useState<string | null>(null);
+
+  // Verificar se o usuário pode aprovar/reprovar
+  const canApprove = currentUser.role === 'master' || currentUser.role === 'admin' ||
+    currentUser.role === 'manager' || (currentUser.permissions as any)?.approvals_canApprove === true;
 
   useEffect(() => {
     const loadData = async () => {
@@ -49,18 +63,35 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
   const pendingPricings = allPricings.filter(p => p.approvalStatus === 'Pendente' && p.status !== 'Excluída');
   const pendingDeletionRequests = allPricings.filter(p => p.deletionRequest?.status === 'Pendente');
 
-  const handlePricingApproval = async (id: string, newStatus: 'Aprovada' | 'Reprovada') => {
-    let reason = '';
-    if (newStatus === 'Reprovada') {
-      reason = prompt('Por favor, informe o motivo da reprovação:') || '';
-      if (!reason.trim()) {
-        showError('É obrigatório informar o motivo da reprovação.');
-        return;
-      }
-    } else {
-      if (!confirm(`Deseja realmente aprovar esta precificação?`)) return;
-    }
+  // Inicia o fluxo de reprovação (abre modal)
+  const initiateRejection = (id: string) => {
+    setPendingRejectionId(id);
+    setRejectionReason('');
+    setShowRejectionModal(true);
+  };
 
+  const handlePricingApproval = async (id: string, newStatus: 'Aprovada' | 'Reprovada') => {
+    if (newStatus === 'Reprovada') {
+      initiateRejection(id);
+      return;
+    }
+    if (!confirm('Deseja realmente aprovar esta precificação?')) return;
+    await processPricingApproval(id, 'Aprovada', '');
+  };
+
+  const confirmRejection = async () => {
+    if (!rejectionReason.trim()) {
+      showError('É obrigatório informar o motivo da reprovação.');
+      return;
+    }
+    if (!pendingRejectionId) return;
+    await processPricingApproval(pendingRejectionId, 'Reprovada', rejectionReason);
+    setShowRejectionModal(false);
+    setRejectionReason('');
+    setPendingRejectionId(null);
+  };
+
+  const processPricingApproval = async (id: string, newStatus: 'Aprovada' | 'Reprovada', reason: string) => {
     const pricing = allPricings.find(p => p.id === id);
     if (!pricing) return;
 
@@ -79,7 +110,7 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
 
       await createNotification({
         userId: pricing.userId,
-        title: `Precificação ${newStatus === 'Aprovada' ? 'Aprovada' : 'Reprovada'}`,
+        title: `Precificação ${newStatus === 'Aprovada' ? 'Aprovada ✅' : 'Reprovada ❌'}`,
         message: `Sua precificação para ${pricing.factors.client.name} foi ${newStatus.toLowerCase()}.${newStatus === 'Reprovada' ? ` Motivo: ${reason}` : ''}`,
         date: new Date().toISOString(),
         read: false,
@@ -94,18 +125,34 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
     }
   };
 
-  const handlePricingDeletionApproval = async (id: string, newStatus: 'Aprovada' | 'Reprovada') => {
-    let reason = '';
-    if (newStatus === 'Reprovada') {
-      reason = prompt('Por favor, informe o motivo da reprovação da exclusão:') || '';
-      if (!reason.trim()) {
-        showError('É obrigatório informar o motivo da reprovação da exclusão.');
-        return;
-      }
-    } else {
-      if (!confirm(`Deseja realmente aprovar a exclusão desta precificação?`)) return;
-    }
+  const initiateDeletionRejection = (id: string) => {
+    setPendingDeletionRejectionId(id);
+    setDeletionRejectionReason('');
+    setShowDeletionRejectionModal(true);
+  };
 
+  const handlePricingDeletionApproval = async (id: string, newStatus: 'Aprovada' | 'Reprovada') => {
+    if (newStatus === 'Reprovada') {
+      initiateDeletionRejection(id);
+      return;
+    }
+    if (!confirm('Deseja realmente aprovar a exclusão desta precificação?')) return;
+    await processDeletionApproval(id, 'Aprovada', '');
+  };
+
+  const confirmDeletionRejection = async () => {
+    if (!deletionRejectionReason.trim()) {
+      showError('É obrigatório informar o motivo da reprovação da exclusão.');
+      return;
+    }
+    if (!pendingDeletionRejectionId) return;
+    await processDeletionApproval(pendingDeletionRejectionId, 'Reprovada', deletionRejectionReason);
+    setShowDeletionRejectionModal(false);
+    setDeletionRejectionReason('');
+    setPendingDeletionRejectionId(null);
+  };
+
+  const processDeletionApproval = async (id: string, newStatus: 'Aprovada' | 'Reprovada', reason: string) => {
     const pricing = allPricings.find(p => p.id === id);
     if (!pricing || !pricing.deletionRequest) return;
 
@@ -167,7 +214,7 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
     } catch { showError('Erro ao processar aprovação da meta.'); }
   };
 
-  if (currentUser.role !== 'master' && currentUser.role !== 'admin' && currentUser.role !== 'manager') {
+  if (currentUser.role !== 'master' && currentUser.role !== 'admin' && currentUser.role !== 'manager' && !(currentUser.permissions as any)?.approvals) {
     return (
       <div className="p-6 bg-white rounded-xl shadow-sm border border-stone-200 text-center">
         <Shield className="w-12 h-12 mx-auto text-amber-500 mb-4" />
@@ -180,6 +227,13 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
   return (
     <div className="space-y-8">
       <h1 className="text-3xl font-bold text-stone-800">Central de Aprovações</h1>
+
+      {!canApprove && (
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-3 text-amber-800">
+          <Shield className="w-5 h-5 flex-shrink-0" />
+          <p className="text-sm font-medium">Você tem acesso de visualização apenas. Seu perfil não possui permissão para aprovar ou reprovar precificações.</p>
+        </div>
+      )}
 
       <div className="flex gap-2">
         <button
@@ -212,9 +266,15 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
                 <p className="text-xs font-bold text-emerald-600 mt-1">Status: {p.status}</p>
               </div>
               <div className="flex gap-2">
-                <button onClick={() => setSelectedPricing(p)} className="p-2 text-stone-500 hover:bg-stone-200 rounded-full"><Eye className="w-4 h-4" /></button>
-                <button onClick={() => handlePricingApproval(p.id, 'Aprovada')} className="px-3 py-1 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700">Aprovar</button>
-                <button onClick={() => handlePricingApproval(p.id, 'Reprovada')} className="px-3 py-1 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700">Reprovar</button>
+                <button onClick={() => setSelectedPricing(p)} className="p-2 text-stone-500 hover:bg-stone-200 rounded-full" title="Visualizar">
+                  <Eye className="w-4 h-4" />
+                </button>
+                {canApprove && (
+                  <>
+                    <button onClick={() => handlePricingApproval(p.id, 'Aprovada')} className="px-3 py-1 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700">Aprovar</button>
+                    <button onClick={() => handlePricingApproval(p.id, 'Reprovada')} className="px-3 py-1 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700">Reprovar</button>
+                  </>
+                )}
               </div>
             </div>
           )) : <p className="text-stone-500 p-6 text-center bg-white rounded-xl border border-dashed">Nenhuma precificação pendente.</p>}
@@ -229,10 +289,12 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
                 <p className="font-bold text-stone-700">{g.userName} - {g.type === 'monthly' ? `Mês ${g.month}/${g.year}` : `Ano ${g.year}`}</p>
                 <p className="text-sm text-stone-500">Meta: {g.targetValue} toneladas</p>
               </div>
-              <div className="flex gap-2">
-                <button onClick={() => handleGoalApproval(g.id, 'Aprovada')} className="px-3 py-1 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700">Aprovar</button>
-                <button onClick={() => handleGoalApproval(g.id, 'Reprovada')} className="px-3 py-1 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700">Reprovar</button>
-              </div>
+              {canApprove && (
+                <div className="flex gap-2">
+                  <button onClick={() => handleGoalApproval(g.id, 'Aprovada')} className="px-3 py-1 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700">Aprovar</button>
+                  <button onClick={() => handleGoalApproval(g.id, 'Reprovada')} className="px-3 py-1 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700">Reprovar</button>
+                </div>
+              )}
             </div>
           )) : <p className="text-stone-500 p-6 text-center bg-white rounded-xl border border-dashed">Nenhuma meta pendente.</p>}
         </div>
@@ -254,10 +316,12 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
                   </div>
                   <p className="text-[10px] text-stone-400 mt-2 uppercase font-bold">Solicitado por: {p.deletionRequest?.userName} em {new Date(p.deletionRequest?.date || '').toLocaleDateString('pt-BR')}</p>
                 </div>
-                <div className="flex gap-2">
-                  <button onClick={() => handlePricingDeletionApproval(p.id, 'Aprovada')} className="px-4 py-2 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700">Aprovar Exclusão</button>
-                  <button onClick={() => handlePricingDeletionApproval(p.id, 'Reprovada')} className="px-4 py-2 bg-stone-800 text-white text-xs font-bold rounded-lg hover:bg-stone-900">Rejeitar Pedido</button>
-                </div>
+                {canApprove && (
+                  <div className="flex gap-2">
+                    <button onClick={() => handlePricingDeletionApproval(p.id, 'Aprovada')} className="px-4 py-2 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700">Aprovar Exclusão</button>
+                    <button onClick={() => handlePricingDeletionApproval(p.id, 'Reprovada')} className="px-4 py-2 bg-stone-800 text-white text-xs font-bold rounded-lg hover:bg-stone-900">Rejeitar Pedido</button>
+                  </div>
+                )}
               </div>
             </div>
           )) : <p className="text-stone-500 p-6 text-center bg-white rounded-xl border border-dashed">Nenhuma solicitação de exclusão pendente.</p>}
@@ -272,6 +336,90 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
           onUpdateApproval={handlePricingApproval}
           appSettings={appSettings}
         />
+      )}
+
+      {/* Modal de Reprovação de Precificação */}
+      {showRejectionModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
+            <div className="p-6 border-b border-stone-100 flex justify-between items-center">
+              <h3 className="text-lg font-black text-red-700 flex items-center gap-2">
+                <XCircle className="w-5 h-5" /> Reprovar Precificação
+              </h3>
+              <button onClick={() => setShowRejectionModal(false)} className="text-stone-400 hover:text-stone-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6">
+              <p className="text-sm text-stone-600 mb-4">Informe o motivo da reprovação. Este motivo será registrado no histórico e notificado ao vendedor.</p>
+              <label className="text-[10px] font-bold text-stone-400 uppercase tracking-widest block mb-2">Motivo da Reprovação *</label>
+              <textarea
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                placeholder="Descreva o motivo pelo qual esta precificação foi reprovada..."
+                className="w-full p-4 bg-stone-50 border-2 border-red-100 rounded-xl text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none min-h-[120px] transition-all"
+                autoFocus
+              />
+            </div>
+            <div className="p-6 bg-stone-50 flex gap-3 rounded-b-2xl">
+              <button
+                onClick={() => { setShowRejectionModal(false); setRejectionReason(''); }}
+                className="flex-1 px-4 py-2 text-sm font-bold text-stone-600 hover:bg-stone-200 rounded-lg transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                disabled={!rejectionReason.trim()}
+                onClick={confirmRejection}
+                className="flex-1 px-4 py-2 text-sm font-bold bg-red-600 text-white hover:bg-red-700 rounded-lg transition-all disabled:opacity-50 shadow-lg shadow-red-200"
+              >
+                Confirmar Reprovação
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Reprovação de Exclusão */}
+      {showDeletionRejectionModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
+            <div className="p-6 border-b border-stone-100 flex justify-between items-center">
+              <h3 className="text-lg font-black text-stone-800 flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-amber-500" /> Rejeitar Pedido de Exclusão
+              </h3>
+              <button onClick={() => setShowDeletionRejectionModal(false)} className="text-stone-400 hover:text-stone-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6">
+              <p className="text-sm text-stone-600 mb-4">Informe o motivo da rejeição do pedido de exclusão.</p>
+              <label className="text-[10px] font-bold text-stone-400 uppercase tracking-widest block mb-2">Motivo da Rejeição *</label>
+              <textarea
+                value={deletionRejectionReason}
+                onChange={(e) => setDeletionRejectionReason(e.target.value)}
+                placeholder="Explique por que o pedido de exclusão foi rejeitado..."
+                className="w-full p-4 bg-stone-50 border-2 border-stone-100 rounded-xl text-sm focus:ring-2 focus:ring-stone-500 focus:border-stone-500 outline-none min-h-[120px] transition-all"
+                autoFocus
+              />
+            </div>
+            <div className="p-6 bg-stone-50 flex gap-3 rounded-b-2xl">
+              <button
+                onClick={() => { setShowDeletionRejectionModal(false); setDeletionRejectionReason(''); }}
+                className="flex-1 px-4 py-2 text-sm font-bold text-stone-600 hover:bg-stone-200 rounded-lg transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                disabled={!deletionRejectionReason.trim()}
+                onClick={confirmDeletionRejection}
+                className="flex-1 px-4 py-2 text-sm font-bold bg-stone-800 text-white hover:bg-stone-900 rounded-lg transition-all disabled:opacity-50"
+              >
+                Confirmar Rejeição
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

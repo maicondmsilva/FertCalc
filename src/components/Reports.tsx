@@ -3,6 +3,7 @@ import { BarChart3, PieChart, TrendingUp, Download, Filter, Calendar, Users, Tar
 import { User, PricingRecord, Goal } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Cell } from 'recharts';
 import { getPricingRecords, getGoals } from '../services/db';
+import { getPricingTotalTons, getPricingTotalSaleValue } from '../utils/pricingMetrics';
 
 interface ReportsProps {
   currentUser: User;
@@ -53,11 +54,11 @@ export default function Reports({ currentUser }: ReportsProps) {
   const filteredHistory = getFilteredHistory();
 
   const stats = {
-    totalSales: filteredHistory.filter(p => p.status === 'Fechada').reduce((acc, p) => acc + p.summary.totalSaleValue, 0),
-    totalTons: filteredHistory.filter(p => p.status === 'Fechada').reduce((acc, p) => acc + p.factors.totalTons, 0),
+    totalSales: filteredHistory.filter(p => p.status === 'Fechada').reduce((acc, p) => acc + getPricingTotalSaleValue(p), 0),
+    totalTons: filteredHistory.filter(p => p.status === 'Fechada').reduce((acc, p) => acc + getPricingTotalTons(p), 0),
     conversionRate: filteredHistory.length > 0 ? (filteredHistory.filter(p => p.status === 'Fechada').length / filteredHistory.length) * 100 : 0,
     averageTicket: filteredHistory.filter(p => p.status === 'Fechada').length > 0
-      ? filteredHistory.filter(p => p.status === 'Fechada').reduce((acc, p) => acc + p.summary.totalSaleValue, 0) / filteredHistory.filter(p => p.status === 'Fechada').length
+      ? filteredHistory.filter(p => p.status === 'Fechada').reduce((acc, p) => acc + getPricingTotalSaleValue(p), 0) / filteredHistory.filter(p => p.status === 'Fechada').length
       : 0
   };
 
@@ -73,7 +74,7 @@ export default function Reports({ currentUser }: ReportsProps) {
         const pDate = new Date(p.date);
         return p.status === 'Fechada' && (pDate.getMonth() + 1) === monthNum && pDate.getFullYear() === year;
       })
-      .reduce((sum, p) => sum + p.summary.totalSaleValue, 0);
+      .reduce((sum, p) => sum + getPricingTotalSaleValue(p), 0);
 
     return { name: monthName, value };
   }).reverse();
@@ -201,7 +202,7 @@ export default function Reports({ currentUser }: ReportsProps) {
               </div>
               <div className="space-y-6">
                 {goals.filter(g => g.status === 'Aprovada').slice(0, 3).map(g => {
-                  const realized = history.filter(p => p.userId === g.userId && p.status === 'Fechada').reduce((acc, p) => acc + p.summary.totalSaleValue, 0);
+                  const realized = history.filter(p => p.userId === g.userId && p.status === 'Fechada').reduce((acc, p) => acc + getPricingTotalSaleValue(p), 0);
                   const percent = Math.min((realized / g.targetValue) * 100, 100);
                   return (
                     <div key={g.id}>
@@ -256,8 +257,8 @@ export default function Reports({ currentUser }: ReportsProps) {
                       <td className="px-6 py-4 text-stone-500">{new Date(p.date).toLocaleDateString()}</td>
                       <td className="px-6 py-4 font-bold text-stone-800">{p.factors.client.name}</td>
                       {currentUser.role !== 'user' && <td className="px-6 py-4 text-stone-600">{p.userName}</td>}
-                      <td className="px-6 py-4 font-mono text-xs">{p.factors.targetFormula}</td>
-                      <td className="px-6 py-4 font-bold text-emerald-600">R$ {p.summary.totalSaleValue.toLocaleString()}</td>
+                      <td className="px-6 py-4 font-mono text-xs">{p.factors?.targetFormula || 'Multi'}</td>
+                      <td className="px-6 py-4 font-bold text-emerald-600">R$ {getPricingTotalSaleValue(p).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                       <td className="px-6 py-4">
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${p.status === 'Fechada' ? 'bg-emerald-100 text-emerald-700' :
                             p.status === 'Perdida' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'

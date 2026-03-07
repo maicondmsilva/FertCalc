@@ -3,6 +3,7 @@ import { PricingRecord, Goal, User } from '../types';
 import { TrendingUp, TrendingDown, DollarSign, FileText, Target, Clock, CheckCircle, XCircle, BarChart3 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 import { getPricingRecords, getGoals } from '../services/db';
+import { getPricingTotalTons, getPricingTotalSaleValue } from '../utils/pricingMetrics';
 
 interface DashboardProps {
   currentUser: User;
@@ -22,8 +23,8 @@ export default function Dashboard({ currentUser }: DashboardProps) {
   }, [currentUser]);
 
   const stats = {
-    totalValue: pricings.filter(p => p.status === 'Fechada').reduce((sum, p) => sum + (p.summary?.totalSaleValue || 0), 0),
-    totalValueInProgress: pricings.filter(p => p.status === 'Em Andamento').reduce((sum, p) => sum + (p.summary?.totalSaleValue || 0), 0),
+    totalValue: pricings.filter(p => p.status === 'Fechada').reduce((sum, p) => sum + getPricingTotalSaleValue(p), 0),
+    totalValueInProgress: pricings.filter(p => p.status === 'Em Andamento').reduce((sum, p) => sum + getPricingTotalSaleValue(p), 0),
     count: pricings.length,
     closedCount: pricings.filter(p => p.status === 'Fechada').length,
     inProgressCount: pricings.filter(p => p.status === 'Em Andamento').length,
@@ -42,7 +43,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
         d.getMonth() + 1 === monthlyGoal?.month &&
         d.getFullYear() === monthlyGoal?.year;
     })
-    .reduce((sum, p) => sum + (p.factors?.totalTons || 0), 0);
+    .reduce((sum, p) => sum + getPricingTotalTons(p), 0);
 
   const goalProgress = monthlyGoal ? (monthlySales / monthlyGoal.targetValue) * 100 : 0;
 
@@ -69,7 +70,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
         const d = new Date(p.date);
         return p.status === 'Fechada' && (d.getMonth() + 1) === m.monthNum && d.getFullYear() === m.year;
       })
-      .reduce((sum, p) => sum + (p.summary?.totalSaleValue || 0), 0);
+      .reduce((sum, p) => sum + getPricingTotalSaleValue(p), 0);
   });
 
   return (

@@ -78,6 +78,8 @@ export interface User {
     // Sub-permissões de Histórico
     history_changeStatus?: boolean;
     history_editPricing?: boolean;
+    // Sub-permissões de Aprovações
+    approvals_canApprove?: boolean;
     // Sub-permissões de Cadastros
     macro_create?: boolean;
     macro_edit?: boolean;

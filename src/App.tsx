@@ -82,7 +82,14 @@ export default function App() {
     });
 
     getNotifications().then(notifs => {
-      setNotifications(notifs);
+      // Filter by current user - each user sees only their own notifications
+      const savedUser = localStorage.getItem('current_user');
+      if (savedUser) {
+        const user = JSON.parse(savedUser);
+        setNotifications(notifs.filter(n => n.userId === user.id || n.userId === ''));
+      } else {
+        setNotifications(notifs);
+      }
     });
 
     const handleBeforeInstallPrompt = (e: any) => {
@@ -456,7 +463,7 @@ export default function App() {
                 Instalar App
               </button>
             )}
-            {(currentUser.role === 'master' || currentUser.role === 'admin' || currentUser.role === 'manager') && (
+            
               <div className="relative">
                 <button
                   onClick={() => {
@@ -507,7 +514,7 @@ export default function App() {
                   </div>
                 )}
               </div>
-            )}
+            
           </div>
         </header>
 

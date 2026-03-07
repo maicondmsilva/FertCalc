@@ -3,6 +3,7 @@ import { Goal, User as AppUser, PricingRecord, Notification } from '../types';
 import { Target, TrendingUp, Calendar, CheckCircle2, AlertCircle, Clock, Plus, Trash2 } from 'lucide-react';
 import { getGoals, createGoal, updateGoal, deleteGoal, getPricingRecords, getUsers, createNotification } from '../services/db';
 import { useToast } from './Toast';
+import { getPricingTotalTons } from '../utils/pricingMetrics';
 
 interface GoalsProps {
   currentUser: AppUser;
@@ -60,7 +61,7 @@ export default function Goals({ currentUser }: GoalsProps) {
       }
     });
 
-    const current = relevant.reduce((sum, p) => sum + (p.factors?.totalTons || 0), 0);
+    const current = relevant.reduce((sum, p) => sum + getPricingTotalTons(p), 0);
     const percentage = goal.targetValue > 0 ? Math.min((current / goal.targetValue) * 100, 100) : 0;
 
     return {

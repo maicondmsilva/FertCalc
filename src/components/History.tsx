@@ -5,8 +5,9 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import PricingDetailModal from './PricingDetailModal';
 import { generatePricingPDF } from '../utils/pdfGenerator';
-import { getPricingRecords, deletePricingRecord, updatePricingRecord, getAppSettings, createNotification } from '../services/db';
+import { getPricingRecords, deletePricingRecord, updatePricingRecord, getAppSettings, createNotification, getUsers } from '../services/db';
 import { useToast } from './Toast';
+import { getPricingTotalTons, getPricingTotalSaleValue } from '../utils/pricingMetrics';
 
 interface HistoryProps {
   onEdit?: (pricing: PricingRecord) => void;
@@ -47,8 +48,8 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [pricingToDelete, setPricingToDelete] = useState<PricingRecord | null>(null);
   const [deletionReason, setDeletionReason] = useState('');
-  // New state for showing deleted pricings
   const [showDeleted, setShowDeleted] = useState(false);
+  const [activeTab, setActiveTab] = useState<'active' | 'deleted'>('active');
 
   const filteredPricings = pricings.filter(p => {
     const clientName = p.factors?.client?.name || '';
@@ -74,10 +75,10 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
     closed: pricings.filter(p => p.status === 'Fechada').length,
     lost: pricings.filter(p => p.status === 'Perdida').length,
     deleted: pricings.filter(p => p.status === 'Excluída').length,
-    totalValue: pricings.filter(p => p.status === 'Fechada').reduce((sum, p) => sum + (p.summary.totalSaleValue || 0), 0),
-    totalValueInProgress: pricings.filter(p => p.status === 'Em Andamento').reduce((sum, p) => sum + (p.summary.totalSaleValue || 0), 0),
-    totalTonsClosed: pricings.filter(p => p.status === 'Fechada').reduce((sum, p) => sum + (p.factors?.totalTons || 0), 0),
-    totalTonsInProgress: pricings.filter(p => p.status === 'Em Andamento').reduce((sum, p) => sum + (p.factors?.totalTons || 0), 0)
+    totalValue: pricings.filter(p => p.status === 'Fechada').reduce((sum, p) => sum + getPricingTotalSaleValue(p), 0),
+    totalValueInProgress: pricings.filter(p => p.status === 'Em Andamento').reduce((sum, p) => sum + getPricingTotalSaleValue(p), 0),
+    totalTonsClosed: pricings.filter(p => p.status === 'Fechada').reduce((sum, p) => sum + getPricingTotalTons(p), 0),
+    totalTonsInProgress: pricings.filter(p => p.status === 'Em Andamento').reduce((sum, p) => sum + getPricingTotalTons(p), 0)
   };
 
   const exportConsolidatedReport = () => {
@@ -165,16 +166,23 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
         history: [...(pricingToDelete.history || []), historyEntry]
       } as any);
 
-      // Notify managers
-      await createNotification({
-        userId: '', // Broad
-        title: 'Solicitação de Exclusão de Precificação',
-        message: `${currentUser.name} solicitou a exclusão da precificação ${pricingToDelete.formattedCod}. Motivo: ${deletionReason}`,
-        date: new Date().toISOString(),
-        read: false,
-        type: 'pricing_deletion_request',
-        dataId: pricingToDelete.id
-      });
+      // Notificar todos os gerentes e administradores
+      const allUsers = await getUsers();
+      const approvers = allUsers.filter(u =>
+        u.role === 'master' || u.role === 'admin' || u.role === 'manager'
+      );
+
+      await Promise.all(approvers.map(approver =>
+        createNotification({
+          userId: approver.id,
+          title: 'Solicitação de Exclusão de Precificação',
+          message: `${currentUser.name} solicitou a exclusão da precificação ${pricingToDelete.formattedCod} (Cliente: ${pricingToDelete.factors?.client?.name}). Motivo: ${deletionReason}`,
+          date: new Date().toISOString(),
+          read: false,
+          type: 'pricing_deletion_request',
+          dataId: pricingToDelete.id
+        })
+      ));
 
       showSuccess('Solicitação de exclusão enviada para aprovação!');
       setIsDeleting(false);
@@ -197,9 +205,14 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
   };
 
   const updateStatus = async (id: string, newStatus: PricingRecord['status']) => {
+    const record = pricings.find(p => p.id === id);
+    // Bloquear mudança para 'Fechada' sem aprovação
+    if (newStatus === 'Fechada' && record?.approvalStatus !== 'Aprovada') {
+      showError('A precificação precisa ser aprovada antes de ser marcada como Fechada.');
+      return;
+    }
     const historyEntry = { date: new Date().toISOString(), userId: currentUser.id, userName: currentUser.name, action: `Status alterado para: ${newStatus} ` };
     try {
-      const record = pricings.find(p => p.id === id);
       await updatePricingRecord(id, { status: newStatus, history: [...(record?.history || []), historyEntry] });
       await loadData();
       if (selectedPricing?.id === id) {
@@ -269,7 +282,27 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
 
       <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
         <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-          <h2 className="text-xl font-bold text-stone-800">Situação das Precificações</h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-xl font-bold text-stone-800">Situação das Precificações</h2>
+            <div className="flex gap-1">
+              <button
+                onClick={() => setActiveTab('active')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === 'active' ? 'bg-emerald-600 text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                }`}
+              >
+                Ativas
+              </button>
+              <button
+                onClick={() => setActiveTab('deleted')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === 'deleted' ? 'bg-red-600 text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                }`}
+              >
+                Excluídas ({stats.deleted})
+              </button>
+            </div>
+          </div>
 
           <div className="flex flex-wrap gap-4 w-full md:w-auto">
             <div className="flex items-center gap-2">
@@ -322,7 +355,7 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredPricings
-          .filter(p => showDeleted ? p.status === 'Excluída' : p.status !== 'Excluída')
+          .filter(p => activeTab === 'deleted' ? p.status === 'Excluída' : p.status !== 'Excluída')
           .map(p => (
             <div key={p.id} id={`pricing-card-${p.id}`} className={`bg-white rounded-xl shadow-sm border ${p.status === 'Excluída' ? 'border-red-100 opacity-75' : 'border-stone-200 hover:shadow-md'} transition-shadow cursor-pointer relative`} onClick={() => setSelectedPricing(p)}>
               {p.transferToUserId && (
@@ -396,11 +429,11 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
               </div>
               <div className="bg-stone-50 p-5 flex justify-between items-center">
                 <div>
-                  <p className="text-xs text-stone-500 font-medium uppercase tracking-wider mb-1">Venda Total ({p.factors?.totalTons || 0} tons)</p>
+                  <p className="text-xs text-stone-500 font-medium uppercase tracking-wider mb-1">Venda Total ({getPricingTotalTons(p).toFixed(1)} tons)</p>
                   <p className="text-xl font-bold text-emerald-600">
-                    R$ {(Number(p.summary?.totalSaleValue) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    R$ {getPricingTotalSaleValue(p).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </p>
-                  <p className="text-[10px] text-stone-400">Tonnage: {(p.factors?.totalTons || 0).toFixed(1)} t | R$ {Number(p.summary?.finalPrice || 0).toFixed(2)} / ton</p>
+                  <p className="text-[10px] text-stone-400">Tonnage: {getPricingTotalTons(p).toFixed(1)} t | R$ {getPricingTotalTons(p) > 0 ? (getPricingTotalSaleValue(p) / getPricingTotalTons(p)).toFixed(2) : '0.00'} / ton</p>
                 </div>
                 <div className="flex items-center gap-2">
                   {p.status !== 'Excluída' && (p.status === 'Em Andamento' && (currentUser.permissions as any)?.history_editPricing !== false && (
