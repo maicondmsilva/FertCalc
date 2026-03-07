@@ -158,6 +158,7 @@ export default function UserManager() {
         permissions: getDefaultPermissions('user') as any
       });
     } catch (err) {
+      console.error('Erro ao salvar usuário:', err);
       showError('Erro ao salvar usuário. Tente novamente.');
     } finally {
       setLoading(false);

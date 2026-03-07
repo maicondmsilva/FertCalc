@@ -5,7 +5,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import PricingDetailModal from './PricingDetailModal';
 import { generatePricingPDF } from '../utils/pdfGenerator';
-import { getPricingRecords, deletePricingRecord, updatePricingRecord, getAppSettings, createNotification, getUsers } from '../services/db';
+import { getPricingRecords, deletePricingRecord, updatePricingRecord, getAppSettings, createNotification, getUsers, getManagersOfUser } from '../services/db';
 import { useToast } from './Toast';
 import { getPricingTotalTons, getPricingTotalSaleValue } from '../utils/pricingMetrics';
 
@@ -168,15 +168,17 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
 
       // Notificar todos os gerentes e administradores
       const allUsers = await getUsers();
-      const approvers = allUsers.filter(u =>
-        u.role === 'master' || u.role === 'admin' || u.role === 'manager'
-      );
+      const managers = await getManagersOfUser(currentUser.id);
+      const approvers = await getUsers();
+      const masterAdmins = approvers.filter(u => u.role === 'master' || u.role === 'admin' || (u.permissions as any)?.approvals_canApprove === true);
+      
+      const notifyIds = new Set([...managers.map(m => m.id), ...masterAdmins.map(a => a.id)]);
 
-      await Promise.all(approvers.map(approver =>
+      await Promise.all(Array.from(notifyIds).map(targetId => 
         createNotification({
-          userId: approver.id,
-          title: 'Solicitação de Exclusão de Precificação',
-          message: `${currentUser.name} solicitou a exclusão da precificação ${pricingToDelete.formattedCod} (Cliente: ${pricingToDelete.factors?.client?.name}). Motivo: ${deletionReason}`,
+          userId: targetId,
+          title: 'Solicitação de Exclusão',
+          message: `${currentUser.name} solicitou a exclusão de uma precificação aprovada: ${pricingToDelete.formattedCod}.`,
           date: new Date().toISOString(),
           read: false,
           type: 'pricing_deletion_request',

@@ -43,11 +43,11 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
       let filteredPricings: PricingRecord[] = [];
       let filteredGoals: Goal[] = [];
 
+      const managedIds = currentUser.managedUserIds || [];
       if (canApproveTotal) {
         filteredPricings = fetchedPricings;
         filteredGoals = allGoals.filter(g => g.status === 'Pendente');
       } else if (currentUser.role === 'manager') {
-        const managedIds = currentUser.managedUserIds || [];
         filteredPricings = fetchedPricings.filter(p => (p.userId === currentUser.id || managedIds.includes(p.userId)));
         filteredGoals = allGoals.filter(g => (g.userId === currentUser.id || managedIds.includes(g.userId)) && g.status === 'Pendente');
       } else {
@@ -56,6 +56,12 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
       }
       setAllPricings(filteredPricings);
       setGoals(filteredGoals);
+      console.log('Filtro Aprovações:', { 
+        role: currentUser.role, 
+        managedIds, 
+        pricings: filteredPricings.length, 
+        goals: filteredGoals.length 
+      });
     };
     loadData();
   }, [currentUser]);

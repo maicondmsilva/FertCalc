@@ -85,25 +85,30 @@ export default function App() {
     });
 
     const fetchNotifications = async () => {
-      const notifs = await getNotifications();
-      let userNotifs = notifs;
-      const savedUser = localStorage.getItem('current_user');
-      if (savedUser) {
-        const user = JSON.parse(savedUser);
-        userNotifs = notifs.filter(n => n.userId === user.id || n.userId === '');
-      }
+      if (!currentUser) return;
+      
+      const allNotifs = await getNotifications(currentUser.id);
       
       setNotifications(prev => {
-        // Handle new notifications popups
-        if (userNotifs.length > prev.length && prev.length > 0) {
-          const newNotifs = userNotifs.filter(un => !prev.some(pn => pn.id === un.id));
-          if (newNotifs.length > 0) {
-             const sortedNew = [...newNotifs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-             const newest = sortedNew[0];
-             showInfo(newest.message, newest.title, { label: 'Abrir', onClick: () => { setIsNotificationsOpen(true); } });
-          }
+        const newNotifs = allNotifs.filter(n => !n.read && !prev.find(p => p.id === n.id));
+        if (newNotifs.length > 0) {
+          const sortedNew = [...newNotifs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+          const newest = sortedNew[0];
+          
+          showInfo(newest.message, newest.title, { 
+            label: 'Abrir', 
+            onClick: () => { 
+              if (newest.type?.includes('pricing') || newest.type?.includes('deletion')) {
+                navigate('/approvals');
+              } else if (newest.type?.includes('goal')) {
+                navigate('/goals');
+              } else {
+                setIsNotificationsOpen(true); 
+              }
+            } 
+          });
         }
-        return userNotifs;
+        return allNotifs;
       });
     };
 

@@ -60,7 +60,16 @@ export async function saveAppSettings(settings: AppSettings): Promise<void> {
 // USERS
 // ============================================================
 export async function getUsers(): Promise<User[]> {
-  const { data, error } = await supabase.from('app_users').select('*').order('created_at');
+  const { data, error } = await supabase.from('app_users').select('*').order('name');
+  if (error || !data) return [];
+  return data.map(mapUser);
+}
+
+export async function getManagersOfUser(userId: string): Promise<User[]> {
+  const { data, error } = await supabase
+    .from('app_users')
+    .select('*')
+    .contains('managed_user_ids', [userId]);
   if (error || !data) return [];
   return data.map(mapUser);
 }
@@ -870,8 +879,18 @@ export async function deleteGoal(id: string): Promise<void> {
 // ============================================================
 // NOTIFICATIONS
 // ============================================================
-export async function getNotifications(): Promise<Notification[]> {
-  const { data, error } = await supabase.from('notifications').select('*').order('created_at', { ascending: false });
+// ============================================================
+// NOTIFICATIONS
+// ============================================================
+export async function getNotifications(userId?: string): Promise<Notification[]> {
+  let query = supabase.from('notifications').select('*').order('created_at', { ascending: false });
+  
+  if (userId) {
+    // Busca notificações do usuário OU globais (onde user_id é null)
+    query = query.or(`user_id.eq.${userId},user_id.is.null`);
+  }
+
+  const { data, error } = await query;
   if (error || !data) return [];
   return data.map(d => ({
     id: d.id,
@@ -917,6 +936,8 @@ export async function markNotificationsAsRead(notificationIds: string[]): Promis
 }
 
 export async function deleteAllNotifications(userId: string): Promise<void> {
+  // Deleta apenas as notificações privadas do usuário.
+  // Notificações globais (null) permanecem ou poderiam ser marcadas como lidas se necessário.
   const { error } = await supabase
     .from('notifications')
     .delete()

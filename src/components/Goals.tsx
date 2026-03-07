@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Goal, User as AppUser, PricingRecord, Notification } from '../types';
 import { Target, TrendingUp, Calendar, CheckCircle2, AlertCircle, Clock, Plus, Trash2 } from 'lucide-react';
-import { getGoals, createGoal, updateGoal, deleteGoal, getPricingRecords, getUsers, createNotification } from '../services/db';
+import { getGoals, createGoal, updateGoal, deleteGoal, getPricingRecords, getUsers, createNotification, getManagersOfUser } from '../services/db';
 import { useToast } from './Toast';
 import { getPricingTotalTons } from '../utils/pricingMetrics';
 
@@ -87,14 +87,22 @@ export default function Goals({ currentUser }: GoalsProps) {
         status: 'Pendente'
       });
       if (currentUser.role === 'user') {
-        await createNotification({
-          userId: '',
-          title: 'Nova Meta Pendente',
-          message: `${currentUser.name} criou uma nova meta de ${Number(newGoal.targetValue).toLocaleString('pt-BR')} Toneladas (${newGoal.type === 'monthly' ? 'Mensal' : 'Anual'}).`,
-          date: new Date().toISOString(),
-          read: false,
-          type: 'goal_approval'
-        });
+        const managers = await getManagersOfUser(currentUser.id);
+        const approvers = await getUsers();
+        const masterAdmins = approvers.filter(u => u.role === 'master' || u.role === 'admin' || (u.permissions as any)?.approvals_canApprove === true);
+        
+        const notifyIds = new Set([...managers.map(m => m.id), ...masterAdmins.map(a => a.id)]);
+        
+        for (const targetId of notifyIds) {
+          await createNotification({
+            userId: targetId,
+            title: 'Nova Meta Pendente',
+            message: `${currentUser.name} criou uma nova meta de ${Number(newGoal.targetValue).toLocaleString('pt-BR')} Toneladas (${newGoal.type === 'monthly' ? 'Mensal' : 'Anual'}).`,
+            date: new Date().toISOString(),
+            read: false,
+            type: 'goal_approval'
+          });
+        }
       }
       showSuccess('Meta criada com sucesso!');
       setIsAddingGoal(false);

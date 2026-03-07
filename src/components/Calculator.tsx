@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import solver from 'javascript-lp-solver';
 import { Plus, Trash2, Save, AlertTriangle, CheckCircle2, Calculator as CalculatorIcon, Building2, Database, Search, User, UserCheck, Tag, LayoutDashboard, Settings, X, Beaker } from 'lucide-react';
 import { RawMaterial, PricingFactors, PricingRecord, PricingSummary, Branch, PriceList, Client, Agent, User as AppUser, PricingHistoryEntry, TargetFormula, IncompatibilityRule, SavedFormula } from '../types';
-import { getClients, getAgents, getBranches, getPriceLists, getIncompatibilityRules, createPricingRecord, updatePricingRecord, createSavedFormula, getSavedFormulas, updateSavedFormula, createNotification, getUsers } from '../services/db';
+import { getClients, getAgents, getBranches, getPriceLists, getIncompatibilityRules, createPricingRecord, updatePricingRecord, createSavedFormula, getSavedFormulas, updateSavedFormula, createNotification, getUsers, getManagersOfUser } from '../services/db';
 import { useToast } from './Toast';
 import { formatNPK } from '../utils/formatters';
 
@@ -597,21 +597,23 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
         savedRecord = await createPricingRecord(record);
         if (isNew) {
           // Emit notification for new pricing to all approvers
-          const allUsers = await getUsers();
-          const approvers = allUsers.filter(u => 
-            u.role === 'master' || u.role === 'admin' || u.role === 'manager' || (u.permissions as any)?.approvals_canApprove
-          );
-          await Promise.all(approvers.map(approver => 
-            createNotification({
-              userId: approver.id,
-              title: 'Nova Precificação Realizada',
-              message: `O vendedor ${currentUser.name} (${currentUser.customCode}) realizou uma nova precificação para ${factors.client.name}.`,
+          const managers = await getManagersOfUser(currentUser.id);
+          const approvers = await getUsers();
+          const masterAdmins = approvers.filter(u => u.role === 'master' || u.role === 'admin' || (u.permissions as any)?.approvals_canApprove === true);
+          
+          const notifyIds = new Set([...managers.map(m => m.id), ...masterAdmins.map(a => a.id)]);
+
+          for (const targetId of notifyIds) {
+            await createNotification({
+              userId: targetId,
+              title: 'Nova Precificação Pendente',
+              message: `${currentUser.name} gerou uma nova precificação para ${factors.client.name} que requer aprovação.`,
               date: new Date().toISOString(),
               read: false,
               type: 'pricing_approval',
-              dataId: savedRecord.id
-            })
-          ));
+              dataId: record.id
+            });
+          }
         }
       }
       showSuccess('Precificação salva com sucesso!');
