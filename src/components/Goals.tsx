@@ -161,7 +161,7 @@ export default function Goals({ currentUser }: GoalsProps) {
             </div>
             <div>
               <label className="block text-xs font-bold text-stone-500 mb-1">Valor Alvo (Toneladas)</label>
-              <input type="number" value={newGoal.targetValue} onChange={(e) => setNewGoal({ ...newGoal, targetValue: Number(e.target.value) })} className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm" />
+              <input type="number" value={newGoal.targetValue || ''} onChange={(e) => setNewGoal({ ...newGoal, targetValue: Number(e.target.value) })} className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm" />
             </div>
             {newGoal.type === 'monthly' && (
               <div>

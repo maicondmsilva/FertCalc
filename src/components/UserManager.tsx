@@ -250,7 +250,6 @@ export default function UserManager() {
                 onChange={(e) => setFormData({ ...formData, customCode: e.target.value })}
                 className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
                 placeholder="Ex: VEND-001"
-                required
               />
             </div>
             <div>

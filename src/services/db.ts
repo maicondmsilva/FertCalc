@@ -907,12 +907,12 @@ export async function createNotification(notification: Omit<Notification, 'id'>)
   return { id: data.id, userId: data.user_id, title: data.title, message: data.message, date: data.date, read: data.read, type: data.type, dataId: data.data_id };
 }
 
-export async function markNotificationsAsRead(userId: string): Promise<void> {
+export async function markNotificationsAsRead(notificationIds: string[]): Promise<void> {
+  if (!notificationIds || notificationIds.length === 0) return;
   const { error } = await supabase
     .from('notifications')
     .update({ read: true })
-    .eq('user_id', userId)
-    .eq('read', false);
+    .in('id', notificationIds);
   if (error) throw error;
 }
 

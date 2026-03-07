@@ -138,10 +138,13 @@ export default function App() {
   const unreadCount = notifications.filter(n => !n.read).length;
 
   const markNotificationsRead = () => {
+    const unreadIds = notifications.filter(n => !n.read).map(n => n.id);
+    if (unreadIds.length === 0) return;
+    
     const updated = notifications.map(n => ({ ...n, read: true }));
     setNotifications(updated);
     if (currentUser) {
-      markNotificationsAsRead(currentUser.id).catch(console.error);
+      markNotificationsAsRead(unreadIds).catch(console.error);
     }
   };
 
