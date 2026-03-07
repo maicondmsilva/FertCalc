@@ -1,8 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { getPricingRecords } from '../services/db';
 import { User, PricingRecord } from '../types';
-import { DollarSign, Percent, TrendingUp, Calendar, User as UserIcon, Building, Download, BarChart3, Package } from 'lucide-react';
-import { getPricingTotalTons, getPricingTotalSaleValue, getPricingTotalCommission } from '../utils/pricingMetrics';
+import { DollarSign, Percent, TrendingUp, Calendar, User as UserIcon, Building, Download, BarChart3, Package, FileText } from 'lucide-react';
+import { getPricingTotalTons, getPricingTotalSaleValue, getPricingTotalCommission, getPricingAverageCommissionRate } from '../utils/pricingMetrics';
+import PricingDetailModal from './PricingDetailModal';
+
+export const formatPricingCode = (cod: string | undefined): string => {
+  if (!cod) return '---';
+  // Remove # and leading zeros
+  return cod.replace(/^#+0*/, '') || '0';
+};
 
 interface CommissionReportProps {
   currentUser: User;
@@ -12,6 +19,7 @@ export default function CommissionReport({ currentUser }: CommissionReportProps)
   const [pricings, setPricings] = useState<PricingRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState<'month' | 'quarter' | 'year' | 'all'>('month');
+  const [selectedPricing, setSelectedPricing] = useState<PricingRecord | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -237,40 +245,62 @@ export default function CommissionReport({ currentUser }: CommissionReportProps)
           <table className="w-full text-left">
             <thead className="bg-stone-50 text-stone-600 text-sm font-semibold border-b border-stone-200">
               <tr>
+                <th className="py-3 px-6 text-center w-16">COD</th>
                 <th className="py-3 px-6">Data</th>
                 <th className="py-3 px-6">Cliente</th>
                 <th className="py-3 px-6">Agente</th>
+                <th className="py-3 px-6 text-center">% Age</th>
                 <th className="py-3 px-6 text-right">Toneladas</th>
                 <th className="py-3 px-6 text-right">Venda Bruta</th>
-                <th className="py-3 px-6 text-right">Comissão</th>
                 <th className="py-3 px-6 text-right">Comissão/Ton</th>
+                <th className="py-3 px-6 text-right">Com. Total</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100">
-              {filteredPricings.slice(0, 10).map((p) => (
-                <tr key={p.id} className="hover:bg-stone-50">
-                  <td className="py-3 px-6 text-stone-600 text-sm">
-                    {new Date(p.date).toLocaleDateString('pt-BR')}
-                  </td>
-                  <td className="py-3 px-6 font-medium text-stone-800">{p.factors?.client?.name || 'N/A'}</td>
-                  <td className="py-3 px-6 text-stone-600">{p.factors?.agent?.name || 'N/A'}</td>
-                  <td className="py-3 px-6 text-right text-stone-600">
-                    {getPricingTotalTons(p).toLocaleString('pt-BR', { minimumFractionDigits: 1 })} t
-                  </td>
-                  <td className="py-3 px-6 text-right text-stone-600">
-                    {getPricingTotalSaleValue(p).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                  </td>
-                  <td className="py-3 px-6 text-right font-bold text-emerald-600">
-                    {getPricingTotalCommission(p).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                  </td>
-                  <td className="py-3 px-6 text-right font-bold text-stone-600">
-                    R$ {getPricingTotalTons(p) > 0 ? (getPricingTotalCommission(p) / getPricingTotalTons(p)).toFixed(2) : '0.00'}/t
-                  </td>
-                </tr>
-              ))}
+              {filteredPricings.slice(0, 10).map((p) => {
+                const totalComm = getPricingTotalCommission(p);
+                const totalTons = getPricingTotalTons(p);
+                const commPerTon = totalTons > 0 ? totalComm / totalTons : 0;
+                const commRate = getPricingAverageCommissionRate(p);
+
+                return (
+                  <tr key={p.id} className="hover:bg-stone-50 transition-colors">
+                    <td className="py-3 px-6 text-center">
+                      <button
+                        onClick={() => setSelectedPricing(p)}
+                        className="text-emerald-600 font-bold hover:text-emerald-800 hover:underline transition-all flex items-center justify-center gap-1 focus:outline-none"
+                        title="Ver Detalhes"
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        {formatPricingCode(p.formattedCod)}
+                      </button>
+                    </td>
+                    <td className="py-3 px-6 text-stone-600 text-sm">
+                      {new Date(p.date).toLocaleDateString('pt-BR')}
+                    </td>
+                    <td className="py-3 px-6 font-medium text-stone-800">{p.factors.client?.name || '---'}</td>
+                    <td className="py-3 px-6 text-stone-600 text-sm">{p.factors.agent?.name || '---'}</td>
+                    <td className="py-3 px-6 text-center text-purple-600 font-bold text-sm">
+                      {commRate.toFixed(1)}%
+                    </td>
+                    <td className="py-3 px-6 text-right text-stone-600 text-sm">
+                      {totalTons.toLocaleString('pt-BR', { minimumFractionDigits: 1 })} t
+                    </td>
+                    <td className="py-3 px-6 text-right font-medium text-stone-800 text-sm">
+                      {getPricingTotalSaleValue(p).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </td>
+                    <td className="py-3 px-6 text-right text-stone-600 font-bold text-sm">
+                      R$ {commPerTon.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/t
+                    </td>
+                    <td className="py-3 px-6 text-right font-bold text-emerald-600 text-sm">
+                      {totalComm.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </td>
+                  </tr>
+                );
+              })}
               {filteredPricings.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-stone-500">Nenhum registro encontrado.</td>
+                  <td colSpan={9} className="py-8 text-center text-stone-500">Nenhum registro encontrado.</td>
                 </tr>
               )}
             </tbody>

@@ -637,11 +637,11 @@ function pricingRecordToDb(r: Partial<PricingRecord>) {
 }
 
 /**
- * Formats a numeric COD into a string like #0001
+ * Formats a numeric COD into a string like 1, 2, 3
  */
 export function formatPricingCod(cod?: number): string {
   if (!cod) return '---';
-  return `#${String(cod).padStart(4, '0')}`;
+  return String(cod);
 }
 
 function mapPricingRecord(d: any): PricingRecord {

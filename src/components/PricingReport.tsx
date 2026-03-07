@@ -5,7 +5,9 @@ import { BarChart3, FileText, Search, Filter, TrendingUp, TrendingDown, DollarSi
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
-import { getPricingTotalTons, getPricingTotalSaleValue } from '../utils/pricingMetrics';
+import { getPricingTotalTons, getPricingTotalSaleValue, getPricingAverageCommissionRate } from '../utils/pricingMetrics';
+import PricingDetailModal from './PricingDetailModal';
+import { formatPricingCode } from './CommissionReport';
 
 interface PricingReportProps {
   currentUser: User;
@@ -29,6 +31,7 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('table');
+  const [selectedPricing, setSelectedPricing] = useState<PricingRecord | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -145,14 +148,15 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
 
     autoTable(doc, {
       startY: 48,
-      head: [['#COD', 'Data', 'Vendedor', 'Cliente', 'Agent', 'Fórmulas', 'Tons', 'Preço Médio/Ton', 'Valor Total', 'Status', 'Aprovação']],
+      head: [['COD', 'Data', 'Vendedor', 'Cliente', 'Agent', '% Age', 'Fórmulas', 'Tons', 'Preço Médio/Ton', 'Valor Total', 'Status', 'Aprovação']],
       body: filteredPricings.map(p => [
-        p.formattedCod || '---',
+        formatPricingCode(p.formattedCod),
         new Date(p.date).toLocaleDateString('pt-BR'),
         p.userName || '---',
         p.factors?.client?.name || '---',
         p.factors?.agent?.name || '---',
-        (p.calculations?.length || 0) + ' fórmula(s)',
+        getPricingAverageCommissionRate(p).toFixed(1) + '%',
+        (p.calculations?.length || 0) + ' f.',
         getPricingTotalTons(p).toFixed(1) + ' t',
         `R$ ${(getPricingTotalTons(p) > 0 ? getPricingTotalSaleValue(p) / getPricingTotalTons(p) : 0).toFixed(2)}`,
         `R$ ${getPricingTotalSaleValue(p).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
@@ -173,13 +177,14 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
       ['RELATÓRIO DE PRECIFICAÇÃO', appSettings.companyName],
       ['Gerado em', new Date().toLocaleString('pt-BR'), 'Por', currentUser.name],
       [],
-      ['COD', 'Data', 'Vendedor', 'Cliente', 'Agente', 'Filial', 'Total Fórmulas', 'Toneladas', 'Preço Médio/Ton', 'Valor Total', 'Status', 'Aprovação'],
+      ['COD', 'Data', 'Vendedor', 'Cliente', 'Agente', '% Comissao Agent', 'Filial', 'Total Fórmulas', 'Toneladas', 'Preço Médio/Ton', 'Valor Total', 'Status', 'Aprovação'],
       ...filteredPricings.map(p => [
-        p.formattedCod || '---',
+        formatPricingCode(p.formattedCod),
         new Date(p.date).toLocaleDateString('pt-BR'),
         p.userName || '---',
         p.factors?.client?.name || '---',
         p.factors?.agent?.name || '---',
+        getPricingAverageCommissionRate(p),
         branches.find(b => b.id === p.factors?.branchId)?.name || '---',
         p.calculations?.length || 0,
         getPricingTotalTons(p),
@@ -354,82 +359,105 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
 
       {/* Table */}
       <div className="bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
-            <thead className="bg-stone-800 text-white text-[10px] font-bold uppercase tracking-wider">
-              <tr>
-                <th className="px-4 py-3">#COD</th>
-                <th className="px-4 py-3">Data</th>
-                <th className="px-4 py-3">Vendedor</th>
-                <th className="px-4 py-3">Cliente</th>
-                <th className="px-4 py-3">Agente</th>
-                <th className="px-4 py-3 text-right">Toneladas</th>
-                <th className="px-4 py-3 text-right">Preço/Ton</th>
-                <th className="px-4 py-3 text-right">Valor Total</th>
-                <th className="px-4 py-3 text-center">Status</th>
-                <th className="px-4 py-3 text-center">Aprovação</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-stone-100">
-              {filteredPricings.length === 0 ? (
+        {viewMode === 'table' ? (
+          <div className="overflow-x-auto min-h-[400px]">
+            <table className="w-full text-left">
+              <thead className="bg-stone-50 border-b border-stone-200 text-stone-600 text-xs font-semibold">
                 <tr>
-                  <td colSpan={10} className="px-4 py-12 text-center text-stone-400 italic">
-                    Nenhuma precificação encontrada com os filtros aplicados.
-                  </td>
+                  <th className="px-4 py-3 text-center">COD</th>
+                  <th className="px-4 py-3">Data</th>
+                  <th className="px-4 py-3">Cliente</th>
+                  <th className="px-4 py-3">Vendedor</th>
+                  <th className="px-4 py-3">Agente</th>
+                  <th className="px-4 py-3 text-center">% Age</th>
+                  <th className="px-4 py-3 text-center">Fórm.</th>
+                  <th className="px-4 py-3 text-right">Tons</th>
+                  <th className="px-4 py-3 text-right">Preço Médio</th>
+                  <th className="px-4 py-3 text-right">Total Venda</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Aprov.</th>
                 </tr>
-              ) : filteredPricings.map(p => (
-                <tr key={p.id} className="hover:bg-stone-50 transition-colors">
-                  <td className="px-4 py-3 font-mono font-bold text-emerald-600 text-xs">{p.formattedCod}</td>
-                  <td className="px-4 py-3 text-stone-600 whitespace-nowrap text-xs">{new Date(p.date).toLocaleDateString('pt-BR')}</td>
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-stone-800 text-xs">{p.userName || '---'}</p>
-                    <p className="text-[10px] text-stone-400">{p.userCode}</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-stone-800 text-xs">{p.factors?.client?.name || '---'}</p>
-                    <p className="text-[10px] text-stone-400">{p.factors?.client?.fazenda || ''}</p>
-                  </td>
-                  <td className="px-4 py-3 text-stone-600 text-xs">{p.factors?.agent?.name || '---'}</td>
-                  <td className="px-4 py-3 text-right font-mono text-xs text-stone-700">
-                    {getPricingTotalTons(p).toFixed(1)} t
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-xs text-stone-700">
-                    R$ {(getPricingTotalTons(p) > 0 ? getPricingTotalSaleValue(p) / getPricingTotalTons(p) : 0).toFixed(2)}
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-sm font-bold text-emerald-700">
-                    R$ {getPricingTotalSaleValue(p).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${getStatusColor(p.status)}`}>
-                      {p.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${getApprovalColor(p.approvalStatus || 'Pendente')}`}>
-                      {p.approvalStatus || 'Pendente'}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            {filteredPricings.length > 0 && (
-              <tfoot className="bg-stone-50 border-t-2 border-stone-200">
-                <tr>
-                  <td colSpan={5} className="px-4 py-3 text-xs font-black text-stone-600 uppercase">TOTAIS</td>
-                  <td className="px-4 py-3 text-right font-mono font-black text-stone-800 text-xs">
-                    {filteredPricings.reduce((s, p) => s + getPricingTotalTons(p), 0).toFixed(1)} t
-                  </td>
-                  <td className="px-4 py-3"></td>
-                  <td className="px-4 py-3 text-right font-mono font-black text-emerald-700">
-                    R$ {filteredPricings.reduce((s, p) => s + getPricingTotalSaleValue(p), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </td>
-                  <td colSpan={2}></td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-stone-100 bg-white">
+                {filteredPricings.map(p => {
+                  const avgPrice = getPricingTotalTons(p) > 0 ? getPricingTotalSaleValue(p) / getPricingTotalTons(p) : 0;
+                  return (
+                    <tr key={p.id} className="hover:bg-stone-50 transition-colors">
+                      <td className="px-4 py-3 text-center">
+                        <button
+                          onClick={() => setSelectedPricing(p)}
+                          className="text-emerald-600 font-bold hover:text-emerald-800 hover:underline transition-all flex items-center justify-center gap-1 focus:outline-none"
+                          title="Ver Detalhes"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          {formatPricingCode(p.formattedCod)}
+                        </button>
+                      </td>
+                      <td className="px-4 py-3 text-stone-600 text-sm whitespace-nowrap">
+                        {new Date(p.date).toLocaleDateString('pt-BR')}
+                      </td>
+                      <td className="px-4 py-3 text-stone-800 font-medium text-sm">
+                        {p.factors?.client?.name || '---'}
+                      </td>
+                      <td className="px-4 py-3 text-stone-600 text-sm">
+                        {p.userName || '---'}
+                      </td>
+                      <td className="px-4 py-3 text-stone-600 text-sm">
+                        {p.factors?.agent?.name || '---'}
+                      </td>
+                      <td className="px-4 py-3 text-center text-purple-600 font-bold text-sm">
+                        {getPricingAverageCommissionRate(p).toFixed(1)}%
+                      </td>
+                      <td className="px-4 py-3 text-center text-stone-600 text-sm font-medium">
+                        {p.calculations?.length || 0}
+                      </td>
+                      <td className="px-4 py-3 text-emerald-700 font-bold text-sm text-right">
+                        {getPricingTotalTons(p).toLocaleString('pt-BR', { minimumFractionDigits: 1 })}
+                      </td>
+                      <td className="px-4 py-3 text-stone-600 font-bold text-sm text-right whitespace-nowrap">
+                        R$ {avgPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-4 py-3 text-emerald-600 font-black text-sm text-right whitespace-nowrap">
+                        R$ {getPricingTotalSaleValue(p).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${getStatusColor(p.status)}`}>
+                          {p.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${getApprovalColor(p.approvalStatus || 'Pendente')}`}>
+                          {p.approvalStatus || 'Pendente'}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {filteredPricings.length === 0 && (
+                  <tr>
+                    <td colSpan={12} className="px-4 py-8 text-center text-stone-500">
+                      Nenhuma precificação encontrada com os filtros atuais.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="p-12 text-center text-stone-500">
+            Modo de visualização em cards em construção...
+          </div>
+        )}
       </div>
+
+      {selectedPricing && (
+        <PricingDetailModal
+          selectedPricing={selectedPricing}
+          currentUser={currentUser}
+          onClose={() => setSelectedPricing(null)}
+          onUpdateStatus={() => {}}
+        />
+      )}
     </div>
   );
 }
