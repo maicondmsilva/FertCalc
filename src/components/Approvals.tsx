@@ -29,9 +29,9 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
   const [deletionRejectionReason, setDeletionRejectionReason] = useState('');
   const [pendingDeletionRejectionId, setPendingDeletionRejectionId] = useState<string | null>(null);
 
-  // Verificar se o usuário pode aprovar/reprovar
-  const canApprove = currentUser.role === 'master' || currentUser.role === 'admin' ||
-    currentUser.role === 'manager' || (currentUser.permissions as any)?.approvals_canApprove === true;
+  // Verificar permissões de aprovação
+  const canApproveTotal = currentUser.role === 'master' || currentUser.role === 'admin' || (currentUser.permissions as any)?.approvals_canApprove === true;
+  const canApprove = canApproveTotal || currentUser.role === 'manager';
 
   useEffect(() => {
     const loadData = async () => {
@@ -43,7 +43,7 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
       let filteredPricings: PricingRecord[] = [];
       let filteredGoals: Goal[] = [];
 
-      if (currentUser.role === 'master' || currentUser.role === 'admin') {
+      if (canApproveTotal) {
         filteredPricings = fetchedPricings;
         filteredGoals = allGoals.filter(g => g.status === 'Pendente');
       } else if (currentUser.role === 'manager') {

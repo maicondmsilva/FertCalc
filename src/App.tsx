@@ -25,6 +25,7 @@ import { LayoutDashboard, History as HistoryIcon, Database, Users, UserCheck, Bu
 import { PricingRecord, User, AppSettings, Notification, NavItem, SavedFormula } from './types';
 import { getAppSettings, getNotifications, markNotificationsAsRead } from './services/db';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { useToast } from './components/Toast';
 
 import Approvals from './components/Approvals';
 import PrdModule from './components/PrdModule';
@@ -53,6 +54,7 @@ export default function App() {
     activeModule = 'managementReports';
   }
 
+  const { showInfo } = useToast();
   const [editingPricing, setEditingPricing] = useState<PricingRecord | null>(null);
   const [initialFormulaContext, setInitialFormulaContext] = useState<{ formula: SavedFormula | null; branchId: string; priceListId: string }>({ formula: null, branchId: '', priceListId: '' });
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -81,16 +83,31 @@ export default function App() {
       }
     });
 
-    getNotifications().then(notifs => {
-      // Filter by current user - each user sees only their own notifications
+    const fetchNotifications = async () => {
+      const notifs = await getNotifications();
+      let userNotifs = notifs;
       const savedUser = localStorage.getItem('current_user');
       if (savedUser) {
         const user = JSON.parse(savedUser);
-        setNotifications(notifs.filter(n => n.userId === user.id || n.userId === ''));
-      } else {
-        setNotifications(notifs);
+        userNotifs = notifs.filter(n => n.userId === user.id || n.userId === '');
       }
-    });
+      
+      setNotifications(prev => {
+        // Handle new notifications popups
+        if (userNotifs.length > prev.length && prev.length > 0) {
+          const newNotifs = userNotifs.filter(un => !prev.some(pn => pn.id === un.id));
+          if (newNotifs.length > 0) {
+             const sortedNew = [...newNotifs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+             const newest = sortedNew[0];
+             showInfo(newest.message, newest.title, { label: 'Abrir', onClick: () => { setIsNotificationsOpen(true); } });
+          }
+        }
+        return userNotifs;
+      });
+    };
+
+    fetchNotifications();
+    const intervalId = setInterval(fetchNotifications, 10000);
 
     const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault();
@@ -101,6 +118,7 @@ export default function App() {
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      clearInterval(intervalId);
     };
   }, []);
 
@@ -502,11 +520,13 @@ export default function App() {
                       {notifications.length === 0 ? (
                         <div className="p-8 text-center text-stone-400 text-sm">Nenhuma notificação</div>
                       ) : (
-                        notifications.slice().reverse().map(n => (
-                          <div key={n.id} className={`p-4 border-b border-stone-100 hover:bg-stone-50 transition-colors ${!n.read ? 'bg-emerald-50/30' : ''}`}>
-                            <p className="text-sm font-bold text-stone-800">{n.title}</p>
-                            <p className="text-xs text-stone-600 mt-1">{n.message}</p>
-                            <p className="text-[10px] text-stone-400 mt-2">{new Date(n.date).toLocaleString('pt-BR')}</p>
+                        [...notifications]
+                          .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                          .map(n => (
+                          <div key={n.id} className={`p-4 border-b border-stone-200 transition-colors ${!n.read ? 'bg-blue-50 border-l-4 border-l-blue-500' : 'bg-stone-50 text-stone-500 hover:bg-stone-100'}`}>
+                            <p className={`text-sm ${!n.read ? 'font-bold text-blue-900' : 'font-medium text-stone-700'}`}>{n.title}</p>
+                            <p className="text-xs mt-1">{n.message}</p>
+                            <p className="text-[10px] opacity-70 mt-2">{new Date(n.date).toLocaleString('pt-BR')}</p>
                           </div>
                         ))
                       )}
