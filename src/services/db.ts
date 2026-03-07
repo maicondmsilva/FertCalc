@@ -84,6 +84,7 @@ export async function createUser(user: Omit<User, 'id'> & { password: string }):
       custom_code: user.customCode,
       password: user.password,
       role: user.role,
+      managed_user_ids: user.managedUserIds || [],
       permissions: user.permissions || {},
     })
     .select()
@@ -99,6 +100,7 @@ export async function updateUser(id: string, user: Partial<User> & { password?: 
   if (user.customCode !== undefined) payload.custom_code = user.customCode;
   if (user.password !== undefined && user.password !== '') payload.password = user.password;
   if (user.role !== undefined) payload.role = user.role;
+  if (user.managedUserIds !== undefined) payload.managed_user_ids = user.managedUserIds;
   if (user.permissions !== undefined) payload.permissions = user.permissions;
   const { error } = await supabase.from('app_users').update(payload).eq('id', id);
   if (error) throw error;
@@ -117,6 +119,7 @@ function mapUser(data: any): User {
     customCode: data.custom_code,
     password: data.password,
     role: data.role,
+    managedUserIds: data.managed_user_ids || [],
     permissions: data.permissions || {},
   };
 }

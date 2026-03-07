@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Save, User, Search, Edit2, MapPin, Phone, Mail, Hash, Eye, X } from 'lucide-react';
-import { Client } from '../types';
+import { Plus, Trash2, Save, User as UserIcon, Search, Edit2, MapPin, Phone, Mail, Hash, Eye, X } from 'lucide-react';
+import { Client, User } from '../types';
 import { formatDocument, formatPhone, formatCEP, lookupCEP } from '../utils/formatters';
 import { getClients, createClient, updateClient, deleteClient, getNextClientCode } from '../services/db';
 import { useToast } from './Toast';
@@ -16,8 +16,12 @@ const initialFormData = {
   address: { cep: '', street: '', number: '', neighborhood: '', city: '', state: '' }
 };
 
-export default function ClientManager() {
+export default function ClientManager({ currentUser }: { currentUser: User }) {
   const { showSuccess, showError } = useToast();
+  
+  const canCreate = currentUser.role === 'master' || currentUser.role === 'admin' || (currentUser.permissions as any)?.clients_create;
+  const canEdit = currentUser.role === 'master' || currentUser.role === 'admin' || (currentUser.permissions as any)?.clients_edit;
+  const canDelete = currentUser.role === 'master' || currentUser.role === 'admin' || (currentUser.permissions as any)?.clients_delete;
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
@@ -105,11 +109,12 @@ export default function ClientManager() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
-        <h2 className="text-xl font-bold text-stone-800 mb-6 flex items-center">
-          <User className="w-5 h-5 mr-2 text-emerald-600" />
-          {editingClient ? 'Editar Cliente' : 'Cadastrar Novo Cliente'}
-        </h2>
+      {canCreate && !editingClient || canEdit && editingClient ? (
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
+          <h2 className="text-xl font-bold text-stone-800 mb-6 flex items-center">
+            <UserIcon className="w-5 h-5 mr-2 text-emerald-600" />
+            {editingClient ? 'Editar Cliente' : 'Cadastrar Novo Cliente'}
+          </h2>
 
         <form onSubmit={saveClient} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -180,6 +185,7 @@ export default function ClientManager() {
           </div>
         </form>
       </div>
+      ) : null}
 
       <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
         <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
@@ -210,8 +216,12 @@ export default function ClientManager() {
                   <td className="px-4 py-3 text-stone-600">{client.document || '---'}</td>
                   <td className="px-4 py-3 text-right space-x-2">
                     <button onClick={() => setViewingClient(client)} className="p-1 text-emerald-500 hover:bg-emerald-50 rounded transition-colors" title="Visualizar"><Eye className="w-4 h-4" /></button>
-                    <button onClick={() => startEdit(client)} className="p-1 text-blue-500 hover:bg-blue-50 rounded transition-colors" title="Editar"><Edit2 className="w-4 h-4" /></button>
-                    <button onClick={() => handleDeleteClient(client.id)} className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors" title="Excluir"><Trash2 className="w-4 h-4" /></button>
+                    {canEdit && (
+                      <button onClick={() => startEdit(client)} className="p-1 text-blue-500 hover:bg-blue-50 rounded transition-colors" title="Editar"><Edit2 className="w-4 h-4" /></button>
+                    )}
+                    {canDelete && (
+                      <button onClick={() => handleDeleteClient(client.id)} className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors" title="Excluir"><Trash2 className="w-4 h-4" /></button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -231,7 +241,7 @@ export default function ClientManager() {
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
             <div className="p-6 border-b border-stone-100 flex justify-between items-center bg-emerald-600 text-white">
-              <h2 className="text-xl font-bold flex items-center gap-2"><User className="w-5 h-5" />Dados do Cliente</h2>
+              <h2 className="text-xl font-bold flex items-center gap-2"><UserIcon className="w-5 h-5" />Dados do Cliente</h2>
               <button onClick={() => setViewingClient(null)} className="p-2 hover:bg-white/10 rounded-full transition-colors"><X className="w-6 h-6" /></button>
             </div>
             <div className="p-6 overflow-y-auto space-y-6">

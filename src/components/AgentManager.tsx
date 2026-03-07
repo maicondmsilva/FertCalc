@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Save, UserCheck, Search, Edit2, MapPin, Phone, Mail, Eye, X } from 'lucide-react';
-import { Agent } from '../types';
+import { Agent, User } from '../types';
 import { formatDocument, formatPhone, formatCEP, lookupCEP } from '../utils/formatters';
 import { getAgents, createAgent, updateAgent, deleteAgent, getNextAgentCode } from '../services/db';
 import { useToast } from './Toast';
@@ -15,8 +15,12 @@ const initialFormData = {
   address: { cep: '', street: '', number: '', neighborhood: '', city: '', state: '' }
 };
 
-export default function AgentManager() {
+export default function AgentManager({ currentUser }: { currentUser: User }) {
   const { showSuccess, showError } = useToast();
+  
+  const canCreate = currentUser.role === 'master' || currentUser.role === 'admin' || (currentUser.permissions as any)?.agents_create;
+  const canEdit = currentUser.role === 'master' || currentUser.role === 'admin' || (currentUser.permissions as any)?.agents_edit;
+  const canDelete = currentUser.role === 'master' || currentUser.role === 'admin' || (currentUser.permissions as any)?.agents_delete;
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(false);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
@@ -98,11 +102,12 @@ export default function AgentManager() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
-        <h2 className="text-xl font-bold text-stone-800 mb-6 flex items-center">
-          <UserCheck className="w-5 h-5 mr-2 text-blue-600" />
-          {editingAgent ? 'Editar Agente' : 'Cadastrar Novo Agente'}
-        </h2>
+      {canCreate && !editingAgent || canEdit && editingAgent ? (
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
+          <h2 className="text-xl font-bold text-stone-800 mb-6 flex items-center">
+            <UserCheck className="w-5 h-5 mr-2 text-blue-600" />
+            {editingAgent ? 'Editar Agente' : 'Cadastrar Novo Agente'}
+          </h2>
         <form onSubmit={saveAgent} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="md:col-span-2">
@@ -162,6 +167,7 @@ export default function AgentManager() {
           </div>
         </form>
       </div>
+      ) : null}
 
       <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
         <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
@@ -189,8 +195,12 @@ export default function AgentManager() {
                   <td className="px-4 py-3 text-stone-600">{agent.document || '---'}</td>
                   <td className="px-4 py-3 text-right space-x-2">
                     <button onClick={() => setViewingAgent(agent)} className="p-1 text-blue-500 hover:bg-blue-50 rounded transition-colors" title="Visualizar"><Eye className="w-4 h-4" /></button>
-                    <button onClick={() => startEdit(agent)} className="p-1 text-blue-500 hover:bg-blue-50 rounded transition-colors" title="Editar"><Edit2 className="w-4 h-4" /></button>
-                    <button onClick={() => handleDeleteAgent(agent.id)} className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors" title="Excluir"><Trash2 className="w-4 h-4" /></button>
+                    {canEdit && (
+                      <button onClick={() => startEdit(agent)} className="p-1 text-blue-500 hover:bg-blue-50 rounded transition-colors" title="Editar"><Edit2 className="w-4 h-4" /></button>
+                    )}
+                    {canDelete && (
+                      <button onClick={() => handleDeleteAgent(agent.id)} className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors" title="Excluir"><Trash2 className="w-4 h-4" /></button>
+                    )}
                   </td>
                 </tr>
               ))}

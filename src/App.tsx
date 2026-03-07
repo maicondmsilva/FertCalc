@@ -595,9 +595,9 @@ export default function App() {
             {activeModule === 'pricing' && activeTab === 'materials_brand' && <BrandManager />}
             {activeModule === 'pricing' && activeTab === 'products' && <ProductManager />}
             {activeModule === 'pricing' && activeTab === 'incompatibilities' && <IncompatibilityManager />}
-            {activeModule === 'pricing' && activeTab === 'clients' && <ClientManager />}
-            {activeModule === 'pricing' && activeTab === 'agents' && <AgentManager />}
-            {activeModule === 'config' && activeTab === 'branches' && <BranchManager />}
+            {activeModule === 'pricing' && activeTab === 'clients' && <ClientManager currentUser={currentUser} />}
+            {activeModule === 'pricing' && activeTab === 'agents' && <AgentManager currentUser={currentUser} />}
+            {activeModule === 'config' && activeTab === 'branches' && <BranchManager currentUser={currentUser} />}
             {activeModule === 'config' && activeTab === 'settings' && <SettingsManager />}
             {activeModule === 'config' && activeTab === 'users' && <UserManager />}
             {activeModule === 'prd' && activeTab === 'prd' && <PrdModule currentUser={currentUser} />}

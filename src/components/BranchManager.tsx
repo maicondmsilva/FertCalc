@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Save, Building2, Edit2 } from 'lucide-react';
-import { Branch } from '../types';
+import { Branch, User } from '../types';
 import { getBranches, createBranch, updateBranch, deleteBranch } from '../services/db';
 import { useToast } from './Toast';
 
-export default function BranchManager() {
+export default function BranchManager({ currentUser }: { currentUser: User }) {
+  const canCreate = currentUser.role === 'master' || currentUser.role === 'admin' || (currentUser.permissions as any)?.branches_create;
+  const canEdit = currentUser.role === 'master' || currentUser.role === 'admin' || (currentUser.permissions as any)?.branches_edit;
+  const canDelete = currentUser.role === 'master' || currentUser.role === 'admin' || (currentUser.permissions as any)?.branches_delete;
   const { showSuccess, showError } = useToast();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
@@ -64,11 +67,12 @@ export default function BranchManager() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
-        <h2 className="text-xl font-bold text-stone-800 mb-6 flex items-center">
-          <Building2 className="w-5 h-5 mr-2 text-stone-600" />
-          {editingBranch ? 'Editar Filial' : 'Cadastrar Nova Filial'}
-        </h2>
+      {canCreate && !editingBranch || canEdit && editingBranch ? (
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
+          <h2 className="text-xl font-bold text-stone-800 mb-6 flex items-center">
+            <Building2 className="w-5 h-5 mr-2 text-stone-600" />
+            {editingBranch ? 'Editar Filial' : 'Cadastrar Nova Filial'}
+          </h2>
 
         <form onSubmit={saveBranch} className="flex gap-4">
           <div className="flex-1">
@@ -106,6 +110,7 @@ export default function BranchManager() {
           </div>
         </form>
       </div>
+      ) : null}
 
       <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
         <h3 className="text-lg font-bold text-stone-800 mb-4">Filiais Ativas</h3>
@@ -116,18 +121,22 @@ export default function BranchManager() {
                 <span className="font-medium text-stone-800">{branch.name}</span>
               </div>
               <div className="flex gap-2">
-                <button
-                  onClick={() => startEdit(branch)}
-                  className="p-1 text-blue-500 hover:bg-blue-50 rounded transition-colors"
-                >
-                  <Edit2 className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => handleDeleteBranch(branch.id)}
-                  className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                {canEdit && (
+                  <button
+                    onClick={() => startEdit(branch)}
+                    className="p-1 text-blue-500 hover:bg-blue-50 rounded transition-colors"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                )}
+                {canDelete && (
+                  <button
+                    onClick={() => handleDeleteBranch(branch.id)}
+                    className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
           ))}

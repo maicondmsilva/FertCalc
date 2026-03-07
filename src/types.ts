@@ -86,7 +86,19 @@ export interface User {
     macro_delete?: boolean;
     micro_create?: boolean;
     micro_edit?: boolean;
-    micro_delete?: boolean;
+    // Sub-permissões CRUD
+    clients_create?: boolean;
+    clients_edit?: boolean;
+    clients_delete?: boolean;
+    agents_create?: boolean;
+    agents_edit?: boolean;
+    agents_delete?: boolean;
+    priceLists_create?: boolean;
+    priceLists_edit?: boolean;
+    priceLists_delete?: boolean;
+    branches_create?: boolean;
+    branches_edit?: boolean;
+    branches_delete?: boolean;
   };
 }
 

@@ -45,10 +45,6 @@ export default function UserManager() {
     { id: 'reports', name: 'Relatórios' },
     { id: 'pricingReport', name: 'Relatório de Precificação' },
     { id: 'commissionReport', name: 'Relatório de Comissão' },
-    { id: 'priceLists', name: 'Lista de Preço' },
-    { id: 'clients', name: 'Clientes' },
-    { id: 'agents', name: 'Agentes' },
-    { id: 'branches', name: 'Filiais' },
     { id: 'users', name: 'Usuários' },
     { id: 'settings', name: 'Personalização' },
     { id: 'prd', name: 'Documentação PRD' },
@@ -87,10 +83,16 @@ export default function UserManager() {
     };
 
     if (role === 'master' || role === 'admin') {
-      return Object.keys(base).reduce((acc, key) => ({ ...acc, [key]: true }), { approvals_canApprove: true });
+      const allCrud = ['clients', 'agents', 'priceLists', 'branches', 'macro', 'micro'].reduce((acc, resource) => {
+        return { ...acc, [`${resource}_create`]: true, [`${resource}_edit`]: true, [`${resource}_delete`]: true, [resource]: true };
+      }, {});
+      return Object.keys(base).reduce((acc, key) => ({ ...acc, [key]: true }), { approvals_canApprove: true, ...allCrud });
     }
     if (role === 'manager') {
-      return { ...base, approvals: true, approvals_canApprove: true, reports: true, pricingReport: true, commissionReport: true, goals: true, priceLists: true, branches: true };
+      const allCrud = ['clients', 'agents', 'priceLists', 'branches', 'macro', 'micro'].reduce((acc, resource) => {
+        return { ...acc, [`${resource}_create`]: true, [`${resource}_edit`]: true, [`${resource}_delete`]: true, [resource]: true };
+      }, {});
+      return { ...base, approvals: true, approvals_canApprove: true, reports: true, pricingReport: true, commissionReport: true, goals: true, ...allCrud };
     }
     return base;
   };
@@ -320,10 +322,6 @@ export default function UserManager() {
                   { id: 'reports', name: 'Relatórios' },
                   { id: 'pricingReport', name: 'Rel. Precificação' },
                   { id: 'commissionReport', name: 'Rel. Comissão' },
-                  { id: 'priceLists', name: 'Lista de Preços' },
-                  { id: 'clients', name: 'Clientes' },
-                  { id: 'agents', name: 'Agentes' },
-                  { id: 'branches', name: 'Filiais' },
                   { id: 'users', name: 'Usuários' },
                   { id: 'settings', name: 'Personalização' },
                   { id: 'managementReports', name: 'Rel. Gerenciais' },
@@ -375,25 +373,54 @@ export default function UserManager() {
               </div>
             </div>
 
-            {/* Sub-permissões Cadastros */}
+            {/* Sub-permissões Cadastros CRUD */}
             <div className="border border-purple-200 rounded-xl overflow-hidden">
-              <div className="bg-purple-700 text-white px-4 py-2 text-xs font-bold uppercase tracking-wider">🗄️ Cadastros — Macros e Micros</div>
-              <div className="p-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {[
-                  { id: 'macro_create', name: 'Criar Macro' },
-                  { id: 'macro_edit', name: 'Editar Macro' },
-                  { id: 'macro_delete', name: 'Excluir Macro' },
-                  { id: 'micro_create', name: 'Criar Micro' },
-                  { id: 'micro_edit', name: 'Editar Micro' },
-                  { id: 'micro_delete', name: 'Excluir Micro' },
-                ].map(m => (
-                  <button key={m.id} type="button"
-                    onClick={() => setFormData({ ...formData, permissions: { ...formData.permissions, [m.id]: !(formData.permissions as any)[m.id] } })}
-                    className={`flex items-center justify-between px-3 py-2 rounded-lg border transition-all text-xs font-bold ${(formData.permissions as any)[m.id] ? 'bg-purple-50 border-purple-300 text-purple-700' : 'bg-stone-50 border-stone-200 text-stone-400'}`}>
-                    {m.name}
-                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ml-1 ${(formData.permissions as any)[m.id] ? 'bg-purple-500' : 'bg-stone-300'}`} />
-                  </button>
-                ))}
+              <div className="bg-purple-700 text-white px-4 py-2 text-xs font-bold uppercase tracking-wider flex items-center justify-between">
+                <span>🗄️ Cadastros — Permissões Especializadas</span>
+              </div>
+              
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-purple-50 text-purple-800 text-[10px] uppercase font-bold border-b border-purple-100">
+                    <tr>
+                      <th className="px-4 py-2">Módulo</th>
+                      <th className="px-4 py-2 text-center">Visualizar</th>
+                      <th className="px-4 py-2 text-center">Incluir</th>
+                      <th className="px-4 py-2 text-center">Editar</th>
+                      <th className="px-4 py-2 text-center">Excluir</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-purple-50">
+                    {[
+                      { id: 'clients', name: 'Clientes' },
+                      { id: 'agents', name: 'Agentes' },
+                      { id: 'priceLists', name: 'Listas de Preços' },
+                      { id: 'branches', name: 'Filiais' },
+                      { id: 'macro', name: 'Matérias-Primas (Macro)' },
+                      { id: 'micro', name: 'Matérias-Primas (Micro)' },
+                    ].map(module => (
+                      <tr key={module.id} className="hover:bg-stone-50 transition-colors">
+                        <td className="px-4 py-3 font-medium text-stone-700">{module.name}</td>
+                        {['', '_create', '_edit', '_delete'].map(action => {
+                          const paramKey = action === '' ? module.id : `${module.id}${action}`;
+                          // Note for backwards-compatibility: some modules are pure toggles if they are primitive, but we map them as bools
+                          const val = (formData.permissions as any)[paramKey] === true;
+                          return (
+                            <td key={paramKey} className="px-4 py-3 text-center">
+                              <button
+                                type="button"
+                                onClick={() => setFormData({ ...formData, permissions: { ...formData.permissions, [paramKey]: !val } })}
+                                className={`w-6 h-6 rounded flex items-center justify-center mx-auto transition-colors border ${val ? 'bg-purple-500 border-purple-600 text-white' : 'bg-stone-100 border-stone-200 text-transparent hover:bg-stone-200'}`}
+                              >
+                                {val && <div className="w-2 h-2 rounded-full bg-white" />}
+                              </button>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
 
@@ -480,9 +507,14 @@ export default function UserManager() {
                     <div className="flex flex-wrap gap-1 max-w-xs">
                       {modules.filter(m => (user.permissions as any)?.[m.id]).map(m => (
                         <span key={m.id} className="px-1.5 py-0.5 bg-stone-100 text-stone-600 rounded text-[9px] font-medium border border-stone-200">
-                          {m.name}
+                           {m.name}
                         </span>
                       ))}
+                      {['clients', 'agents', 'priceLists', 'branches', 'macro', 'micro'].some(k => (user.permissions as any)?.[k]) && (
+                        <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-[9px] font-medium border border-purple-200">
+                          ⚙️ Cadastros Gen.
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="px-6 py-4 text-right">
