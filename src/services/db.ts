@@ -886,16 +886,20 @@ export async function getNotifications(): Promise<Notification[]> {
 }
 
 export async function createNotification(notification: Omit<Notification, 'id'>): Promise<Notification> {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const validUserId = notification.userId && uuidRegex.test(notification.userId) ? notification.userId : null;
+  const validDataId = notification.dataId && uuidRegex.test(notification.dataId) ? notification.dataId : null;
+
   const { data, error } = await supabase
     .from('notifications')
     .insert({
-      user_id: notification.userId,
+      user_id: validUserId,
       title: notification.title,
       message: notification.message,
       date: notification.date,
       read: notification.read,
       type: notification.type,
-      data_id: notification.dataId,
+      data_id: validDataId,
     })
     .select()
     .single();

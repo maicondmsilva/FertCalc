@@ -16,6 +16,7 @@ import Goals from './components/Goals';
 import Reports from './components/Reports';
 import PricingReport from './components/PricingReport';
 import CommissionReport from './components/CommissionReport';
+import PricingBySeller from './components/PricingBySeller';
 import Login from './components/Login';
 import Home from './components/Home';
 // import Dashboard from './components/Dashboard';
@@ -44,7 +45,7 @@ export default function App() {
   const activeTab = pathParts[0] || '';
 
   let activeModule: 'pricing' | 'config' | 'prd' | 'managementReports' | null = null;
-  if (['dashboard', 'calculator', 'saved_formulas', 'history', 'goals', 'approvals', 'reports', 'pricingReport', 'commissionReport', 'pricelists', 'materials_macro', 'materials_micro', 'materials_brand', 'products', 'incompatibilities', 'clients', 'agents'].includes(activeTab)) {
+  if (['dashboard', 'calculator', 'saved_formulas', 'history', 'goals', 'approvals', 'reports', 'pricingReport', 'commissionReport', 'pricingBySeller', 'pricelists', 'materials_macro', 'materials_micro', 'materials_brand', 'products', 'incompatibilities', 'clients', 'agents'].includes(activeTab)) {
     activeModule = 'pricing';
   } else if (['branches', 'settings', 'users'].includes(activeTab)) {
     activeModule = 'config';
@@ -217,6 +218,7 @@ export default function App() {
           children: [
             { id: 'pricingReport', label: 'Relatório de Precificação', icon: BarChart3, permission: 'reports' },
             { id: 'commissionReport', label: 'Relatório de Comissão', icon: BarChart3, permission: 'reports' },
+            { id: 'pricingBySeller', label: 'Precificação por Vendedor', icon: BarChart3, permission: 'pricingBySeller' },
           ]
         },
         { id: 'clients', label: 'Clientes', icon: Users, permission: 'clients' },
@@ -589,6 +591,7 @@ export default function App() {
             {activeModule === 'pricing' && activeTab === 'reports' && <Reports currentUser={currentUser} />}
             {activeModule === 'pricing' && activeTab === 'pricingReport' && <PricingReport currentUser={currentUser} />}
             {activeModule === 'pricing' && activeTab === 'commissionReport' && <CommissionReport currentUser={currentUser} />}
+            {activeModule === 'pricing' && activeTab === 'pricingBySeller' && <PricingBySeller currentUser={currentUser} />}
             {activeModule === 'pricing' && activeTab === 'pricelists' && <PriceListManager currentUser={currentUser} />}
             {activeModule === 'pricing' && activeTab === 'materials_macro' && <MacroManager currentUser={currentUser} />}
             {activeModule === 'pricing' && activeTab === 'materials_micro' && <MicroManager currentUser={currentUser} />}

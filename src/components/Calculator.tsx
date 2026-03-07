@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import solver from 'javascript-lp-solver';
 import { Plus, Trash2, Save, AlertTriangle, CheckCircle2, Calculator as CalculatorIcon, Building2, Database, Search, User, UserCheck, Tag, LayoutDashboard, Settings, X, Beaker } from 'lucide-react';
 import { RawMaterial, PricingFactors, PricingRecord, PricingSummary, Branch, PriceList, Client, Agent, User as AppUser, PricingHistoryEntry, TargetFormula, IncompatibilityRule, SavedFormula } from '../types';
-import { getClients, getAgents, getBranches, getPriceLists, getIncompatibilityRules, createPricingRecord, updatePricingRecord, createSavedFormula, getSavedFormulas, updateSavedFormula, createNotification } from '../services/db';
+import { getClients, getAgents, getBranches, getPriceLists, getIncompatibilityRules, createPricingRecord, updatePricingRecord, createSavedFormula, getSavedFormulas, updateSavedFormula, createNotification, getUsers } from '../services/db';
 import { useToast } from './Toast';
 import { formatNPK } from '../utils/formatters';
 
@@ -596,15 +596,22 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
       } else {
         savedRecord = await createPricingRecord(record);
         if (isNew) {
-          // Emit notification for new pricing
-          await createNotification({
-            userId: '', // Broad notification or handled by backend/logic to relevant roles
-            title: 'Nova Precificação Realizada',
-            message: `O vendedor ${currentUser.name} (${currentUser.customCode}) realizou uma nova precificação para ${factors.client.name}.`,
-            date: new Date().toISOString(),
-            read: false,
-            type: 'pricing_approval' // Reusing pricing_approval type for general pricing alerts
-          });
+          // Emit notification for new pricing to all approvers
+          const allUsers = await getUsers();
+          const approvers = allUsers.filter(u => 
+            u.role === 'master' || u.role === 'admin' || u.role === 'manager' || (u.permissions as any)?.approvals_canApprove
+          );
+          await Promise.all(approvers.map(approver => 
+            createNotification({
+              userId: approver.id,
+              title: 'Nova Precificação Realizada',
+              message: `O vendedor ${currentUser.name} (${currentUser.customCode}) realizou uma nova precificação para ${factors.client.name}.`,
+              date: new Date().toISOString(),
+              read: false,
+              type: 'pricing_approval',
+              dataId: savedRecord.id
+            })
+          ));
         }
       }
       showSuccess('Precificação salva com sucesso!');

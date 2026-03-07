@@ -71,6 +71,7 @@ export interface User {
     pricingReport?: boolean;
     commissionReport?: boolean;
     prd?: boolean;
+    pricingBySeller?: boolean;
     // Sub-permissões da Calculadora
     calculator_savePricing?: boolean;
     calculator_generatePDF?: boolean;

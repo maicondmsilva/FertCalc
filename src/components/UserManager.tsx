@@ -31,6 +31,7 @@ export default function UserManager() {
       reports: true,
       pricingReport: true,
       commissionReport: true,
+      pricingBySeller: false,
       prd: true,
       managementReports: true
     }
@@ -78,6 +79,7 @@ export default function UserManager() {
       reports: true,
       pricingReport: true,
       commissionReport: true,
+      pricingBySeller: false,
       prd: false,
       managementReports: false
     };
@@ -92,7 +94,7 @@ export default function UserManager() {
       const allCrud = ['clients', 'agents', 'priceLists', 'branches', 'macro', 'micro'].reduce((acc, resource) => {
         return { ...acc, [`${resource}_create`]: true, [`${resource}_edit`]: true, [`${resource}_delete`]: true, [resource]: true };
       }, {});
-      return { ...base, approvals: true, approvals_canApprove: true, reports: true, pricingReport: true, commissionReport: true, goals: true, ...allCrud };
+      return { ...base, approvals: true, approvals_canApprove: true, reports: true, pricingReport: true, commissionReport: true, pricingBySeller: true, goals: true, ...allCrud };
     }
     return base;
   };
@@ -322,6 +324,7 @@ export default function UserManager() {
                   { id: 'reports', name: 'Relatórios' },
                   { id: 'pricingReport', name: 'Rel. Precificação' },
                   { id: 'commissionReport', name: 'Rel. Comissão' },
+                  { id: 'pricingBySeller', name: 'Precificação por Vendedor' },
                   { id: 'users', name: 'Usuários' },
                   { id: 'settings', name: 'Personalização' },
                   { id: 'managementReports', name: 'Rel. Gerenciais' },
