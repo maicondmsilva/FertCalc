@@ -43,10 +43,13 @@ export default function UserManager() {
     { id: 'history', name: 'Situação' },
     { id: 'approvals', name: 'Aprovações' },
     { id: 'goals', name: 'Metas' },
+    { id: 'savedFormulas', name: 'Fórmulas Salvas' },
     { id: 'reports', name: 'Relatórios' },
     { id: 'pricingReport', name: 'Relatório de Precificação' },
     { id: 'commissionReport', name: 'Relatório de Comissão' },
+    { id: 'pricingBySeller', name: 'Precificação por Vendedor' },
     { id: 'users', name: 'Usuários' },
+    { id: 'branches', name: 'Filiais' },
     { id: 'settings', name: 'Personalização' },
     { id: 'prd', name: 'Documentação PRD' },
     { id: 'managementReports', name: 'Relatórios Gerenciais' }
@@ -76,6 +79,7 @@ export default function UserManager() {
       users: false,
       settings: false,
       approvals: false,
+      savedFormulas: true,
       reports: true,
       pricingReport: true,
       commissionReport: true,
@@ -126,7 +130,7 @@ export default function UserManager() {
         const payload: any = {
           name: formData.name,
           email: formData.email,
-          customCode: formData.customCode,
+          customCode: formData.customCode || null,
           role: formData.role,
           managedUserIds: formData.role === 'manager' ? formData.managedUserIds : [],
           permissions: formData.permissions,
@@ -138,7 +142,7 @@ export default function UserManager() {
         await createUser({
           name: formData.name,
           email: formData.email,
-          customCode: formData.customCode,
+          customCode: formData.customCode || null,
           password: formData.password,
           role: formData.role,
           managedUserIds: formData.role === 'manager' ? formData.managedUserIds : [],
@@ -157,9 +161,10 @@ export default function UserManager() {
         managedUserIds: [],
         permissions: getDefaultPermissions('user') as any
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro ao salvar usuário:', err);
-      showError('Erro ao salvar usuário. Tente novamente.');
+      const detail = err?.message || err?.details || 'Erro desconhecido';
+      showError(`Erro ao salvar usuário: ${detail}`);
     } finally {
       setLoading(false);
     }
@@ -326,7 +331,9 @@ export default function UserManager() {
                   { id: 'commissionReport', name: 'Rel. Comissão' },
                   { id: 'pricingBySeller', name: 'Precificação por Vendedor' },
                   { id: 'users', name: 'Usuários' },
+                  { id: 'branches', name: 'Filiais' },
                   { id: 'settings', name: 'Personalização' },
+                  { id: 'prd', name: 'Documentação PRD' },
                   { id: 'managementReports', name: 'Rel. Gerenciais' },
                 ].map(m => (
                   <button key={m.id} type="button"

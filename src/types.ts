@@ -81,12 +81,6 @@ export interface User {
     history_editPricing?: boolean;
     // Sub-permissões de Aprovações
     approvals_canApprove?: boolean;
-    // Sub-permissões de Cadastros
-    macro_create?: boolean;
-    macro_edit?: boolean;
-    macro_delete?: boolean;
-    micro_create?: boolean;
-    micro_edit?: boolean;
     // Sub-permissões CRUD
     clients_create?: boolean;
     clients_edit?: boolean;
@@ -100,6 +94,14 @@ export interface User {
     branches_create?: boolean;
     branches_edit?: boolean;
     branches_delete?: boolean;
+    macro_create?: boolean;
+    macro_edit?: boolean;
+    macro_delete?: boolean;
+    micro_create?: boolean;
+    micro_edit?: boolean;
+    micro_delete?: boolean;
+    macro?: boolean;
+    micro?: boolean;
   };
 }
 
