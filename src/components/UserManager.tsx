@@ -163,8 +163,12 @@ export default function UserManager() {
       });
     } catch (err: any) {
       console.error('Erro ao salvar usuário:', err);
-      const detail = err?.message || err?.details || 'Erro desconhecido';
-      showError(`Erro ao salvar usuário: ${detail}`);
+      const msg: string = err?.message || err?.details || '';
+      if (msg.includes('app_users_email_key') || msg.includes('duplicate key')) {
+        showError('Este e-mail já está cadastrado. Use um e-mail diferente ou edite o usuário existente.');
+      } else {
+        showError(`Erro ao salvar usuário: ${msg || 'Erro desconhecido'}`);
+      }
     } finally {
       setLoading(false);
     }
