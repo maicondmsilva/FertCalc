@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, Search, Calculator, Check, ArrowRight, Save } from 'lucide-react';
 import { getFertigranPFormulas, saveComparisonHistory } from '../services/db';
-import { FertigranPFormula, User as AppUser } from '../types';
+import { FertigranPFormula, User as AppUser, RawMaterial, TargetFormula } from '../types';
+import solver from 'javascript-lp-solver';
 
 interface Props {
   isOpen: boolean;
@@ -11,9 +12,12 @@ interface Props {
   originalP: number;
   originalK: number;
   currentUser: AppUser;
+  macros: RawMaterial[];
+  micros: RawMaterial[];
+  onApplyFertigranP: (calculation: Omit<TargetFormula, 'id'>) => void;
 }
 
-export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName, originalN, originalP, originalK, currentUser }: Props) {
+export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName, originalN, originalP, originalK, currentUser, macros, micros, onApplyFertigranP }: Props) {
   const [hectares, setHectares] = useState<number>(0);
   const [dose, setDose] = useState<number>(0);
 
@@ -26,6 +30,10 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
 
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  
+  const [optimizedDose, setOptimizedDose] = useState<number>(0);
+  const [optimizedFormulaTarget, setOptimizedFormulaTarget] = useState<string>('0-0-0');
+  const [optimizedComposition, setOptimizedComposition] = useState<{material: RawMaterial, qtd: number}[]>([]);
 
   useEffect(() => {
     if (isOpen) {
@@ -74,13 +82,84 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
     idealNewK = (targetK / dose) * 100;
   }
 
-  if (selectedFormula && targetP > 0 && selectedFormula.npk_p > 0) {
-    // Calculate new dose based on limiting factor P
-    newDose = targetP / (selectedFormula.npk_p / 100);
+  // LP Optimization when formula or targets change
+  useEffect(() => {
+    if (!selectedFormulaId && dose > 0 && (targetN > 0 || targetP > 0 || targetK > 0)) {
+      // Find optimal dose and mix for theoretical target using LP
+      const model: any = {
+        optimize: "cost",
+        opType: "min",
+        constraints: {
+          n_eq: { min: targetN * 10, max: (targetN * 10) + 1 }, // precision to 1 decimal place (multiply by 10)
+          p_eq: { min: targetP * 10, max: (targetP * 10) + 1 },
+          k_eq: { min: targetK * 10, max: (targetK * 10) + 1 },
+        },
+        variables: {},
+        ints: {}
+      };
+
+      const availableMaterials = [...macros, ...micros].filter(m => m.selected);
+      availableMaterials.forEach(m => {
+        model.variables[m.id] = {
+          cost: m.price / 1000,
+          n_eq: m.n / 10, // adjusting scale
+          p_eq: m.p / 10,
+          k_eq: m.k / 10,
+          weight: 1
+        };
+      });
+
+      const result = solver.Solve(model);
+      
+      if (result.feasible) {
+        let totalWeight = 0;
+        const comp: {material: RawMaterial, qtd: number}[] = [];
+        availableMaterials.forEach(m => {
+          if (result[m.id] && result[m.id] > 0) {
+            totalWeight += result[m.id];
+            comp.push({ material: m, qtd: result[m.id] });
+          }
+        });
+
+        setOptimizedDose(totalWeight);
+        setOptimizedComposition(comp);
+        
+        if (totalWeight > 0) {
+          const fn = (targetN / totalWeight) * 100;
+          const fp = (targetP / totalWeight) * 100;
+          const fk = (targetK / totalWeight) * 100;
+          setOptimizedFormulaTarget(`${fn.toFixed(1)}-${fp.toFixed(1)}-${fk.toFixed(1)}`);
+        }
+      } else {
+        setOptimizedDose(0);
+        setOptimizedComposition([]);
+      }
+    } else {
+        // If a pre-defined formula is selected, we just adjust the dose based on P
+        if (selectedFormula && targetP > 0 && selectedFormula.npk_p > 0) {
+          const fixedNewDose = targetP / (selectedFormula.npk_p / 100);
+          setOptimizedDose(fixedNewDose);
+          setOptimizedFormulaTarget(selectedFormula.nome);
+        } else {
+          setOptimizedDose(0);
+          setOptimizedComposition([]);
+        }
+    }
+  }, [selectedFormulaId, targetN, targetP, targetK, macros, micros]);
+
+  if (optimizedDose > 0) {
+    newDose = optimizedDose;
     newQuantityTons = (newDose * hectares) / 1000;
-    simulatedProvidedN = newDose * (selectedFormula.npk_n / 100);
-    simulatedProvidedP = newDose * (selectedFormula.npk_p / 100);
-    simulatedProvidedK = newDose * (selectedFormula.npk_k / 100);
+    
+    if (selectedFormula) {
+      simulatedProvidedN = newDose * (selectedFormula.npk_n / 100);
+      simulatedProvidedP = newDose * (selectedFormula.npk_p / 100);
+      simulatedProvidedK = newDose * (selectedFormula.npk_k / 100);
+    } else {
+      simulatedProvidedN = targetN;
+      simulatedProvidedP = targetP;
+      simulatedProvidedK = targetK;
+    }
   }
 
   const handleSave = async () => {
@@ -106,6 +185,91 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleSendToPricing = async () => {
+    // Save history first
+    await handleSave();
+    
+    if (!selectedFormulaId && optimizedDose > 0) {
+       // Send theoretical mixed formula to pricing
+       const matchedFormula = optimizedFormulaTarget.match(/(\d+(?:[.,]\d+)?)[^\d]+(\d+(?:[.,]\d+)?)[^\d]+(\d+(?:[.,]\d+)?)/);
+       let nNum = 0, pNum = 0, kNum = 0;
+       if (matchedFormula) {
+           nNum = parseFloat(matchedFormula[1].replace(',', '.'));
+           pNum = parseFloat(matchedFormula[2].replace(',', '.'));
+           kNum = parseFloat(matchedFormula[3].replace(',', '.'));
+       }
+
+       // Map global macros/micros, marking only the composition ones as selected 
+       const mappedMacros = macros.map(m => ({
+           ...m,
+           selected: optimizedComposition.some(c => c.material.id === m.id)
+       }));
+       const mappedMicros = micros.map(m => ({
+           ...m,
+           selected: optimizedComposition.some(c => c.material.id === m.id)
+       }));
+
+       onApplyFertigranP({
+         formula: optimizedFormulaTarget,
+         selected: true,
+         targetN: nNum,
+         targetP: pNum,
+         targetK: kNum,
+         macros: mappedMacros,
+         micros: mappedMicros,
+         factors: {
+             targetFormula: optimizedFormulaTarget,
+             factor: 0.8,
+             discount: 0,
+             margin: 0,
+             freight: 0,
+             taxRate: 0,
+             commission: 0,
+             monthlyInterestRate: 0,
+             dueDate: '',
+             exemptCurrentMonth: false,
+             client: { id: '', code: '', name: '', document: '' },
+             agent: { id: '', code: '', name: '', document: '' },
+             branchId: '',
+             priceListId: '',
+             totalTons: newQuantityTons > 0 ? newQuantityTons : 1000 // default to 1000 tons if uncalculated
+         }
+       });
+    } else if (selectedFormula) {
+      // Send certified formula to pricing
+      onApplyFertigranP({
+         formula: selectedFormula.nome,
+         selected: true,
+         targetN: selectedFormula.npk_n,
+         targetP: selectedFormula.npk_p,
+         targetK: selectedFormula.npk_k,
+         targetCa: selectedFormula.ca,
+         targetS: selectedFormula.s,
+         macros: macros.map(m => ({ ...m })),
+         micros: micros.map(m => ({ ...m })),
+         factors: {
+             targetFormula: selectedFormula.nome,
+             factor: 0.8,
+             discount: 0,
+             margin: 0,
+             freight: 0,
+             taxRate: 0,
+             commission: 0,
+             monthlyInterestRate: 0,
+             dueDate: '',
+             exemptCurrentMonth: false,
+             client: { id: '', code: '', name: '', document: '' },
+             agent: { id: '', code: '', name: '', document: '' },
+             branchId: '',
+             priceListId: '',
+             totalTons: newQuantityTons > 0 ? newQuantityTons : 1000
+         }
+       });
+    }
+    
+    onClose();
   };
 
   if (!isOpen) return null;
@@ -281,20 +445,34 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
                     <div className="space-y-4">
                       <div className="text-center">
                         <span className="text-2xl font-black text-indigo-700">
-                          {dose > 0 ? `${idealNewN.toFixed(1)}-${idealNewP.toFixed(1)}-${idealNewK.toFixed(1)}` : '0-0-0'}
+                          {dose > 0 ? optimizedFormulaTarget : '0-0-0'}
                         </span>
-                        <p className="text-[10px] text-stone-500 mt-1">Fórmula teórica para manter dose de {dose} kg/ha</p>
+                        <p className="text-[10px] text-stone-500 mt-1">Fórmula Otimizada (Dose Mínima Fertigran)</p>
                       </div>
                       
                       <div className="flex items-center justify-between border-t border-stone-100 pt-3">
-                        <span className="text-sm text-stone-500 font-medium">Dose Mantida:</span>
-                        <span className="text-lg font-bold text-indigo-700">{dose} kg/ha</span>
+                        <span className="text-sm text-stone-500 font-medium">Nova Dose Otimizada:</span>
+                        <span className="text-lg font-bold text-indigo-700">{dose > 0 ? optimizedDose.toFixed(1) : 0} kg/ha</span>
                       </div>
                       
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-stone-500 font-medium">Volume Mantido:</span>
-                        <span className="text-lg font-bold text-emerald-600">{originalQuantityTons.toFixed(2)} Tons</span>
+                        <span className="text-sm text-stone-500 font-medium">Novo Volume Mínimo:</span>
+                        <span className="text-lg font-bold text-emerald-600">{newQuantityTons.toFixed(2)} Tons</span>
                       </div>
+
+                      {optimizedComposition.length > 0 && (
+                        <div className="mt-3 p-3 bg-stone-50 rounded-lg border border-stone-100">
+                          <p className="text-[10px] uppercase font-bold text-stone-500 mb-2">Composição P/ Hectare:</p>
+                          <div className="space-y-1">
+                            {optimizedComposition.map((item, idx) => (
+                              <div key={idx} className="flex justify-between text-xs text-stone-600">
+                                <span>{item.material.name}</span>
+                                <span className="font-mono text-emerald-600 font-bold">{item.qtd.toFixed(1)} kg</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -350,13 +528,13 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
               Fechar
             </button>
             <button 
-              onClick={handleSave}
+              onClick={handleSendToPricing}
               disabled={isSaving || dose === 0 || hectares === 0}
               className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition-colors flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isSaving ? 'Salvando...' : (
+              {isSaving ? 'Processando...' : (
                 <>
-                  <Save className="w-4 h-4 mr-2" /> Salvar Histórico
+                  <Save className="w-4 h-4 mr-2" /> Enviar para Precificação
                 </>
               )}
             </button>

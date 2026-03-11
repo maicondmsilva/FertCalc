@@ -1811,6 +1811,18 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
           originalP={currentComparisonFormula.p}
           originalK={currentComparisonFormula.k}
           currentUser={currentUser}
+          macros={macros}
+          micros={micros}
+          onApplyFertigranP={(newFormula) => {
+            setCalculations([
+              ...calculations, 
+              { 
+                ...newFormula, 
+                id: `f_${Date.now()}` 
+              }
+            ]);
+            showSuccess('Receita Fertigran adicionada na Precificação!');
+          }}
         />
       )}
     </div>
