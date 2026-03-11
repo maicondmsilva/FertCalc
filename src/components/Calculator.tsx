@@ -1810,6 +1810,7 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
           originalN={currentComparisonFormula.n}
           originalP={currentComparisonFormula.p}
           originalK={currentComparisonFormula.k}
+          currentUser={currentUser}
         />
       )}
     </div>

@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, Search, Calculator, Check, ArrowRight, Save } from 'lucide-react';
 import { getFertigranPFormulas, saveComparisonHistory } from '../services/db';
-import { FertigranPFormula } from '../types';
-import { useAuth } from '../hooks/useAuth';
+import { FertigranPFormula, User as AppUser } from '../types';
 
 interface Props {
   isOpen: boolean;
@@ -11,10 +10,10 @@ interface Props {
   originalN: number;
   originalP: number;
   originalK: number;
+  currentUser: AppUser;
 }
 
-export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName, originalN, originalP, originalK }: Props) {
-  const { user } = useAuth();
+export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName, originalN, originalP, originalK, currentUser }: Props) {
   const [hectares, setHectares] = useState<number>(0);
   const [dose, setDose] = useState<number>(0);
 
@@ -85,13 +84,13 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
   }
 
   const handleSave = async () => {
-    if (!user) return;
+    if (!currentUser) return;
     setIsSaving(true);
     setSaveSuccess(false);
     try {
       await saveComparisonHistory({
-        usuario_id: user.id,
-        usuario_nome: user.name,
+        usuario_id: currentUser.id,
+        usuario_nome: currentUser.name,
         formula_original: originalFormulaName || `${originalN}-${originalP}-${originalK}`,
         formula_nova: selectedFormula ? selectedFormula.nome : `${idealNewN.toFixed(1)}-${idealNewP.toFixed(1)}-${idealNewK.toFixed(1)}`,
         hectares,
