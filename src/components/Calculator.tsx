@@ -5,6 +5,7 @@ import { RawMaterial, PricingFactors, PricingRecord, PricingSummary, Branch, Pri
 import { getClients, getAgents, getBranches, getPriceLists, getIncompatibilityRules, createPricingRecord, updatePricingRecord, createSavedFormula, getSavedFormulas, updateSavedFormula, createNotification, getUsers, getManagersOfUser } from '../services/db';
 import { useToast } from './Toast';
 import { formatNPK } from '../utils/formatters';
+import { FertigranPComparisonModal } from './FertigranPComparisonModal';
 
 const defaultMacros: RawMaterial[] = [
   { id: 'm1', type: 'macro', name: 'Ureia', price: 2500, n: 45, p: 0, k: 0, s: 0, ca: 0, microGuarantees: [], minQty: 50, maxQty: 1000, selected: true, quantity: 0 },
@@ -36,6 +37,10 @@ const getAutoWidth = (val: any) => {
 export default function Calculator({ initialData, initialFormulaToLoad, initialBranchId, initialPriceListId, onClearEditing, onSaveSuccess, currentUser }: CalculatorProps) {
   const { showSuccess, showError } = useToast();
   const [status, setStatus] = useState<'Em Andamento' | 'Fechada' | 'Perdida'>('Em Andamento');
+
+  const [isFertigranPModalOpen, setIsFertigranPModalOpen] = useState(false);
+  const [currentComparisonFormula, setCurrentComparisonFormula] = useState<{formulaName: string, n: number, p: number, k: number} | null>(null);
+
   const [branches, setBranches] = useState<Branch[]>([]);
   const [priceLists, setPriceLists] = useState<PriceList[]>([]);
   const [availableClients, setAvailableClients] = useState<Client[]>([]);
@@ -1033,7 +1038,25 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
                       style={{ top: '100%', width: 'min(800px, calc(100vw - 2rem))', marginTop: '4px' }}
                     >
                       <div className="flex justify-between items-center border-b border-stone-100 pb-2">
-                        <h4 className="text-xs font-bold text-stone-500 uppercase">⚙ {calc.formula || 'Fórmula'}</h4>
+                        <div className="flex items-center gap-4">
+                          <h4 className="text-xs font-bold text-stone-500 uppercase">⚙ {calc.formula || 'Fórmula'}</h4>
+                          {calc.summary && (
+                            <button
+                              onClick={() => {
+                                setCurrentComparisonFormula({
+                                  formulaName: calc.formula,
+                                  n: calc.summary!.resultingN,
+                                  p: calc.summary!.resultingP,
+                                  k: calc.summary!.resultingK
+                                });
+                                setIsFertigranPModalOpen(true);
+                              }}
+                              className="text-[10px] font-bold bg-indigo-50 text-indigo-700 px-2 py-1 rounded hover:bg-indigo-100 transition-colors flex items-center"
+                            >
+                              Comparar com Fertigran P
+                            </button>
+                          )}
+                        </div>
                         <button onClick={() => setExpandedCalc(null)} className="text-stone-400 hover:text-stone-600">
                           <X className="w-4 h-4" />
                         </button>
@@ -1778,6 +1801,17 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
           </div>
         </div>
       </div>
+      
+      {currentComparisonFormula && (
+        <FertigranPComparisonModal
+          isOpen={isFertigranPModalOpen}
+          onClose={() => setIsFertigranPModalOpen(false)}
+          originalFormulaName={currentComparisonFormula.formulaName}
+          originalN={currentComparisonFormula.n}
+          originalP={currentComparisonFormula.p}
+          originalK={currentComparisonFormula.k}
+        />
+      )}
     </div>
   );
 }

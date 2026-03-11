@@ -378,3 +378,34 @@ export interface NavItem {
   type?: 'parent' | 'child';
   children?: NavItem[];
 }
+
+export interface FertigranPFormula {
+  id: string;
+  nome: string;
+  npk_n: number;
+  npk_p: number;
+  npk_k: number;
+  ca: number;
+  s: number;
+  materias_primas: string[];
+  ativo: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ComparisonHistory {
+  id: string;
+  usuario_id: string;
+  usuario_nome: string;
+  formula_original: string;
+  formula_nova: string;
+  hectares: number;
+  dose_original: number;
+  dose_nova: number;
+  reducoes_aplicadas: {
+    n: number;
+    p: number;
+    k: number;
+  };
+  created_at?: string;
+}

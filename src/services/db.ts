@@ -20,6 +20,8 @@ import {
   PricingHistoryEntry,
   Goal,
   Notification,
+  FertigranPFormula,
+  ComparisonHistory
 } from '../types';
 
 // ============================================================
@@ -965,4 +967,37 @@ export async function requestPasswordReset(email: string): Promise<{ success: bo
     success: true,
     message: 'Um link de recuperação foi enviado para o seu e-mail (Simulado).'
   };
+}
+
+// ============================================================
+// FERTIGRAN P COMPARISONS
+// ============================================================
+
+export async function getFertigranPFormulas(): Promise<FertigranPFormula[]> {
+  const { data, error } = await supabase
+    .from('fertigran_p_formulas')
+    .select('*')
+    .eq('ativo', true);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function saveComparisonHistory(history: Omit<ComparisonHistory, 'id' | 'created_at'>): Promise<ComparisonHistory> {
+  const { data, error } = await supabase
+    .from('comparison_history')
+    .insert([history])
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function getComparisonHistory(userId: string): Promise<ComparisonHistory[]> {
+  const { data, error } = await supabase
+    .from('comparison_history')
+    .select('*')
+    .eq('usuario_id', userId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
 }

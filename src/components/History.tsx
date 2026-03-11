@@ -48,6 +48,7 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [pricingToDelete, setPricingToDelete] = useState<PricingRecord | null>(null);
   const [deletionReason, setDeletionReason] = useState('');
+  const [isSubmittingDeletion, setIsSubmittingDeletion] = useState(false);
   const [showDeleted, setShowDeleted] = useState(false);
   const [activeTab, setActiveTab] = useState<'active' | 'deleted'>('active');
 
@@ -145,7 +146,8 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
   };
 
   const handleRequestDeletion = async () => {
-    if (!pricingToDelete || !deletionReason.trim()) return;
+    if (!pricingToDelete || !deletionReason.trim() || isSubmittingDeletion) return;
+    setIsSubmittingDeletion(true);
 
     try {
       const historyEntry = {
@@ -201,8 +203,11 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
           status: 'Pendente'
         }
       } as any : p));
-    } catch (err) {
-      showError('Erro ao enviar solicitação de exclusão.');
+    } catch (err: any) {
+      console.error('Erro ao enviar exclusão:', err);
+      showError('Erro ao enviar solicitação de exclusão: ' + (err.message || 'Erro desconhecido.'));
+    } finally {
+      setIsSubmittingDeletion(false);
     }
   };
 
@@ -530,11 +535,18 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                 Cancelar
               </button>
               <button
-                disabled={!deletionReason.trim()}
+                disabled={!deletionReason.trim() || isSubmittingDeletion}
                 onClick={handleRequestDeletion}
-                className="flex-1 px-4 py-2 text-sm font-bold bg-red-600 text-white hover:bg-red-700 rounded-lg transition-all disabled:opacity-50 shadow-lg shadow-red-200"
+                className="flex-1 px-4 py-2 text-sm font-bold bg-red-600 text-white hover:bg-red-700 rounded-lg transition-all disabled:opacity-50 shadow-lg shadow-red-200 flex items-center justify-center gap-2"
               >
-                Enviar Solicitação
+                {isSubmittingDeletion ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Enviando...
+                  </>
+                ) : (
+                  'Enviar Solicitação'
+                )}
               </button>
             </div>
           </div>
