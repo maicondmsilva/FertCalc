@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Search, Calculator, Check, ArrowRight, Save, Info, AlertTriangle } from 'lucide-react';
+import { X, Search, Calculator, Check, ArrowRight, Save, Info, TriangleAlert as AlertTriangle } from 'lucide-react';
 import { getFertigranPFormulas, saveComparisonHistory, getCompatibilityCategories } from '../services/db';
 import { FertigranPFormula, User as AppUser, RawMaterial, TargetFormula, CompatibilityCategory } from '../types';
 import solver from 'javascript-lp-solver';

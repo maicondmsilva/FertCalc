@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Goal, User as AppUser, PricingRecord, Notification } from '../types';
-import { Target, TrendingUp, Calendar, CheckCircle2, AlertCircle, Clock, Plus, Trash2 } from 'lucide-react';
+import { Target, TrendingUp, Calendar, CircleCheck as CheckCircle2, CircleAlert as AlertCircle, Clock, Plus, Trash2 } from 'lucide-react';
 import { getGoals, createGoal, updateGoal, deleteGoal, getPricingRecords, getUsers, createNotification, getManagersOfUser } from '../services/db';
 import { useToast } from './Toast';
 import { getPricingTotalTons } from '../utils/pricingMetrics';

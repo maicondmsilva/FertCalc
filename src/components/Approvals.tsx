@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PricingRecord, Goal, User as AppUser, AppSettings } from '../types';
-import { CheckCircle, XCircle, Clock, Shield, Target, Eye, AlertTriangle, X } from 'lucide-react';
+import { CircleCheck as CheckCircle, Circle as XCircle, Clock, Shield, Target, Eye, TriangleAlert as AlertTriangle, X } from 'lucide-react';
 import PricingDetailModal from './PricingDetailModal';
 import { getPricingRecords, getGoals, getAppSettings, updatePricingRecord, updateGoal, createNotification, getUsers } from '../services/db';
 import { useToast } from './Toast';

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import solver from 'javascript-lp-solver';
-import { Plus, Trash2, Save, AlertTriangle, CheckCircle2, Calculator as CalculatorIcon, Building2, Database, Search, User, UserCheck, Tag, LayoutDashboard, Settings, X, Beaker } from 'lucide-react';
+import { Plus, Trash2, Save, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle2, Calculator as CalculatorIcon, Building2, Database, Search, User, UserCheck, Tag, LayoutDashboard, Settings, X, Beaker } from 'lucide-react';
 import { RawMaterial, PricingFactors, PricingRecord, PricingSummary, Branch, PriceList, Client, Agent, User as AppUser, PricingHistoryEntry, TargetFormula, IncompatibilityRule, SavedFormula } from '../types';
 import { getClients, getAgents, getBranches, getPriceLists, getIncompatibilityRules, createPricingRecord, updatePricingRecord, createSavedFormula, getSavedFormulas, updateSavedFormula, createNotification, getUsers, getManagersOfUser, getCompatibilityCategories } from '../services/db';
 import { useToast } from './Toast';
