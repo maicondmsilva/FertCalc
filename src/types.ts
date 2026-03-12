@@ -406,6 +406,10 @@ export interface ComparisonHistory {
     n: number;
     p: number;
     k: number;
+    fatores_comerciais?: any;
+    incluir_pdf?: boolean;
+    composicao?: any;
+    garantias_finais?: any;
   };
   created_at?: string;
 }

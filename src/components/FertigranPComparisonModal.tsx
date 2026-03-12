@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Search, Calculator, Check, ArrowRight, Save } from 'lucide-react';
+import { X, Search, Calculator, Check, ArrowRight, Save, Info, AlertTriangle } from 'lucide-react';
 import { getFertigranPFormulas, saveComparisonHistory } from '../services/db';
 import { FertigranPFormula, User as AppUser, RawMaterial, TargetFormula } from '../types';
 import solver from 'javascript-lp-solver';
@@ -25,6 +25,16 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
   const [reductionP, setReductionP] = useState<number>(0);
   const [reductionK, setReductionK] = useState<number>(0);
 
+  const [includeInPdf, setIncludeInPdf] = useState(true);
+  const [localMicros, setLocalMicros] = useState<RawMaterial[]>(micros);
+  const [commercialFactors, setCommercialFactors] = useState({
+    factor: 0.8,
+    margin: 0,
+    discount: 0,
+    freight: 0,
+    commission: 0,
+  });
+
   const [formulas, setFormulas] = useState<FertigranPFormula[]>([]);
   const [selectedFormulaId, setSelectedFormulaId] = useState<string>('');
 
@@ -34,13 +44,15 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
   const [optimizedDose, setOptimizedDose] = useState<number>(0);
   const [optimizedFormulaTarget, setOptimizedFormulaTarget] = useState<string>('0-0-0');
   const [optimizedComposition, setOptimizedComposition] = useState<{material: RawMaterial, qtd: number}[]>([]);
+  const [resultingGuarantees, setResultingGuarantees] = useState<{s: number, ca: number, micros: {name: string, value: number}[]}>({s: 0, ca: 0, micros: []});
 
   useEffect(() => {
     if (isOpen) {
       loadFormulas();
       setSaveSuccess(false);
+      setLocalMicros(micros.map(m => ({ ...m })));
     }
-  }, [isOpen]);
+  }, [isOpen, micros]);
 
   const loadFormulas = async () => {
     try {
@@ -98,7 +110,7 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
         ints: {}
       };
 
-      const availableMaterials = [...macros, ...micros].filter(m => m.selected);
+      const availableMaterials = [...macros, ...localMicros].filter(m => m.selected);
       availableMaterials.forEach(m => {
         model.variables[m.id] = {
           cost: m.price / 1000,
@@ -114,10 +126,22 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
       if (result.feasible) {
         let totalWeight = 0;
         const comp: {material: RawMaterial, qtd: number}[] = [];
+        let resS = 0;
+        let resCa = 0;
+        const microSums: { [key: string]: number } = {};
+
         availableMaterials.forEach(m => {
           if (result[m.id] && result[m.id] > 0) {
-            totalWeight += result[m.id];
-            comp.push({ material: m, qtd: result[m.id] });
+            const qtd = result[m.id];
+            totalWeight += qtd;
+            comp.push({ material: m, qtd });
+            
+            // Calculate resulting secondary/micros based on quantities per hectare
+            resS += qtd * (m.s / 100);
+            resCa += qtd * (m.ca / 100);
+            m.microGuarantees?.forEach(micro => {
+              microSums[micro.name] = (microSums[micro.name] || 0) + qtd * (micro.value / 100);
+            });
           }
         });
 
@@ -129,10 +153,20 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
           const fp = (targetP / totalWeight) * 100;
           const fk = (targetK / totalWeight) * 100;
           setOptimizedFormulaTarget(`${fn.toFixed(1)}-${fp.toFixed(1)}-${fk.toFixed(1)}`);
+          
+          setResultingGuarantees({
+            s: (resS / totalWeight) * 100,
+            ca: (resCa / totalWeight) * 100,
+            micros: Object.entries(microSums).map(([name, val]) => ({
+              name,
+              value: (val / totalWeight) * 100
+            }))
+          });
         }
       } else {
         setOptimizedDose(0);
         setOptimizedComposition([]);
+        setResultingGuarantees({s: 0, ca: 0, micros: []});
       }
     } else {
         // If a pre-defined formula is selected, we just adjust the dose based on P
@@ -140,12 +174,18 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
           const fixedNewDose = targetP / (selectedFormula.npk_p / 100);
           setOptimizedDose(fixedNewDose);
           setOptimizedFormulaTarget(selectedFormula.nome);
+          setResultingGuarantees({
+            s: selectedFormula.s || 0,
+            ca: selectedFormula.ca || 0,
+            micros: [] // predefined formulas in current schema might not have micros list yet or it's empty
+          });
         } else {
           setOptimizedDose(0);
           setOptimizedComposition([]);
+          setResultingGuarantees({s: 0, ca: 0, micros: []});
         }
     }
-  }, [selectedFormulaId, targetN, targetP, targetK, macros, micros]);
+  }, [selectedFormulaId, targetN, targetP, targetK, macros, localMicros]);
 
   if (optimizedDose > 0) {
     newDose = optimizedDose;
@@ -175,7 +215,15 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
         hectares,
         dose_original: dose,
         dose_nova: newDose > 0 ? newDose : dose,
-        reducoes_aplicadas: { n: reductionN, p: reductionP, k: reductionK }
+        reducoes_aplicadas: { 
+          n: reductionN, 
+          p: reductionP, 
+          k: reductionK,
+          fatores_comerciais: commercialFactors,
+          incluir_pdf: includeInPdf,
+          composicao: optimizedComposition.map(c => ({ material: c.material.name, qtd: c.qtd })),
+          garantias_finais: resultingGuarantees
+        }
       });
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
@@ -206,27 +254,29 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
            ...m,
            selected: optimizedComposition.some(c => c.material.id === m.id)
        }));
-       const mappedMicros = micros.map(m => ({
+       const mappedMicros = localMicros.map(m => ({
            ...m,
            selected: optimizedComposition.some(c => c.material.id === m.id)
        }));
 
        onApplyFertigranP({
          formula: optimizedFormulaTarget,
-         selected: true,
+         selected: includeInPdf,
          targetN: nNum,
          targetP: pNum,
          targetK: kNum,
+         targetS: resultingGuarantees.s,
+         targetCa: resultingGuarantees.ca,
          macros: mappedMacros,
          micros: mappedMicros,
          factors: {
              targetFormula: optimizedFormulaTarget,
-             factor: 0.8,
-             discount: 0,
-             margin: 0,
-             freight: 0,
+             factor: commercialFactors.factor,
+             discount: commercialFactors.discount,
+             margin: commercialFactors.margin,
+             freight: commercialFactors.freight,
              taxRate: 0,
-             commission: 0,
+             commission: commercialFactors.commission,
              monthlyInterestRate: 0,
              dueDate: '',
              exemptCurrentMonth: false,
@@ -234,29 +284,29 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
              agent: { id: '', code: '', name: '', document: '' },
              branchId: '',
              priceListId: '',
-             totalTons: newQuantityTons > 0 ? newQuantityTons : 1000 // default to 1000 tons if uncalculated
+             totalTons: newQuantityTons > 0 ? newQuantityTons : 1000
          }
        });
     } else if (selectedFormula) {
       // Send certified formula to pricing
       onApplyFertigranP({
          formula: selectedFormula.nome,
-         selected: true,
+         selected: includeInPdf,
          targetN: selectedFormula.npk_n,
          targetP: selectedFormula.npk_p,
          targetK: selectedFormula.npk_k,
          targetCa: selectedFormula.ca,
          targetS: selectedFormula.s,
          macros: macros.map(m => ({ ...m })),
-         micros: micros.map(m => ({ ...m })),
+         micros: localMicros.map(m => ({ ...m })),
          factors: {
              targetFormula: selectedFormula.nome,
-             factor: 0.8,
-             discount: 0,
-             margin: 0,
-             freight: 0,
+             factor: commercialFactors.factor,
+             discount: commercialFactors.discount,
+             margin: commercialFactors.margin,
+             freight: commercialFactors.freight,
              taxRate: 0,
-             commission: 0,
+             commission: commercialFactors.commission,
              monthlyInterestRate: 0,
              dueDate: '',
              exemptCurrentMonth: false,
@@ -390,26 +440,119 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
             </div>
           </div>
 
-          {/* Section 3: Fertigran Selection & Results */}
+          {/* Section 3: Micro Selection (NEW) */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-bold text-amber-600 uppercase flex items-center gap-2">
+              <span className="bg-amber-100 text-amber-700 w-6 h-6 rounded-full flex items-center justify-center text-xs">3</span>
+              Seleção de Micronutrientes
+            </h3>
+            <div className="p-4 bg-amber-50/30 rounded-lg border border-amber-100">
+              <p className="text-[10px] text-stone-500 mb-3 font-medium">Selecione os micros que deseja incluir na nova formulação Fertigran P:</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {localMicros.map(m => (
+                  <label key={m.id} className="flex items-center gap-2 p-2 bg-white border border-amber-100 rounded-lg cursor-pointer hover:bg-amber-50 transition-colors">
+                    <input 
+                      type="checkbox"
+                      checked={m.selected}
+                      onChange={() => {
+                        setLocalMicros(prev => prev.map(mm => mm.id === m.id ? { ...mm, selected: !mm.selected } : mm));
+                      }}
+                      className="rounded text-amber-600 focus:ring-amber-500"
+                    />
+                    <span className="text-xs font-bold text-stone-700 truncate">{m.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Section 4: Commercial Factors (NEW) */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-bold text-blue-600 uppercase flex items-center gap-2">
+              <span className="bg-blue-100 text-blue-700 w-6 h-6 rounded-full flex items-center justify-center text-xs">4</span>
+              Fatores Comerciais Personalizados
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 p-4 bg-blue-50/30 rounded-lg border border-blue-100">
+              <div>
+                <label className="block text-[10px] text-blue-700 font-bold mb-1">Fator (Ex: 0.8)</label>
+                <input 
+                  type="number" step="0.01"
+                  value={commercialFactors.factor}
+                  onChange={e => setCommercialFactors({ ...commercialFactors, factor: Number(e.target.value) })}
+                  className="w-full px-2 py-1.5 text-xs border border-blue-200 rounded focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] text-blue-700 font-bold mb-1">Margem %</label>
+                <input 
+                  type="number"
+                  value={commercialFactors.margin}
+                  onChange={e => setCommercialFactors({ ...commercialFactors, margin: Number(e.target.value) })}
+                  className="w-full px-2 py-1.5 text-xs border border-blue-200 rounded focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] text-blue-700 font-bold mb-1">Desconto %</label>
+                <input 
+                  type="number"
+                  value={commercialFactors.discount}
+                  onChange={e => setCommercialFactors({ ...commercialFactors, discount: Number(e.target.value) })}
+                  className="w-full px-2 py-1.5 text-xs border border-blue-200 rounded focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] text-blue-700 font-bold mb-1">Frete (R$/Ton)</label>
+                <input 
+                  type="number"
+                  value={commercialFactors.freight}
+                  onChange={e => setCommercialFactors({ ...commercialFactors, freight: Number(e.target.value) })}
+                  className="w-full px-2 py-1.5 text-xs border border-blue-200 rounded focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] text-blue-700 font-bold mb-1">Comissão %</label>
+                <input 
+                  type="number"
+                  value={commercialFactors.commission}
+                  onChange={e => setCommercialFactors({ ...commercialFactors, commission: Number(e.target.value) })}
+                  className="w-full px-2 py-1.5 text-xs border border-blue-200 rounded focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 5: Fertigran Selection & Results (was 3) */}
           <div className="space-y-4">
             <h3 className="text-sm font-bold text-indigo-600 uppercase flex items-center gap-2">
-              <span className="bg-indigo-100 text-indigo-700 w-6 h-6 rounded-full flex items-center justify-center text-xs">3</span>
-              Fórmula Fertigran P
+              <span className="bg-indigo-100 text-indigo-700 w-6 h-6 rounded-full flex items-center justify-center text-xs">5</span>
+              Resultado e Formulação Final
             </h3>
             
             <div className="p-4 bg-indigo-50/30 rounded-lg border border-indigo-100 space-y-4">
-              <div>
-                <label className="block text-xs text-indigo-700 font-bold mb-2">Selecione uma fórmula padrão existente:</label>
-                <select
-                  value={selectedFormulaId}
-                  onChange={e => setSelectedFormulaId(e.target.value)}
-                  className="w-full md:w-1/2 px-3 py-2 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white"
-                >
-                  <option value="">Fórmula Customizada (Baseada nas reduções)</option>
-                  {formulas.map(f => (
-                    <option key={f.id} value={f.id}>{f.nome} (N:{f.npk_n} P:{f.npk_p} K:{f.npk_k})</option>
-                  ))}
-                </select>
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex-1 min-w-[300px]">
+                  <label className="block text-xs text-indigo-700 font-bold mb-2">Selecione uma fórmula padrão existente:</label>
+                  <select
+                    value={selectedFormulaId}
+                    onChange={e => setSelectedFormulaId(e.target.value)}
+                    className="w-full px-3 py-2 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white"
+                  >
+                    <option value="">Fórmula Customizada (Baseada nas reduções e Solver)</option>
+                    {formulas.map(f => (
+                      <option key={f.id} value={f.id}>{f.nome} (N:{f.npk_n} P:{f.npk_p} K:{f.npk_k})</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-center gap-2 pt-6">
+                  <input 
+                    type="checkbox" 
+                    id="includeInPdf"
+                    checked={includeInPdf}
+                    onChange={e => setIncludeInPdf(e.target.checked)}
+                    className="rounded text-indigo-600"
+                  />
+                  <label htmlFor="includeInPdf" className="text-xs font-bold text-stone-700 cursor-pointer">Aparecer no PDF / Comparativo</label>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -461,15 +604,55 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
                       </div>
 
                       {optimizedComposition.length > 0 && (
-                        <div className="mt-3 p-3 bg-stone-50 rounded-lg border border-stone-100">
-                          <p className="text-[10px] uppercase font-bold text-stone-500 mb-2">Composição P/ Hectare:</p>
-                          <div className="space-y-1">
-                            {optimizedComposition.map((item, idx) => (
-                              <div key={idx} className="flex justify-between text-xs text-stone-600">
-                                <span>{item.material.name}</span>
-                                <span className="font-mono text-emerald-600 font-bold">{item.qtd.toFixed(1)} kg</span>
+                        <div className="mt-3 space-y-3">
+                          <div className="p-3 bg-stone-50 rounded-lg border border-stone-100">
+                            <p className="text-[10px] uppercase font-bold text-stone-500 mb-2">Composição da Batida (1.000 kg):</p>
+                            <div className="space-y-1">
+                              {optimizedComposition.map((item, idx) => (
+                                <div key={idx} className="flex justify-between text-xs text-stone-600">
+                                  <span>{item.material.name}</span>
+                                  <span className="font-mono text-emerald-600 font-bold">
+                                    {((item.qtd / optimizedDose) * 1000).toFixed(1)} kg
+                                  </span>
+                                </div>
+                              ))}
+                              <div className="pt-1 mt-1 border-t border-stone-200 flex justify-between text-[10px] font-bold text-stone-700">
+                                <span>TOTAL BATIDA</span>
+                                <span>1.000 kg</span>
                               </div>
-                            ))}
+                            </div>
+                          </div>
+
+                          <div className="p-3 bg-indigo-50/50 rounded-lg border border-indigo-100">
+                            <p className="text-[10px] uppercase font-bold text-indigo-500 mb-2">Garantias Resultantes:</p>
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                              <div className="flex justify-between text-[10px]">
+                                <span className="text-stone-500">N Total:</span>
+                                <span className="font-bold text-indigo-700">{(targetN/optimizedDose*100).toFixed(1)}%</span>
+                              </div>
+                              <div className="flex justify-between text-[10px]">
+                                <span className="text-stone-500">P₂O₅ Sol. CNA+água:</span>
+                                <span className="font-bold text-indigo-700">{(targetP/optimizedDose*100).toFixed(1)}%</span>
+                              </div>
+                              <div className="flex justify-between text-[10px]">
+                                <span className="text-stone-500">K₂O Sol. água:</span>
+                                <span className="font-bold text-indigo-700">{(targetK/optimizedDose*100).toFixed(1)}%</span>
+                              </div>
+                              <div className="flex justify-between text-[10px]">
+                                <span className="text-stone-500">S Total:</span>
+                                <span className="font-bold text-amber-600">{resultingGuarantees.s.toFixed(1)}%</span>
+                              </div>
+                              <div className="flex justify-between text-[10px]">
+                                <span className="text-stone-500">Ca Total:</span>
+                                <span className="font-bold text-amber-600">{resultingGuarantees.ca.toFixed(1)}%</span>
+                              </div>
+                              {resultingGuarantees.micros.map((m, idx) => (
+                                <div key={idx} className="flex justify-between text-[10px]">
+                                  <span className="text-stone-500">{m.name}:</span>
+                                  <span className="font-bold text-emerald-600">{m.value.toFixed(3)}%</span>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         </div>
                       )}
