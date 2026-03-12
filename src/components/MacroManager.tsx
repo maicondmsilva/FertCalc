@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Save, Database, Eye, Edit3, X } from 'lucide-react';
-import { MacroMaterial, MicroGuarantee, Brand, User } from '../types';
-import { getMacroMaterials, createMacroMaterial, updateMacroMaterial, deleteMacroMaterial, getBrands } from '../services/db';
+import { MacroMaterial, MicroGuarantee, Brand, User, CompatibilityCategory } from '../types';
+import { getMacroMaterials, createMacroMaterial, updateMacroMaterial, deleteMacroMaterial, getBrands, getCompatibilityCategories } from '../services/db';
 import { useToast } from './Toast';
 
 const emptyForm = () => ({
@@ -14,7 +14,7 @@ const emptyForm = () => ({
   brandId: '',
   formulaSuffix: '',
   isPremiumLine: false,
-  categories: [] as ('phosphated' | 'nitrogenous' | 'fertigran_p')[],
+  categories: [] as string[],
 });
 
 interface MacroManagerProps {
@@ -36,6 +36,7 @@ export default function MacroManager({ currentUser }: MacroManagerProps) {
 
   const [macros, setMacros] = useState<MacroMaterial[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
+  const [compCategories, setCompCategories] = useState<CompatibilityCategory[]>([]);
   const [tableLoading, setTableLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -51,9 +52,14 @@ export default function MacroManager({ currentUser }: MacroManagerProps) {
 
   const loadData = async () => {
     setTableLoading(true);
-    const [m, b] = await Promise.all([getMacroMaterials(), getBrands()]);
+    const [m, b, cc] = await Promise.all([
+      getMacroMaterials(), 
+      getBrands(),
+      getCompatibilityCategories()
+    ]);
     setMacros(m);
     setBrands(b);
+    setCompCategories(cc);
     setTableLoading(false);
   };
 
@@ -72,12 +78,12 @@ export default function MacroManager({ currentUser }: MacroManagerProps) {
     setGuarantees(prev => prev.filter((_, idx) => idx !== i));
 
   // ── Categorias ─────────────────────────────────────────────
-  const toggleCategory = (cat: 'phosphated' | 'nitrogenous' | 'fertigran_p', checked: boolean) =>
+  const toggleCategory = (catId: string, checked: boolean) =>
     setFormData(prev => ({
       ...prev,
       categories: checked
-        ? [...prev.categories, cat]
-        : prev.categories.filter(c => c !== cat),
+        ? [...prev.categories, catId]
+        : prev.categories.filter(c => c !== catId),
     }));
 
   // ── Reset ──────────────────────────────────────────────────
@@ -305,21 +311,24 @@ export default function MacroManager({ currentUser }: MacroManagerProps) {
               <label className="block text-sm font-medium text-stone-600 mb-2">
                 Categorias de Compatibilidade
               </label>
-              <div className="flex gap-6">
-                {(['phosphated', 'nitrogenous', 'fertigran_p'] as const).map(cat => (
-                  <label key={cat} className="flex items-center gap-2 cursor-pointer">
+              <div className="flex flex-wrap gap-x-6 gap-y-2">
+                {compCategories.map(cat => (
+                  <label key={cat.id} className="flex items-center gap-2 cursor-pointer group">
                     <input
                       type="checkbox"
                       disabled={viewMode}
-                      checked={formData.categories.includes(cat)}
-                      onChange={e => toggleCategory(cat, e.target.checked)}
+                      checked={formData.categories.includes(cat.id || cat.nome)}
+                      onChange={e => toggleCategory(cat.id || cat.nome, e.target.checked)}
                       className="rounded text-blue-600 focus:ring-blue-500 disabled:opacity-50"
                     />
-                    <span className="text-sm text-stone-700">
-                      {cat === 'phosphated' ? 'Fosfatada' : cat === 'nitrogenous' ? 'Nitrogenada' : 'Fertigran P'}
+                    <span className="text-sm text-stone-700 group-hover:text-blue-600 transition-colors">
+                      {cat.nome}
                     </span>
                   </label>
                 ))}
+                {compCategories.length === 0 && (
+                  <span className="text-xs text-stone-400 italic">Nenhuma categoria cadastrada.</span>
+                )}
               </div>
             </div>
 

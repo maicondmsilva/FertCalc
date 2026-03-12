@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Save, FlaskConical, Eye, Edit3 } from 'lucide-react';
-import { MicroMaterial, MicroGuarantee, User } from '../types';
-import { getMicroMaterials, createMicroMaterial, updateMicroMaterial, deleteMicroMaterial } from '../services/db';
+import { MicroMaterial, MicroGuarantee, User, CompatibilityCategory } from '../types';
+import { getMicroMaterials, createMicroMaterial, updateMicroMaterial, deleteMicroMaterial, getCompatibilityCategories } from '../services/db';
 import { useToast } from './Toast';
 
 interface MicroManagerProps {
@@ -15,7 +15,8 @@ export default function MicroManager({ currentUser }: MicroManagerProps) {
   const [name, setName] = useState('');
   const [formulaSuffix, setFormulaSuffix] = useState('');
   const [guarantees, setGuarantees] = useState<MicroGuarantee[]>([]);
-  const [categories, setCategories] = useState<('phosphated' | 'nitrogenous' | 'fertigran_p')[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [compCategories, setCompCategories] = useState<CompatibilityCategory[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState(false);
 
@@ -23,8 +24,12 @@ export default function MicroManager({ currentUser }: MicroManagerProps) {
 
   const loadData = async () => {
     setLoading(true);
-    const data = await getMicroMaterials();
+    const [data, cc] = await Promise.all([
+      getMicroMaterials(),
+      getCompatibilityCategories()
+    ]);
     setMicros(data);
+    setCompCategories(cc);
     setLoading(false);
   };
 
@@ -36,9 +41,9 @@ export default function MicroManager({ currentUser }: MicroManagerProps) {
 
   const cancelEdit = () => { setName(''); setFormulaSuffix(''); setGuarantees([]); setCategories([]); setEditingId(null); setViewMode(false); };
 
-  const handleCategoryChange = (category: 'phosphated' | 'nitrogenous' | 'fertigran_p', checked: boolean) => {
-    if (checked) setCategories([...categories, category]);
-    else setCategories(categories.filter(c => c !== category));
+  const handleCategoryChange = (catId: string, checked: boolean) => {
+    if (checked) setCategories([...categories, catId]);
+    else setCategories(categories.filter(c => c !== catId));
   };
 
   const handleEdit = (micro: MicroMaterial) => {
@@ -111,19 +116,22 @@ export default function MicroManager({ currentUser }: MicroManagerProps) {
             </div>
             <div>
               <label className="block text-sm font-medium text-stone-600 mb-2">Categorias de Compatibilidade</label>
-              <div className="flex gap-6">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={categories.includes('phosphated')} onChange={(e) => handleCategoryChange('phosphated', e.target.checked)} disabled={viewMode} className="rounded text-emerald-600 focus:ring-emerald-500 disabled:opacity-50" />
-                  <span className="text-sm text-stone-700">Fosfatada</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={categories.includes('nitrogenous')} onChange={(e) => handleCategoryChange('nitrogenous', e.target.checked)} disabled={viewMode} className="rounded text-emerald-600 focus:ring-emerald-500 disabled:opacity-50" />
-                  <span className="text-sm text-stone-700">Nitrogenada</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={categories.includes('fertigran_p')} onChange={(e) => handleCategoryChange('fertigran_p', e.target.checked)} disabled={viewMode} className="rounded text-emerald-600 focus:ring-emerald-500 disabled:opacity-50" />
-                  <span className="text-sm text-stone-700">Fertigran P</span>
-                </label>
+              <div className="flex flex-wrap gap-x-6 gap-y-2">
+                {compCategories.map(cat => (
+                  <label key={cat.id} className="flex items-center gap-2 cursor-pointer group">
+                    <input 
+                      type="checkbox" 
+                      checked={categories.includes(cat.id || cat.nome)} 
+                      onChange={(e) => handleCategoryChange(cat.id || cat.nome, e.target.checked)} 
+                      disabled={viewMode} 
+                      className="rounded text-emerald-600 focus:ring-emerald-500 disabled:opacity-50" 
+                    />
+                    <span className="text-sm text-stone-700 group-hover:text-emerald-600 transition-colors">{cat.nome}</span>
+                  </label>
+                ))}
+                {compCategories.length === 0 && (
+                  <span className="text-xs text-stone-400 italic">Nenhuma categoria cadastrada.</span>
+                )}
               </div>
             </div>
             <div className="flex gap-2">

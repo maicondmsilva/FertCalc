@@ -1001,3 +1001,46 @@ export async function getComparisonHistory(userId: string): Promise<ComparisonHi
   if (error) throw error;
   return data || [];
 }
+
+// ============================================================
+// COMPATIBILITY CATEGORIES
+// ============================================================
+
+export async function getCompatibilityCategories(): Promise<CompatibilityCategory[]> {
+  const { data, error } = await supabase
+    .from('compatibility_categories')
+    .select('*')
+    .eq('ativo', true)
+    .order('ordem', { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function createCompatibilityCategory(category: Omit<CompatibilityCategory, 'id' | 'created_at' | 'updated_at'>): Promise<CompatibilityCategory> {
+  const { data, error } = await supabase
+    .from('compatibility_categories')
+    .insert([category])
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateCompatibilityCategory(id: string, category: Partial<CompatibilityCategory>): Promise<CompatibilityCategory> {
+  const { data, error } = await supabase
+    .from('compatibility_categories')
+    .update({ ...category, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteCompatibilityCategory(id: string): Promise<void> {
+  const { data, error } = await supabase
+    .from('compatibility_categories')
+    .update({ ativo: false, updated_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw error;
+}

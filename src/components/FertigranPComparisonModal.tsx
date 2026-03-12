@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, Search, Calculator, Check, ArrowRight, Save, Info, AlertTriangle } from 'lucide-react';
-import { getFertigranPFormulas, saveComparisonHistory } from '../services/db';
-import { FertigranPFormula, User as AppUser, RawMaterial, TargetFormula } from '../types';
+import { getFertigranPFormulas, saveComparisonHistory, getCompatibilityCategories } from '../services/db';
+import { FertigranPFormula, User as AppUser, RawMaterial, TargetFormula, CompatibilityCategory } from '../types';
 import solver from 'javascript-lp-solver';
 
 interface Props {
@@ -38,6 +38,9 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
   const [formulas, setFormulas] = useState<FertigranPFormula[]>([]);
   const [selectedFormulaId, setSelectedFormulaId] = useState<string>('');
 
+  const [compCategories, setCompCategories] = useState<CompatibilityCategory[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
+
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   
@@ -49,10 +52,20 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
   useEffect(() => {
     if (isOpen) {
       loadFormulas();
+      loadCategories();
       setSaveSuccess(false);
       setLocalMicros(micros.map(m => ({ ...m })));
     }
   }, [isOpen, micros]);
+
+  const loadCategories = async () => {
+    try {
+      const data = await getCompatibilityCategories();
+      setCompCategories(data);
+    } catch (err) {
+      console.error('Error loading categories:', err);
+    }
+  };
 
   const loadFormulas = async () => {
     try {
@@ -78,7 +91,7 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
   const targetP = suppliedP * (1 - reductionP / 100);
   const targetK = suppliedK * (1 - reductionK / 100);
 
-  let newDose = 0;
+  let newDoseValue = 0;
   let newQuantityTons = 0;
   let simulatedProvidedN = 0;
   let simulatedProvidedP = 0;
@@ -110,7 +123,11 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
         ints: {}
       };
 
-      const availableMaterials = [...macros, ...localMicros].filter(m => m.selected);
+      const availableMaterials = [...macros, ...localMicros].filter(m => {
+        if (!m.selected) return false;
+        if (selectedCategoryId === 'all') return true;
+        return m.categories?.includes(selectedCategoryId);
+      });
       availableMaterials.forEach(m => {
         model.variables[m.id] = {
           cost: m.price / 1000,
@@ -121,7 +138,7 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
         };
       });
 
-      const result = solver.Solve(model);
+      const result: any = solver.Solve(model);
       
       if (result.feasible) {
         let totalWeight = 0;
@@ -177,7 +194,7 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
           setResultingGuarantees({
             s: selectedFormula.s || 0,
             ca: selectedFormula.ca || 0,
-            micros: [] // predefined formulas in current schema might not have micros list yet or it's empty
+            micros: [] 
           });
         } else {
           setOptimizedDose(0);
@@ -185,16 +202,16 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
           setResultingGuarantees({s: 0, ca: 0, micros: []});
         }
     }
-  }, [selectedFormulaId, targetN, targetP, targetK, macros, localMicros]);
+  }, [selectedFormulaId, targetN, targetP, targetK, macros, localMicros, selectedCategoryId]);
 
   if (optimizedDose > 0) {
-    newDose = optimizedDose;
-    newQuantityTons = (newDose * hectares) / 1000;
+    newDoseValue = optimizedDose;
+    newQuantityTons = (newDoseValue * hectares) / 1000;
     
     if (selectedFormula) {
-      simulatedProvidedN = newDose * (selectedFormula.npk_n / 100);
-      simulatedProvidedP = newDose * (selectedFormula.npk_p / 100);
-      simulatedProvidedK = newDose * (selectedFormula.npk_k / 100);
+      simulatedProvidedN = newDoseValue * (selectedFormula.npk_n / 100);
+      simulatedProvidedP = newDoseValue * (selectedFormula.npk_p / 100);
+      simulatedProvidedK = newDoseValue * (selectedFormula.npk_k / 100);
     } else {
       simulatedProvidedN = targetN;
       simulatedProvidedP = targetP;
@@ -214,7 +231,7 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
         formula_nova: selectedFormula ? selectedFormula.nome : `${idealNewN.toFixed(1)}-${idealNewP.toFixed(1)}-${idealNewK.toFixed(1)}`,
         hectares,
         dose_original: dose,
-        dose_nova: newDose > 0 ? newDose : dose,
+        dose_nova: newDoseValue > 0 ? newDoseValue : dose,
         reducoes_aplicadas: { 
           n: reductionN, 
           p: reductionP, 
@@ -543,6 +560,21 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
                     ))}
                   </select>
                 </div>
+                
+                <div className="flex-1 min-w-[300px]">
+                  <label className="block text-xs text-indigo-700 font-bold mb-2">Filtrar Matérias-Primas por Categoria:</label>
+                  <select
+                    value={selectedCategoryId}
+                    onChange={e => setSelectedCategoryId(e.target.value)}
+                    className="w-full px-3 py-2 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white"
+                  >
+                    <option value="all">Todas as Matérias-Primas Selecionadas</option>
+                    {compCategories.map(cat => (
+                      <option key={cat.id} value={cat.id}>{cat.nome}</option>
+                    ))}
+                  </select>
+                </div>
+
                 <div className="flex items-center gap-2 pt-6">
                   <input 
                     type="checkbox" 
@@ -570,7 +602,7 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
                       
                       <div className="flex items-center justify-between border-t border-stone-100 pt-3">
                         <span className="text-sm text-stone-500 font-medium">Nova Dose:</span>
-                        <span className="text-lg font-bold text-indigo-700">{newDose.toFixed(1)} kg/ha</span>
+                        <span className="text-lg font-bold text-indigo-700">{newDoseValue.toFixed(1)} kg/ha</span>
                       </div>
                       
                       <div className="flex items-center justify-between">
@@ -668,7 +700,7 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-stone-600">Redução de Volume:</span>
                       <span className="text-md font-bold text-emerald-700">
-                        {selectedFormulaId ? (
+                        {newQuantityTons > 0 ? (
                           <>
                             {(originalQuantityTons - newQuantityTons).toFixed(2)} Tons 
                             <span className="text-xs ml-1">
