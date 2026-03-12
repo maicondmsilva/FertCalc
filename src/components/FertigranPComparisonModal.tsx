@@ -26,7 +26,8 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
   const [reductionK, setReductionK] = useState<number>(0);
 
   const [includeInPdf, setIncludeInPdf] = useState(true);
-  const [localMicros, setLocalMicros] = useState<RawMaterial[]>(micros);
+  const [localMacros, setLocalMacros] = useState<RawMaterial[]>(macros.map(m => ({ ...m, selected: false })));
+  const [localMicros, setLocalMicros] = useState<RawMaterial[]>(micros.map(m => ({ ...m, selected: false })));
   const [commercialFactors, setCommercialFactors] = useState({
     factor: 0.8,
     margin: 0,
@@ -54,9 +55,24 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
       loadFormulas();
       loadCategories();
       setSaveSuccess(false);
-      setLocalMicros(micros.map(m => ({ ...m })));
+      setLocalMacros(macros.map(m => ({ ...m, selected: false })));
+      setLocalMicros(micros.map(m => ({ ...m, selected: false })));
     }
-  }, [isOpen, micros]);
+  }, [isOpen, macros, micros]);
+
+  // Auto-selection based on category
+  useEffect(() => {
+    if (selectedCategoryId !== 'all') {
+      setLocalMacros(prev => prev.map(m => ({
+        ...m,
+        selected: m.categories?.includes(selectedCategoryId) || false
+      })));
+      setLocalMicros(prev => prev.map(m => ({
+        ...m,
+        selected: m.categories?.includes(selectedCategoryId) || false
+      })));
+    }
+  }, [selectedCategoryId]);
 
   const loadCategories = async () => {
     try {
@@ -123,12 +139,14 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
         ints: {}
       };
 
-      const availableMaterials = [...macros, ...localMicros].filter(m => {
-        if (!m.selected) return false;
-        if (selectedCategoryId === 'all') return true;
-        return m.categories?.includes(selectedCategoryId);
-      });
-      availableMaterials.forEach(m => {
+      const availableMaterials = [...localMacros, ...localMicros].filter(m => m.selected);
+    
+    // Filtro adicional pelo ID da categoria selecionada (se não for "all")
+    const filteredByCategoryId = selectedCategoryId === 'all' 
+      ? availableMaterials 
+      : availableMaterials.filter(m => m.categories?.includes(selectedCategoryId));
+      
+      filteredByCategoryId.forEach(m => {
         model.variables[m.id] = {
           cost: m.price / 1000,
           n_eq: m.n / 10, // adjusting scale
@@ -147,7 +165,7 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
         let resCa = 0;
         const microSums: { [key: string]: number } = {};
 
-        availableMaterials.forEach(m => {
+        filteredByCategoryId.forEach(m => {
           if (result[m.id] && result[m.id] > 0) {
             const qtd = result[m.id];
             totalWeight += qtd;
@@ -202,7 +220,7 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
           setResultingGuarantees({s: 0, ca: 0, micros: []});
         }
     }
-  }, [selectedFormulaId, targetN, targetP, targetK, macros, localMicros, selectedCategoryId]);
+  }, [selectedFormulaId, targetN, targetP, targetK, localMacros, localMicros, selectedCategoryId]);
 
   if (optimizedDose > 0) {
     newDoseValue = optimizedDose;
@@ -252,91 +270,108 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
     }
   };
 
-  const handleSendToPricing = async () => {
+   const handleSendToPricing = async () => {
+    if (isSaving) return;
+    
+    console.log('Iniciando Enviar para Precificação...', { optimizedDose, selectedFormulaId });
+
+    if (optimizedDose <= 0) {
+      alert("Nenhum cálculo válido para enviar. A dose resultante deve ser maior que zero. Verifique se o cálculo foi concluído com sucesso.");
+      return;
+    }
+
     // Save history first
     await handleSave();
     
-    if (!selectedFormulaId && optimizedDose > 0) {
-       // Send theoretical mixed formula to pricing
-       const matchedFormula = optimizedFormulaTarget.match(/(\d+(?:[.,]\d+)?)[^\d]+(\d+(?:[.,]\d+)?)[^\d]+(\d+(?:[.,]\d+)?)/);
-       let nNum = 0, pNum = 0, kNum = 0;
-       if (matchedFormula) {
-           nNum = parseFloat(matchedFormula[1].replace(',', '.'));
-           pNum = parseFloat(matchedFormula[2].replace(',', '.'));
-           kNum = parseFloat(matchedFormula[3].replace(',', '.'));
-       }
-
-       // Map global macros/micros, marking only the composition ones as selected 
-       const mappedMacros = macros.map(m => ({
-           ...m,
-           selected: optimizedComposition.some(c => c.material.id === m.id)
-       }));
-       const mappedMicros = localMicros.map(m => ({
-           ...m,
-           selected: optimizedComposition.some(c => c.material.id === m.id)
-       }));
-
-       onApplyFertigranP({
-         formula: optimizedFormulaTarget,
-         selected: includeInPdf,
-         targetN: nNum,
-         targetP: pNum,
-         targetK: kNum,
-         targetS: resultingGuarantees.s,
-         targetCa: resultingGuarantees.ca,
-         macros: mappedMacros,
-         micros: mappedMicros,
-         factors: {
-             targetFormula: optimizedFormulaTarget,
-             factor: commercialFactors.factor,
-             discount: commercialFactors.discount,
-             margin: commercialFactors.margin,
-             freight: commercialFactors.freight,
-             taxRate: 0,
-             commission: commercialFactors.commission,
-             monthlyInterestRate: 0,
-             dueDate: '',
-             exemptCurrentMonth: false,
-             client: { id: '', code: '', name: '', document: '' },
-             agent: { id: '', code: '', name: '', document: '' },
-             branchId: '',
-             priceListId: '',
-             totalTons: newQuantityTons > 0 ? newQuantityTons : 1000
+    try {
+      if (!selectedFormulaId) {
+         // Send theoretical mixed formula to pricing
+         const matchedFormula = optimizedFormulaTarget.match(/(\d+(?:[.,]\d+)?)[^\d]+(\d+(?:[.,]\d+)?)[^\d]+(\d+(?:[.,]\d+)?)/);
+         let nNum = 0, pNum = 0, kNum = 0;
+         if (matchedFormula) {
+             nNum = parseFloat(matchedFormula[1].replace(',', '.'));
+             pNum = parseFloat(matchedFormula[2].replace(',', '.'));
+             kNum = parseFloat(matchedFormula[3].replace(',', '.'));
          }
-       });
-    } else if (selectedFormula) {
-      // Send certified formula to pricing
-      onApplyFertigranP({
-         formula: selectedFormula.nome,
-         selected: includeInPdf,
-         targetN: selectedFormula.npk_n,
-         targetP: selectedFormula.npk_p,
-         targetK: selectedFormula.npk_k,
-         targetCa: selectedFormula.ca,
-         targetS: selectedFormula.s,
-         macros: macros.map(m => ({ ...m })),
-         micros: localMicros.map(m => ({ ...m })),
-         factors: {
-             targetFormula: selectedFormula.nome,
-             factor: commercialFactors.factor,
-             discount: commercialFactors.discount,
-             margin: commercialFactors.margin,
-             freight: commercialFactors.freight,
-             taxRate: 0,
-             commission: commercialFactors.commission,
-             monthlyInterestRate: 0,
-             dueDate: '',
-             exemptCurrentMonth: false,
-             client: { id: '', code: '', name: '', document: '' },
-             agent: { id: '', code: '', name: '', document: '' },
-             branchId: '',
-             priceListId: '',
-             totalTons: newQuantityTons > 0 ? newQuantityTons : 1000
-         }
-       });
+
+         // Map global macros/micros, marking only the composition ones as selected 
+         const mappedMacros = localMacros.map(m => ({
+             ...m,
+             selected: optimizedComposition.some(c => c.material.id === m.id)
+         }));
+         const mappedMicros = localMicros.map(m => ({
+             ...m,
+             selected: optimizedComposition.some(c => c.material.id === m.id)
+         }));
+
+         onApplyFertigranP({
+           formula: optimizedFormulaTarget,
+           selected: includeInPdf,
+           targetN: nNum,
+           targetP: pNum,
+           targetK: kNum,
+           targetS: resultingGuarantees.s,
+           targetCa: resultingGuarantees.ca,
+           macros: mappedMacros,
+           micros: mappedMicros,
+           factors: {
+               targetFormula: optimizedFormulaTarget,
+               factor: commercialFactors.factor,
+               discount: commercialFactors.discount,
+               margin: commercialFactors.margin,
+               freight: commercialFactors.freight,
+               taxRate: 0,
+               commission: commercialFactors.commission,
+               monthlyInterestRate: 0,
+               dueDate: '',
+               exemptCurrentMonth: false,
+               client: { id: '', code: '', name: '', document: '' },
+               agent: { id: '', code: '', name: '', document: '' },
+               branchId: '',
+               priceListId: '',
+               totalTons: newQuantityTons > 0 ? newQuantityTons : 1000
+           }
+         });
+      } else if (selectedFormula) {
+        // Send certified formula to pricing
+        onApplyFertigranP({
+           formula: selectedFormula.nome,
+           selected: includeInPdf,
+           targetN: selectedFormula.npk_n,
+           targetP: selectedFormula.npk_p,
+           targetK: selectedFormula.npk_k,
+           targetCa: selectedFormula.ca,
+           targetS: selectedFormula.s,
+           macros: localMacros, // For pre-defined formulas, all localMacros/Micros are passed as is
+           micros: localMicros,
+           factors: {
+               targetFormula: selectedFormula.nome,
+               factor: commercialFactors.factor,
+               discount: commercialFactors.discount,
+               margin: commercialFactors.margin,
+               freight: commercialFactors.freight,
+               taxRate: 0,
+               commission: commercialFactors.commission,
+               monthlyInterestRate: 0,
+               dueDate: '',
+               exemptCurrentMonth: false,
+               client: { id: '', code: '', name: '', document: '' },
+               agent: { id: '', code: '', name: '', document: '' },
+               branchId: '',
+               priceListId: '',
+               totalTons: newQuantityTons > 0 ? newQuantityTons : 1000
+           }
+         });
+      } else {
+        alert("Fórmula selecionada não encontrada.");
+        return;
+      }
+      
+      onClose();
+    } catch (err) {
+      console.error('Erro ao enviar para precificação:', err);
+      alert('Ocorreu um erro ao enviar os dados para a calculadora.');
     }
-    
-    onClose();
   };
 
   if (!isOpen) return null;
@@ -466,7 +501,23 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
             <div className="p-4 bg-amber-50/30 rounded-lg border border-amber-100">
               <p className="text-[10px] text-stone-500 mb-3 font-medium">Selecione os micros que deseja incluir na nova formulação Fertigran P:</p>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {localMicros.map(m => (
+                  {localMacros.map(m => (
+                    <div key={m.id} className="flex items-center justify-between p-2 bg-stone-50 rounded border border-stone-200">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={m.selected}
+                          onChange={(e) => {
+                            setLocalMacros(prev => prev.map(p => p.id === m.id ? { ...p, selected: e.target.checked } : p));
+                          }}
+                          className="w-4 h-4 text-indigo-600 rounded border-stone-300 focus:ring-indigo-500"
+                        />
+                        <span className="text-sm font-medium text-stone-700">{m.name}</span>
+                      </div>
+                      <span className="text-xs font-mono text-stone-400">{m.n}-{m.p}-{m.k}</span>
+                    </div>
+                  ))}
+                  {localMicros.map(m => (
                   <label key={m.id} className="flex items-center gap-2 p-2 bg-white border border-amber-100 rounded-lg cursor-pointer hover:bg-amber-50 transition-colors">
                     <input 
                       type="checkbox"

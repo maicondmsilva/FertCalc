@@ -159,8 +159,14 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
   };
 
   const processDeletionApproval = async (id: string, newStatus: 'Aprovada' | 'Reprovada', reason: string) => {
+    console.log('Iniciando processamento de exclusão...', { id, newStatus });
+    
     const pricing = allPricings.find(p => p.id === id);
-    if (!pricing || !pricing.deletionRequest) return;
+    if (!pricing || !pricing.deletionRequest) {
+      console.error('Precificação ou pedido de exclusão não encontrado:', { id, pricing });
+      showError('Ocorreu um erro: registro de exclusão não encontrado.');
+      return;
+    }
 
     const historyEntry = {
       date: new Date().toISOString(),
@@ -182,14 +188,19 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
         history: [...(pricing.history || []), historyEntry]
       } as any);
 
-      await createNotification({
-        userId: pricing.userId,
-        title: `Solicitação de Exclusão ${newStatus === 'Aprovada' ? 'Aprovada' : 'Reprovada'}`,
-        message: `Sua solicitação de exclusão para a precificação de ${pricing.factors.client.name} foi ${newStatus.toLowerCase()}.${newStatus === 'Reprovada' ? ` Motivo: ${reason}` : ''}`,
-        date: new Date().toISOString(),
-        read: false,
-        type: 'pricing_approval',
-      });
+      // Enviar notificação para o usuário que solicitou
+      try {
+        await createNotification({
+          userId: pricing.userId,
+          title: `Solicitação de Exclusão ${newStatus === 'Aprovada' ? 'Aprovada' : 'Reprovada'}`,
+          message: `Sua solicitação de exclusão para a precificação ${pricing.formattedCod || ''} de ${pricing.factors?.client?.name || 'Cliente'} foi ${newStatus.toLowerCase()}.${newStatus === 'Reprovada' ? ` Motivo: ${reason}` : ''}`,
+          date: new Date().toISOString(),
+          read: false,
+          type: 'pricing_approval',
+        });
+      } catch (notifyErr) {
+        console.warn('Falha ao enviar notificação (operação principal concluída):', notifyErr);
+      }
 
       setAllPricings(prev => prev.map(p => p.id === id ? {
         ...p,
@@ -197,9 +208,11 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
         status: newStatus === 'Aprovada' ? 'Excluída' : p.status,
         history: [...(p.history || []), historyEntry]
       } : p));
+      
       showSuccess(`Solicitação de exclusão ${newStatus.toLowerCase()} com sucesso!`);
-    } catch {
-      showError('Erro ao processar aprovação da exclusão.');
+    } catch (err) {
+      console.error('Erro ao processar aprovação da exclusão:', err);
+      showError('Erro ao processar aprovação da exclusão no servidor.');
     }
   };
 
