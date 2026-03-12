@@ -159,11 +159,8 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
   };
 
   const processDeletionApproval = async (id: string, newStatus: 'Aprovada' | 'Reprovada', reason: string) => {
-    console.log('Iniciando processamento de exclusão...', { id, newStatus });
-    
     const pricing = allPricings.find(p => p.id === id);
     if (!pricing || !pricing.deletionRequest) {
-      console.error('Precificação ou pedido de exclusão não encontrado:', { id, pricing });
       showError('Ocorreu um erro: registro de exclusão não encontrado.');
       return;
     }
@@ -179,6 +176,8 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
       const updatedDeletionRequest = {
         ...pricing.deletionRequest,
         status: newStatus,
+        approverName: currentUser.name,
+        approverDate: new Date().toISOString(),
         date: new Date().toISOString()
       };
 
@@ -188,7 +187,6 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
         history: [...(pricing.history || []), historyEntry]
       } as any);
 
-      // Enviar notificação para o usuário que solicitou
       try {
         await createNotification({
           userId: pricing.userId,
@@ -199,16 +197,17 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
           type: 'pricing_approval',
         });
       } catch (notifyErr) {
-        console.warn('Falha ao enviar notificação (operação principal concluída):', notifyErr);
+        console.warn('Falha ao enviar notificação:', notifyErr);
       }
 
-      setAllPricings(prev => prev.map(p => p.id === id ? {
+      const updatedPricings = allPricings.map(p => p.id === id ? {
         ...p,
         deletionRequest: updatedDeletionRequest,
         status: newStatus === 'Aprovada' ? 'Excluída' : p.status,
         history: [...(p.history || []), historyEntry]
-      } : p));
-      
+      } : p);
+
+      setAllPricings(updatedPricings);
       showSuccess(`Solicitação de exclusão ${newStatus.toLowerCase()} com sucesso!`);
     } catch (err) {
       console.error('Erro ao processar aprovação da exclusão:', err);

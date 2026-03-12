@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import solver from 'javascript-lp-solver';
 import { Plus, Trash2, Save, AlertTriangle, CheckCircle2, Calculator as CalculatorIcon, Building2, Database, Search, User, UserCheck, Tag, LayoutDashboard, Settings, X, Beaker } from 'lucide-react';
 import { RawMaterial, PricingFactors, PricingRecord, PricingSummary, Branch, PriceList, Client, Agent, User as AppUser, PricingHistoryEntry, TargetFormula, IncompatibilityRule, SavedFormula } from '../types';
-import { getClients, getAgents, getBranches, getPriceLists, getIncompatibilityRules, createPricingRecord, updatePricingRecord, createSavedFormula, getSavedFormulas, updateSavedFormula, createNotification, getUsers, getManagersOfUser } from '../services/db';
+import { getClients, getAgents, getBranches, getPriceLists, getIncompatibilityRules, createPricingRecord, updatePricingRecord, createSavedFormula, getSavedFormulas, updateSavedFormula, createNotification, getUsers, getManagersOfUser, getCompatibilityCategories } from '../services/db';
 import { useToast } from './Toast';
 import { formatNPK } from '../utils/formatters';
 import { FertigranPComparisonModal } from './FertigranPComparisonModal';
@@ -54,6 +54,8 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
   const [macros, setMacros] = useState<RawMaterial[]>(defaultMacros);
   const [micros, setMicros] = useState<RawMaterial[]>(defaultMicros);
   const [incompatibilityRules, setIncompatibilityRules] = useState<IncompatibilityRule[]>([]);
+  const [compCategories, setCompCategories] = useState<any[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
 
   const isLocked = initialData && initialData.status !== 'Em Andamento';
 
@@ -120,18 +122,20 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
 
   useEffect(() => {
     const loadData = async () => {
-      const [savedBranches, savedLists, savedClients, savedAgents, savedRules] = await Promise.all([
+      const [savedBranches, savedLists, savedClients, savedAgents, savedRules, savedCategories] = await Promise.all([
         getBranches(),
         getPriceLists(),
         getClients(),
         getAgents(),
         getIncompatibilityRules(),
+        getCompatibilityCategories(),
       ]);
       setBranches(savedBranches);
       setPriceLists(savedLists);
       setAvailableClients(savedClients);
       setAvailableAgents(savedAgents);
       setIncompatibilityRules(savedRules);
+      setCompCategories(savedCategories);
 
       if (savedBranches.length > 0 && !factors.branchId) {
         const firstBranch = savedBranches[0];
@@ -148,6 +152,19 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
   }, []);
 
   const [currency, setCurrency] = useState<'BRL' | 'USD'>('BRL');
+
+  useEffect(() => {
+    if (selectedCategoryId !== 'all') {
+      setMacros(prev => prev.map(m => ({
+        ...m,
+        selected: m.categories?.includes(selectedCategoryId) || false
+      })));
+      setMicros(prev => prev.map(m => ({
+        ...m,
+        selected: m.categories?.includes(selectedCategoryId) || false
+      })));
+    }
+  }, [selectedCategoryId]);
 
   // Update prices when list changes
   useEffect(() => {
@@ -595,33 +612,52 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
     try {
       let savedRecord: PricingRecord;
       const isNew = !initialData;
+      const wasApproved = initialData?.approvalStatus === 'Aprovada';
+
       if (initialData) {
         await updatePricingRecord(initialData.id, record);
         savedRecord = { ...record, id: initialData.id };
-      } else {
-        savedRecord = await createPricingRecord(record);
-        if (isNew) {
-          // Emit notification for new pricing to all approvers
-          const managers = await getManagersOfUser(currentUser.id);
-          const approvers = await getUsers();
-          const masterAdmins = approvers.filter(u => u.role === 'master' || u.role === 'admin' || (u.permissions as any)?.approvals_canApprove === true);
-          
-          const notifyIds = new Set([...managers.map(m => m.id), ...masterAdmins.map(a => a.id)]);
+
+        if (wasApproved) {
+          const managersList = await getManagersOfUser(currentUser.id);
+          const approversList = await getUsers();
+          const masterAdmins = approversList.filter(u => u.role === 'master' || u.role === 'admin' || (u.permissions as any)?.approvals_canApprove === true);
+
+          const notifyIds = new Set([...managersList.map(m => m.id), ...masterAdmins.map(a => a.id)]);
 
           for (const targetId of notifyIds) {
             await createNotification({
               userId: targetId,
-              title: 'Nova Precificação Pendente',
-              message: `${currentUser.name} gerou uma nova precificação para ${factors.client.name} que requer aprovação.`,
+              title: 'Precificação Aprovada Alterada',
+              message: `${currentUser.name} alterou a precificação aprovada para ${factors.client.name}. Revisão necessária para nova aprovação.`,
               date: new Date().toISOString(),
               read: false,
               type: 'pricing_approval',
-              dataId: record.id
+              dataId: initialData.id
             });
           }
         }
+      } else {
+        savedRecord = await createPricingRecord(record);
+        const managersList = await getManagersOfUser(currentUser.id);
+        const approversList = await getUsers();
+        const masterAdmins = approversList.filter(u => u.role === 'master' || u.role === 'admin' || (u.permissions as any)?.approvals_canApprove === true);
+
+        const notifyIds = new Set([...managersList.map(m => m.id), ...masterAdmins.map(a => a.id)]);
+
+        for (const targetId of notifyIds) {
+          await createNotification({
+            userId: targetId,
+            title: 'Nova Precificação Pendente',
+            message: `${currentUser.name} gerou uma nova precificação para ${factors.client.name} que requer aprovação.`,
+            date: new Date().toISOString(),
+            read: false,
+            type: 'pricing_approval',
+            dataId: savedRecord.id
+          });
+        }
       }
-      showSuccess('Precificação salva com sucesso!');
+      showSuccess(`Precificação ${wasApproved ? 'alterada' : 'salva'} com sucesso!${wasApproved ? ' Notificação enviada aos gerentes.' : ''}`);
       setClientSearch('');
       setAgentSearch('');
       if (onClearEditing) onClearEditing();
@@ -1373,7 +1409,24 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
         {/* Macronutrients */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200 overflow-x-auto">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold text-stone-800">Macronutrientes</h2>
+            <div className="flex-1">
+              <h2 className="text-lg font-semibold text-stone-800 mb-3">Macronutrientes</h2>
+              {compCategories.length > 0 && (
+                <div className="flex items-center gap-2 mb-4">
+                  <label className="text-xs font-bold text-stone-600">Filtrar por Categoria:</label>
+                  <select
+                    value={selectedCategoryId}
+                    onChange={(e) => setSelectedCategoryId(e.target.value)}
+                    className="px-3 py-2 border border-stone-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 bg-white"
+                  >
+                    <option value="all">Todos os Materiais</option>
+                    {compCategories.map(cat => (
+                      <option key={cat.id} value={cat.id}>{cat.nome}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setMicrosInGear(v => !v)}
@@ -1543,7 +1596,7 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
         {/* Micronutrients */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200 overflow-x-auto">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold text-stone-800">Micronutrientes</h2>
+            <h2 className="text-lg font-semibold text-stone-800 mb-3">Micronutrientes</h2>
             {!isLocked && (
               <button onClick={addMicro} className="text-sm bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg font-medium hover:bg-emerald-100 flex items-center">
                 <Plus className="w-4 h-4 mr-1" /> Adicionar

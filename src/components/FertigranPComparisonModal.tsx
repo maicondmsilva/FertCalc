@@ -272,20 +272,24 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
 
    const handleSendToPricing = async () => {
     if (isSaving) return;
-    
-    console.log('Iniciando Enviar para Precificação...', { optimizedDose, selectedFormulaId });
 
     if (optimizedDose <= 0) {
       alert("Nenhum cálculo válido para enviar. A dose resultante deve ser maior que zero. Verifique se o cálculo foi concluído com sucesso.");
       return;
     }
 
-    // Save history first
-    await handleSave();
-    
+    if (dose === 0 || hectares === 0) {
+      alert("Preencha a área (hectares) e a dose original antes de enviar.");
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveSuccess(false);
+
     try {
+      await handleSave();
+
       if (!selectedFormulaId) {
-         // Send theoretical mixed formula to pricing
          const matchedFormula = optimizedFormulaTarget.match(/(\d+(?:[.,]\d+)?)[^\d]+(\d+(?:[.,]\d+)?)[^\d]+(\d+(?:[.,]\d+)?)/);
          let nNum = 0, pNum = 0, kNum = 0;
          if (matchedFormula) {
@@ -294,7 +298,6 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
              kNum = parseFloat(matchedFormula[3].replace(',', '.'));
          }
 
-         // Map global macros/micros, marking only the composition ones as selected 
          const mappedMacros = localMacros.map(m => ({
              ...m,
              selected: optimizedComposition.some(c => c.material.id === m.id)
@@ -333,7 +336,6 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
            }
          });
       } else if (selectedFormula) {
-        // Send certified formula to pricing
         onApplyFertigranP({
            formula: selectedFormula.nome,
            selected: includeInPdf,
@@ -342,7 +344,7 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
            targetK: selectedFormula.npk_k,
            targetCa: selectedFormula.ca,
            targetS: selectedFormula.s,
-           macros: localMacros, // For pre-defined formulas, all localMacros/Micros are passed as is
+           macros: localMacros,
            micros: localMicros,
            factors: {
                targetFormula: selectedFormula.nome,
@@ -364,13 +366,17 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
          });
       } else {
         alert("Fórmula selecionada não encontrada.");
+        setIsSaving(false);
         return;
       }
-      
-      onClose();
+
+      setTimeout(() => {
+        onClose();
+      }, 500);
     } catch (err) {
       console.error('Erro ao enviar para precificação:', err);
       alert('Ocorreu um erro ao enviar os dados para a calculadora.');
+      setIsSaving(false);
     }
   };
 
@@ -518,17 +524,28 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
                     </div>
                   ))}
                   {localMicros.map(m => (
-                  <label key={m.id} className="flex items-center gap-2 p-2 bg-white border border-amber-100 rounded-lg cursor-pointer hover:bg-amber-50 transition-colors">
-                    <input 
-                      type="checkbox"
-                      checked={m.selected}
-                      onChange={() => {
-                        setLocalMicros(prev => prev.map(mm => mm.id === m.id ? { ...mm, selected: !mm.selected } : mm));
+                  <div key={m.id} className="flex flex-col gap-1 p-2 bg-white border border-amber-100 rounded-lg hover:bg-amber-50 transition-colors">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={m.selected}
+                        onChange={() => {
+                          setLocalMicros(prev => prev.map(mm => mm.id === m.id ? { ...mm, selected: !mm.selected } : mm));
+                        }}
+                        className="rounded text-amber-600 focus:ring-amber-500"
+                      />
+                      <span className="text-xs font-bold text-stone-700 truncate">{m.name}</span>
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="Qtd (kg)"
+                      value={m.quantity || 0}
+                      onChange={(e) => {
+                        setLocalMicros(prev => prev.map(mm => mm.id === m.id ? { ...mm, quantity: Number(e.target.value) || 0 } : mm));
                       }}
-                      className="rounded text-amber-600 focus:ring-amber-500"
+                      className="w-full px-2 py-1 text-xs border border-amber-200 rounded bg-amber-50 focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
                     />
-                    <span className="text-xs font-bold text-stone-700 truncate">{m.name}</span>
-                  </label>
+                  </div>
                 ))}
               </div>
             </div>

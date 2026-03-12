@@ -86,24 +86,56 @@ export default function Goals({ currentUser }: GoalsProps) {
         year: newGoal.year || new Date().getFullYear(),
         status: 'Pendente'
       });
+
+      const approvers = await getUsers();
+      const masterAdmins = approvers.filter(u => u.role === 'master' || u.role === 'admin' || (u.permissions as any)?.approvals_canApprove === true);
+
       if (currentUser.role === 'user') {
         const managers = await getManagersOfUser(currentUser.id);
-        const approvers = await getUsers();
-        const masterAdmins = approvers.filter(u => u.role === 'master' || u.role === 'admin' || (u.permissions as any)?.approvals_canApprove === true);
-        
         const notifyIds = new Set([...managers.map(m => m.id), ...masterAdmins.map(a => a.id)]);
-        
+
         for (const targetId of notifyIds) {
           await createNotification({
             userId: targetId,
             title: 'Nova Meta Pendente',
-            message: `${currentUser.name} criou uma nova meta de ${Number(newGoal.targetValue).toLocaleString('pt-BR')} Toneladas (${newGoal.type === 'monthly' ? 'Mensal' : 'Anual'}).`,
+            message: `${currentUser.name} criou uma nova meta de ${Number(newGoal.targetValue).toLocaleString('pt-BR')} Toneladas para ${newGoal.type === 'monthly' ? `Mês ${newGoal.month}/${newGoal.year}` : `Ano ${newGoal.year}`}.`,
+            date: new Date().toISOString(),
+            read: false,
+            type: 'goal_approval'
+          });
+        }
+      } else if (currentUser.role === 'manager' && userId !== currentUser.id) {
+        const targetUser = allUsers.find(u => u.id === userId);
+        const userManagers = await getManagersOfUser(userId);
+        const notifyIds = new Set([...userManagers.map(m => m.id), ...masterAdmins.map(a => a.id), userId]);
+
+        for (const targetId of notifyIds) {
+          await createNotification({
+            userId: targetId,
+            title: 'Nova Meta Criada',
+            message: `${currentUser.name} criou uma nova meta para ${targetUser?.name || 'você'}: ${Number(newGoal.targetValue).toLocaleString('pt-BR')} toneladas para ${newGoal.type === 'monthly' ? `Mês ${newGoal.month}/${newGoal.year}` : `Ano ${newGoal.year}`}.`,
+            date: new Date().toISOString(),
+            read: false,
+            type: 'goal_approval'
+          });
+        }
+      } else if ((currentUser.role === 'master' || currentUser.role === 'admin') && userId !== currentUser.id) {
+        const targetUser = allUsers.find(u => u.id === userId);
+        const userManagers = await getManagersOfUser(userId);
+        const notifyIds = new Set([...userManagers.map(m => m.id), userId]);
+
+        for (const targetId of notifyIds) {
+          await createNotification({
+            userId: targetId,
+            title: 'Nova Meta Criada',
+            message: `${currentUser.name} criou uma nova meta para ${targetUser?.name || 'você'}: ${Number(newGoal.targetValue).toLocaleString('pt-BR')} toneladas para ${newGoal.type === 'monthly' ? `Mês ${newGoal.month}/${newGoal.year}` : `Ano ${newGoal.year}`}.`,
             date: new Date().toISOString(),
             read: false,
             type: 'goal_approval'
           });
         }
       }
+
       showSuccess('Meta criada com sucesso!');
       setIsAddingGoal(false);
       await loadData();
@@ -127,6 +159,26 @@ export default function Goals({ currentUser }: GoalsProps) {
   const handleDeleteGoal = async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir esta meta? Esta ação não pode ser desfeita.')) return;
     try {
+      const goalToDelete = goals.find(g => g.id === id);
+      if (goalToDelete && currentUser.role === 'manager') {
+        const masterAdmins = allUsers.filter(u => u.role === 'master' || u.role === 'admin' || (u.permissions as any)?.approvals_canApprove === true);
+        const managersList = await getManagersOfUser(goalToDelete.userId);
+
+        const notifyIds = new Set([...masterAdmins.map(a => a.id), ...managersList.map(m => m.id)]);
+
+        for (const targetId of notifyIds) {
+          await createNotification({
+            userId: targetId,
+            title: 'Meta Excluída',
+            message: `${currentUser.name} excluiu a meta de ${goalToDelete.targetValue.toLocaleString('pt-BR')} toneladas de ${goalToDelete.userName}.`,
+            date: new Date().toISOString(),
+            read: false,
+            type: 'goal_approval',
+            dataId: id
+          });
+        }
+      }
+
       await deleteGoal(id);
       showSuccess('Meta excluída com sucesso!');
       await loadData();
