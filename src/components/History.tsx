@@ -364,15 +364,24 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
         {filteredPricings
           .filter(p => activeTab === 'deleted' ? p.status === 'Excluída' : p.status !== 'Excluída')
           .map(p => (
-            <div key={p.id} id={`pricing-card-${p.id}`} className={`bg-white rounded-xl shadow-sm border ${p.status === 'Excluída' ? 'border-red-100 opacity-75' : 'border-stone-200 hover:shadow-md'} transition-shadow cursor-pointer relative`} onClick={() => setSelectedPricing(p)}>
+            <div key={p.id} id={`pricing-card-${p.id}`} className={`bg-white rounded-xl shadow-sm border ${
+                p.status === 'Excluída' ? 'border-red-100 opacity-75' : 
+                p.approvalStatus === 'Reprovada' ? 'border-red-500 bg-red-50/20' : 
+                'border-stone-200 hover:shadow-md'
+              } transition-shadow cursor-pointer relative`} onClick={() => setSelectedPricing(p)}>
               {p.transferToUserId && (
                 <div className="absolute top-0 right-0 bg-amber-500 text-white text-[10px] font-black px-3 py-1 uppercase tracking-tighter rounded-bl-lg shadow-sm z-10 animate-pulse">
                   {p.transferToUserId === currentUser.id ? 'PENDENTE ACEITE' : 'TRANSFERÊNCIA ENVIADA'}
                 </div>
               )}
               {p.deletionRequest?.status === 'Pendente' && (
-                <div className="absolute top-0 left-0 right-0 bg-amber-500 text-white text-[10px] font-bold py-1 px-3 flex items-center justify-center gap-2 z-10">
+                <div className="absolute top-0 left-0 right-0 bg-amber-500 text-white text-[10px] font-bold py-1 px-3 flex items-center justify-center gap-2 z-10 transition-colors">
                   <AlertTriangle className="w-3 h-3" /> Exclusão Pendente de Aprovação
+                </div>
+              )}
+              {p.approvalStatus === 'Reprovada' && (
+                <div className="absolute top-0 left-0 right-0 bg-red-600 text-white text-[10px] font-bold py-1 px-3 flex items-center justify-center gap-2 z-10 animate-pulse">
+                  <XCircle className="w-3 h-3" /> REPROVADA - REVISE OS DADOS
                 </div>
               )}
               <div className="p-5 border-b border-stone-100">
@@ -430,6 +439,15 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                     <div className="flex items-start mt-2 p-2 bg-stone-50 rounded border border-stone-100 italic text-stone-500 text-[10px] line-clamp-2">
                       <Info className="w-3 h-3 mr-1 mt-0.5 flex-shrink-0" />
                       {p.factors.commercialObservation}
+                    </div>
+                  )}
+                  {p.approvalStatus === 'Reprovada' && p.rejectionObservation && (
+                    <div className="mt-3 p-3 bg-red-100/50 border border-red-200 rounded-lg animate-in slide-in-from-top-1">
+                      <p className="text-[10px] font-bold text-red-700 uppercase mb-1 flex items-center gap-1">
+                        <XCircle className="w-3 h-3" /> Motivo da Reprovação:
+                      </p>
+                      <p className="text-sm text-red-900 font-medium">"{p.rejectionObservation}"</p>
+                      <p className="text-[9px] text-red-500 mt-2 italic font-bold">Clique em editar para corrigir e reenviar.</p>
                     </div>
                   )}
                 </div>

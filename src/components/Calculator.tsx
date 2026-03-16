@@ -619,10 +619,11 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
       userCode: currentUser.customCode,
       date: initialData?.date || new Date().toISOString(),
       status,
-      approvalStatus: initialData?.approvalStatus || 'Pendente',
+      approvalStatus: initialData?.approvalStatus === 'Reprovada' ? 'Pendente' : (initialData?.approvalStatus || 'Pendente'),
       macros,
       micros,
       factors,
+      rejectionObservation: initialData?.approvalStatus === 'Reprovada' ? '' : initialData?.rejectionObservation,
       summary: updatedCalculations.find(c => c.selected)?.summary || {
         totalWeight: 0, baseCost: 0, basePrice: 0, interestValue: 0,
         taxValue: 0, commissionValue: 0, freightValue: 0, finalPrice: 0,
@@ -637,12 +638,13 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
       let savedRecord: PricingRecord;
       const isNew = !initialData;
       const wasApproved = initialData?.approvalStatus === 'Aprovada';
+      const wasRejected = initialData?.approvalStatus === 'Reprovada';
 
       if (initialData) {
         await updatePricingRecord(initialData.id, record);
         savedRecord = { ...record, id: initialData.id };
 
-        if (wasApproved) {
+        if (wasApproved || wasRejected) {
           const managersList = await getManagersOfUser(currentUser.id);
           const approversList = await getUsers();
           const masterAdmins = approversList.filter(u => u.role === 'master' || u.role === 'admin' || (u.permissions as any)?.approvals_canApprove === true);
@@ -652,8 +654,10 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
           for (const targetId of notifyIds) {
             await createNotification({
               userId: targetId,
-              title: 'Precificação Aprovada Alterada',
-              message: `${currentUser.name} alterou a precificação aprovada para ${factors.client.name}. Revisão necessária para nova aprovação.`,
+              title: wasApproved ? 'Precificação Aprovada Alterada' : 'Reenvio de Precificação Reprovada',
+              message: wasApproved 
+                ? `${currentUser.name} alterou a precificação aprovada para ${factors.client.name}. Revisão necessária para nova aprovação.`
+                : `${currentUser.name} corrigiu e reenviou a precificação de ${factors.client.name} que havia sido reprovada.`,
               date: new Date().toISOString(),
               read: false,
               type: 'pricing_approval',
@@ -681,7 +685,7 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
           });
         }
       }
-      showSuccess(`Precificação ${wasApproved ? 'alterada' : 'salva'} com sucesso!${wasApproved ? ' Notificação enviada aos gerentes.' : ''}`);
+      showSuccess(`Precificação ${(wasApproved || wasRejected) ? 'atualizada' : 'salva'} com sucesso!${(wasApproved || wasRejected) ? ' Notificação enviada aos gerentes.' : ''}`);
       setClientSearch('');
       setAgentSearch('');
       if (onClearEditing) onClearEditing();

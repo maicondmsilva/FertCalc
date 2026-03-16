@@ -21,7 +21,8 @@ import {
   Goal,
   Notification,
   FertigranPFormula,
-  ComparisonHistory
+  ComparisonHistory,
+  CompatibilityCategory
 } from '../types';
 
 // ============================================================
@@ -647,6 +648,7 @@ function pricingRecordToDb(r: Partial<PricingRecord>) {
   if (r.transferToUserId !== undefined) d.transfer_to_user_id = r.transferToUserId;
   if (r.transferToUserName !== undefined) d.transfer_to_user_name = r.transferToUserName;
   if (r.deletionRequest !== undefined) d.deletion_request = r.deletionRequest;
+  if (r.rejectionObservation !== undefined) d.rejection_observation = r.rejectionObservation;
   return d;
 }
 
@@ -679,6 +681,7 @@ function mapPricingRecord(d: any): PricingRecord {
     transferToUserId: d.transfer_to_user_id,
     transferToUserName: d.transfer_to_user_name,
     deletionRequest: d.deletion_request,
+    rejectionObservation: d.rejection_observation,
   };
 }
 

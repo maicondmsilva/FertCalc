@@ -33,36 +33,31 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
   const canApproveTotal = currentUser.role === 'master' || currentUser.role === 'admin' || (currentUser.permissions as any)?.approvals_canApprove === true;
   const canApprove = canApproveTotal || currentUser.role === 'manager';
 
+  const loadData = async () => {
+    const [fetchedPricings, allGoals, settings] = await Promise.all([
+      getPricingRecords(), getGoals(), getAppSettings()
+    ]);
+    if (settings) setAppSettings(settings);
+
+    let filteredPricings: PricingRecord[] = [];
+    let filteredGoals: Goal[] = [];
+
+    const managedIds = currentUser.managedUserIds || [];
+    if (canApproveTotal) {
+      filteredPricings = fetchedPricings;
+      filteredGoals = allGoals.filter(g => g.status === 'Pendente');
+    } else if (currentUser.role === 'manager') {
+      filteredPricings = fetchedPricings.filter(p => (p.userId === currentUser.id || managedIds.includes(p.userId)));
+      filteredGoals = allGoals.filter(g => (g.userId === currentUser.id || managedIds.includes(g.userId)) && g.status === 'Pendente');
+    } else {
+      filteredPricings = fetchedPricings.filter(p => p.userId === currentUser.id);
+      filteredGoals = allGoals.filter(g => g.userId === currentUser.id && g.status === 'Pendente');
+    }
+    setAllPricings(filteredPricings);
+    setGoals(filteredGoals);
+  };
+
   useEffect(() => {
-    const loadData = async () => {
-      const [fetchedPricings, allGoals, settings] = await Promise.all([
-        getPricingRecords(), getGoals(), getAppSettings()
-      ]);
-      if (settings) setAppSettings(settings);
-
-      let filteredPricings: PricingRecord[] = [];
-      let filteredGoals: Goal[] = [];
-
-      const managedIds = currentUser.managedUserIds || [];
-      if (canApproveTotal) {
-        filteredPricings = fetchedPricings;
-        filteredGoals = allGoals.filter(g => g.status === 'Pendente');
-      } else if (currentUser.role === 'manager') {
-        filteredPricings = fetchedPricings.filter(p => (p.userId === currentUser.id || managedIds.includes(p.userId)));
-        filteredGoals = allGoals.filter(g => (g.userId === currentUser.id || managedIds.includes(g.userId)) && g.status === 'Pendente');
-      } else {
-        filteredPricings = fetchedPricings.filter(p => p.userId === currentUser.id);
-        filteredGoals = allGoals.filter(g => g.userId === currentUser.id && g.status === 'Pendente');
-      }
-      setAllPricings(filteredPricings);
-      setGoals(filteredGoals);
-      console.log('Filtro Aprovações:', { 
-        role: currentUser.role, 
-        managedIds, 
-        pricings: filteredPricings.length, 
-        goals: filteredGoals.length 
-      });
-    };
     loadData();
   }, [currentUser]);
 
@@ -111,6 +106,7 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
     try {
       await updatePricingRecord(id, {
         approvalStatus: newStatus,
+        rejectionObservation: newStatus === 'Reprovada' ? reason : '',
         history: [...(pricing.history || []), historyEntry]
       } as any);
 
@@ -126,6 +122,7 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
       setAllPricings(prev => prev.map(p => p.id === id ? { ...p, approvalStatus: newStatus, history: [...(p.history || []), historyEntry] } : p));
       if (selectedPricing?.id === id) setSelectedPricing(null);
       showSuccess(`Precificação ${newStatus.toLowerCase()} com sucesso!`);
+      loadData(); // Refresh to ensure sync
     } catch {
       showError('Erro ao processar aprovação.');
     }
@@ -209,6 +206,7 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
 
       setAllPricings(updatedPricings);
       showSuccess(`Solicitação de exclusão ${newStatus.toLowerCase()} com sucesso!`);
+      loadData(); // Refresh to ensure sync
     } catch (err: any) {
       console.error('Erro ao processar aprovação da exclusão:', err);
       showError(`Erro ao processar aprovação da exclusão: ${err.message || 'Erro no servidor'}`);
@@ -336,8 +334,12 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
                 </div>
                 {canApprove && (
                   <div className="flex gap-2">
-                    <button onClick={() => handlePricingDeletionApproval(p.id, 'Aprovada')} className="px-4 py-2 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700">Aprovar Exclusão</button>
-                    <button onClick={() => handlePricingDeletionApproval(p.id, 'Reprovada')} className="px-4 py-2 bg-stone-800 text-white text-xs font-bold rounded-lg hover:bg-stone-900">Rejeitar Pedido</button>
+                    <button onClick={() => handlePricingDeletionApproval(p.id, 'Aprovada')} className="px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 shadow-sm border border-emerald-500/20 flex items-center gap-1.5 transition-all active:scale-95">
+                      <CheckCircle className="w-3.5 h-3.5" /> Aprovar Exclusão
+                    </button>
+                    <button onClick={() => handlePricingDeletionApproval(p.id, 'Reprovada')} className="px-4 py-2 bg-stone-100 text-stone-600 text-xs font-bold rounded-lg hover:bg-stone-200 border border-stone-200 shadow-sm transition-all active:scale-95">
+                      <XCircle className="w-3.5 h-3.5" /> Rejeitar Pedido
+                    </button>
                   </div>
                 )}
               </div>

@@ -352,6 +352,7 @@ export interface PricingRecord {
   formattedCod?: string;
   transferToUserId?: string;
   transferToUserName?: string;
+  rejectionObservation?: string;
   deletionRequest?: {
     reason: string;
     requestedBy: string; // userId
