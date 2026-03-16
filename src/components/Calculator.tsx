@@ -471,20 +471,30 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
         let updatedFormula = { ...c, [field]: value };
         
         // Se a mudança for na categoria, vamos auto-selecionar os produtos
-        if (field === 'category' && value !== 'all') {
-            const newMacros = updatedFormula.macros.map(m => ({
-                ...m,
-                selected: m.categories?.includes(value) || false
-            }));
-            const newMicros = updatedFormula.micros.map(m => ({
-                ...m,
-                selected: m.categories?.includes(value) || false
-            }));
+        if (field === 'category') {
+            const isAll = value === 'all';
+            
+            // Usamos os macros e micros GLOBAIS como base para garantir que estamos filtrando os dados mais recentes
+            const newMacros = macros.map(m => {
+                const isMatch = isAll ? !m.isPremiumLine : m.categories?.includes(value);
+                return {
+                    ...m,
+                    selected: !!isMatch
+                };
+            });
+            
+            const newMicros = micros.map(m => {
+                const isMatch = isAll ? false : m.categories?.includes(value);
+                return {
+                    ...m,
+                    selected: !!isMatch
+                };
+            });
             
             updatedFormula.macros = newMacros;
             updatedFormula.micros = newMicros;
 
-            // Sync to global states so user sees checkboxes update in main tables
+            // Sincroniza com os estados globais para o usuário ver o feedback visual nas tabelas principais
             setMacros(newMacros);
             setMicros(newMicros);
         }

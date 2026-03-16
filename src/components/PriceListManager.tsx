@@ -32,6 +32,7 @@ const microToRow = (m: MicroMaterial): RawMaterial => ({
   n: 0, p: 0, k: 0, s: 0, ca: 0,
   microGuarantees: m.microGuarantees || [],
   minQty: 0, maxQty: 1000, selected: true, quantity: 0,
+  categories: m.categories,
 });
 
 // ─────────────────────────────────────────────────────────
