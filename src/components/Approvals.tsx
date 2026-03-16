@@ -209,9 +209,9 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
 
       setAllPricings(updatedPricings);
       showSuccess(`Solicitação de exclusão ${newStatus.toLowerCase()} com sucesso!`);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro ao processar aprovação da exclusão:', err);
-      showError('Erro ao processar aprovação da exclusão no servidor.');
+      showError(`Erro ao processar aprovação da exclusão: ${err.message || 'Erro no servidor'}`);
     }
   };
 

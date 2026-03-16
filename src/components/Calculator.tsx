@@ -55,7 +55,6 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
   const [micros, setMicros] = useState<RawMaterial[]>(defaultMicros);
   const [incompatibilityRules, setIncompatibilityRules] = useState<IncompatibilityRule[]>([]);
   const [compCategories, setCompCategories] = useState<any[]>([]);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
 
   const isLocked = initialData && initialData.status !== 'Em Andamento';
 
@@ -153,18 +152,6 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
 
   const [currency, setCurrency] = useState<'BRL' | 'USD'>('BRL');
 
-  useEffect(() => {
-    if (selectedCategoryId !== 'all') {
-      setMacros(prev => prev.map(m => ({
-        ...m,
-        selected: m.categories?.includes(selectedCategoryId) || false
-      })));
-      setMicros(prev => prev.map(m => ({
-        ...m,
-        selected: m.categories?.includes(selectedCategoryId) || false
-      })));
-    }
-  }, [selectedCategoryId]);
 
   // Update prices when list changes
   useEffect(() => {
@@ -478,7 +465,26 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
   };
 
   const updateCalculation = (id: string, field: keyof TargetFormula, value: any) => {
-    setCalculations(calculations.map(c => c.id === id ? { ...c, [field]: value } : c));
+    setCalculations(calculations.map(c => {
+      if (c.id === id) {
+        let updatedFormula = { ...c, [field]: value };
+        
+        // Se a mudança for na categoria, vamos auto-selecionar os produtos
+        if (field === 'category' && value !== 'all') {
+            updatedFormula.macros = updatedFormula.macros.map(m => ({
+                ...m,
+                selected: m.categories?.includes(value) || false
+            }));
+            updatedFormula.micros = updatedFormula.micros.map(m => ({
+                ...m,
+                selected: m.categories?.includes(value) || false
+            }));
+        }
+        
+        return updatedFormula;
+      }
+      return c;
+    }));
   };
 
   const handleCalcMicroChange = (calcId: string, microId: string, field: keyof RawMaterial, value: any) => {
@@ -1411,21 +1417,6 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
           <div className="flex justify-between items-center mb-4">
             <div className="flex-1">
               <h2 className="text-lg font-semibold text-stone-800 mb-3">Macronutrientes</h2>
-              {compCategories.length > 0 && (
-                <div className="flex items-center gap-2 mb-4">
-                  <label className="text-xs font-bold text-stone-600">Filtrar por Categoria:</label>
-                  <select
-                    value={selectedCategoryId}
-                    onChange={(e) => setSelectedCategoryId(e.target.value)}
-                    className="px-3 py-2 border border-stone-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 bg-white"
-                  >
-                    <option value="all">Todos os Materiais</option>
-                    {compCategories.map(cat => (
-                      <option key={cat.id} value={cat.id}>{cat.nome}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
             </div>
             <div className="flex items-center gap-2">
               <button

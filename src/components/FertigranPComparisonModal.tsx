@@ -154,6 +154,12 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
           k_eq: m.k / 10,
           weight: 1
         };
+
+        const forcedQty = Number(m.quantity) || 0;
+        if (forcedQty > 0) {
+          model.constraints[`forced_${m.id}`] = { equal: forcedQty };
+          model.variables[m.id][`forced_${m.id}`] = 1;
+        }
       });
 
       const result: any = solver.Solve(model);
@@ -262,9 +268,11 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
       });
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error saving history:', err);
-      alert('Erro ao salvar histórico de comparação.');
+      // Show more details if available
+      const errorMsg = err?.message || err?.details || 'Erro ao salvar histórico de comparação.';
+      alert(`Erro ao salvar histórico: ${errorMsg}`);
     } finally {
       setIsSaving(false);
     }
@@ -502,25 +510,36 @@ export function FertigranPComparisonModal({ isOpen, onClose, originalFormulaName
           <div className="space-y-4">
             <h3 className="text-sm font-bold text-amber-600 uppercase flex items-center gap-2">
               <span className="bg-amber-100 text-amber-700 w-6 h-6 rounded-full flex items-center justify-center text-xs">3</span>
-              Seleção de Micronutrientes
+              Seleção de Matérias-Primas
             </h3>
             <div className="p-4 bg-amber-50/30 rounded-lg border border-amber-100">
-              <p className="text-[10px] text-stone-500 mb-3 font-medium">Selecione os micros que deseja incluir na nova formulação Fertigran P:</p>
+              <p className="text-[10px] text-stone-500 mb-3 font-medium">Selecione e informe quantidades (opcional) para a formulação:</p>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {localMacros.map(m => (
-                    <div key={m.id} className="flex items-center justify-between p-2 bg-stone-50 rounded border border-stone-200">
-                      <div className="flex items-center gap-2">
+                    <div key={m.id} className="flex flex-col gap-1 p-2 bg-white border border-indigo-100 rounded-lg hover:bg-indigo-50 transition-colors">
+                      <label className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="checkbox"
                           checked={m.selected}
                           onChange={(e) => {
                             setLocalMacros(prev => prev.map(p => p.id === m.id ? { ...p, selected: e.target.checked } : p));
                           }}
-                          className="w-4 h-4 text-indigo-600 rounded border-stone-300 focus:ring-indigo-500"
+                          className="rounded text-indigo-600 focus:ring-indigo-500"
                         />
-                        <span className="text-sm font-medium text-stone-700">{m.name}</span>
+                        <span className="text-xs font-bold text-stone-700 truncate">{m.name}</span>
+                      </label>
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          placeholder="Qtd (kg)"
+                          value={m.quantity || 0}
+                          onChange={(e) => {
+                            setLocalMacros(prev => prev.map(mm => mm.id === m.id ? { ...mm, quantity: Number(e.target.value) || 0 } : mm));
+                          }}
+                          className="w-full px-2 py-1 text-xs border border-indigo-200 rounded bg-indigo-50 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                        />
+                        <span className="text-[8px] font-mono text-stone-400 shrink-0">{m.n}-{m.p}-{m.k}</span>
                       </div>
-                      <span className="text-xs font-mono text-stone-400">{m.n}-{m.p}-{m.k}</span>
                     </div>
                   ))}
                   {localMicros.map(m => (

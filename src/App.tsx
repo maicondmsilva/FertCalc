@@ -128,6 +128,34 @@ export default function App() {
     };
   }, []);
 
+  // Inactivity Timeout (10 minutes)
+  useEffect(() => {
+    if (!currentUser) return;
+
+    let timeoutId: number;
+
+    const resetTimer = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      // Logout after 10 minutes of inactivity
+      timeoutId = window.setTimeout(() => {
+        console.log('Session timed out due to inactivity');
+        handleLogout();
+        alert('Sua sessão expirou por inatividade. Por favor, entre novamente.');
+      }, 10 * 60 * 1000);
+    };
+
+    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+    events.forEach(event => window.addEventListener(event, resetTimer));
+
+    // Initialize timer
+    resetTimer();
+
+    return () => {
+      events.forEach(event => window.removeEventListener(event, resetTimer));
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [currentUser]);
+
   const handleInstallClick = () => {
     if (deferredPrompt) {
       deferredPrompt.prompt();
@@ -161,8 +189,11 @@ export default function App() {
       const { deleteAllNotifications } = await import('./services/db');
       await deleteAllNotifications(currentUser.id);
       setNotifications([]);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro ao limpar notificações:', err);
+      // The provided snippet seems to be from a different context (approvals/pricings)
+      // and would cause syntax errors if inserted directly here.
+      // Keeping the original error handling for notifications.
     }
   };
 
