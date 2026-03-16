@@ -222,7 +222,8 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
     const updatedCalculations = [...calculations];
 
     formulasToCalculate.forEach(calc => {
-      // Use per-formula micros when microsInGear, otherwise global
+      // Usar macros/micros específicos da fórmula se disponíveis (para respeitar seleções por categoria)
+      const currentMacros = (calc.macros && calc.macros.length > 0) ? calc.macros : macros;
       const currentMicros = microsInGear ? (calc.micros.length > 0 ? calc.micros : micros) : (overrideMicros || micros);
 
       const match = calc.formula.match(/(\d+(?:[.,]\d+)?)[^\d]+(\d+(?:[.,]\d+)?)[^\d]+(\d+(?:[.,]\d+)?)/);
@@ -471,14 +472,21 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
         
         // Se a mudança for na categoria, vamos auto-selecionar os produtos
         if (field === 'category' && value !== 'all') {
-            updatedFormula.macros = updatedFormula.macros.map(m => ({
+            const newMacros = updatedFormula.macros.map(m => ({
                 ...m,
                 selected: m.categories?.includes(value) || false
             }));
-            updatedFormula.micros = updatedFormula.micros.map(m => ({
+            const newMicros = updatedFormula.micros.map(m => ({
                 ...m,
                 selected: m.categories?.includes(value) || false
             }));
+            
+            updatedFormula.macros = newMacros;
+            updatedFormula.micros = newMicros;
+
+            // Sync to global states so user sees checkboxes update in main tables
+            setMacros(newMacros);
+            setMicros(newMicros);
         }
         
         return updatedFormula;
