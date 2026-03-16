@@ -258,7 +258,7 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
       // Filter by category
       if (calc.category && calc.category !== 'all') {
         availableMaterials = availableMaterials.filter(m =>
-          !m.categories || m.categories.length === 0 || m.categories.includes(calc.category as 'phosphated' | 'nitrogenous' | 'fertigran_p')
+          m.categories?.includes(calc.category!)
         );
       }
 
@@ -1047,9 +1047,9 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
                       title="Tipo de Fórmula"
                     >
                       <option value="all">Todas</option>
-                      <option value="phosphated">Fosfatada</option>
-                      <option value="nitrogenous">Nitrogenada</option>
-                      <option value="fertigran_p">Fertigran P</option>
+                      {compCategories.map(cat => (
+                        <option key={cat.id} value={cat.id}>{cat.nome}</option>
+                      ))}
                     </select>
                     <button
                       onClick={() => setExpandedCalc(expandedCalc === calc.id ? null : calc.id)}
