@@ -1,26 +1,33 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
+import { PricingFactors, Client, Agent } from '../types';
 
-const usePricingFactors = () => {
-    const [client, setClient] = useState(null);
-    const [agent, setAgent] = useState(null);
-    const [calculationParameters, setCalculationParameters] = useState({});
+const defaultFactors: PricingFactors = {
+  targetFormula: '00-00-00',
+  factor: 1,
+  discount: 0,
+  margin: 0,
+  freight: 0,
+  taxRate: 0,
+  commission: 0,
+  monthlyInterestRate: 0,
+  dueDate: '',
+  exemptCurrentMonth: false,
+  client: { id: '', code: '', name: '', document: '' },
+  agent: { id: '', code: '', name: '', document: '' },
+  branchId: '',
+  priceListId: '',
+  totalTons: 0,
+};
 
-    const updateClient = (newClient) => {
-        setClient(newClient);
-    };
+const usePricingFactors = (initial?: Partial<PricingFactors>) => {
+  const [factors, setFactors] = useState<PricingFactors>({ ...defaultFactors, ...(initial || {}) });
 
-    const updateAgent = (newAgent) => {
-        setAgent(newAgent);
-    };
+  const updateFactor = useCallback((patch: Partial<PricingFactors>) => setFactors((prev) => ({ ...prev, ...patch })), []);
+  const setClient = useCallback((c: Client) => setFactors((prev) => ({ ...prev, client: c })), []);
+  const setAgent = useCallback((a: Agent) => setFactors((prev) => ({ ...prev, agent: a })), []);
+  const resetFactors = useCallback(() => setFactors({ ...defaultFactors }), []);
 
-    const updateCalculationParameters = (newParams) => {
-        setCalculationParameters(prevParams => ({
-            ...prevParams,
-            ...newParams
-        }));
-    };
-
-    return { client, agent, calculationParameters, updateClient, updateAgent, updateCalculationParameters };
+  return { factors, updateFactor, setClient, setAgent, resetFactors };
 };
 
 export default usePricingFactors;
