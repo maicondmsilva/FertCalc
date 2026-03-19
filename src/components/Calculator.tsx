@@ -186,10 +186,6 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
         macros: updatedCalcMacros,
       };
     }));
-
-    if (field === 'quantity') {
-      calculateFormula(undefined, nextMacros, micros);
-    }
   };
 
   const handleMicroChange = (id: string, field: keyof RawMaterial, value: any) => {
@@ -207,10 +203,6 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
         micros: updatedCalcMicros,
       };
     }));
-
-    if (field === 'quantity') {
-      calculateFormula(undefined, macros, nextMicros);
-    }
   };
 
   const handleFactorChange = (field: keyof PricingFactors, value: any) => {
@@ -233,9 +225,7 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
   const [expandedCalc, setExpandedCalc] = useState<string | null>(null);
   const [microsInGear, setMicrosInGear] = useState<boolean>(true);
 
-  const calculateFormula = (targetFormulaId?: string, overrideMacros?: RawMaterial[], overrideMicros?: RawMaterial[]) => {
-    const currentMacros = overrideMacros || macros;
-
+  const calculateFormula = (targetFormulaId?: string) => {
     const formulasToCalculate = targetFormulaId
       ? calculations.filter(c => c.id === targetFormulaId)
       : calculations.filter(c => c.selected);
@@ -250,7 +240,7 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
     formulasToCalculate.forEach(calc => {
       // Usar macros/micros específicos da fórmula se disponíveis (para respeitar seleções por categoria)
       const currentMacros = (calc.macros && calc.macros.length > 0) ? calc.macros : macros;
-      const currentMicros = microsInGear ? (calc.micros.length > 0 ? calc.micros : micros) : (overrideMicros || micros);
+      const currentMicros = microsInGear ? (calc.micros.length > 0 ? calc.micros : micros) : micros;
 
       const match = calc.formula.match(/(\d+(?:[.,]\d+)?)[^\d]+(\d+(?:[.,]\d+)?)[^\d]+(\d+(?:[.,]\d+)?)/);
       if (!match) return;
@@ -280,9 +270,9 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
         ints: {}
       };
 
-      // Use all selected materials — category auto-selection already controls which products
-      // are selected; any additional manually selected products are included here too
-      let availableMaterials = [...currentMacros, ...currentMicros].filter(m => m.selected);
+      // Include all selected materials AND any product with a manually forced quantity,
+      // regardless of the active category filter
+      let availableMaterials = [...currentMacros, ...currentMicros].filter(m => m.selected || Number(m.quantity) > 0);
 
       availableMaterials.forEach(m => {
         const useVar = `use_${m.id}`;
@@ -1443,7 +1433,7 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
               >
                 <Plus className="w-4 h-4 mr-1" /> Adicionar Fórmula Alvo
               </button>
-              {calculations.some(c => c.selected) && (
+              {(calculations.some(c => c.selected) || macros.some(m => m.selected) || micros.some(m => m.selected)) && (
                 <button
                   onClick={() => calculateFormula()}
                   className="w-full py-2 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 transition-colors shadow-sm text-sm"
