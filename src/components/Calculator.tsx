@@ -183,10 +183,7 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
       );
       return {
         ...calc,
-        macros: updatedCalcMacros,
-        // Ao alterar uma configuração manual, removemos o filtro por categoria (set to 'all') 
-        // para garantir que a calculadora leve a seleção manual em consideração em vez de re-filtrar
-        category: field === 'selected' || field === 'quantity' ? 'all' : calc.category
+        macros: updatedCalcMacros
       };
     }));
 
@@ -207,10 +204,7 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
       );
       return {
         ...calc,
-        micros: updatedCalcMicros,
-        // Ao alterar uma configuração manual, removemos o filtro por categoria (set to 'all') 
-        // para garantir que a calculadora leve a seleção manual em consideração em vez de re-filtrar
-        category: field === 'selected' || field === 'quantity' ? 'all' : calc.category
+        micros: updatedCalcMicros
       };
     }));
 
@@ -287,13 +281,6 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
       };
 
       let availableMaterials = [...currentMacros, ...currentMicros].filter(m => m.selected);
-
-      // Filter by category
-      if (calc.category && calc.category !== 'all') {
-        availableMaterials = availableMaterials.filter(m =>
-          m.categories?.includes(calc.category!)
-        );
-      }
 
       availableMaterials.forEach(m => {
         const useVar = `use_${m.id}`;
