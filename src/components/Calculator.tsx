@@ -174,6 +174,22 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
   const handleMacroChange = (id: string, field: keyof RawMaterial, value: any) => {
     const nextMacros = macros.map(m => m.id === id ? { ...m, [field]: value } : m);
     setMacros(nextMacros);
+    
+    // Sincronizar seleção manual com as fórmulas em andamento para refletir as alterações na calculadora
+    setCalculations(calculations.map(calc => {
+      // Create new macros array for this calculation, with the updated field for the specific ID
+      const updatedCalcMacros = (calc.macros.length > 0 ? calc.macros : macros).map(m => 
+        m.id === id ? { ...m, [field]: value } : m
+      );
+      return {
+        ...calc,
+        macros: updatedCalcMacros,
+        // Ao alterar uma configuração manual, removemos o filtro por categoria (set to 'all') 
+        // para garantir que a calculadora leve a seleção manual em consideração em vez de re-filtrar
+        category: field === 'selected' || field === 'quantity' ? 'all' : calc.category
+      };
+    }));
+
     if (field === 'quantity') {
       calculateFormula(undefined, nextMacros, micros);
     }
@@ -182,6 +198,22 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
   const handleMicroChange = (id: string, field: keyof RawMaterial, value: any) => {
     const nextMicros = micros.map(m => m.id === id ? { ...m, [field]: value } : m);
     setMicros(nextMicros);
+    
+    // Sincronizar seleção manual com as fórmulas em andamento para refletir as alterações na calculadora
+    setCalculations(calculations.map(calc => {
+      // Create new micros array for this calculation, with the updated field for the specific ID
+      const updatedCalcMicros = (calc.micros.length > 0 ? calc.micros : micros).map(m => 
+        m.id === id ? { ...m, [field]: value } : m
+      );
+      return {
+        ...calc,
+        micros: updatedCalcMicros,
+        // Ao alterar uma configuração manual, removemos o filtro por categoria (set to 'all') 
+        // para garantir que a calculadora leve a seleção manual em consideração em vez de re-filtrar
+        category: field === 'selected' || field === 'quantity' ? 'all' : calc.category
+      };
+    }));
+
     if (field === 'quantity') {
       calculateFormula(undefined, macros, nextMicros);
     }
@@ -1104,7 +1136,7 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
                       <div className="flex justify-between items-center border-b border-stone-100 pb-2">
                         <div className="flex items-center gap-4">
                           <h4 className="text-xs font-bold text-stone-500 uppercase">⚙ {calc.formula || 'Fórmula'}</h4>
-                          {calc.summary && (
+                          {calc.summary && (currentUser.role === 'master' || currentUser.role === 'admin' || currentUser.role === 'manager' || (currentUser.permissions as any)?.calculator_fertigranP !== false) && (
                             <button
                               onClick={() => {
                                 setCurrentComparisonFormula({
@@ -1488,8 +1520,21 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
               </tr>
             </thead>
             <tbody>
-              {macros.map((m) => (
-                <tr key={m.id} className="border-b border-stone-100">
+              {[
+                ...macros.filter(m => !m.isPremiumLine).map(m => ({ m, itemType: 'normal' })),
+                ...(macros.some(m => m.isPremiumLine) ? [{ itemType: 'header', id: 'premium-header' } as any] : []),
+                ...macros.filter(m => m.isPremiumLine).map(m => ({ m, itemType: 'premium' }))
+              ].map((row: any) => {
+                if (row.itemType === 'header') {
+                  return (
+                    <tr key="premium-header"><td colSpan={12} className="px-3 py-1.5 bg-amber-50 border-t border-amber-200">
+                      <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">⭐ Linha Diferenciada / Premium</span>
+                    </td></tr>
+                  );
+                }
+                const m = row.m as RawMaterial;
+                return (
+                  <tr key={m.id} className={`border-b border-stone-100 ${row.itemType === 'premium' ? 'bg-amber-50/40' : 'hover:bg-stone-50/50'}`}>
                   <td className="px-3 py-2">
                     <input type="checkbox" checked={m.selected} disabled={isLocked} onChange={(e) => handleMacroChange(m.id, 'selected', e.target.checked)} className={`rounded text-emerald-600 focus:ring-emerald-500 ${isLocked ? 'cursor-not-allowed' : ''}`} />
                   </td>
@@ -1601,7 +1646,8 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
                     )}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

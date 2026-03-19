@@ -86,6 +86,7 @@ export interface User {
     calculator_savePricing?: boolean;
     calculator_generatePDF?: boolean;
     calculator_saveFormula?: boolean;
+    calculator_fertigranP?: boolean;
     // Sub-permissões de Histórico
     history_changeStatus?: boolean;
     history_editPricing?: boolean;
@@ -222,6 +223,7 @@ export interface PriceList {
   date: string;
   currency?: 'BRL' | 'USD';
   exchangeRate?: number;
+  dollarRate?: number; // Para efeito de conhecimento em listas BRL
   macros: RawMaterial[];
   micros: RawMaterial[];
 }

@@ -556,7 +556,8 @@ export async function getPriceLists(): Promise<PriceList[]> {
     branchId: d.branch_id,
     date: d.date,
     currency: d.currency,
-    exchangeRate: d.exchange_rate ? Number(d.exchange_rate) : undefined,
+    exchangeRate: d.currency === 'USD' ? (d.exchange_rate ? Number(d.exchange_rate) : undefined) : undefined,
+    dollarRate: d.currency === 'BRL' ? (d.exchange_rate ? Number(d.exchange_rate) : undefined) : undefined,
     macros: d.macros || [],
     micros: d.micros || [],
   }));
@@ -570,14 +571,24 @@ export async function createPriceList(pl: Omit<PriceList, 'id'>): Promise<PriceL
       branch_id: pl.branchId,
       date: pl.date,
       currency: pl.currency,
-      exchange_rate: pl.exchangeRate,
+      exchange_rate: pl.currency === 'USD' ? pl.exchangeRate : pl.dollarRate,
       macros: pl.macros,
       micros: pl.micros,
     })
     .select()
     .single();
   if (error) throw error;
-  return { id: data.id, name: data.name, branchId: data.branch_id, date: data.date, currency: data.currency, exchangeRate: data.exchange_rate ? Number(data.exchange_rate) : undefined, macros: data.macros || [], micros: data.micros || [] };
+  return { 
+    id: data.id, 
+    name: data.name, 
+    branchId: data.branch_id, 
+    date: data.date, 
+    currency: data.currency, 
+    exchangeRate: data.currency === 'USD' ? (data.exchange_rate ? Number(data.exchange_rate) : undefined) : undefined, 
+    dollarRate: data.currency === 'BRL' ? (data.exchange_rate ? Number(data.exchange_rate) : undefined) : undefined, 
+    macros: data.macros || [], 
+    micros: data.micros || [] 
+  };
 }
 
 export async function updatePriceList(id: string, pl: Partial<PriceList>): Promise<void> {
@@ -586,7 +597,8 @@ export async function updatePriceList(id: string, pl: Partial<PriceList>): Promi
   if (pl.branchId !== undefined) payload.branch_id = pl.branchId;
   if (pl.date !== undefined) payload.date = pl.date;
   if (pl.currency !== undefined) payload.currency = pl.currency;
-  if (pl.exchangeRate !== undefined) payload.exchange_rate = pl.exchangeRate;
+  if (pl.exchangeRate !== undefined && pl.currency === 'USD') payload.exchange_rate = pl.exchangeRate;
+  if (pl.dollarRate !== undefined && pl.currency === 'BRL') payload.exchange_rate = pl.dollarRate;
   if (pl.macros !== undefined) payload.macros = pl.macros;
   if (pl.micros !== undefined) payload.micros = pl.micros;
   const { error } = await supabase.from('price_lists').update(payload).eq('id', id);

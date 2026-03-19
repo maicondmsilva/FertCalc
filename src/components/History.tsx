@@ -145,6 +145,38 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
     }
   };
 
+  const handleDuplicate = async (pricing: PricingRecord) => {
+    if (confirm('Deseja gerar uma cópia (nova precificação) baseada nesta?')) {
+      try {
+        const newPricing: Partial<PricingRecord> = {
+          ...pricing,
+          id: `p_${Date.now()}`,
+          date: new Date().toISOString(),
+          status: 'Em Andamento',
+          approvalStatus: 'Pendente',
+          history: [{
+            date: new Date().toISOString(),
+            userId: currentUser.id,
+            userName: currentUser.name,
+            action: `Precificação duplicada a partir de ${pricing.formattedCod}`
+          }],
+          // Generate a temporary COD, it will be updated by the server or trigger if applicable
+          cod: 0, 
+          formattedCod: 'NOVA COPIA',
+          transferToUserId: undefined,
+          deletionRequest: undefined
+        };
+
+        const created = await createPricingRecord(newPricing as PricingRecord);
+        showSuccess('Cópia gerada com sucesso!');
+        await loadData(); // Reload to get the proper ID and formattedCod
+      } catch (err) {
+        console.error('Erro ao duplicar:', err);
+        showError('Erro ao duplicar precificação.');
+      }
+    }
+  };
+
   const handleRequestDeletion = async () => {
     if (!pricingToDelete || !deletionReason.trim() || isSubmittingDeletion) return;
     setIsSubmittingDeletion(true);
@@ -473,6 +505,16 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                       <Edit3 className="w-5 h-5" />
                     </button>
                   ))}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDuplicate(p);
+                    }}
+                    className="p-2.5 hover:bg-emerald-100 text-emerald-600 rounded-full transition-all active:scale-95 bg-emerald-50/50"
+                    title="Duplicar Precificação"
+                  >
+                    <FileText className="w-5 h-5" />
+                  </button>
                   {(p.status !== 'Excluída' && (currentUser.role === 'master' || currentUser.role === 'admin' || (currentUser.permissions as any)?.history_changeStatus !== false)) && (
                     <button
                       onClick={(e) => {

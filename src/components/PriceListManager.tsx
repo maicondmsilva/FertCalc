@@ -7,6 +7,7 @@ import {
   getMicroMaterials,
   getPriceLists,
   createPriceList,
+  updatePriceList,
   deletePriceList,
 } from '../services/db';
 import { useToast } from './Toast';
@@ -214,6 +215,8 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
   const [listName, setListName] = useState('');
   const [currency, setCurrency] = useState<'BRL' | 'USD'>('BRL');
   const [exchangeRate, setExchangeRate] = useState<number>(0);
+  const [dollarRate, setDollarRate] = useState<number>(0);
+  const [editingListId, setEditingListId] = useState<string | null>(null);
   const [macros, setMacros] = useState<RawMaterial[]>([]);
   const [micros, setMicros] = useState<RawMaterial[]>([]);
 
@@ -257,6 +260,8 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
     setMicros([]);
     setCurrency('BRL');
     setExchangeRate(0);
+    setDollarRate(0);
+    setEditingListId(null);
   };
 
   const savePriceList = async () => {
@@ -269,15 +274,29 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
     if (!selectedBranchId) { showError('Selecione uma filial.'); return; }
     setSaving(true);
     try {
-      const newList = await createPriceList({
-        name: listName.trim(), branchId: selectedBranchId,
-        date: new Date().toISOString(), currency,
-        exchangeRate: currency === 'USD' ? exchangeRate : undefined,
-        macros, micros,
-      });
-      setPriceLists(prev => [newList, ...prev]);
-      cancelForm();
-      showSuccess('Lista de preços salva com sucesso!');
+      if (editingListId) {
+        await updatePriceList(editingListId, {
+          name: listName.trim(), branchId: selectedBranchId,
+          currency,
+          exchangeRate: currency === 'USD' ? exchangeRate : undefined,
+          dollarRate: currency === 'BRL' ? dollarRate : undefined,
+          macros, micros,
+        });
+        setPriceLists(prev => prev.map(p => p.id === editingListId ? { ...p, name: listName.trim(), branchId: selectedBranchId, currency, exchangeRate: currency === 'USD' ? exchangeRate : undefined, dollarRate: currency === 'BRL' ? dollarRate : undefined, macros, micros } : p));
+        cancelForm();
+        showSuccess('Lista de preços atualizada com sucesso!');
+      } else {
+        const newList = await createPriceList({
+          name: listName.trim(), branchId: selectedBranchId,
+          date: new Date().toISOString(), currency,
+          exchangeRate: currency === 'USD' ? exchangeRate : undefined,
+          dollarRate: currency === 'BRL' ? dollarRate : undefined,
+          macros, micros,
+        });
+        setPriceLists(prev => [newList, ...prev]);
+        cancelForm();
+        showSuccess('Lista de preços salva com sucesso!');
+      }
     } catch (err: any) {
       showError(`Erro ao salvar: ${err?.message || 'Tente novamente.'}`);
     } finally {
@@ -362,7 +381,17 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
             </div>
           )}
 
-          <div className={currency === 'USD' ? 'md:col-span-1' : 'md:col-span-2'}>
+          {currency === 'BRL' && (
+            <div>
+              <label className="block text-sm font-medium text-stone-600 mb-1">Câmbio p/ Ref. (US$)</label>
+              <input type="number" value={dollarRate === 0 ? '' : dollarRate}
+                onChange={e => setDollarRate(Number(e.target.value))}
+                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                placeholder="0.00" title="Apenas para registro visual na lista" />
+            </div>
+          )}
+
+          <div className="md:col-span-1">
             <label className="block text-sm font-medium text-stone-600 mb-1">Nome da Lista</label>
             <div className="flex gap-2">
               <input type="text" value={listName} onChange={e => setListName(e.target.value)}
@@ -536,18 +565,41 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
                 <div className="flex items-center gap-1"><Calendar className="w-3 h-3" />{new Date(list.date).toLocaleDateString('pt-BR')}</div>
                 <div className="text-[10px] text-stone-400">{list.macros.length} macro(s) · {list.micros.length} micro(s)</div>
               </div>
-              <div className="mt-3 pt-3 border-t border-stone-100">
+              <div className="text-[10px] text-stone-400 font-mono mt-1 mb-2">
+                ID: {list.id}
+              </div>
+              <div className="mt-2 pt-3 flex flex-wrap items-center gap-3 border-t border-stone-100">
                 <button
                   onClick={() => {
                     setMacros(list.macros);
                     setMicros(list.micros);
                     setSelectedBranchId(list.branchId);
+                    setCurrency(list.currency || 'BRL');
+                    if (list.currency === 'USD') setExchangeRate(list.exchangeRate || 0);
+                    if (list.currency === 'BRL') setDollarRate(list.dollarRate || 0);
+                    setListName(list.name);
+                    setEditingListId(list.id);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="text-xs text-blue-600 font-bold hover:underline"
+                >
+                  Visualizar / Editar
+                </button>
+                <button
+                  onClick={() => {
+                    setMacros(list.macros);
+                    setMicros(list.micros);
+                    setSelectedBranchId(list.branchId);
+                    setCurrency(list.currency || 'BRL');
+                    if (list.currency === 'USD') setExchangeRate(list.exchangeRate || 0);
+                    if (list.currency === 'BRL') setDollarRate(list.dollarRate || 0);
                     setListName(list.name + ' (Cópia)');
+                    setEditingListId(null);
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
                   className="text-xs text-emerald-600 font-bold hover:underline"
                 >
-                  Carregar para Editar
+                  Copiar P/ Novo
                 </button>
               </div>
             </div>
