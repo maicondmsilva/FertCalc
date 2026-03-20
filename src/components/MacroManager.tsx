@@ -309,7 +309,7 @@ export default function MacroManager({ currentUser }: MacroManagerProps) {
             {/* Categorias */}
             <div>
               <label className="block text-sm font-medium text-stone-600 mb-2">
-                Categorias de Compatibilidade
+                Categorias de Produtos
               </label>
               <div className="flex flex-wrap gap-x-6 gap-y-2">
                 {compCategories.map(cat => (
