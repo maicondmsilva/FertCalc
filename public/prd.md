@@ -1,4 +1,4 @@
-# Documento de Requisitos do Produto (PRD) - FertCalc Pro
+# FertCalc Pro — Documento de Requisitos do Produto (PRD)
 
 ## 1. Introdução
 
