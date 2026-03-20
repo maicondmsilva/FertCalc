@@ -312,7 +312,6 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
           model.ints[useVar] = 1;
         }
 
-        model.ints[useVar] = 1;
         model.constraints[minLiner] = { min: 0 };
         model.constraints[maxLiner] = { max: 0 };
       });
@@ -335,14 +334,29 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
       if (results.feasible) {
         const calcIndex = updatedCalculations.findIndex(c => c.id === calc.id);
         if (calcIndex !== -1) {
-          const newMacros = currentMacros.map(m => ({
+          const rawMacros = currentMacros.map(m => ({
             ...m,
             quantity: m.selected ? (results[m.id] || 0) : 0
           }));
-          const newMicros = currentMicros.map(m => ({
+          const rawMicros = currentMicros.map(m => ({
             ...m,
             quantity: m.selected ? (results[m.id] || 0) : 0
           }));
+
+          // Adjust for floating-point errors: if total is within 5kg of 1000, correct the largest material
+          const rawTotal = [...rawMacros, ...rawMicros].reduce((sum, m) => sum + m.quantity, 0);
+          let newMacros = rawMacros;
+          let newMicros = rawMicros;
+          if (Math.abs(rawTotal - 1000) > 0.01 && Math.abs(rawTotal - 1000) < 5) {
+            const diff = rawTotal - 1000;
+            const allMats = [...rawMacros, ...rawMicros].filter(m => m.quantity > 0);
+            if (allMats.length > 0) {
+              const adjustTarget = allMats.reduce((max, m) => m.quantity > max.quantity ? m : max, allMats[0]);
+              const adjustId = adjustTarget.id;
+              newMacros = rawMacros.map(m => m.id === adjustId ? { ...m, quantity: Math.max(0, m.quantity - diff) } : m);
+              newMicros = rawMicros.map(m => m.id === adjustId ? { ...m, quantity: Math.max(0, m.quantity - diff) } : m);
+            }
+          }
 
           updatedCalculations[calcIndex] = {
             ...updatedCalculations[calcIndex],
@@ -1235,6 +1249,11 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
                               </div>
                             ))}
                           </div>
+                          {/* Total */}
+                          <div className="flex justify-between text-[11px] mt-1 pt-1 border-t border-stone-200">
+                            <span className="text-stone-700 font-bold">Total Batida</span>
+                            <span className="text-emerald-700 font-bold">{[...calc.macros, ...calc.micros].filter(m => m.quantity > 0).reduce((sum, m) => sum + m.quantity, 0).toFixed(1)} kg</span>
+                          </div>
                         </div>
                       )}
 
@@ -1854,6 +1873,13 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
                         <span className="text-emerald-500 font-mono">{m.quantity.toFixed(0)}</span>
                       </div>
                     ))}
+                  </div>
+                  {/* Total da batida */}
+                  <div className="flex justify-between text-[10px] mt-2 pt-1.5 border-t border-stone-600">
+                    <span className="text-stone-300 font-bold uppercase">Total Batida</span>
+                    <span className="text-white font-bold font-mono">
+                      {[...calc.macros, ...calc.micros].filter(m => m.quantity > 0).reduce((sum, m) => sum + m.quantity, 0).toFixed(0)} kg
+                    </span>
                   </div>
                 </div>
               </div>
