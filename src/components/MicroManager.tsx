@@ -115,7 +115,7 @@ export default function MicroManager({ currentUser }: MicroManagerProps) {
               <input type="text" value={formulaSuffix} disabled={viewMode} onChange={(e) => setFormulaSuffix(e.target.value)} className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 disabled:bg-stone-50 disabled:text-stone-500" placeholder="Ex: C/ ZN" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-stone-600 mb-2">Categorias de Compatibilidade</label>
+              <label className="block text-sm font-medium text-stone-600 mb-2">Categorias de Produtos</label>
               <div className="flex flex-wrap gap-x-6 gap-y-2">
                 {compCategories.map(cat => (
                   <label key={cat.id} className="flex items-center gap-2 cursor-pointer group">

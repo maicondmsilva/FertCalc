@@ -314,10 +314,10 @@ export default function SettingsManager() {
       <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
         <h2 className="text-xl font-bold text-stone-800 mb-6 flex items-center">
           <Settings className="w-5 h-5 mr-2 text-stone-600" />
-          Categorias de Compatibilidade
+          Categorias de Produtos
         </h2>
         <p className="text-sm text-stone-500 mb-6">
-          Personalize as categorias de compatibilidade para organizar suas matérias-primas e filtrar nos cálculos.
+          Personalize as categorias de produtos para organizar suas matérias-primas e filtrar nos cálculos.
         </p>
         <CompatibilityCategoryManager />
       </div>

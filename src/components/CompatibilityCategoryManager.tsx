@@ -79,7 +79,7 @@ export default function CompatibilityCategoryManager() {
     <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
       <h2 className="text-xl font-bold text-stone-800 mb-6 flex items-center gap-2">
         <List className="w-5 h-5 text-blue-600" />
-        Categorias de Compatibilidade
+        Categorias de Produtos
       </h2>
 
       <div className="flex gap-2 mb-8">
