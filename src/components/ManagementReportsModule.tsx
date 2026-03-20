@@ -557,12 +557,14 @@ const Lancamentos = ({
   indicadores, 
   categorias,
   configs,
+  currentUser,
   onSave 
 }: { 
   unidades: Unidade[]; 
   indicadores: Indicador[]; 
   categorias: Categoria[];
   configs: ConfiguracaoIndicador[];
+  currentUser: User;
   onSave: (l: Partial<Lancamento>[]) => Promise<void> 
 }) => {
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -593,7 +595,7 @@ const Lancamentos = ({
       unidade_id: selectedUnidade,
       indicador_id,
       valor: Number(valor),
-      usuario_id: 'user-1' // Mock user
+      usuario_id: currentUser.id
     }));
     await onSave(toSave);
     setLoading(false);
@@ -1376,13 +1378,14 @@ export default function ManagementReportsModule({ currentUser, activeTab }: Mana
 
   const handleSaveLancamentos = async (newLancamentos: Partial<Lancamento>[]) => {
     try {
-      await Promise.all(newLancamentos.map(l => 
-        fetch('/api/lancamentos', {
+      await Promise.all(newLancamentos.map(async (l) => {
+        const response = await fetch('/api/lancamentos', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(l)
-        })
-      ));
+        });
+        if (!response.ok) throw new Error('Falha ao registrar lançamento');
+      }));
       await fetchData();
       showToast('✅ Lançamento registrado com sucesso!', 'success');
     } catch (error) {
@@ -1391,33 +1394,48 @@ export default function ManagementReportsModule({ currentUser, activeTab }: Mana
   };
 
   const handleSaveUnidade = async (u: Unidade) => {
-    await fetch('/api/unidades', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(u)
-    });
-    await fetchData();
-    showToast('Unidade salva com sucesso', 'success');
+    try {
+      const response = await fetch('/api/unidades', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(u)
+      });
+      if (!response.ok) throw new Error('Falha ao salvar unidade');
+      await fetchData();
+      showToast('Unidade salva com sucesso', 'success');
+    } catch (error) {
+      showToast('❌ Erro ao salvar unidade. Tente novamente.', 'error');
+    }
   };
 
   const handleSaveIndicador = async (i: Indicador) => {
-    await fetch('/api/indicadores', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(i)
-    });
-    await fetchData();
-    showToast('Indicador salvo com sucesso', 'success');
+    try {
+      const response = await fetch('/api/indicadores', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(i)
+      });
+      if (!response.ok) throw new Error('Falha ao salvar indicador');
+      await fetchData();
+      showToast('Indicador salvo com sucesso', 'success');
+    } catch (error) {
+      showToast('❌ Erro ao salvar indicador. Tente novamente.', 'error');
+    }
   };
 
   const handleSaveCategoria = async (c: Categoria) => {
-    await fetch('/api/categorias', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(c)
-    });
-    await fetchData();
-    showToast('Categoria salva com sucesso', 'success');
+    try {
+      const response = await fetch('/api/categorias', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(c)
+      });
+      if (!response.ok) throw new Error('Falha ao salvar categoria');
+      await fetchData();
+      showToast('Categoria salva com sucesso', 'success');
+    } catch (error) {
+      showToast('❌ Erro ao salvar categoria. Tente novamente.', 'error');
+    }
   };
 
   if (loading) {
@@ -1456,6 +1474,7 @@ export default function ManagementReportsModule({ currentUser, activeTab }: Mana
             indicadores={indicadores} 
             categorias={categorias}
             configs={configs}
+            currentUser={currentUser}
             onSave={handleSaveLancamentos} 
           />
         )}
@@ -1471,63 +1490,117 @@ export default function ManagementReportsModule({ currentUser, activeTab }: Mana
             onSaveIndicador={handleSaveIndicador}
             onSaveCategoria={handleSaveCategoria}
             onSaveMeta={async (m) => {
-              await fetch('/api/metas', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(m)
-              });
-              await fetchData();
+              try {
+                const response = await fetch('/api/metas', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(m)
+                });
+                if (!response.ok) throw new Error('Falha ao salvar meta');
+                await fetchData();
+                showToast('Meta salva com sucesso', 'success');
+              } catch (error) {
+                showToast('❌ Erro ao salvar meta. Tente novamente.', 'error');
+              }
             }}
             onSaveConfig={async (c) => {
-              await fetch('/api/configuracoes-indicadores', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(c)
-              });
-              await fetchData();
+              try {
+                const response = await fetch('/api/configuracoes-indicadores', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(c)
+                });
+                if (!response.ok) throw new Error('Falha ao salvar configuração');
+                await fetchData();
+                showToast('Configuração salva com sucesso', 'success');
+              } catch (error) {
+                showToast('❌ Erro ao salvar configuração. Tente novamente.', 'error');
+              }
             }}
             onSaveDiasUteis={async (d) => {
-              await fetch('/api/dias-uteis', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(d)
-              });
-              await fetchData();
+              try {
+                const response = await fetch('/api/dias-uteis', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(d)
+                });
+                if (!response.ok) throw new Error('Falha ao salvar dias úteis');
+                await fetchData();
+                showToast('Dias úteis salvos com sucesso', 'success');
+              } catch (error) {
+                showToast('❌ Erro ao salvar dias úteis. Tente novamente.', 'error');
+              }
             }}
             onDeleteUnidade={async (id) => {
               if (confirm('Tem certeza que deseja excluir esta unidade?')) {
-                await fetch(`/api/unidades/${id}`, { method: 'DELETE' });
-                await fetchData();
+                try {
+                  const response = await fetch(`/api/unidades/${id}`, { method: 'DELETE' });
+                  if (!response.ok) throw new Error('Falha ao excluir unidade');
+                  await fetchData();
+                  showToast('Unidade excluída com sucesso', 'success');
+                } catch (error) {
+                  showToast('❌ Erro ao excluir unidade. Tente novamente.', 'error');
+                }
               }
             }}
             onDeleteIndicador={async (id) => {
               if (confirm('Tem certeza que deseja excluir este indicador?')) {
-                await fetch(`/api/indicadores/${id}`, { method: 'DELETE' });
-                await fetchData();
+                try {
+                  const response = await fetch(`/api/indicadores/${id}`, { method: 'DELETE' });
+                  if (!response.ok) throw new Error('Falha ao excluir indicador');
+                  await fetchData();
+                  showToast('Indicador excluído com sucesso', 'success');
+                } catch (error) {
+                  showToast('❌ Erro ao excluir indicador. Tente novamente.', 'error');
+                }
               }
             }}
             onDeleteCategoria={async (id) => {
               if (confirm('Tem certeza que deseja excluir esta categoria?')) {
-                await fetch(`/api/categorias/${id}`, { method: 'DELETE' });
-                await fetchData();
+                try {
+                  const response = await fetch(`/api/categorias/${id}`, { method: 'DELETE' });
+                  if (!response.ok) throw new Error('Falha ao excluir categoria');
+                  await fetchData();
+                  showToast('Categoria excluída com sucesso', 'success');
+                } catch (error) {
+                  showToast('❌ Erro ao excluir categoria. Tente novamente.', 'error');
+                }
               }
             }}
             onDeleteMeta={async (id) => {
               if (confirm('Tem certeza que deseja excluir esta meta?')) {
-                await fetch(`/api/metas/${id}`, { method: 'DELETE' });
-                await fetchData();
+                try {
+                  const response = await fetch(`/api/metas/${id}`, { method: 'DELETE' });
+                  if (!response.ok) throw new Error('Falha ao excluir meta');
+                  await fetchData();
+                  showToast('Meta excluída com sucesso', 'success');
+                } catch (error) {
+                  showToast('❌ Erro ao excluir meta. Tente novamente.', 'error');
+                }
               }
             }}
             onDeleteConfig={async (uId, iId) => {
               if (confirm('Tem certeza que deseja excluir esta personalização?')) {
-                await fetch(`/api/configuracoes-indicadores?unidade_id=${uId}&indicador_id=${iId}`, { method: 'DELETE' });
-                await fetchData();
+                try {
+                  const response = await fetch(`/api/configuracoes-indicadores?unidade_id=${uId}&indicador_id=${iId}`, { method: 'DELETE' });
+                  if (!response.ok) throw new Error('Falha ao excluir personalização');
+                  await fetchData();
+                  showToast('Personalização excluída com sucesso', 'success');
+                } catch (error) {
+                  showToast('❌ Erro ao excluir personalização. Tente novamente.', 'error');
+                }
               }
             }}
             onDeleteDiasUteis={async (uId, ano, mes) => {
               if (confirm('Tem certeza que deseja excluir este registro de dias úteis?')) {
-                await fetch(`/api/dias-uteis?unidade_id=${uId}&ano=${ano}&mes=${mes}`, { method: 'DELETE' });
-                await fetchData();
+                try {
+                  const response = await fetch(`/api/dias-uteis?unidade_id=${uId}&ano=${ano}&mes=${mes}`, { method: 'DELETE' });
+                  if (!response.ok) throw new Error('Falha ao excluir dias úteis');
+                  await fetchData();
+                  showToast('Dias úteis excluídos com sucesso', 'success');
+                } catch (error) {
+                  showToast('❌ Erro ao excluir dias úteis. Tente novamente.', 'error');
+                }
               }
             }}
           />

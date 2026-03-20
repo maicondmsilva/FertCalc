@@ -179,45 +179,69 @@ async function startServer() {
     res.json(db.prepare("SELECT * FROM categorias ORDER BY ordem").all());
   });
   app.post("/api/categorias", (req, res) => {
-    const c = req.body;
-    db.prepare(
-      "INSERT INTO categorias (id, nome, ordem) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET nome=excluded.nome, ordem=excluded.ordem"
-    ).run(c.id, c.nome, c.ordem ?? 0);
-    res.json(c);
+    try {
+      const c = req.body;
+      db.prepare(
+        "INSERT INTO categorias (id, nome, ordem) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET nome=excluded.nome, ordem=excluded.ordem"
+      ).run(c.id, c.nome, c.ordem ?? 0);
+      res.json(c);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
   app.delete("/api/categorias/:id", (req, res) => {
-    db.prepare("DELETE FROM categorias WHERE id = ?").run(req.params.id);
-    res.json({ success: true });
+    try {
+      db.prepare("DELETE FROM categorias WHERE id = ?").run(req.params.id);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   app.get("/api/unidades", (req, res) => {
     res.json((db.prepare("SELECT * FROM unidades ORDER BY ordem_exibicao").all() as any[]).map(rowToUnidade));
   });
   app.post("/api/unidades", (req, res) => {
-    const u = req.body;
-    db.prepare(
-      "INSERT INTO unidades (id, nome, ordem_exibicao, ativo) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET nome=excluded.nome, ordem_exibicao=excluded.ordem_exibicao, ativo=excluded.ativo"
-    ).run(u.id, u.nome, u.ordem_exibicao ?? 0, u.ativo ? 1 : 0);
-    res.json(rowToUnidade({ ...u, ativo: u.ativo ? 1 : 0 }));
+    try {
+      const u = req.body;
+      db.prepare(
+        "INSERT INTO unidades (id, nome, ordem_exibicao, ativo) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET nome=excluded.nome, ordem_exibicao=excluded.ordem_exibicao, ativo=excluded.ativo"
+      ).run(u.id, u.nome, u.ordem_exibicao ?? 0, u.ativo ? 1 : 0);
+      res.json(rowToUnidade({ ...u, ativo: u.ativo ? 1 : 0 }));
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
   app.delete("/api/unidades/:id", (req, res) => {
-    db.prepare("DELETE FROM unidades WHERE id = ?").run(req.params.id);
-    res.json({ success: true });
+    try {
+      db.prepare("DELETE FROM unidades WHERE id = ?").run(req.params.id);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   app.get("/api/indicadores", (req, res) => {
     res.json((db.prepare("SELECT * FROM indicadores ORDER BY ordem").all() as any[]).map(rowToIndicador));
   });
   app.post("/api/indicadores", (req, res) => {
-    const i = req.body;
-    db.prepare(
-      "INSERT INTO indicadores (id, nome, categoria, unidade_medida, digitavel, ordem) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET nome=excluded.nome, categoria=excluded.categoria, unidade_medida=excluded.unidade_medida, digitavel=excluded.digitavel, ordem=excluded.ordem"
-    ).run(i.id, i.nome, i.categoria, i.unidade_medida, i.digitavel ? 1 : 0, i.ordem ?? 0);
-    res.json(rowToIndicador({ ...i, digitavel: i.digitavel ? 1 : 0 }));
+    try {
+      const i = req.body;
+      db.prepare(
+        "INSERT INTO indicadores (id, nome, categoria, unidade_medida, digitavel, ordem) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET nome=excluded.nome, categoria=excluded.categoria, unidade_medida=excluded.unidade_medida, digitavel=excluded.digitavel, ordem=excluded.ordem"
+      ).run(i.id, i.nome, i.categoria, i.unidade_medida, i.digitavel ? 1 : 0, i.ordem ?? 0);
+      res.json(rowToIndicador({ ...i, digitavel: i.digitavel ? 1 : 0 }));
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
   app.delete("/api/indicadores/:id", (req, res) => {
-    db.prepare("DELETE FROM indicadores WHERE id = ?").run(req.params.id);
-    res.json({ success: true });
+    try {
+      db.prepare("DELETE FROM indicadores WHERE id = ?").run(req.params.id);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   app.get("/api/lancamentos", (req, res) => {
@@ -229,30 +253,46 @@ async function startServer() {
     res.json(db.prepare(sql).all(...params));
   });
   app.post("/api/lancamentos", (req, res) => {
-    const l = req.body;
-    db.prepare(
-      "INSERT INTO lancamentos (id, data, unidade_id, indicador_id, valor, observacao, usuario_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET data=excluded.data, unidade_id=excluded.unidade_id, indicador_id=excluded.indicador_id, valor=excluded.valor, observacao=excluded.observacao, usuario_id=excluded.usuario_id, updated_at=excluded.updated_at"
-    ).run(l.id, l.data, l.unidade_id, l.indicador_id, l.valor ?? 0, l.observacao ?? null, l.usuario_id ?? null, l.created_at ?? null, l.updated_at ?? null);
-    res.json(l);
+    try {
+      const l = req.body;
+      db.prepare(
+        "INSERT INTO lancamentos (id, data, unidade_id, indicador_id, valor, observacao, usuario_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET data=excluded.data, unidade_id=excluded.unidade_id, indicador_id=excluded.indicador_id, valor=excluded.valor, observacao=excluded.observacao, usuario_id=excluded.usuario_id, updated_at=excluded.updated_at"
+      ).run(l.id, l.data, l.unidade_id, l.indicador_id, l.valor ?? 0, l.observacao ?? null, l.usuario_id ?? null, l.created_at ?? null, l.updated_at ?? null);
+      res.json(l);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
   app.delete("/api/lancamentos/:id", (req, res) => {
-    db.prepare("DELETE FROM lancamentos WHERE id = ?").run(req.params.id);
-    res.json({ success: true });
+    try {
+      db.prepare("DELETE FROM lancamentos WHERE id = ?").run(req.params.id);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   app.get("/api/metas", (req, res) => {
     res.json(db.prepare("SELECT * FROM metas").all());
   });
   app.post("/api/metas", (req, res) => {
-    const m = req.body;
-    db.prepare(
-      "INSERT INTO metas (id, unidade_id, ano, mes, indicador_id, valor_meta) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET unidade_id=excluded.unidade_id, ano=excluded.ano, mes=excluded.mes, indicador_id=excluded.indicador_id, valor_meta=excluded.valor_meta"
-    ).run(m.id, m.unidade_id, m.ano, m.mes, m.indicador_id, m.valor_meta ?? 0);
-    res.json(m);
+    try {
+      const m = req.body;
+      db.prepare(
+        "INSERT INTO metas (id, unidade_id, ano, mes, indicador_id, valor_meta) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET unidade_id=excluded.unidade_id, ano=excluded.ano, mes=excluded.mes, indicador_id=excluded.indicador_id, valor_meta=excluded.valor_meta"
+      ).run(m.id, m.unidade_id, m.ano, m.mes, m.indicador_id, m.valor_meta ?? 0);
+      res.json(m);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
   app.delete("/api/metas/:id", (req, res) => {
-    db.prepare("DELETE FROM metas WHERE id = ?").run(req.params.id);
-    res.json({ success: true });
+    try {
+      db.prepare("DELETE FROM metas WHERE id = ?").run(req.params.id);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   app.get("/api/configuracoes-indicadores", (req, res) => {
@@ -264,32 +304,48 @@ async function startServer() {
     );
   });
   app.post("/api/configuracoes-indicadores", (req, res) => {
-    const c = req.body;
-    db.prepare(
-      "INSERT INTO configuracoes_indicadores (unidade_id, indicador_id, nome_personalizado, visivel) VALUES (?, ?, ?, ?) ON CONFLICT(unidade_id, indicador_id) DO UPDATE SET nome_personalizado=excluded.nome_personalizado, visivel=excluded.visivel"
-    ).run(c.unidade_id, c.indicador_id, c.nome_personalizado ?? null, c.visivel ? 1 : 0);
-    res.json(c);
+    try {
+      const c = req.body;
+      db.prepare(
+        "INSERT INTO configuracoes_indicadores (unidade_id, indicador_id, nome_personalizado, visivel) VALUES (?, ?, ?, ?) ON CONFLICT(unidade_id, indicador_id) DO UPDATE SET nome_personalizado=excluded.nome_personalizado, visivel=excluded.visivel"
+      ).run(c.unidade_id, c.indicador_id, c.nome_personalizado ?? null, c.visivel ? 1 : 0);
+      res.json(c);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
   app.delete("/api/configuracoes-indicadores", (req, res) => {
-    const { unidade_id, indicador_id } = req.query;
-    db.prepare("DELETE FROM configuracoes_indicadores WHERE unidade_id = ? AND indicador_id = ?").run(unidade_id, indicador_id);
-    res.json({ success: true });
+    try {
+      const { unidade_id, indicador_id } = req.query;
+      db.prepare("DELETE FROM configuracoes_indicadores WHERE unidade_id = ? AND indicador_id = ?").run(unidade_id, indicador_id);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   app.get("/api/dias-uteis", (req, res) => {
     res.json(db.prepare("SELECT * FROM dias_uteis").all());
   });
   app.post("/api/dias-uteis", (req, res) => {
-    const d = req.body;
-    db.prepare(
-      "INSERT INTO dias_uteis (unidade_id, ano, mes, total_dias_uteis) VALUES (?, ?, ?, ?) ON CONFLICT(unidade_id, ano, mes) DO UPDATE SET total_dias_uteis=excluded.total_dias_uteis"
-    ).run(d.unidade_id, d.ano, d.mes, d.total_dias_uteis ?? 0);
-    res.json(d);
+    try {
+      const d = req.body;
+      db.prepare(
+        "INSERT INTO dias_uteis (unidade_id, ano, mes, total_dias_uteis) VALUES (?, ?, ?, ?) ON CONFLICT(unidade_id, ano, mes) DO UPDATE SET total_dias_uteis=excluded.total_dias_uteis"
+      ).run(d.unidade_id, d.ano, d.mes, d.total_dias_uteis ?? 0);
+      res.json(d);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
   app.delete("/api/dias-uteis", (req, res) => {
-    const { unidade_id, ano, mes } = req.query;
-    db.prepare("DELETE FROM dias_uteis WHERE unidade_id = ? AND ano = ? AND mes = ?").run(unidade_id, Number(ano), Number(mes));
-    res.json({ success: true });
+    try {
+      const { unidade_id, ano, mes } = req.query;
+      db.prepare("DELETE FROM dias_uteis WHERE unidade_id = ? AND ano = ? AND mes = ?").run(unidade_id, Number(ano), Number(mes));
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   // Vite middleware for development
