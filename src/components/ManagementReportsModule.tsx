@@ -1359,7 +1359,7 @@ export default function ManagementReportsModule({ currentUser, activeTab }: Mana
       if (dRes.ok) setDiasUteis(await dRes.json());
     } catch (error) {
       console.error('Error fetching data:', error);
-      // showToast('Erro ao carregar dados', 'error');
+      showToast('Erro ao carregar dados', 'error');
     } finally {
       setLoading(false);
     }
