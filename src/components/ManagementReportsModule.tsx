@@ -54,6 +54,15 @@ import {
   User,
   Categoria
 } from '../types';
+import {
+  getMgmtUnidades, upsertMgmtUnidade, deleteMgmtUnidade,
+  getMgmtCategorias, upsertMgmtCategoria, deleteMgmtCategoria,
+  getMgmtIndicadores, upsertMgmtIndicador, deleteMgmtIndicador,
+  getMgmtLancamentos, upsertMgmtLancamentos, deleteMgmtLancamento,
+  getMgmtMetas, upsertMgmtMeta, deleteMgmtMeta,
+  getMgmtConfigs, upsertMgmtConfig, deleteMgmtConfig,
+  getMgmtDiasUteis, upsertMgmtDiasUteis, deleteMgmtDiasUteis,
+} from '../services/db';
 
 // Utility for tailwind classes
 function cn(...inputs: ClassValue[]) {
@@ -574,8 +583,7 @@ const Lancamentos = ({
 
   useEffect(() => {
     if (selectedUnidade && selectedDate) {
-      fetch(`/api/lancamentos?data=${selectedDate}&unidade_id=${selectedUnidade}`)
-        .then(res => res.json())
+      getMgmtLancamentos({ data: selectedDate, unidade_id: selectedUnidade })
         .then(data => {
           const newValues: Record<string, number> = {};
           data.forEach((l: Lancamento) => {
@@ -1342,25 +1350,24 @@ export default function ManagementReportsModule({ currentUser, activeTab }: Mana
 
   const fetchData = async () => {
     try {
-      const [uRes, iRes, catRes, lRes, mRes, cRes, dRes] = await Promise.all([
-        fetch('/api/unidades'),
-        fetch('/api/indicadores'),
-        fetch('/api/categorias'),
-        fetch('/api/lancamentos'),
-        fetch('/api/metas'),
-        fetch('/api/configuracoes-indicadores'),
-        fetch('/api/dias-uteis')
+      const [u, i, cat, l, m, c, d] = await Promise.all([
+        getMgmtUnidades(),
+        getMgmtIndicadores(),
+        getMgmtCategorias(),
+        getMgmtLancamentos(),
+        getMgmtMetas(),
+        getMgmtConfigs(),
+        getMgmtDiasUteis(),
       ]);
-      
-      if (uRes.ok) setUnidades(await uRes.json());
-      if (iRes.ok) setIndicadores(await iRes.json());
-      if (catRes.ok) setCategorias(await catRes.json());
-      if (lRes.ok) setLancamentos(await lRes.json());
-      if (mRes.ok) setMetas(await mRes.json());
-      if (cRes.ok) setConfigs(await cRes.json());
-      if (dRes.ok) setDiasUteis(await dRes.json());
+      setUnidades(u);
+      setIndicadores(i);
+      setCategorias(cat);
+      setLancamentos(l);
+      setMetas(m);
+      setConfigs(c);
+      setDiasUteis(d);
     } catch (error) {
-      console.error('Error fetching data:', error);
+      console.error('Erro ao carregar dados:', error);
       showToast('Erro ao carregar dados', 'error');
     } finally {
       setLoading(false);
@@ -1378,14 +1385,7 @@ export default function ManagementReportsModule({ currentUser, activeTab }: Mana
 
   const handleSaveLancamentos = async (newLancamentos: Partial<Lancamento>[]) => {
     try {
-      await Promise.all(newLancamentos.map(async (l) => {
-        const response = await fetch('/api/lancamentos', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(l)
-        });
-        if (!response.ok) throw new Error('Falha ao registrar lançamento');
-      }));
+      await upsertMgmtLancamentos(newLancamentos);
       await fetchData();
       showToast('✅ Lançamento registrado com sucesso!', 'success');
     } catch (error) {
@@ -1395,12 +1395,7 @@ export default function ManagementReportsModule({ currentUser, activeTab }: Mana
 
   const handleSaveUnidade = async (u: Unidade) => {
     try {
-      const response = await fetch('/api/unidades', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(u)
-      });
-      if (!response.ok) throw new Error('Falha ao salvar unidade');
+      await upsertMgmtUnidade(u);
       await fetchData();
       showToast('Unidade salva com sucesso', 'success');
     } catch (error) {
@@ -1410,12 +1405,7 @@ export default function ManagementReportsModule({ currentUser, activeTab }: Mana
 
   const handleSaveIndicador = async (i: Indicador) => {
     try {
-      const response = await fetch('/api/indicadores', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(i)
-      });
-      if (!response.ok) throw new Error('Falha ao salvar indicador');
+      await upsertMgmtIndicador(i);
       await fetchData();
       showToast('Indicador salvo com sucesso', 'success');
     } catch (error) {
@@ -1425,12 +1415,7 @@ export default function ManagementReportsModule({ currentUser, activeTab }: Mana
 
   const handleSaveCategoria = async (c: Categoria) => {
     try {
-      const response = await fetch('/api/categorias', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(c)
-      });
-      if (!response.ok) throw new Error('Falha ao salvar categoria');
+      await upsertMgmtCategoria(c);
       await fetchData();
       showToast('Categoria salva com sucesso', 'success');
     } catch (error) {
@@ -1491,12 +1476,7 @@ export default function ManagementReportsModule({ currentUser, activeTab }: Mana
             onSaveCategoria={handleSaveCategoria}
             onSaveMeta={async (m) => {
               try {
-                const response = await fetch('/api/metas', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(m)
-                });
-                if (!response.ok) throw new Error('Falha ao salvar meta');
+                await upsertMgmtMeta(m);
                 await fetchData();
                 showToast('Meta salva com sucesso', 'success');
               } catch (error) {
@@ -1505,12 +1485,7 @@ export default function ManagementReportsModule({ currentUser, activeTab }: Mana
             }}
             onSaveConfig={async (c) => {
               try {
-                const response = await fetch('/api/configuracoes-indicadores', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(c)
-                });
-                if (!response.ok) throw new Error('Falha ao salvar configuração');
+                await upsertMgmtConfig(c);
                 await fetchData();
                 showToast('Configuração salva com sucesso', 'success');
               } catch (error) {
@@ -1519,12 +1494,7 @@ export default function ManagementReportsModule({ currentUser, activeTab }: Mana
             }}
             onSaveDiasUteis={async (d) => {
               try {
-                const response = await fetch('/api/dias-uteis', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(d)
-                });
-                if (!response.ok) throw new Error('Falha ao salvar dias úteis');
+                await upsertMgmtDiasUteis(d);
                 await fetchData();
                 showToast('Dias úteis salvos com sucesso', 'success');
               } catch (error) {
@@ -1534,8 +1504,7 @@ export default function ManagementReportsModule({ currentUser, activeTab }: Mana
             onDeleteUnidade={async (id) => {
               if (confirm('Tem certeza que deseja excluir esta unidade?')) {
                 try {
-                  const response = await fetch(`/api/unidades/${id}`, { method: 'DELETE' });
-                  if (!response.ok) throw new Error('Falha ao excluir unidade');
+                  await deleteMgmtUnidade(id);
                   await fetchData();
                   showToast('Unidade excluída com sucesso', 'success');
                 } catch (error) {
@@ -1546,8 +1515,7 @@ export default function ManagementReportsModule({ currentUser, activeTab }: Mana
             onDeleteIndicador={async (id) => {
               if (confirm('Tem certeza que deseja excluir este indicador?')) {
                 try {
-                  const response = await fetch(`/api/indicadores/${id}`, { method: 'DELETE' });
-                  if (!response.ok) throw new Error('Falha ao excluir indicador');
+                  await deleteMgmtIndicador(id);
                   await fetchData();
                   showToast('Indicador excluído com sucesso', 'success');
                 } catch (error) {
@@ -1558,8 +1526,7 @@ export default function ManagementReportsModule({ currentUser, activeTab }: Mana
             onDeleteCategoria={async (id) => {
               if (confirm('Tem certeza que deseja excluir esta categoria?')) {
                 try {
-                  const response = await fetch(`/api/categorias/${id}`, { method: 'DELETE' });
-                  if (!response.ok) throw new Error('Falha ao excluir categoria');
+                  await deleteMgmtCategoria(id);
                   await fetchData();
                   showToast('Categoria excluída com sucesso', 'success');
                 } catch (error) {
@@ -1570,8 +1537,7 @@ export default function ManagementReportsModule({ currentUser, activeTab }: Mana
             onDeleteMeta={async (id) => {
               if (confirm('Tem certeza que deseja excluir esta meta?')) {
                 try {
-                  const response = await fetch(`/api/metas/${id}`, { method: 'DELETE' });
-                  if (!response.ok) throw new Error('Falha ao excluir meta');
+                  await deleteMgmtMeta(id);
                   await fetchData();
                   showToast('Meta excluída com sucesso', 'success');
                 } catch (error) {
@@ -1582,8 +1548,7 @@ export default function ManagementReportsModule({ currentUser, activeTab }: Mana
             onDeleteConfig={async (uId, iId) => {
               if (confirm('Tem certeza que deseja excluir esta personalização?')) {
                 try {
-                  const response = await fetch(`/api/configuracoes-indicadores?unidade_id=${uId}&indicador_id=${iId}`, { method: 'DELETE' });
-                  if (!response.ok) throw new Error('Falha ao excluir personalização');
+                  await deleteMgmtConfig(uId, iId);
                   await fetchData();
                   showToast('Personalização excluída com sucesso', 'success');
                 } catch (error) {
@@ -1594,8 +1559,7 @@ export default function ManagementReportsModule({ currentUser, activeTab }: Mana
             onDeleteDiasUteis={async (uId, ano, mes) => {
               if (confirm('Tem certeza que deseja excluir este registro de dias úteis?')) {
                 try {
-                  const response = await fetch(`/api/dias-uteis?unidade_id=${uId}&ano=${ano}&mes=${mes}`, { method: 'DELETE' });
-                  if (!response.ok) throw new Error('Falha ao excluir dias úteis');
+                  await deleteMgmtDiasUteis(uId, ano, mes);
                   await fetchData();
                   showToast('Dias úteis excluídos com sucesso', 'success');
                 } catch (error) {

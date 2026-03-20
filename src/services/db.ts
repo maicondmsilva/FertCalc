@@ -22,7 +22,14 @@ import {
   Notification,
   FertigranPFormula,
   ComparisonHistory,
-  CompatibilityCategory
+  CompatibilityCategory,
+  Unidade,
+  Categoria,
+  Indicador,
+  Lancamento,
+  MetaMensal,
+  ConfiguracaoIndicador,
+  DiasUteisMes
 } from '../types';
 
 // ============================================================
@@ -1057,5 +1064,175 @@ export async function deleteCompatibilityCategory(id: string): Promise<void> {
     .from('compatibility_categories')
     .update({ ativo: false, updated_at: new Date().toISOString() })
     .eq('id', id);
+  if (error) throw error;
+}
+
+// ============================================================
+// MANAGEMENT REPORTS - UNIDADES
+// ============================================================
+export async function getMgmtUnidades(): Promise<Unidade[]> {
+  const { data, error } = await supabase
+    .from('management_unidades')
+    .select('*')
+    .order('ordem_exibicao');
+  if (error || !data) return [];
+  return data;
+}
+
+export async function upsertMgmtUnidade(u: Unidade): Promise<void> {
+  const { error } = await supabase
+    .from('management_unidades')
+    .upsert({ ...u, updated_at: new Date().toISOString() }, { onConflict: 'id' });
+  if (error) throw error;
+}
+
+export async function deleteMgmtUnidade(id: string): Promise<void> {
+  const { error } = await supabase.from('management_unidades').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ============================================================
+// MANAGEMENT REPORTS - CATEGORIAS
+// ============================================================
+export async function getMgmtCategorias(): Promise<Categoria[]> {
+  const { data, error } = await supabase
+    .from('management_categorias')
+    .select('*')
+    .order('ordem');
+  if (error || !data) return [];
+  return data;
+}
+
+export async function upsertMgmtCategoria(c: Categoria): Promise<void> {
+  const { error } = await supabase
+    .from('management_categorias')
+    .upsert(c, { onConflict: 'id' });
+  if (error) throw error;
+}
+
+export async function deleteMgmtCategoria(id: string): Promise<void> {
+  const { error } = await supabase.from('management_categorias').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ============================================================
+// MANAGEMENT REPORTS - INDICADORES
+// ============================================================
+export async function getMgmtIndicadores(): Promise<Indicador[]> {
+  const { data, error } = await supabase
+    .from('management_indicadores')
+    .select('*')
+    .order('ordem');
+  if (error || !data) return [];
+  return data;
+}
+
+export async function upsertMgmtIndicador(i: Indicador): Promise<void> {
+  const { error } = await supabase
+    .from('management_indicadores')
+    .upsert(i, { onConflict: 'id' });
+  if (error) throw error;
+}
+
+export async function deleteMgmtIndicador(id: string): Promise<void> {
+  const { error } = await supabase.from('management_indicadores').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ============================================================
+// MANAGEMENT REPORTS - LANÇAMENTOS
+// ============================================================
+export async function getMgmtLancamentos(filters?: { data?: string; unidade_id?: string }): Promise<Lancamento[]> {
+  let query = supabase.from('management_lancamentos').select('*');
+  if (filters?.data) query = query.eq('data', filters.data);
+  if (filters?.unidade_id) query = query.eq('unidade_id', filters.unidade_id);
+  const { data, error } = await query;
+  if (error || !data) return [];
+  return data;
+}
+
+export async function upsertMgmtLancamentos(lancamentos: Partial<Lancamento>[]): Promise<void> {
+  const now = new Date().toISOString();
+  const rows = lancamentos.map(l => ({ ...l, updated_at: now }));
+  const { error } = await supabase
+    .from('management_lancamentos')
+    .upsert(rows, { onConflict: 'id' });
+  if (error) throw error;
+}
+
+export async function deleteMgmtLancamento(id: string): Promise<void> {
+  const { error } = await supabase.from('management_lancamentos').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ============================================================
+// MANAGEMENT REPORTS - METAS
+// ============================================================
+export async function getMgmtMetas(): Promise<MetaMensal[]> {
+  const { data, error } = await supabase.from('management_metas').select('*');
+  if (error || !data) return [];
+  return data;
+}
+
+export async function upsertMgmtMeta(m: MetaMensal): Promise<void> {
+  const { error } = await supabase
+    .from('management_metas')
+    .upsert(m, { onConflict: 'id' });
+  if (error) throw error;
+}
+
+export async function deleteMgmtMeta(id: string): Promise<void> {
+  const { error } = await supabase.from('management_metas').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ============================================================
+// MANAGEMENT REPORTS - CONFIGURAÇÕES DE INDICADORES
+// ============================================================
+export async function getMgmtConfigs(): Promise<ConfiguracaoIndicador[]> {
+  const { data, error } = await supabase.from('management_configuracoes_indicadores').select('*');
+  if (error || !data) return [];
+  return data;
+}
+
+export async function upsertMgmtConfig(c: ConfiguracaoIndicador): Promise<void> {
+  const { error } = await supabase
+    .from('management_configuracoes_indicadores')
+    .upsert(c, { onConflict: 'unidade_id,indicador_id' });
+  if (error) throw error;
+}
+
+export async function deleteMgmtConfig(unidade_id: string, indicador_id: string): Promise<void> {
+  const { error } = await supabase
+    .from('management_configuracoes_indicadores')
+    .delete()
+    .eq('unidade_id', unidade_id)
+    .eq('indicador_id', indicador_id);
+  if (error) throw error;
+}
+
+// ============================================================
+// MANAGEMENT REPORTS - DIAS ÚTEIS
+// ============================================================
+export async function getMgmtDiasUteis(): Promise<DiasUteisMes[]> {
+  const { data, error } = await supabase.from('management_dias_uteis').select('*');
+  if (error || !data) return [];
+  return data;
+}
+
+export async function upsertMgmtDiasUteis(d: DiasUteisMes): Promise<void> {
+  const { error } = await supabase
+    .from('management_dias_uteis')
+    .upsert(d, { onConflict: 'unidade_id,ano,mes' });
+  if (error) throw error;
+}
+
+export async function deleteMgmtDiasUteis(unidade_id: string, ano: number, mes: number): Promise<void> {
+  const { error } = await supabase
+    .from('management_dias_uteis')
+    .delete()
+    .eq('unidade_id', unidade_id)
+    .eq('ano', ano)
+    .eq('mes', mes);
   if (error) throw error;
 }
