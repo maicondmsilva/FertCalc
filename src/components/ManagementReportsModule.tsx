@@ -1389,6 +1389,7 @@ export default function ManagementReportsModule({ currentUser, activeTab }: Mana
       await fetchData();
       showToast('✅ Lançamento registrado com sucesso!', 'success');
     } catch (error) {
+      console.error('Erro ao registrar lançamento:', error);
       showToast('❌ Erro ao registrar lançamento. Tente novamente.', 'error');
     }
   };
@@ -1399,6 +1400,7 @@ export default function ManagementReportsModule({ currentUser, activeTab }: Mana
       await fetchData();
       showToast('Unidade salva com sucesso', 'success');
     } catch (error) {
+      console.error('Erro ao salvar unidade:', error);
       showToast('❌ Erro ao salvar unidade. Tente novamente.', 'error');
     }
   };
@@ -1409,6 +1411,7 @@ export default function ManagementReportsModule({ currentUser, activeTab }: Mana
       await fetchData();
       showToast('Indicador salvo com sucesso', 'success');
     } catch (error) {
+      console.error('Erro ao salvar indicador:', error);
       showToast('❌ Erro ao salvar indicador. Tente novamente.', 'error');
     }
   };
@@ -1419,6 +1422,7 @@ export default function ManagementReportsModule({ currentUser, activeTab }: Mana
       await fetchData();
       showToast('Categoria salva com sucesso', 'success');
     } catch (error) {
+      console.error('Erro ao salvar categoria:', error);
       showToast('❌ Erro ao salvar categoria. Tente novamente.', 'error');
     }
   };
@@ -1480,6 +1484,7 @@ export default function ManagementReportsModule({ currentUser, activeTab }: Mana
                 await fetchData();
                 showToast('Meta salva com sucesso', 'success');
               } catch (error) {
+                console.error('Erro ao salvar meta:', error);
                 showToast('❌ Erro ao salvar meta. Tente novamente.', 'error');
               }
             }}
@@ -1489,6 +1494,7 @@ export default function ManagementReportsModule({ currentUser, activeTab }: Mana
                 await fetchData();
                 showToast('Configuração salva com sucesso', 'success');
               } catch (error) {
+                console.error('Erro ao salvar configuração:', error);
                 showToast('❌ Erro ao salvar configuração. Tente novamente.', 'error');
               }
             }}
@@ -1498,6 +1504,7 @@ export default function ManagementReportsModule({ currentUser, activeTab }: Mana
                 await fetchData();
                 showToast('Dias úteis salvos com sucesso', 'success');
               } catch (error) {
+                console.error('Erro ao salvar dias úteis:', error);
                 showToast('❌ Erro ao salvar dias úteis. Tente novamente.', 'error');
               }
             }}
@@ -1508,6 +1515,7 @@ export default function ManagementReportsModule({ currentUser, activeTab }: Mana
                   await fetchData();
                   showToast('Unidade excluída com sucesso', 'success');
                 } catch (error) {
+                  console.error('Erro ao excluir unidade:', error);
                   showToast('❌ Erro ao excluir unidade. Tente novamente.', 'error');
                 }
               }
@@ -1519,6 +1527,7 @@ export default function ManagementReportsModule({ currentUser, activeTab }: Mana
                   await fetchData();
                   showToast('Indicador excluído com sucesso', 'success');
                 } catch (error) {
+                  console.error('Erro ao excluir indicador:', error);
                   showToast('❌ Erro ao excluir indicador. Tente novamente.', 'error');
                 }
               }
@@ -1530,6 +1539,7 @@ export default function ManagementReportsModule({ currentUser, activeTab }: Mana
                   await fetchData();
                   showToast('Categoria excluída com sucesso', 'success');
                 } catch (error) {
+                  console.error('Erro ao excluir categoria:', error);
                   showToast('❌ Erro ao excluir categoria. Tente novamente.', 'error');
                 }
               }
@@ -1541,6 +1551,7 @@ export default function ManagementReportsModule({ currentUser, activeTab }: Mana
                   await fetchData();
                   showToast('Meta excluída com sucesso', 'success');
                 } catch (error) {
+                  console.error('Erro ao excluir meta:', error);
                   showToast('❌ Erro ao excluir meta. Tente novamente.', 'error');
                 }
               }
@@ -1552,6 +1563,7 @@ export default function ManagementReportsModule({ currentUser, activeTab }: Mana
                   await fetchData();
                   showToast('Personalização excluída com sucesso', 'success');
                 } catch (error) {
+                  console.error('Erro ao excluir personalização:', error);
                   showToast('❌ Erro ao excluir personalização. Tente novamente.', 'error');
                 }
               }
@@ -1563,6 +1575,7 @@ export default function ManagementReportsModule({ currentUser, activeTab }: Mana
                   await fetchData();
                   showToast('Dias úteis excluídos com sucesso', 'success');
                 } catch (error) {
+                  console.error('Erro ao excluir dias úteis:', error);
                   showToast('❌ Erro ao excluir dias úteis. Tente novamente.', 'error');
                 }
               }
