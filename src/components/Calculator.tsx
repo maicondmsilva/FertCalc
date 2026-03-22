@@ -278,8 +278,6 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
         const useVar = `use_${m.id}`;
         const minLiner = `link_min_${m.id}`;
         const maxLiner = `link_max_${m.id}`;
-        const forcedQty = Number(m.quantity) || 0;
-        const isForced = forcedQty > 0;
 
         model.variables[m.id] = {
           cost: Number(m.price) || 0,
@@ -293,26 +291,14 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
           [maxLiner]: 1
         };
 
-        // Se estiver forçado, o solver PRECISA usar exatamente essa quantidade
-        if (isForced) {
-          model.variables[useVar] = {
-            cost: 0,
-            [minLiner]: -forcedQty,
-            [maxLiner]: -forcedQty,
-            [useVar]: 1
-          };
-          model.constraints[useVar] = { equal: 1 };
-        } else {
-          // Variável binária normal para controlar se o produto entra ou não (respeitando minQty)
-          model.variables[useVar] = {
-            cost: 0.01,
-            [minLiner]: -(Number(m.minQty) || 0),
-            [maxLiner]: -(Number(m.maxQty) || 1000)
-          };
-          model.ints[useVar] = 1;
-        }
-
+        // Variável binária normal para controlar se o produto entra ou não (respeitando minQty)
+        model.variables[useVar] = {
+          cost: 0.01,
+          [minLiner]: -(Number(m.minQty) || 0),
+          [maxLiner]: -(Number(m.maxQty) || 1000)
+        };
         model.ints[useVar] = 1;
+
         model.constraints[minLiner] = { min: 0 };
         model.constraints[maxLiner] = { max: 0 };
       });
