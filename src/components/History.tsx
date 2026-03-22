@@ -170,9 +170,9 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
         const created = await createPricingRecord(newPricing as PricingRecord);
         showSuccess('Cópia gerada com sucesso!');
         await loadData(); // Reload to get the proper ID and formattedCod
-      } catch (err) {
+      } catch (err: any) {
         console.error('Erro ao duplicar:', err);
-        showError('Erro ao duplicar precificação.');
+        showError('Erro ao duplicar precificação: ' + (err?.message || JSON.stringify(err)));
       }
     }
   };

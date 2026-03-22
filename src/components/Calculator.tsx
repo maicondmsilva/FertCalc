@@ -272,9 +272,7 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
         ints: {}
       };
 
-      // Include all selected materials AND any product with a manually forced quantity,
-      // regardless of the active category filter
-      let availableMaterials = [...currentMacros, ...currentMicros].filter(m => m.selected || Number(m.quantity) > 0);
+      let availableMaterials = [...currentMacros, ...currentMicros].filter(m => m.selected);
 
       availableMaterials.forEach(m => {
         const useVar = `use_${m.id}`;
