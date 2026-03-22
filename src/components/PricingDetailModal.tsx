@@ -464,7 +464,7 @@ export default function PricingDetailModal({
           )}
 
           {/* Status Change */}
-          {onUpdateStatus && ((currentUser.role === 'master' || currentUser.role === 'admin' || currentUser.role === 'manager') || (currentUser.permissions as any)?.history_changeStatus !== false) && (
+          {selectedPricing.status !== 'Excluída' && onUpdateStatus && ((currentUser.role === 'master' || currentUser.role === 'admin' || currentUser.role === 'manager') || (currentUser.permissions as any)?.history_changeStatus !== false) && (
             <div className="bg-stone-100 p-4 rounded-xl border border-stone-200">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-bold text-stone-600 uppercase">Alterar Status</span>

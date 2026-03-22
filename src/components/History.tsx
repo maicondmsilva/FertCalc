@@ -511,7 +511,7 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                       handleDuplicate(p);
                     }}
                     className="p-2.5 hover:bg-emerald-100 text-emerald-600 rounded-full transition-all active:scale-95 bg-emerald-50/50"
-                    title="Duplicar Precificação"
+                    title="Gerar Cópia"
                   >
                     <FileText className="w-5 h-5" />
                   </button>
