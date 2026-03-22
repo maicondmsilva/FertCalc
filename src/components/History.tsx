@@ -5,7 +5,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import PricingDetailModal from './PricingDetailModal';
 import { generatePricingPDF } from '../utils/pdfGenerator';
-import { getPricingRecords, deletePricingRecord, updatePricingRecord, getAppSettings, createNotification, getUsers, getManagersOfUser } from '../services/db';
+import { getPricingRecords, deletePricingRecord, updatePricingRecord, createPricingRecord, getAppSettings, createNotification, getUsers, getManagersOfUser } from '../services/db';
 import { useToast } from './Toast';
 import { getPricingTotalTons, getPricingTotalSaleValue } from '../utils/pricingMetrics';
 
