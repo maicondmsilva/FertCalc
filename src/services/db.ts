@@ -379,6 +379,9 @@ export async function updateMacroMaterial(id: string, material: Partial<MacroMat
     .update({ ...macroToDb(material as any), updated_at: new Date().toISOString() })
     .eq('id', id);
   if (error) throw error;
+  
+  // Auto-sync into Price Lists
+  await syncProductToPriceLists(id, material, 'macro');
 }
 
 export async function deleteMacroMaterial(id: string): Promise<void> {
@@ -447,6 +450,40 @@ export async function updateMicroMaterial(id: string, material: Partial<MicroMat
     .update({ ...microToDb(material as any), updated_at: new Date().toISOString() })
     .eq('id', id);
   if (error) throw error;
+  
+  // Auto-sync into Price Lists
+  await syncProductToPriceLists(id, material, 'micro');
+}
+
+// ============================================================
+// AUTO SYNC RAW MATERIALS -> PRICE LISTS
+// ============================================================
+async function syncProductToPriceLists(id: string, updates: any, type: 'macro' | 'micro') {
+  try {
+    const { data: priceLists } = await supabase.from('price_lists').select('id, macros, micros');
+    if (!priceLists?.length) return;
+
+    for (const pl of priceLists) {
+      let changed = false;
+      const targetArray = type === 'macro' ? pl.macros || [] : pl.micros || [];
+      const updatedArray = targetArray.map((mat: any) => {
+        if (mat.id === id) {
+          changed = true;
+          return { ...mat, ...updates }; 
+        }
+        return mat;
+      });
+
+      if (changed) {
+        await supabase
+          .from('price_lists')
+          .update(type === 'macro' ? { macros: updatedArray } : { micros: updatedArray })
+          .eq('id', pl.id);
+      }
+    }
+  } catch (err) {
+    console.error('Failed to sync product to price lists', err);
+  }
 }
 
 export async function deleteMicroMaterial(id: string): Promise<void> {
@@ -1072,11 +1109,16 @@ export async function deleteCompatibilityCategory(id: string): Promise<void> {
 // ============================================================
 export async function getMgmtUnidades(): Promise<Unidade[]> {
   const { data, error } = await supabase
-    .from('management_unidades')
+    .from('branches')
     .select('*')
-    .order('ordem_exibicao');
+    .order('name');
   if (error || !data) return [];
-  return data;
+  return data.map((b, idx) => ({
+    id: b.id,
+    nome: b.name,
+    ativo: true,
+    ordem_exibicao: idx
+  }));
 }
 
 export async function upsertMgmtUnidade(u: Unidade): Promise<void> {

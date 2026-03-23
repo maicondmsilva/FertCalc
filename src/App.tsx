@@ -298,7 +298,7 @@ export default function App() {
       const allItems = [
         {
           id: 'managementReports_group',
-          label: 'Relatórios Gerenciais',
+          label: 'RELATÓRIO DIÁRIO',
           icon: BarChart3,
           permission: 'managementReports',
           type: 'parent',

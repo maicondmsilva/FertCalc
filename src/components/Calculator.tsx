@@ -183,7 +183,6 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
       );
       return {
         ...calc,
-        macros: updatedCalcMacros,
         macros: updatedCalcMacros
       };
     }));
@@ -201,7 +200,6 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
       );
       return {
         ...calc,
-        micros: updatedCalcMicros,
         micros: updatedCalcMicros
       };
     }));

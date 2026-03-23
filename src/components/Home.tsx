@@ -21,7 +21,7 @@ export default function Home({ currentUser, onSelectModule }: HomeProps) {
     },
     {
       id: 'managementReports',
-      label: 'RELATÓRIOS GERENCIAIS',
+      label: 'CONFIGURAÇÕES PARA RELATÓRIOS',
       description: 'Acompanhe o desempenho consolidado das unidades de negócio.',
       icon: BarChart3,
       color: 'bg-indigo-600',

@@ -739,7 +739,7 @@ const Cadastros = ({
   onDeleteConfig: (unidade_id: string, indicador_id: string) => Promise<void>;
   onDeleteDiasUteis: (unidade_id: string, ano: number, mes: number) => Promise<void>;
 }) => {
-  const [activeTab, setActiveTab] = useState<'unidades' | 'indicadores' | 'categorias' | 'metas' | 'config-unidades' | 'dias-uteis'>('unidades');
+  const [activeTab, setActiveTab] = useState<'indicadores' | 'categorias' | 'metas' | 'config-unidades' | 'dias-uteis'>('categorias');
   const [selectedUnidade, setSelectedUnidade] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState<'unidade' | 'indicador' | 'categoria' | 'meta' | null>(null);
@@ -806,7 +806,6 @@ const Cadastros = ({
 
       <div className="flex border-b border-slate-200 gap-6 overflow-x-auto">
         {[
-          { id: 'unidades', label: 'Unidades', icon: Building2 },
           { id: 'categorias', label: 'Categorias', icon: LayoutDashboard },
           { id: 'indicadores', label: 'Indicadores', icon: BarChart3 },
           { id: 'metas', label: 'Metas Mensais', icon: Target },
