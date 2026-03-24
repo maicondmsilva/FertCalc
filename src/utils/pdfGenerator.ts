@@ -89,6 +89,22 @@ export const generatePricingPDF = (record: PricingRecord, settings: AppSettings,
       </div>` : ''}
     </div>
 
+    <!-- FRETE / VENCIMENTO INFO -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:10px;">
+      <div style="background:#f0f4f8;border-radius:8px;padding:8px 12px;text-align:center;">
+        <div style="font-size:9px;font-weight:800;text-transform:uppercase;color:#888;margin-bottom:4px;letter-spacing:0.5px;">Tipo de Frete</div>
+        <div style="font-size:13px;font-weight:700;color:#1a1a2e;">${freightLabel}</div>
+      </div>
+      <div style="background:#f0f4f8;border-radius:8px;padding:8px 12px;text-align:center;">
+        <div style="font-size:9px;font-weight:800;text-transform:uppercase;color:#888;margin-bottom:4px;letter-spacing:0.5px;">Valor do Frete</div>
+        <div style="font-size:13px;font-weight:700;color:#1a1a2e;">${freight > 0 ? fmt(freight) + '/ton' : '—'}</div>
+      </div>
+      <div style="background:#f0f4f8;border-radius:8px;padding:8px 12px;text-align:center;">
+        <div style="font-size:9px;font-weight:800;text-transform:uppercase;color:#888;margin-bottom:4px;letter-spacing:0.5px;">Vencimento</div>
+        <div style="font-size:13px;font-weight:700;color:#1a1a2e;">${dueDate}</div>
+      </div>
+    </div>
+
     <!-- PRODUTOS TABLE -->
     <div style="margin-bottom:10px;">
       <div style="font-size:9px;font-weight:800;text-transform:uppercase;color:#888;letter-spacing:0.5px;margin-bottom:6px;">Produtos / Formulações</div>

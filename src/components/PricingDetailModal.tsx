@@ -175,6 +175,9 @@ export default function PricingDetailModal({
     const cod = pricing.formattedCod || (pricing.cod ? String(pricing.cod).padStart(4, '0') : pricing.id.slice(-8));
     const freight = pricing.factors?.freight ?? 0;
     const freightLabel = freight > 0 ? 'CIF' : 'FOB';
+    const dueDate = pricing.factors?.dueDate
+      ? new Date(pricing.factors.dueDate).toLocaleDateString('pt-BR')
+      : '—';
 
     // Título compacto
     doc.setFontSize(16);
@@ -184,13 +187,13 @@ export default function PricingDetailModal({
     doc.setFont(undefined as any, 'normal');
     doc.text('PROPOSTA COMERCIAL', 14, 20);
 
-    // Dados gerais compactos (2 linhas ao invés de 5 linhas em tabela)
+    // Dados gerais compactos (3 linhas com frete e vencimento)
     autoTable(doc, {
       startY: 25,
       head: [['DADOS GERAIS']],
       body: [
         [`COD: ${cod}  |  Data: ${new Date(pricing.date).toLocaleString('pt-BR')}  |  Cliente: ${pricing.factors?.client?.name || 'N/A'}  |  Agente: ${pricing.factors?.agent?.name || 'N/A'}`],
-        [`Status: ${pricing.status}  |  Aprovação: ${pricing.approvalStatus || 'Pendente'}  |  Frete: ${freightLabel}${freight > 0 ? ` (R$ ${freight.toFixed(2)}/ton)` : ''}`]
+        [`Status: ${pricing.status}  |  Aprovação: ${pricing.approvalStatus || 'Pendente'}  |  Tipo de Frete: ${freightLabel}  |  Valor do Frete: ${freight > 0 ? `R$ ${freight.toFixed(2)}/ton` : '—'}  |  Vencimento: ${dueDate}`]
       ],
       styles: { fontSize: 8, cellPadding: 2 },
       headStyles: { fillColor: [26, 26, 46], fontSize: 8, fontStyle: 'bold' },
