@@ -42,15 +42,15 @@ export default function ProductManager() {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   // Macro form
-  const emptyMacro = () => ({ name: '', n: 0, p: 0, k: 0, s: 0, ca: 0, brandId: '', categories: [] as ('phosphated' | 'nitrogenous' | 'fertigran_p')[], microGuarantees: [] as MicroGuarantee[] });
+  const emptyMacro = () => ({ name: '', n: 0, p: 0, k: 0, s: 0, ca: 0, brandId: '', categories: [] as ('phosphated' | 'nitrogenous' | 'fertigran_p')[], microGuarantees: [] as MicroGuarantee[], minQuantity: 0 });
   const [macroForm, setMacroForm] = useState(emptyMacro());
 
   // Micro form
-  const emptyMicro = () => ({ name: '', categories: [] as ('phosphated' | 'nitrogenous' | 'fertigran_p')[], microGuarantees: [] as MicroGuarantee[] });
+  const emptyMicro = () => ({ name: '', categories: [] as ('phosphated' | 'nitrogenous' | 'fertigran_p')[], microGuarantees: [] as MicroGuarantee[], minQuantity: 0 });
   const [microForm, setMicroForm] = useState(emptyMicro());
 
   // Finished form
-  const emptyFinished = () => ({ name: '', description: '', price: '' as string | number });
+  const emptyFinished = () => ({ name: '', description: '', price: '' as string | number, minQuantity: 0 });
   const [finishedForm, setFinishedForm] = useState(emptyFinished());
 
   /* ── Load ── */
@@ -85,15 +85,15 @@ export default function ProductManager() {
     setEditingId(item.id); setViewMode(readOnly);
     if (tab === 'macro') {
       const m = item as MacroMaterial;
-      setMacroForm({ name: m.name, n: m.n, p: m.p, k: m.k, s: m.s, ca: m.ca, brandId: m.brandId || '', categories: m.categories || [], microGuarantees: m.microGuarantees || [] });
+      setMacroForm({ name: m.name, n: m.n, p: m.p, k: m.k, s: m.s, ca: m.ca, brandId: m.brandId || '', categories: m.categories || [], microGuarantees: m.microGuarantees || [], minQuantity: m.minQuantity || 0 });
     }
     if (tab === 'micro') {
       const m = item as MicroMaterial;
-      setMicroForm({ name: m.name, categories: m.categories || [], microGuarantees: m.microGuarantees || [] });
+      setMicroForm({ name: m.name, categories: m.categories || [], microGuarantees: m.microGuarantees || [], minQuantity: m.minQuantity || 0 });
     }
     if (tab === 'finished') {
       const f = item as FinishedProduct;
-      setFinishedForm({ name: f.name, description: f.description || '', price: f.price ?? '' });
+      setFinishedForm({ name: f.name, description: f.description || '', price: f.price ?? '', minQuantity: f.minQuantity || 0 });
     }
     setIsModalOpen(true);
   };
@@ -112,6 +112,7 @@ export default function ProductManager() {
           brandId: macroForm.brandId,
           categories: macroForm.categories,
           microGuarantees: macroForm.microGuarantees.filter(g => g.name.trim()),
+          minQuantity: Number(macroForm.minQuantity) || 0,
         };
         if (editingId) { await updateMacroMaterial(editingId, payload); showSuccess('Macronutriente atualizado com sucesso!'); }
         else { await createMacroMaterial(payload); showSuccess('Macronutriente salvo com sucesso!'); }
@@ -124,6 +125,7 @@ export default function ProductManager() {
           name: microForm.name.trim(),
           categories: microForm.categories,
           microGuarantees: microForm.microGuarantees.filter(g => g.name.trim()),
+          minQuantity: Number(microForm.minQuantity) || 0,
         };
         if (editingId) { await updateMicroMaterial(editingId, payload); showSuccess('Micronutriente atualizado com sucesso!'); }
         else { await createMicroMaterial(payload); showSuccess('Micronutriente salvo com sucesso!'); }
@@ -136,6 +138,7 @@ export default function ProductManager() {
           name: finishedForm.name.trim(),
           description: finishedForm.description?.toString() || '',
           price: finishedForm.price !== '' ? Number(finishedForm.price) : undefined,
+          minQuantity: Number(finishedForm.minQuantity) || 0,
         };
         if (editingId) { await updateFinishedProduct(editingId, payload); showSuccess('Produto atualizado com sucesso!'); }
         else { await createFinishedProduct(payload); showSuccess('Produto salvo com sucesso!'); }
@@ -342,7 +345,15 @@ export default function ProductManager() {
                       ))}
                     </div>
                   </div>
-                  <div>
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-stone-600 mb-1">Quantidade Mínima (kg)</label>
+                    <input type="number" min="0" disabled={viewMode}
+                      value={macroForm.minQuantity || 0}
+                      onChange={e => setMacroForm(p => ({ ...p, minQuantity: Number(e.target.value) }))}
+                      className="w-full sm:w-1/3 px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 disabled:bg-stone-50"
+                      placeholder="Ex: 50" />
+                  </div>
+                  <div className="mt-4">
                     <div className="flex justify-between items-center mb-2">
                       <label className="block text-sm font-medium text-stone-600">Garantia de Micro em Macro</label>
                       {!viewMode && <button type="button" onClick={addGuaranteeMacro} className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded hover:bg-emerald-200 flex items-center gap-1"><Plus className="w-3 h-3" />Add</button>}
@@ -370,6 +381,14 @@ export default function ProductManager() {
                       onChange={e => setMicroForm(p => ({ ...p, name: e.target.value }))}
                       className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 disabled:bg-stone-50"
                       placeholder="Ex: Zinco Sulfato, Boro..." />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-stone-600 mb-1">Quantidade Mínima (kg)</label>
+                    <input type="number" min="0" disabled={viewMode}
+                      value={microForm.minQuantity || 0}
+                      onChange={e => setMicroForm(p => ({ ...p, minQuantity: Number(e.target.value) }))}
+                      className="w-full sm:w-1/3 px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 disabled:bg-stone-50"
+                      placeholder="Ex: 5" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-stone-600 mb-2">Categorias</label>
@@ -428,6 +447,14 @@ export default function ProductManager() {
                       rows={3}
                       className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 disabled:bg-stone-50 resize-none"
                       placeholder="Detalhes adicionais..." />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-stone-600 mb-1">Quantidade Mínima (kg)</label>
+                    <input type="number" min="0" disabled={viewMode}
+                      value={finishedForm.minQuantity || 0}
+                      onChange={e => setFinishedForm(p => ({ ...p, minQuantity: Number(e.target.value) }))}
+                      className="w-full sm:w-1/3 px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 disabled:bg-stone-50"
+                      placeholder="Ex: 1000" />
                   </div>
                 </>
               )}

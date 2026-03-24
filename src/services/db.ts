@@ -404,6 +404,7 @@ function macroToDb(m: Partial<MacroMaterial>) {
   if (m.categories !== undefined) d.categories = m.categories;
   if (m.formulaSuffix !== undefined) d.formula_suffix = m.formulaSuffix;
   if (m.isPremiumLine !== undefined) d.is_premium_line = m.isPremiumLine;
+  if (m.minQuantity !== undefined) d.min_quantity = m.minQuantity;
   return d;
 }
 
@@ -422,6 +423,7 @@ function mapMacro(data: any): MacroMaterial {
     categories: data.categories || [],
     formulaSuffix: data.formula_suffix,
     isPremiumLine: data.is_premium_line || false,
+    minQuantity: data.min_quantity ? Number(data.min_quantity) : 0,
   };
 }
 
@@ -498,6 +500,7 @@ function microToDb(m: Partial<MicroMaterial>) {
   if (m.microGuarantees !== undefined) d.micro_guarantees = m.microGuarantees;
   if (m.categories !== undefined) d.categories = m.categories;
   if (m.formulaSuffix !== undefined) d.formula_suffix = m.formulaSuffix;
+  if (m.minQuantity !== undefined) d.min_quantity = m.minQuantity;
   return d;
 }
 
@@ -509,6 +512,7 @@ function mapMicro(data: any): MicroMaterial {
     microGuarantees: data.micro_guarantees || [],
     categories: data.categories || [],
     formulaSuffix: data.formula_suffix,
+    minQuantity: data.min_quantity ? Number(data.min_quantity) : 0,
   };
 }
 
@@ -524,17 +528,18 @@ export async function getFinishedProducts(): Promise<FinishedProduct[]> {
     name: d.name,
     description: d.description,
     price: d.price ? Number(d.price) : undefined,
+    minQuantity: d.min_quantity ? Number(d.min_quantity) : 0,
   }));
 }
 
 export async function createFinishedProduct(product: Omit<FinishedProduct, 'id'>): Promise<FinishedProduct> {
   const { data, error } = await supabase
     .from('finished_products')
-    .insert({ code: product.code, name: product.name, description: product.description, price: product.price })
+    .insert({ code: product.code, name: product.name, description: product.description, price: product.price, min_quantity: product.minQuantity || 0 })
     .select()
     .single();
   if (error) throw error;
-  return { id: data.id, code: data.code, name: data.name, description: data.description, price: data.price ? Number(data.price) : undefined };
+  return { id: data.id, code: data.code, name: data.name, description: data.description, price: data.price ? Number(data.price) : undefined, minQuantity: data.min_quantity ? Number(data.min_quantity) : 0 };
 }
 
 export async function updateFinishedProduct(id: string, product: Partial<FinishedProduct>): Promise<void> {
@@ -543,6 +548,7 @@ export async function updateFinishedProduct(id: string, product: Partial<Finishe
     name: product.name,
     description: product.description,
     price: product.price,
+    min_quantity: product.minQuantity,
     updated_at: new Date().toISOString(),
   }).eq('id', id);
   if (error) throw error;

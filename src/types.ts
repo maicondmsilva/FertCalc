@@ -8,6 +8,7 @@ export interface FinishedProduct {
   name: string;
   description?: string;
   price?: number;
+  minQuantity?: number;
 }
 
 export interface MicroGuarantee {
@@ -43,6 +44,7 @@ export interface RawMaterial {
   formulaSuffix?: string;
   isPremiumLine?: boolean;
   isFertigranP?: boolean;
+  minQuantity?: number;
 }
 
 export interface CompatibilityCategory {
@@ -253,6 +255,7 @@ export interface MacroMaterial {
   categories?: string[];
   formulaSuffix?: string;
   isPremiumLine?: boolean;
+  minQuantity?: number;
 }
 
 export interface MicroMaterial {
@@ -262,6 +265,7 @@ export interface MicroMaterial {
   microGuarantees: MicroGuarantee[];
   categories?: string[];
   formulaSuffix?: string;
+  minQuantity?: number;
 }
 
 export interface TargetFormula {

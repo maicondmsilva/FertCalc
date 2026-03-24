@@ -6,6 +6,8 @@ import { getClients, getAgents, getBranches, getPriceLists, getIncompatibilityRu
 import { useToast } from './Toast';
 import { formatNPK } from '../utils/formatters';
 import { FertigranPComparisonModal } from './FertigranPComparisonModal';
+import { useCalculatorSettings } from '../hooks/useCalculatorSettings';
+import { CalculatorSettingsModal } from './CalculatorSettingsModal';
 
 const defaultMacros: RawMaterial[] = [
   { id: 'm1', type: 'macro', name: 'Ureia', price: 2500, n: 45, p: 0, k: 0, s: 0, ca: 0, microGuarantees: [], minQty: 50, maxQty: 1000, selected: true, quantity: 0 },
@@ -36,6 +38,7 @@ const getAutoWidth = (val: any) => {
 
 export default function Calculator({ initialData, initialFormulaToLoad, initialBranchId, initialPriceListId, onClearEditing, onSaveSuccess, currentUser }: CalculatorProps) {
   const { showSuccess, showError } = useToast();
+  const { isSettingsOpen, openSettings, closeSettings } = useCalculatorSettings();
   const [status, setStatus] = useState<'Em Andamento' | 'Fechada' | 'Perdida'>('Em Andamento');
 
   const [isFertigranPModalOpen, setIsFertigranPModalOpen] = useState(false);
@@ -162,10 +165,14 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
         setMacros(selectedList.macros.map(m => ({
           ...m,
           selected: m.isPremiumLine ? false : (m.selected ?? true),
-          minQty: m.type === 'macro' && !m.name.toLowerCase().includes('enchimento') ? 50 : (m.minQty || 0)
+          minQty: m.minQuantity !== undefined ? m.minQuantity : (m.type === 'macro' && !m.name.toLowerCase().includes('enchimento') ? 50 : (m.minQty || 0))
         })));
         // Micros chegam sempre desmarcados — usuário escolhe quais usar
-        setMicros(selectedList.micros.map(m => ({ ...m, selected: false, minQty: 0 })));
+        setMicros(selectedList.micros.map(m => ({ 
+          ...m, 
+          selected: false, 
+          minQty: m.minQuantity !== undefined ? m.minQuantity : (m.minQty || 0) 
+        })));
         setCurrency(selectedList.currency || 'BRL');
       }
     }
@@ -1069,11 +1076,18 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
                       ))}
                     </select>
                     <button
+                      onClick={() => openSettings(calc.id)}
+                      className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                      title="Configurar Produtos"
+                    >
+                      <Settings className="w-3.5 h-3.5" />
+                    </button>
+                    <button
                       onClick={() => setExpandedCalc(expandedCalc === calc.id ? null : calc.id)}
                       className={`p-1.5 rounded transition-colors ${expandedCalc === calc.id ? 'bg-indigo-100 text-indigo-700' : 'text-indigo-600 hover:bg-indigo-50'}`}
                       title="Fatores e Micronutrientes"
                     >
-                      <Settings className="w-3.5 h-3.5" />
+                      <CalculatorIcon className="w-3.5 h-3.5" />
                     </button>
                     <button
                       onClick={() => calculateFormula(calc.id)}
@@ -1089,6 +1103,51 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
+
+                  {/* Selected Macros and Micros with Min Quantity Adjustments */}
+                  {[...calc.macros, ...calc.micros].filter(m => m.selected).length > 0 && (
+                    <div className="mt-4 pt-3 border-t border-stone-100">
+                      <p className="text-[10px] uppercase font-bold text-stone-500 mb-2">Macros Selecionados</p>
+                      <div className="flex flex-wrap gap-2">
+                        {[...calc.macros, ...calc.micros].filter(m => m.selected).map(m => (
+                          <div key={m.id} className="flex items-center gap-2 bg-stone-50 border border-stone-200 rounded px-2 py-1 text-xs shadow-sm">
+                            <span className="font-medium text-stone-700 truncate max-w-[120px]" title={m.name}>{m.name}</span>
+                            <span className="text-[10px] text-stone-400">(Mín: {m.minQuantity || 0})</span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={m.minQty === 0 ? '' : m.minQty}
+                              onChange={(e) => {
+                                const val = Number(e.target.value);
+                                if (m.type === 'macro') {
+                                  updateCalculation(calc.id, 'macros', calc.macros.map(mac => mac.id === m.id ? { ...mac, minQty: val, quantity: val } : mac));
+                                } else {
+                                  updateCalculation(calc.id, 'micros', calc.micros.map(mic => mic.id === m.id ? { ...mic, minQty: val, quantity: val } : mic));
+                                }
+                              }}
+                              className="w-14 px-1 py-0.5 text-right border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500 bg-white"
+                              placeholder="0"
+                              title="Ajuste a quantidade mínima"
+                            />
+                            <span className="text-stone-500 font-medium">kg</span>
+                            <button
+                              onClick={() => {
+                                if (m.type === 'macro') {
+                                  updateCalculation(calc.id, 'macros', calc.macros.map(mac => mac.id === m.id ? { ...mac, selected: false } : mac));
+                                } else {
+                                  updateCalculation(calc.id, 'micros', calc.micros.map(mic => mic.id === m.id ? { ...mic, selected: false } : mic));
+                                }
+                              }}
+                              className="text-stone-400 hover:text-red-500 ml-1 transition-colors"
+                              title="Remover produto da fórmula"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Expanded Gear Panel \u2014 absolute, extends right toward summary */}
                   {expandedCalc === calc.id && (
@@ -1411,363 +1470,27 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
                   )}
                 </div>
               ))}
-              <button
-                onClick={addTargetFormula}
-                className="w-full py-2 border-2 border-dashed border-stone-300 rounded-lg text-stone-500 hover:border-emerald-500 hover:text-emerald-600 transition-all text-xs font-bold flex items-center justify-center"
-              >
-                <Plus className="w-4 h-4 mr-1" /> Adicionar Fórmula Alvo
-              </button>
-              {(calculations.some(c => c.selected) || macros.some(m => m.selected) || micros.some(m => m.selected)) && (
+              <div className="flex gap-2">
+                <button
+                  onClick={addTargetFormula}
+                  className="w-full py-2 border-2 border-dashed border-stone-300 rounded-lg text-stone-500 hover:border-emerald-500 hover:text-emerald-600 transition-all text-xs font-bold flex items-center justify-center"
+                >
+                  <Plus className="w-4 h-4 mr-1" /> Adicionar Fórmula Alvo
+                </button>
+              </div>
+              {calculations.some(c => c.selected) && (
                 <button
                   onClick={() => calculateFormula()}
-                  className="w-full py-2 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 transition-colors shadow-sm text-sm"
+                  className="w-full py-2 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 transition-colors shadow-sm text-sm flex items-center justify-center"
                 >
-                  Calcular Selecionadas
+                  <CalculatorIcon className="w-4 h-4 mr-2" /> Calcular Fórmulas Selecionadas
                 </button>
               )}
             </div>
           </div>
         </div>
 
-        {/* Macronutrients */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200 overflow-x-auto">
-          <div className="flex justify-between items-center mb-4">
-            <div className="flex-1">
-              <h2 className="text-lg font-semibold text-stone-800 mb-3">Macronutrientes</h2>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setMicrosInGear(v => !v)}
-                title={microsInGear ? 'Micros na engrenagem (clique para tabela separada)' : 'Micros em tabela separada (clique para mover para engrenagem)'}
-                className={`text-xs px-2 py-1 rounded border font-bold transition-colors flex items-center gap-1 ${microsInGear
-                  ? 'bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100'
-                  : 'bg-stone-100 border-stone-300 text-stone-600 hover:bg-stone-200'
-                  }`}
-              >
-                <Settings className="w-3 h-3" />
-                {microsInGear ? 'Micros: ⚙' : 'Micros: tabela'}
-              </button>
-              {!isLocked && (
-                <button onClick={addMacro} className="text-sm bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg font-medium hover:bg-emerald-100 flex items-center">
-                  <Plus className="w-4 h-4 mr-1" /> Adicionar
-                </button>
-              )}
-            </div>
-          </div>
-          <table className="w-full text-sm text-left">
-            <thead className="text-xs text-stone-500 uppercase bg-stone-50">
-              <tr>
-                <th className="px-3 py-2">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      disabled={isLocked}
-                      checked={macros.length > 0 && macros.every(m => m.selected)}
-                      onChange={(e) => setMacros(macros.map(m => ({ ...m, selected: e.target.checked })))}
-                      className={`rounded text-emerald-600 focus:ring-emerald-500 ${isLocked ? 'cursor-not-allowed' : ''}`}
-                    />
-                    <span>Usar</span>
-                  </div>
-                </th>
-                <th className="px-2 py-2 min-w-[150px]">M. Prima</th>
-                <th className="px-2 py-2 w-20">Preço ({currency === 'BRL' ? 'R$' : 'US$'})</th>
-                <th className="px-1 py-2 w-16">N%</th>
-                <th className="px-1 py-2 w-16">P%</th>
-                <th className="px-1 py-2 w-16">K%</th>
-                <th className="px-1 py-2 w-16">S%</th>
-                <th className="px-1 py-2 w-16">Ca%</th>
-                <th className="px-1 py-2 w-20">Min(kg)</th>
-                <th className="px-1 py-2 w-20">Max(kg)</th>
-                <th className="px-2 py-2 w-24">Qtd(kg)</th>
-                <th className="px-1 py-2 w-8"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {[
-                ...macros.filter(m => !m.isPremiumLine).map(m => ({ m, itemType: 'normal' })),
-                ...(macros.some(m => m.isPremiumLine) ? [{ itemType: 'header', id: 'premium-header' } as any] : []),
-                ...macros.filter(m => m.isPremiumLine).map(m => ({ m, itemType: 'premium' }))
-              ].map((row: any) => {
-                if (row.itemType === 'header') {
-                  return (
-                    <tr key="premium-header"><td colSpan={12} className="px-3 py-1.5 bg-amber-50 border-t border-amber-200">
-                      <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">⭐ Linha Diferenciada / Premium</span>
-                    </td></tr>
-                  );
-                }
-                const m = row.m as RawMaterial;
-                return (
-                  <tr key={m.id} className={`border-b border-stone-100 ${row.itemType === 'premium' ? 'bg-amber-50/40' : 'hover:bg-stone-50/50'}`}>
-                  <td className="px-3 py-2">
-                    <input type="checkbox" checked={m.selected} disabled={isLocked} onChange={(e) => handleMacroChange(m.id, 'selected', e.target.checked)} className={`rounded text-emerald-600 focus:ring-emerald-500 ${isLocked ? 'cursor-not-allowed' : ''}`} />
-                  </td>
-                  <td className="px-3 py-2"><input type="text" value={m.name || ''} disabled={isLocked} onChange={(e) => handleMacroChange(m.id, 'name', e.target.value)} className={`w-full border-stone-200 rounded px-2 py-1 ${isLocked ? 'bg-stone-50 cursor-not-allowed' : ''}`} /></td>
-                  <td className="px-3 py-2">
-                    <input
-                      type="number"
-                      value={m.price === 0 ? '' : m.price}
-                      placeholder="0"
-                      disabled={isLocked}
-                      onChange={(e) => handleMacroChange(m.id, 'price', e.target.value === '' ? 0 : Number(e.target.value))}
-                      style={getAutoWidth(m.price)}
-                      className={`border-stone-200 rounded px-2 py-1 ${isLocked ? 'bg-stone-50 cursor-not-allowed' : ''}`}
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input
-                      type="number"
-                      value={m.n === 0 ? '' : m.n}
-                      placeholder="0"
-                      disabled={isLocked}
-                      onChange={(e) => handleMacroChange(m.id, 'n', e.target.value === '' ? 0 : Number(e.target.value))}
-                      style={getAutoWidth(m.n)}
-                      className={`border-stone-200 rounded px-2 py-1 ${isLocked ? 'bg-stone-50 cursor-not-allowed' : ''}`}
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input
-                      type="number"
-                      value={m.p === 0 ? '' : m.p}
-                      placeholder="0"
-                      disabled={isLocked}
-                      onChange={(e) => handleMacroChange(m.id, 'p', e.target.value === '' ? 0 : Number(e.target.value))}
-                      style={getAutoWidth(m.p)}
-                      className={`border-stone-200 rounded px-2 py-1 ${isLocked ? 'bg-stone-50 cursor-not-allowed' : ''}`}
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input
-                      type="number"
-                      value={m.k === 0 ? '' : m.k}
-                      placeholder="0"
-                      disabled={isLocked}
-                      onChange={(e) => handleMacroChange(m.id, 'k', e.target.value === '' ? 0 : Number(e.target.value))}
-                      style={getAutoWidth(m.k)}
-                      className={`border-stone-200 rounded px-2 py-1 ${isLocked ? 'bg-stone-50 cursor-not-allowed' : ''}`}
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input
-                      type="number"
-                      value={m.s === 0 ? '' : m.s}
-                      placeholder="0"
-                      disabled={isLocked}
-                      onChange={(e) => handleMacroChange(m.id, 's', e.target.value === '' ? 0 : Number(e.target.value))}
-                      style={getAutoWidth(m.s)}
-                      className={`border-stone-200 rounded px-2 py-1 ${isLocked ? 'bg-stone-50 cursor-not-allowed' : ''}`}
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input
-                      type="number"
-                      value={m.ca === 0 ? '' : m.ca}
-                      placeholder="0"
-                      disabled={isLocked}
-                      onChange={(e) => handleMacroChange(m.id, 'ca', e.target.value === '' ? 0 : Number(e.target.value))}
-                      style={getAutoWidth(m.ca)}
-                      className={`border-stone-200 rounded px-2 py-1 ${isLocked ? 'bg-stone-50 cursor-not-allowed' : ''}`}
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input
-                      type="number"
-                      value={m.minQty === 0 ? '' : m.minQty}
-                      placeholder="0"
-                      disabled={isLocked}
-                      onChange={(e) => handleMacroChange(m.id, 'minQty', e.target.value === '' ? 0 : Number(e.target.value))}
-                      style={getAutoWidth(m.minQty)}
-                      className={`border-stone-200 rounded px-2 py-1 ${isLocked ? 'bg-stone-50 cursor-not-allowed' : ''}`}
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input
-                      type="number"
-                      value={m.maxQty === 0 ? '' : m.maxQty}
-                      placeholder="0"
-                      disabled={isLocked}
-                      onChange={(e) => handleMacroChange(m.id, 'maxQty', e.target.value === '' ? 0 : Number(e.target.value))}
-                      style={getAutoWidth(m.maxQty)}
-                      className={`border-stone-200 rounded px-2 py-1 ${isLocked ? 'bg-stone-50 cursor-not-allowed' : ''}`}
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input
-                      type="number"
-                      value={m.quantity === 0 ? '' : m.quantity}
-                      placeholder="0"
-                      disabled={isLocked}
-                      onChange={(e) => handleMacroChange(m.id, 'quantity', e.target.value === '' ? 0 : Number(e.target.value))}
-                      style={getAutoWidth(m.quantity)}
-                      className={`border-emerald-300 rounded px-2 py-1 focus:ring-emerald-500 ${isLocked ? 'bg-stone-50 cursor-not-allowed' : ''}`}
-                    />
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    {!isLocked && (
-                      <button onClick={() => removeMacro(m.id)} className="text-red-500 hover:text-red-700">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Micronutrients */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200 overflow-x-auto">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold text-stone-800 mb-3">Micronutrientes</h2>
-            {!isLocked && (
-              <button onClick={addMicro} className="text-sm bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg font-medium hover:bg-emerald-100 flex items-center">
-                <Plus className="w-4 h-4 mr-1" /> Adicionar
-              </button>
-            )}
-          </div>
-          <table className="w-full text-sm text-left">
-            <thead className="text-xs text-stone-500 uppercase bg-stone-50">
-              <tr>
-                <th className="px-3 py-2">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      disabled={isLocked}
-                      checked={micros.length > 0 && micros.every(m => m.selected)}
-                      onChange={(e) => setMicros(micros.map(m => ({ ...m, selected: e.target.checked })))}
-                      className={`rounded text-emerald-600 focus:ring-emerald-500 ${isLocked ? 'cursor-not-allowed' : ''}`}
-                    />
-                    <span>Usar</span>
-                  </div>
-                </th>
-                <th className="px-2 py-2 min-w-[150px]">M. Prima</th>
-                <th className="px-2 py-2 w-20">Preço ({currency === 'BRL' ? 'R$' : 'US$'})</th>
-                <th className="px-2 py-2">Garantias Micros</th>
-                <th className="px-1 py-1 w-20">Min(kg)</th>
-                <th className="px-1 py-1 w-20">Max(kg)</th>
-                <th className="px-2 py-2 w-24">Qtd(kg)</th>
-                <th className="px-1 py-1 w-8"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {micros.map((m) => (
-                <tr key={m.id} className="border-b border-stone-100">
-                  <td className="px-3 py-2">
-                    <input type="checkbox" checked={m.selected} disabled={isLocked} onChange={(e) => handleMicroChange(m.id, 'selected', e.target.checked)} className={`rounded text-emerald-600 focus:ring-emerald-500 ${isLocked ? 'cursor-not-allowed' : ''}`} />
-                  </td>
-                  <td className="px-3 py-2"><input type="text" value={m.name || ''} disabled={isLocked} onChange={(e) => handleMicroChange(m.id, 'name', e.target.value)} className={`w-full border-stone-200 rounded px-2 py-1 ${isLocked ? 'bg-stone-50 cursor-not-allowed' : ''}`} /></td>
-                  <td className="px-3 py-2">
-                    <input
-                      type="number"
-                      value={m.price === 0 ? '' : m.price}
-                      placeholder="0"
-                      disabled={isLocked}
-                      onChange={(e) => handleMicroChange(m.id, 'price', e.target.value === '' ? 0 : Number(e.target.value))}
-                      style={getAutoWidth(m.price)}
-                      className={`border-stone-200 rounded px-2 py-1 ${isLocked ? 'bg-stone-50 cursor-not-allowed' : ''}`}
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="space-y-1">
-                      {m.microGuarantees.map((g, idx) => (
-                        <div key={idx} className="flex gap-1 items-center">
-                          <input
-                            type="text"
-                            value={g.name || ''}
-                            disabled={isLocked}
-                            onChange={(e) => {
-                              const newG = [...m.microGuarantees];
-                              newG[idx].name = e.target.value;
-                              handleMicroChange(m.id, 'microGuarantees', newG);
-                            }}
-                            style={getAutoWidth(g.name)}
-                            className={`border-stone-200 rounded px-1 py-0.5 text-xs ${isLocked ? 'bg-stone-50 cursor-not-allowed' : ''}`}
-                            placeholder="Nome"
-                          />
-                          <input
-                            type="number"
-                            value={g.value === 0 ? '' : g.value}
-                            disabled={isLocked}
-                            onChange={(e) => {
-                              const newG = [...m.microGuarantees];
-                              newG[idx].value = e.target.value === '' ? 0 : Number(e.target.value);
-                              handleMicroChange(m.id, 'microGuarantees', newG);
-                            }}
-                            style={getAutoWidth(g.value)}
-                            className={`border-stone-200 rounded px-1 py-0.5 text-xs ${isLocked ? 'bg-stone-50 cursor-not-allowed' : ''}`}
-                            placeholder="%"
-                          />
-                          {!isLocked && (
-                            <button
-                              onClick={() => {
-                                const newG = m.microGuarantees.filter((_, i) => i !== idx);
-                                handleMicroChange(m.id, 'microGuarantees', newG);
-                              }}
-                              className="text-red-400 hover:text-red-600"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                      {!isLocked && (
-                        <button
-                          onClick={() => {
-                            const newG = [...m.microGuarantees, { name: '', value: 0 }];
-                            handleMicroChange(m.id, 'microGuarantees', newG);
-                          }}
-                          className="text-[10px] text-emerald-600 hover:underline flex items-center"
-                        >
-                          <Plus className="w-3 h-3 mr-0.5" /> Add Garantia
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2">
-                    <input
-                      type="number"
-                      value={m.minQty === 0 ? '' : m.minQty}
-                      placeholder="0"
-                      disabled={isLocked}
-                      onChange={(e) => handleMicroChange(m.id, 'minQty', e.target.value === '' ? 0 : Number(e.target.value))}
-                      style={getAutoWidth(m.minQty)}
-                      className={`border-stone-200 rounded px-2 py-1 ${isLocked ? 'bg-stone-50 cursor-not-allowed' : ''}`}
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input
-                      type="number"
-                      value={m.maxQty === 0 ? '' : m.maxQty}
-                      placeholder="0"
-                      disabled={isLocked}
-                      onChange={(e) => handleMicroChange(m.id, 'maxQty', e.target.value === '' ? 0 : Number(e.target.value))}
-                      style={getAutoWidth(m.maxQty)}
-                      className={`border-stone-200 rounded px-2 py-1 ${isLocked ? 'bg-stone-50 cursor-not-allowed' : ''}`}
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input
-                      type="number"
-                      value={m.quantity === 0 ? '' : m.quantity}
-                      placeholder="0"
-                      disabled={isLocked}
-                      onChange={(e) => handleMicroChange(m.id, 'quantity', e.target.value === '' ? 0 : Number(e.target.value))}
-                      style={getAutoWidth(m.quantity)}
-                      className={`border-emerald-300 rounded px-2 py-1 focus:ring-emerald-500 ${isLocked ? 'bg-stone-50 cursor-not-allowed' : ''}`}
-                    />
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    {!isLocked && (
-                      <button onClick={() => removeMicro(m.id)} className="text-red-500 hover:text-red-700">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {/* O Modal de configurações substituiu as tabelas de Macros e Micros */}
 
         <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
           <h2 className="text-lg font-semibold text-stone-800 mb-4">Observação Comercial (para PDF)</h2>
@@ -1900,6 +1623,16 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
           }}
         />
       )}
+      <CalculatorSettingsModal
+        isOpen={isSettingsOpen}
+        onClose={closeSettings}
+        formula={calculations.find(c => c.id === activeFormulaId) || null}
+        globalMacros={macros}
+        globalMicros={micros}
+        onConfirm={(updatedFormula) => {
+          setCalculations(calculations.map(c => c.id === updatedFormula.id ? updatedFormula : c));
+        }}
+      />
     </div>
   );
 }
