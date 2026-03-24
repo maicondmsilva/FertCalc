@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   LayoutDashboard, 
   FileEdit, 
@@ -76,6 +76,62 @@ interface ManagementReportsModuleProps {
 
 const MotionDiv = motion.div as any;
 const AnimatePresenceComponent = AnimatePresence as any;
+
+// --- Visual ID generation ---
+const CATEGORIA_PREFIXOS: Record<string, string> = {
+  'Faturamento': 'f',
+  'Carregamento': 'c',
+  'Rentabilidade': 'r',
+  'Cancelamentos': 'n',
+  'Entrada de Pedidos': 'e',
+  'Carteira de Pedidos': 't',
+  'Produção': 'p',
+};
+
+function gerarPrefixoCategoria(categoriaNome: string, prefixosUsados: Set<string>): string {
+  const padrao = CATEGORIA_PREFIXOS[categoriaNome];
+  if (padrao && !prefixosUsados.has(padrao)) return padrao;
+
+  const nome = categoriaNome.toLowerCase().replace(/\s/g, '');
+  for (const char of nome) {
+    if (/[a-z]/.test(char) && !prefixosUsados.has(char)) return char;
+  }
+  // Last resort: find any unused letter a-z
+  for (let i = 0; i < 26; i++) {
+    const c = String.fromCharCode(97 + i);
+    if (!prefixosUsados.has(c)) return c;
+  }
+  return 'x';
+}
+
+function gerarIdsVisuais(
+  indicadores: Indicador[],
+  categorias: Categoria[]
+): { visualIdMap: Record<string, string>; reverseVisualIdMap: Record<string, string> } {
+  const visualIdMap: Record<string, string> = {};
+  const reverseVisualIdMap: Record<string, string> = {};
+  const prefixosUsados = new Set<string>();
+
+  const categoriaPrefixo: Record<string, string> = {};
+  [...categorias].sort((a, b) => a.ordem - b.ordem).forEach(cat => {
+    const prefixo = gerarPrefixoCategoria(cat.nome, prefixosUsados);
+    categoriaPrefixo[cat.nome] = prefixo;
+    prefixosUsados.add(prefixo);
+  });
+
+  const contadores: Record<string, number> = {};
+  [...indicadores]
+    .sort((a, b) => (a.ordem || 0) - (b.ordem || 0))
+    .forEach(ind => {
+      const prefixo = categoriaPrefixo[ind.categoria] || 'x';
+      contadores[prefixo] = (contadores[prefixo] || 0) + 1;
+      const visualId = `${prefixo}${contadores[prefixo]}`;
+      visualIdMap[ind.id] = visualId;
+      reverseVisualIdMap[visualId] = ind.id;
+    });
+
+  return { visualIdMap, reverseVisualIdMap };
+}
 
 // --- UI Components ---
 
@@ -203,11 +259,13 @@ const Modal = ({
 const SortableIndicadorRow = ({ 
   indicador, 
   onEdit, 
-  onDelete 
+  onDelete,
+  visualId
 }: { 
   indicador: Indicador; 
   onEdit: (i: Indicador) => void; 
   onDelete: (id: string) => void;
+  visualId: string;
 }) => {
   const {
     attributes,
@@ -234,7 +292,7 @@ const SortableIndicadorRow = ({
       </td>
       <td className="px-4 py-3">
         <span className="font-medium text-slate-900">{indicador.nome}</span>
-        <span className="block text-[10px] text-slate-400 font-mono">ID: {indicador.id}</span>
+        <span className="block text-[10px] text-indigo-500 font-mono font-bold">ID: {visualId}</span>
       </td>
       <td className="px-4 py-3 text-slate-600">{indicador.unidade_medida}</td>
       <td className="px-4 py-3">
@@ -320,6 +378,11 @@ const Dashboard = ({
   diasUteis: DiasUteisMes[];
 }) => {
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+
+  const { reverseVisualIdMap } = useMemo(
+    () => gerarIdsVisuais(indicadores, categorias),
+    [indicadores, categorias]
+  );
   
   const activeUnidades = unidades.filter(u => u.ativo).sort((a, b) => a.ordem_exibicao - b.ordem_exibicao);
   
@@ -364,9 +427,10 @@ const Dashboard = ({
 
   const avaliarFormula = (formula: string, valores: Record<string, number>): number => {
     try {
-      // Replace [id] references with their numeric values
-      let expressao = formula.replace(/\[([^\]]+)\]/g, (_, id) => {
-        const val = valores[id.trim()];
+      // Replace [visualId] references — resolve to internal id via reverseVisualIdMap first
+      let expressao = formula.replace(/\[([^\]]+)\]/g, (_, visualId) => {
+        const idInterno = reverseVisualIdMap[visualId.trim()] || visualId.trim();
+        const val = valores[idInterno];
         return val !== undefined ? String(val) : '0';
       });
 
@@ -448,7 +512,11 @@ const Dashboard = ({
     const formulaIndicadores = indicadores.filter(ind => !ind.digitavel && ind.formula);
     const getDeps = (formula: string): string[] => {
       const deps: string[] = [];
-      formula.replace(/\[([^\]]+)\]/g, (_, id) => { deps.push(id.trim()); return ''; });
+      formula.replace(/\[([^\]]+)\]/g, (_, visualId) => {
+        const idInterno = reverseVisualIdMap[visualId.trim()] || visualId.trim();
+        deps.push(idInterno);
+        return '';
+      });
       return deps;
     };
     const visited = new Set<string>();
@@ -637,6 +705,11 @@ const Lancamentos = ({
   const [values, setValues] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
 
+  const { visualIdMap } = useMemo(
+    () => gerarIdsVisuais(indicadores, categorias),
+    [indicadores, categorias]
+  );
+
   useEffect(() => {
     if (selectedUnidade && selectedDate) {
       getMgmtLancamentos({ data: selectedDate, unidade_id: selectedUnidade })
@@ -801,6 +874,11 @@ const Cadastros = ({
   const [modalType, setModalType] = useState<'unidade' | 'indicador' | 'categoria' | 'meta' | null>(null);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [isDigitavel, setIsDigitavel] = useState(true);
+
+  const { visualIdMap } = useMemo(
+    () => gerarIdsVisuais(indicadores, categorias),
+    [indicadores, categorias]
+  );
 
   const handleOpenModal = (type: 'unidade' | 'indicador' | 'categoria' | 'meta', item: any = null) => {
     setModalType(type);
@@ -968,6 +1046,13 @@ const Cadastros = ({
               )}
               {modalType === 'indicador' && (
                 <>
+                  {editingItem && (
+                    <div className="bg-indigo-50 p-2 rounded-lg">
+                      <p className="text-xs text-indigo-600 font-mono font-bold">
+                        ID para fórmulas: {visualIdMap[editingItem.id] || editingItem.id}
+                      </p>
+                    </div>
+                  )}
                   <div className="space-y-2">
                     <label className="text-sm font-bold text-slate-700">Nome do Indicador</label>
                     <Input name="nome" defaultValue={editingItem?.nome} placeholder="Ex: Tons Vendidos" required />
@@ -994,10 +1079,11 @@ const Cadastros = ({
                       <Input
                         name="formula"
                         defaultValue={editingItem?.formula || ''}
-                        placeholder="Ex: [f1] / [v1]"
+                        placeholder="Ex: [f1] / [f2]"
                       />
                       <p className="text-xs text-slate-400">
-                        💡 Use [id] para referenciar outros indicadores. Ex: [f1] / [v1] para Ticket Médio.
+                        💡 Use [id] para referenciar outros indicadores. Ex: [f1] / [f2] para Ticket Médio.
+                        Os IDs visuais são exibidos abaixo do nome de cada indicador na tabela acima.
                       </p>
                     </div>
                   )}
@@ -1200,6 +1286,7 @@ const Cadastros = ({
                                   indicador={i} 
                                   onEdit={(ind) => handleOpenModal('indicador', ind)}
                                   onDelete={onDeleteIndicador}
+                                  visualId={visualIdMap[i.id] || i.id}
                                 />
                               ))}
                             </SortableContext>
