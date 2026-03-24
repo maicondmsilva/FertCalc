@@ -17,7 +17,8 @@ import {
   Download,
   Upload,
   Trash2,
-  Edit2
+  Edit2,
+  BookOpen
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, startOfMonth, eachDayOfInterval, isSameDay, parseISO } from 'date-fns';
@@ -362,10 +363,62 @@ const Dashboard = ({
   weekEnd.setDate(weekStart.getDate() + 6);
   weekEnd.setHours(23,59,59,999);
 
-  const avaliarFormula = (formula: string, valores: Record<string, number>): number => {
+  const avaliarFormula = (
+    formula: string,
+    valores: Record<string, number>,
+    aggCtx?: {
+      somaMes: (id: string) => number;
+      somaAno: (id: string) => number;
+      somaSemana: (id: string) => number;
+      mediaMes: (id: string) => number;
+      mediaPonderadaMes: (rentId: string, volId: string) => number;
+      metaMes: (id: string) => number;
+      diasUteisFn: () => number;
+      diasRestantesFn: () => number;
+    }
+  ): number => {
     try {
-      // Replace [id] references with their numeric values
-      let expressao = formula.replace(/\[([^\]]+)\]/g, (_, id) => {
+      let expressao = formula;
+
+      // Process temporal aggregation functions BEFORE simple [id] references
+      if (aggCtx) {
+        // MEDIA_PONDERADA_MES([id1],[id2]) — two-arg, must come before MEDIA_MES
+        expressao = expressao.replace(
+          /MEDIA_PONDERADA_MES\(\[([^\]]+)\],\s*\[([^\]]+)\]\)/g,
+          (_, rentId, volId) => String(aggCtx.mediaPonderadaMes(rentId.trim(), volId.trim()))
+        );
+        expressao = expressao.replace(
+          /SOMA_MES\(\[([^\]]+)\]\)/g,
+          (_, id) => String(aggCtx.somaMes(id.trim()))
+        );
+        expressao = expressao.replace(
+          /SOMA_ANO\(\[([^\]]+)\]\)/g,
+          (_, id) => String(aggCtx.somaAno(id.trim()))
+        );
+        expressao = expressao.replace(
+          /SOMA_SEMANA\(\[([^\]]+)\]\)/g,
+          (_, id) => String(aggCtx.somaSemana(id.trim()))
+        );
+        expressao = expressao.replace(
+          /MEDIA_MES\(\[([^\]]+)\]\)/g,
+          (_, id) => String(aggCtx.mediaMes(id.trim()))
+        );
+        expressao = expressao.replace(
+          /META_MES\(\[([^\]]+)\]\)/g,
+          (_, id) => String(aggCtx.metaMes(id.trim()))
+        );
+        expressao = expressao.replace(
+          /DIAS_UTEIS\(\)/g,
+          () => String(aggCtx.diasUteisFn())
+        );
+        expressao = expressao.replace(
+          /DIAS_RESTANTES\(\)/g,
+          () => String(aggCtx.diasRestantesFn())
+        );
+      }
+
+      // Replace simple [id] references with their numeric values
+      expressao = expressao.replace(/\[([^\]]+)\]/g, (_, id) => {
         const val = valores[id.trim()];
         return val !== undefined ? String(val) : '0';
       });
@@ -444,11 +497,37 @@ const Dashboard = ({
 
     const genericData = Object.fromEntries(indicadores.map(i => [i.id, getValor(u.id, i.id)]));
 
+    // Aggregation context for temporal formula functions
+    const aggCtx = {
+      somaMes: (id: string) => getSomaPeriodo(u.id, id, currentMonthStart, selectedDateObj),
+      somaAno: (id: string) => getSomaPeriodo(u.id, id, currentYearStart, selectedDateObj),
+      somaSemana: (id: string) => getSomaPeriodo(u.id, id, weekStart, selectedDateObj),
+      mediaMes: (id: string) => {
+        const dayValues = lancamentos.filter(
+          l => l.unidade_id === u.id && l.indicador_id === id &&
+               parseISO(l.data) >= currentMonthStart && parseISO(l.data) <= selectedDateObj
+        );
+        return dayValues.length > 0 ? dayValues.reduce((acc, l) => acc + l.valor, 0) / dayValues.length : 0;
+      },
+      mediaPonderadaMes: (rentId: string, volId: string) =>
+        getMediaPonderada(u.id, rentId, volId, currentMonthStart, selectedDateObj),
+      metaMes: (id: string) =>
+        metas.find(m => m.unidade_id === u.id && m.ano === year && m.mes === month && m.indicador_id === id)?.valor_meta || 0,
+      diasUteisFn: () => totalDiasUteis,
+      diasRestantesFn: () => diasRestantes,
+    };
+
     // Process calculated indicators with formulas in dependency order (topological sort)
     const formulaIndicadores = indicadores.filter(ind => !ind.digitavel && ind.formula);
     const getDeps = (formula: string): string[] => {
       const deps: string[] = [];
-      formula.replace(/\[([^\]]+)\]/g, (_, id) => { deps.push(id.trim()); return ''; });
+      // Strip aggregation function calls first so only simple [id] refs are tracked as deps
+      const formulaWithoutAgg = formula
+        .replace(/(?:SOMA_MES|SOMA_ANO|SOMA_SEMANA|MEDIA_MES|META_MES)\(\[[^\]]+\]\)/g, '0')
+        .replace(/MEDIA_PONDERADA_MES\(\[[^\]]+\],\s*\[[^\]]+\]\)/g, '0')
+        .replace(/DIAS_UTEIS\(\)/g, '0')
+        .replace(/DIAS_RESTANTES\(\)/g, '0');
+      formulaWithoutAgg.replace(/\[([^\]]+)\]/g, (_, id) => { deps.push(id.trim()); return ''; });
       return deps;
     };
     const visited = new Set<string>();
@@ -461,7 +540,7 @@ const Dashboard = ({
         const depInd = formulaIndicadores.find(i => i.id === depId);
         if (depInd) evaluate(depInd, stack);
       }
-      genericData[ind.id] = avaliarFormula(ind.formula!, genericData);
+      genericData[ind.id] = avaliarFormula(ind.formula!, genericData, aggCtx);
       visited.add(ind.id);
       stack.delete(ind.id);
     };
@@ -795,7 +874,7 @@ const Cadastros = ({
   onDeleteConfig: (unidade_id: string, indicador_id: string) => Promise<void>;
   onDeleteDiasUteis: (unidade_id: string, ano: number, mes: number) => Promise<void>;
 }) => {
-  const [activeTab, setActiveTab] = useState<'indicadores' | 'categorias' | 'metas' | 'config-unidades' | 'dias-uteis'>('categorias');
+  const [activeTab, setActiveTab] = useState<'unidades' | 'indicadores' | 'categorias' | 'metas' | 'config-unidades' | 'dias-uteis' | 'guia-formulas'>('categorias');
   const [selectedUnidade, setSelectedUnidade] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState<'unidade' | 'indicador' | 'categoria' | 'meta' | null>(null);
@@ -864,11 +943,13 @@ const Cadastros = ({
 
       <div className="flex border-b border-slate-200 gap-6 overflow-x-auto">
         {[
+          { id: 'unidades', label: 'Unidades', icon: Building2 },
           { id: 'categorias', label: 'Categorias', icon: LayoutDashboard },
           { id: 'indicadores', label: 'Indicadores', icon: BarChart3 },
           { id: 'metas', label: 'Metas Mensais', icon: Target },
           { id: 'config-unidades', label: 'Personalização', icon: Settings },
           { id: 'dias-uteis', label: 'Dias Úteis', icon: CalendarIcon },
+          { id: 'guia-formulas', label: 'Guia de Fórmulas', icon: BookOpen },
         ].map(tab => (
           <button
             key={tab.id}
@@ -1398,6 +1479,217 @@ const Cadastros = ({
                   ))}
                 </tbody>
               </table>
+            </Card>
+          </MotionDiv>
+        )}
+
+        {activeTab === 'guia-formulas' && (
+          <MotionDiv key="guia-formulas" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
+            <div>
+              <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-indigo-600" />
+                Guia de Fórmulas
+              </h2>
+              <p className="text-slate-500 mt-1">Aprenda a criar indicadores calculados usando fórmulas dinâmicas.</p>
+            </div>
+
+            {/* Como funciona */}
+            <Card className="p-6 space-y-3">
+              <h3 className="font-bold text-slate-800 text-base">🎯 Como Funciona</h3>
+              <ol className="list-decimal list-inside space-y-1 text-sm text-slate-600">
+                <li>Acesse <strong>Cadastros &gt; Indicadores</strong> e clique em <strong>Novo Indicador</strong>.</li>
+                <li>Preencha o nome, categoria e unidade de medida.</li>
+                <li>Desmarque a opção <strong>"Indicador Digitável"</strong>.</li>
+                <li>No campo <strong>Fórmula de Cálculo</strong>, digite a expressão desejada.</li>
+                <li>Salve — o Dashboard calculará o valor automaticamente.</li>
+              </ol>
+            </Card>
+
+            {/* Referências [id] e Operadores */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Card className="p-6 space-y-3">
+                <h3 className="font-bold text-slate-800 text-base">📌 Referências <code className="bg-slate-100 px-1 rounded">[id]</code></h3>
+                <p className="text-sm text-slate-600">Use <code className="bg-slate-100 px-1 rounded">[id]</code> para referenciar o valor do dia de outro indicador.</p>
+                <div className="bg-slate-50 rounded-lg p-3 font-mono text-sm text-slate-700 space-y-1">
+                  <div>[f1] / [v1]</div>
+                  <div>[r1] * 100</div>
+                  <div>([f2] + [f3]) / [f1]</div>
+                </div>
+                <p className="text-xs text-slate-400">O ID de cada indicador é exibido abaixo do nome na lista de Indicadores.</p>
+              </Card>
+
+              <Card className="p-6 space-y-3">
+                <h3 className="font-bold text-slate-800 text-base">➕ Operadores Disponíveis</h3>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-50">
+                      <th className="px-3 py-2 text-left font-semibold text-slate-600">Operador</th>
+                      <th className="px-3 py-2 text-left font-semibold text-slate-600">Descrição</th>
+                      <th className="px-3 py-2 text-left font-semibold text-slate-600">Exemplo</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {[
+                      ['+', 'Adição', '[f1] + [f2]'],
+                      ['-', 'Subtração', '[f1] - [f2]'],
+                      ['*', 'Multiplicação', '[r1] * [v1]'],
+                      ['/', 'Divisão', '[f1] / [v1]'],
+                      ['( )', 'Agrupamento', '([f1] + [f2]) / [v1]'],
+                    ].map(([op, desc, ex]) => (
+                      <tr key={op} className="hover:bg-slate-50">
+                        <td className="px-3 py-2 font-mono font-bold text-indigo-600">{op}</td>
+                        <td className="px-3 py-2 text-slate-600">{desc}</td>
+                        <td className="px-3 py-2 font-mono text-xs text-slate-500">{ex}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </Card>
+            </div>
+
+            {/* Funções de Agregação */}
+            <Card className="p-6 space-y-3">
+              <h3 className="font-bold text-slate-800 text-base">📊 Funções de Agregação Temporal</h3>
+              <p className="text-sm text-slate-600">Essas funções calculam acumulados e médias ao longo do tempo com base nos lançamentos registrados.</p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-50">
+                      <th className="px-3 py-2 text-left font-semibold text-slate-600">Função</th>
+                      <th className="px-3 py-2 text-left font-semibold text-slate-600">Descrição</th>
+                      <th className="px-3 py-2 text-left font-semibold text-slate-600">Exemplo</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {[
+                      ['SOMA_MES([id])', 'Soma todos os lançamentos do indicador no mês atual até a data selecionada.', 'SOMA_MES([f2])'],
+                      ['SOMA_ANO([id])', 'Soma todos os lançamentos do indicador no ano atual até a data selecionada.', 'SOMA_ANO([f1])'],
+                      ['SOMA_SEMANA([id])', 'Soma os lançamentos do indicador na semana atual (segunda a domingo).', 'SOMA_SEMANA([n1])'],
+                      ['MEDIA_MES([id])', 'Calcula a média simples dos lançamentos diários do mês.', 'MEDIA_MES([r1])'],
+                      ['MEDIA_PONDERADA_MES([id],[peso])', 'Calcula a média ponderada mensal do primeiro indicador usando o segundo como peso.', 'MEDIA_PONDERADA_MES([r1],[f1])'],
+                    ].map(([fn, desc, ex]) => (
+                      <tr key={fn as string} className="hover:bg-slate-50">
+                        <td className="px-3 py-2 font-mono text-indigo-600 font-medium text-xs whitespace-nowrap">{fn}</td>
+                        <td className="px-3 py-2 text-slate-600">{desc}</td>
+                        <td className="px-3 py-2 font-mono text-xs text-slate-500 whitespace-nowrap">{ex}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+
+            {/* Funções Especiais */}
+            <Card className="p-6 space-y-3">
+              <h3 className="font-bold text-slate-800 text-base">⚙️ Funções Especiais</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-50">
+                      <th className="px-3 py-2 text-left font-semibold text-slate-600">Função</th>
+                      <th className="px-3 py-2 text-left font-semibold text-slate-600">Descrição</th>
+                      <th className="px-3 py-2 text-left font-semibold text-slate-600">Exemplo de uso</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {[
+                      ['META_MES([id])', 'Retorna o valor da meta mensal cadastrada para o indicador.', 'META_MES([f2]) - SOMA_MES([f2])'],
+                      ['DIAS_UTEIS()', 'Retorna o total de dias úteis do mês (configurado em Dias Úteis).', 'SOMA_MES([f1]) / DIAS_UTEIS()'],
+                      ['DIAS_RESTANTES()', 'Retorna os dias úteis restantes no mês (total menos dias com lançamento).', '(META_MES([f2]) - SOMA_MES([f2])) / DIAS_RESTANTES()'],
+                    ].map(([fn, desc, ex]) => (
+                      <tr key={fn as string} className="hover:bg-slate-50">
+                        <td className="px-3 py-2 font-mono text-indigo-600 font-medium text-xs whitespace-nowrap">{fn}</td>
+                        <td className="px-3 py-2 text-slate-600">{desc}</td>
+                        <td className="px-3 py-2 font-mono text-xs text-slate-500">{ex}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+
+            {/* Exemplos Práticos */}
+            <Card className="p-6 space-y-3">
+              <h3 className="font-bold text-slate-800 text-base">💡 Exemplos Práticos</h3>
+              <div className="space-y-3">
+                {[
+                  { titulo: 'Ticket Médio do Dia', formula: '[f2] / [f1]', desc: 'Faturamento Venda ÷ Tons Vendido no dia.' },
+                  { titulo: 'Faturamento Acumulado Mês', formula: 'SOMA_MES([f2]) + SOMA_MES([f3]) + SOMA_MES([f4])', desc: 'Soma mensal de três indicadores de faturamento.' },
+                  { titulo: 'Tons Acumulado Ano', formula: 'SOMA_ANO([f1])', desc: 'Total de tons vendidos desde o início do ano.' },
+                  { titulo: 'Ticket Médio Mensal', formula: 'SOMA_MES([f2]) / SOMA_MES([f1])', desc: 'Faturamento mensal ÷ Tons mensais.' },
+                  { titulo: 'Cancelamento na Semana', formula: 'SOMA_SEMANA([n1])', desc: 'Total de cancelamentos na semana corrente.' },
+                  { titulo: 'Média de Rentabilidade Mensal', formula: 'MEDIA_PONDERADA_MES([r1],[f1])', desc: 'Rentabilidade ponderada pelo volume de tons.' },
+                  { titulo: 'Saldo da Meta', formula: 'META_MES([f2]) - SOMA_MES([f2])', desc: 'Quanto ainda falta para atingir a meta do mês.' },
+                  { titulo: 'Média Diária Necessária', formula: '(META_MES([f2]) - SOMA_MES([f2])) / DIAS_RESTANTES()', desc: 'Quanto é preciso faturar por dia para atingir a meta.' },
+                  { titulo: 'Média Diária Realizada', formula: 'SOMA_MES([f2]) / DIAS_UTEIS()', desc: 'Faturamento médio por dia útil no mês.' },
+                  { titulo: '% de Atingimento da Meta', formula: '(SOMA_MES([f2]) / META_MES([f2])) * 100', desc: 'Percentual da meta já atingido no mês.' },
+                ].map(({ titulo, formula, desc }) => (
+                  <div key={titulo} className="border border-slate-100 rounded-lg p-4 space-y-1">
+                    <p className="text-sm font-semibold text-slate-800">{titulo}</p>
+                    <code className="block bg-indigo-50 text-indigo-700 px-3 py-2 rounded text-sm font-mono">{formula}</code>
+                    <p className="text-xs text-slate-500">{desc}</p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            {/* Dicas e Cuidados */}
+            <Card className="p-6 space-y-3">
+              <h3 className="font-bold text-slate-800 text-base">⚠️ Dicas e Cuidados</h3>
+              <ul className="space-y-2 text-sm text-slate-600">
+                <li className="flex gap-2"><span className="text-amber-500 font-bold">•</span><span><strong>Divisão por zero:</strong> Se o denominador for zero, o resultado será 0. Use <code className="bg-slate-100 px-1 rounded">SOMA_MES</code> com cuidado quando o volume puder ser zero.</span></li>
+                <li className="flex gap-2"><span className="text-amber-500 font-bold">•</span><span><strong>Parênteses:</strong> Use parênteses para garantir a ordem correta das operações: <code className="bg-slate-100 px-1 rounded">([f1] + [f2]) / [v1]</code>.</span></li>
+                <li className="flex gap-2"><span className="text-amber-500 font-bold">•</span><span><strong>IDs são dinâmicos:</strong> Confirme o ID de cada indicador na lista de Indicadores antes de usá-lo na fórmula.</span></li>
+                <li className="flex gap-2"><span className="text-amber-500 font-bold">•</span><span><strong>DIAS_RESTANTES():</strong> Retorna 0 quando todos os dias úteis do mês já têm lançamento. Evite divisão direta sem proteção.</span></li>
+                <li className="flex gap-2"><span className="text-amber-500 font-bold">•</span><span><strong>Indicadores calculados encadeados:</strong> Um indicador calculado pode referenciar outro indicador calculado via <code className="bg-slate-100 px-1 rounded">[id]</code>. A ordem de avaliação é resolvida automaticamente.</span></li>
+              </ul>
+            </Card>
+
+            {/* Tabela dinâmica de IDs */}
+            <Card className="p-6 space-y-3">
+              <h3 className="font-bold text-slate-800 text-base">🏷️ IDs dos Indicadores Cadastrados</h3>
+              <p className="text-sm text-slate-500">Use estes IDs nas suas fórmulas.</p>
+              {categorias.length === 0 ? (
+                <p className="text-sm text-slate-400 italic">Nenhum indicador cadastrado ainda.</p>
+              ) : (
+                <div className="space-y-4">
+                  {[...categorias].sort((a, b) => a.ordem - b.ordem).map(cat => {
+                    const catIndicadores = indicadores
+                      .filter(i => i.categoria === cat.nome)
+                      .sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
+                    if (catIndicadores.length === 0) return null;
+                    return (
+                      <div key={cat.id}>
+                        <p className="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-2">{cat.nome}</p>
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="bg-slate-50">
+                              <th className="px-3 py-2 text-left font-semibold text-slate-600">ID</th>
+                              <th className="px-3 py-2 text-left font-semibold text-slate-600">Nome</th>
+                              <th className="px-3 py-2 text-left font-semibold text-slate-600">Unidade</th>
+                              <th className="px-3 py-2 text-left font-semibold text-slate-600">Tipo</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {catIndicadores.map(i => (
+                              <tr key={i.id} className="hover:bg-slate-50">
+                                <td className="px-3 py-2 font-mono font-bold text-indigo-600">[{i.id}]</td>
+                                <td className="px-3 py-2 text-slate-700">{i.nome}</td>
+                                <td className="px-3 py-2 text-slate-500">{i.unidade_medida}</td>
+                                <td className="px-3 py-2">
+                                  <span className={cn('px-2 py-0.5 rounded-full text-[10px] font-bold uppercase', i.digitavel ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600')}>
+                                    {i.digitavel ? 'Digitável' : 'Calculado'}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </Card>
           </MotionDiv>
         )}
