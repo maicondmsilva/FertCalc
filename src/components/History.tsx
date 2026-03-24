@@ -8,6 +8,7 @@ import { generatePricingPDF } from '../utils/pdfGenerator';
 import { getPricingRecords, deletePricingRecord, updatePricingRecord, createPricingRecord, getAppSettings, createNotification, getUsers, getManagersOfUser } from '../services/db';
 import { useToast } from './Toast';
 import { getPricingTotalTons, getPricingTotalSaleValue } from '../utils/pricingMetrics';
+import { notifyPricingDeleted } from '../services/notificationService';
 
 interface HistoryProps {
   onEdit?: (pricing: PricingRecord) => void;
@@ -137,6 +138,10 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
     if (confirm('Deseja realmente excluir esta precificação?')) {
       try {
         await deletePricingRecord(id);
+        
+        // ✅ Notificar Exclusão
+        await notifyPricingDeleted(pricing, currentUser);
+
         setPricings(pricings.filter(p => p.id !== id));
         showSuccess('Precificação excluída com sucesso!');
       } catch (err) {

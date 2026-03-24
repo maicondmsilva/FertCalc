@@ -8,6 +8,7 @@ import { formatNPK } from '../utils/formatters';
 import { FertigranPComparisonModal } from './FertigranPComparisonModal';
 import { useCalculatorSettings } from '../hooks/useCalculatorSettings';
 import { CalculatorSettingsModal } from './CalculatorSettingsModal';
+import { notifyPricingCreated, notifyPricingEdited } from '../services/notificationService';
 
 const defaultMacros: RawMaterial[] = [
   { id: 'm1', type: 'macro', name: 'Ureia', price: 2500, n: 45, p: 0, k: 0, s: 0, ca: 0, microGuarantees: [], minQty: 50, maxQty: 1000, selected: true, quantity: 0 },
@@ -683,6 +684,9 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
         await updatePricingRecord(initialData.id, record);
         savedRecord = { ...record, id: initialData.id };
 
+        // ✅ Notificar Edição
+        await notifyPricingEdited(savedRecord, currentUser);
+
         if (wasApproved || wasRejected) {
           const managersList = await getManagersOfUser(currentUser.id);
           const approversList = await getUsers();
@@ -706,6 +710,10 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
         }
       } else {
         savedRecord = await createPricingRecord(record);
+        
+        // ✅ Notificar Criação
+        await notifyPricingCreated(savedRecord, currentUser);
+
         const managersList = await getManagersOfUser(currentUser.id);
         const approversList = await getUsers();
         const masterAdmins = approversList.filter(u => u.role === 'master' || u.role === 'admin' || (u.permissions as any)?.approvals_canApprove === true);

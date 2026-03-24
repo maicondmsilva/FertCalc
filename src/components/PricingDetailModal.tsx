@@ -9,6 +9,7 @@ import { formatNPK } from '../utils/formatters';
 import { updatePricingRecord, getUsers, transferPricingRecord, acceptPricingTransfer, createNotification } from '../services/db';
 import { useToast } from './Toast';
 import { Send, UserCheck, CheckCircle2, CheckCircle, XCircle } from 'lucide-react';
+import { notifyTransferInitiated, notifyTransferAccepted } from '../services/notificationService';
 
 interface PricingDetailModalProps {
   selectedPricing: PricingRecord;
@@ -69,6 +70,10 @@ export default function PricingDetailModal({
     setLoadingTransfer(true);
     try {
       await transferPricingRecord(selectedPricing.id, seller.id, seller.name, currentUser);
+      
+      // ✅ Notificar novo vendedor
+      await notifyTransferInitiated(selectedPricing, currentUser, seller.id, seller.name);
+
       showSuccess('Transferência iniciada com sucesso!');
       setIsTransferring(false);
       if (onTransferSuccess) onTransferSuccess();
@@ -85,6 +90,12 @@ export default function PricingDetailModal({
     setLoadingTransfer(true);
     try {
       await acceptPricingTransfer(selectedPricing.id, currentUser);
+      
+      // ✅ Notificar Vendedor Original
+      if (selectedPricing.userId) {
+        await notifyTransferAccepted(selectedPricing.id, currentUser.name, selectedPricing.userId);
+      }
+
       showSuccess('Precificação aceita com sucesso!');
       if (onTransferSuccess) onTransferSuccess();
       onClose();

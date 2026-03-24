@@ -23,8 +23,8 @@ import Home from './components/Home';
 import Dashboard from './components/Dashboard';
 import SavedFormulas from './components/SavedFormulas';
 import { LayoutDashboard, History as HistoryIcon, Database, Users, UserCheck, Building2, Settings, LogOut, Leaf, ShieldCheck, Menu, X, Target, Bell, Download, ChevronLeft, ChevronRight, Home as HomeIcon, BarChart3, ChevronDown, FileEdit, Tag, Package, AlertTriangle, Calculator as CalcIcon, Beaker } from 'lucide-react';
-import { PricingRecord, User, AppSettings, Notification, NavItem, SavedFormula } from './types';
-import { getAppSettings, getNotifications, markNotificationsAsRead } from './services/db';
+import { PricingRecord, User, AppSettings, NavItem, SavedFormula } from './types';
+import { getAppSettings, markNotificationsAsRead } from './services/db';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useToast } from './components/Toast';
 
@@ -35,6 +35,12 @@ import ManagementReportsModule from './components/ManagementReportsModule';
 import BrandManager from './components/BrandManager';
 import ProductManager from './components/ProductManager';
 import IncompatibilityManager from './components/IncompatibilityManager';
+
+import { useNotifications } from './hooks/useNotifications';
+import { NotificationBell } from './components/notifications/NotificationBell';
+import { NotificationPanel } from './components/notifications/NotificationPanel';
+import { NotificationCard } from './components/notifications/NotificationCard';
+import { AnimatePresence } from 'framer-motion';
 
 export default function App() {
   const location = useLocation();
@@ -57,7 +63,9 @@ export default function App() {
   const [editingPricing, setEditingPricing] = useState<PricingRecord | null>(null);
   const [initialFormulaContext, setInitialFormulaContext] = useState<{ formula: SavedFormula | null; branchId: string; priceListId: string }>({ formula: null, branchId: '', priceListId: '' });
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  
+  // Custom Hook replaces local state and intervals
+  const { notifications, unreadCount, activeToasts, removeToast, markAsRead, clearAll } = useNotifications(currentUser?.id || '');
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [appSettings, setAppSettings] = useState<AppSettings>({
     companyName: 'FertCalc Pro',
@@ -75,43 +83,11 @@ export default function App() {
       setCurrentUser(JSON.parse(savedUser));
     }
 
-    // Load settings and notifications from Supabase
     getAppSettings().then(savedSettings => {
       if (savedSettings?.companyName) {
         setAppSettings(savedSettings);
       }
     });
-
-    const fetchNotifications = async () => {
-      if (!currentUser) return;
-      
-      const allNotifs = await getNotifications(currentUser.id);
-      
-      setNotifications(prev => {
-        const newNotifs = allNotifs.filter(n => !n.read && !prev.find(p => p.id === n.id));
-        if (newNotifs.length > 0) {
-          const sortedNew = [...newNotifs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-          const newest = sortedNew[0];
-          
-          showInfo(newest.message, newest.title, { 
-            label: 'Abrir', 
-            onClick: () => { 
-              if (newest.type?.includes('pricing') || newest.type?.includes('deletion')) {
-                navigate('/approvals');
-              } else if (newest.type?.includes('goal')) {
-                navigate('/goals');
-              } else {
-                setIsNotificationsOpen(true); 
-              }
-            } 
-          });
-        }
-        return allNotifs;
-      });
-    };
-
-    fetchNotifications();
-    const intervalId = setInterval(fetchNotifications, 10000);
 
     const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault();
@@ -122,7 +98,6 @@ export default function App() {
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-      clearInterval(intervalId);
     };
   }, []);
 
@@ -163,35 +138,6 @@ export default function App() {
         }
         setDeferredPrompt(null);
       });
-    }
-  };
-
-  const unreadCount = notifications.filter(n => !n.read).length;
-
-  const markNotificationsRead = () => {
-    const unreadIds = notifications.filter(n => !n.read).map(n => n.id);
-    if (unreadIds.length === 0) return;
-    
-    const updated = notifications.map(n => ({ ...n, read: true }));
-    setNotifications(updated);
-    if (currentUser) {
-      markNotificationsAsRead(unreadIds).catch(console.error);
-    }
-  };
-
-  const handleClearAllNotifications = async () => {
-    if (!currentUser) return;
-    if (!confirm('Deseja realmente excluir todas as suas notificações?')) return;
-
-    try {
-      const { deleteAllNotifications } = await import('./services/db');
-      await deleteAllNotifications(currentUser.id);
-      setNotifications([]);
-    } catch (err: any) {
-      console.error('Erro ao limpar notificações:', err);
-      // The provided snippet seems to be from a different context (approvals/pricings)
-      // and would cause syntax errors if inserted directly here.
-      // Keeping the original error handling for notifications.
     }
   };
 
@@ -520,56 +466,19 @@ export default function App() {
             )}
             
               <div className="relative">
-                <button
-                  onClick={() => {
-                    setIsNotificationsOpen(!isNotificationsOpen);
-                    if (!isNotificationsOpen) markNotificationsRead();
-                  }}
-                  className="p-2 text-stone-400 hover:text-emerald-600 transition-colors relative rounded-full hover:bg-stone-100"
-                >
-                  <Bell className="w-5 h-5" />
-                  {unreadCount > 0 && (
-                    <span className="absolute top-1 right-1 bg-red-500 text-white text-[8px] font-bold px-1 rounded-full min-w-[14px] h-[14px] flex items-center justify-center border border-white">
-                      {unreadCount}
-                    </span>
-                  )}
-                </button>
+                <NotificationBell 
+                  unreadCount={unreadCount} 
+                  onBellClick={() => setIsNotificationsOpen(!isNotificationsOpen)} 
+                />
 
-                {isNotificationsOpen && (
-                  <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-stone-200 z-50 overflow-hidden">
-                    <div className="p-3 bg-stone-50 border-b border-stone-200 flex justify-between items-center">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-stone-600 uppercase">Notificações</span>
-                        {notifications.length > 0 && (
-                          <button
-                            onClick={handleClearAllNotifications}
-                            className="text-[10px] font-bold text-red-500 hover:text-red-700 bg-red-50 px-2 py-0.5 rounded-full transition-colors"
-                          >
-                            Limpar Tudo
-                          </button>
-                        )}
-                      </div>
-                      <button onClick={() => setIsNotificationsOpen(false)} className="text-stone-400 hover:text-stone-600">
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                    <div className="max-h-96 overflow-y-auto">
-                      {notifications.length === 0 ? (
-                        <div className="p-8 text-center text-stone-400 text-sm">Nenhuma notificação</div>
-                      ) : (
-                        [...notifications]
-                          .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                          .map(n => (
-                          <div key={n.id} className={`p-4 border-b border-stone-200 transition-colors ${!n.read ? 'bg-blue-50 border-l-4 border-l-blue-500' : 'bg-stone-50 text-stone-500 hover:bg-stone-100'}`}>
-                            <p className={`text-sm ${!n.read ? 'font-bold text-blue-900' : 'font-medium text-stone-700'}`}>{n.title}</p>
-                            <p className="text-xs mt-1">{n.message}</p>
-                            <p className="text-[10px] opacity-70 mt-2">{new Date(n.date).toLocaleString('pt-BR')}</p>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                )}
+                <NotificationPanel 
+                  isOpen={isNotificationsOpen} 
+                  onClose={() => setIsNotificationsOpen(false)}
+                  notifications={notifications}
+                  unreadCount={unreadCount}
+                  onMarkAsRead={(id) => markAsRead(id)}
+                  onClearAll={clearAll}
+                />
               </div>
             
           </div>
@@ -642,6 +551,21 @@ export default function App() {
             {activeModule === 'managementReports' && activeTab === 'managementReports_cadastros' && <ManagementReportsModule currentUser={currentUser} activeTab="cadastros" />}
           </div>
         </main>
+      </div>
+
+      {/* Floating Notifications (Toasts) */}
+      <div className="fixed bottom-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none">
+        <AnimatePresence>
+          {activeToasts.map(toast => (
+            <div key={toast.id} className="pointer-events-auto">
+              <NotificationCard 
+                notification={toast}
+                onClose={removeToast}
+                autoClose={true}
+              />
+            </div>
+          ))}
+        </AnimatePresence>
       </div>
     </div >
   );
