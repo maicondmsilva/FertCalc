@@ -162,18 +162,49 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
       const selectedList = priceLists.find(l => l.id === factors.priceListId);
       if (selectedList) {
         // Macros da Linha Diferenciada chegam desmarcadas por padrão
-        setMacros(selectedList.macros.map(m => ({
+        const newMacros = selectedList.macros.map(m => ({
           ...m,
           selected: m.isPremiumLine ? false : (m.selected ?? true),
           minQty: m.minQuantity !== undefined ? m.minQuantity : (m.type === 'macro' && !m.name.toLowerCase().includes('enchimento') ? 50 : (m.minQty || 0))
-        })));
+        }));
         // Micros chegam sempre desmarcados — usuário escolhe quais usar
-        setMicros(selectedList.micros.map(m => ({ 
+        const newMicros = selectedList.micros.map(m => ({ 
           ...m, 
           selected: false, 
           minQty: m.minQuantity !== undefined ? m.minQuantity : (m.minQty || 0) 
-        })));
+        }));
+
+        setMacros(newMacros);
+        setMicros(newMicros);
         setCurrency(selectedList.currency || 'BRL');
+
+        setCalculations(prevCalculations => 
+          prevCalculations.map(calc => {
+            if (!calc.selected) return calc; // Apenas nas selecionadas atualiza os preços e disponibilidades
+            
+            const updatedCalcMacros = newMacros.map(newP => {
+              const savedP = calc.macros.find(s => s.id === newP.id);
+              if (savedP) {
+                return { ...newP, selected: savedP.selected, quantity: savedP.quantity, minQty: savedP.minQty, maxQty: savedP.maxQty };
+              }
+              return { ...newP, selected: false, quantity: 0, minQty: 0, maxQty: 0 };
+            });
+
+            const updatedCalcMicros = newMicros.map(newP => {
+              const savedP = calc.micros.find(s => s.id === newP.id);
+              if (savedP) {
+                return { ...newP, selected: savedP.selected, quantity: savedP.quantity, minQty: savedP.minQty, maxQty: savedP.maxQty };
+              }
+              return { ...newP, selected: false, quantity: 0, minQty: 0, maxQty: 0 };
+            });
+
+            return {
+              ...calc,
+              macros: updatedCalcMacros,
+              micros: updatedCalcMicros
+            };
+          })
+        );
       }
     }
   }, [factors.priceListId, priceLists]);
@@ -973,7 +1004,12 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
               </label>
               <select
                 value={factors.branchId}
-                onChange={(e) => setFactors({ ...factors, branchId: e.target.value, priceListId: '' })}
+                onChange={(e) => {
+                  const newBranch = e.target.value;
+                  const lists = priceLists.filter(l => l.branchId === newBranch);
+                  const latestListId = lists.length > 0 ? lists[0].id : '';
+                  setFactors({ ...factors, branchId: newBranch, priceListId: latestListId });
+                }}
                 className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
               >
                 <option value="">Selecione uma filial</option>
