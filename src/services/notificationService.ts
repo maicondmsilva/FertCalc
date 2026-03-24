@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 import { getManagersOfUser } from './db';
 import { PricingRecord, User } from '../types';
-import { NotificationType, NotificationGroup } from '../types/notification.types';
+import { NotificationType, NotificationGroup, Notification } from '../types/notification.types';
 
 interface NotificationPayload {
   user_id: string;
@@ -12,6 +12,71 @@ interface NotificationPayload {
   action_url?: string;
   metadata?: any;
 }
+
+export const getNotifications = async (userId: string, limit: number = 20): Promise<Notification[]> => {
+  const { data, error } = await supabase
+    .from('notifications')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error('Error fetching notifications:', error);
+    throw error;
+  }
+
+  return (data ?? []) as Notification[];
+};
+
+export const markNotificationAsRead = async (notificationId: string, userId: string): Promise<void> => {
+  const { error } = await supabase
+    .from('notifications')
+    .update({ is_read: true })
+    .eq('id', notificationId)
+    .eq('user_id', userId);
+
+  if (error) {
+    console.error('Error marking notification as read:', error);
+    throw error;
+  }
+};
+
+export const deleteAllNotifications = async (userId: string): Promise<void> => {
+  const { error } = await supabase
+    .from('notifications')
+    .update({ is_read: true })
+    .eq('user_id', userId);
+
+  if (error) {
+    console.error('Error clearing notifications:', error);
+    throw error;
+  }
+};
+
+export const saveNotification = async (notification: Omit<Notification, 'id' | 'created_at' | 'user_id'>, userId: string): Promise<Notification> => {
+  const { data, error } = await supabase
+    .from('notifications')
+    .insert({
+      user_id: userId,
+      type: notification.type,
+      group_type: notification.group_type,
+      title: notification.title,
+      message: notification.message,
+      action_url: notification.action_url ?? null,
+      is_read: false,
+      metadata: notification.metadata ?? null,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error saving notification:', error);
+    throw error;
+  }
+
+  return data as Notification;
+};
 
 export const createNotification = async (payload: NotificationPayload) => {
   try {

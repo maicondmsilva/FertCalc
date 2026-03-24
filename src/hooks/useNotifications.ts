@@ -1,10 +1,9 @@
 import { useEffect, useCallback } from 'react';
-import { supabase } from '../services/supabase';
 import { useNotificationStore } from '../store/notificationStore';
 import { subscribeToNotifications } from '../services/notificationSubscription';
 import { useNotificationPreferences } from './useNotificationPreferences';
 import { useNotificationSound } from './useNotificationSound';
-import { Notification } from '../types/notification.types';
+import { getNotifications, markNotificationAsRead, deleteAllNotifications } from '../services/notificationService';
 
 export function useNotifications(userId: string) {
   const store = useNotificationStore();
@@ -15,18 +14,8 @@ export function useNotifications(userId: string) {
     if (!userId) return;
     
     try {
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(20);
-        
-      if (error) throw error;
-      
-      if (data) {
-        store.setNotifications(data as Notification[]);
-      }
+      const data = await getNotifications(userId, 20);
+      store.setNotifications(data);
     } catch (error) {
       console.error('Failed to load notifications:', error);
     }
@@ -68,21 +57,13 @@ export function useNotifications(userId: string) {
   const markAsReadDb = async (id: string) => {
     store.markAsRead(id);
     if (!userId) return;
-    await supabase
-      .from('notifications')
-      .update({ is_read: true })
-      .eq('id', id);
+    await markNotificationAsRead(id, userId);
   };
 
   const clearAllDb = async () => {
     store.clearAll();
     if (!userId) return;
-    // Padrão: marca todas como lidas ou deleta? Geralmente limpa o painel, não deleta do histórico.
-    // Vamos apenas deletar/marcar lidas.
-    await supabase
-      .from('notifications')
-      .update({ is_read: true })
-      .eq('user_id', userId);
+    await deleteAllNotifications(userId);
   };
 
   return {
