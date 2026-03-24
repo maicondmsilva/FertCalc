@@ -337,6 +337,12 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
 
         model.constraints[minLiner] = { min: 0 };
         model.constraints[maxLiner] = { max: 0 };
+
+        // Forçar a entrada na fórmula quando o usuário definir Fixo (mínimo igual ao máximo e > 0)
+        if (Number(m.minQty) === Number(m.maxQty) && Number(m.minQty) > 0) {
+          model.constraints[`force_${m.id}`] = { equal: Number(m.minQty) };
+          model.variables[m.id][`force_${m.id}`] = 1;
+        }
       });
 
       // Constraints de incompatibilidade (usando as variáveis binárias já definidas)
