@@ -162,6 +162,7 @@ export interface Indicador {
   unidade_medida: string;
   digitavel: boolean;
   ordem?: number;
+  formula?: string;
 }
 
 export interface Lancamento {

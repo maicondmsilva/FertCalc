@@ -232,7 +232,10 @@ const SortableIndicadorRow = ({
           <GripVertical className="w-4 h-4 text-slate-400" />
         </button>
       </td>
-      <td className="px-4 py-3 font-medium text-slate-900">{indicador.nome}</td>
+      <td className="px-4 py-3">
+        <span className="font-medium text-slate-900">{indicador.nome}</span>
+        <span className="block text-[10px] text-slate-400 font-mono">ID: {indicador.id}</span>
+      </td>
       <td className="px-4 py-3 text-slate-600">{indicador.unidade_medida}</td>
       <td className="px-4 py-3">
         <span className={cn('px-2 py-1 rounded-full text-[10px] font-bold uppercase', indicador.digitavel ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600')}>
@@ -359,6 +362,36 @@ const Dashboard = ({
   weekEnd.setDate(weekStart.getDate() + 6);
   weekEnd.setHours(23,59,59,999);
 
+  const avaliarFormula = (formula: string, valores: Record<string, number>): number => {
+    try {
+      // Replace [id] references with their numeric values
+      let expressao = formula.replace(/\[([^\]]+)\]/g, (_, id) => {
+        const val = valores[id.trim()];
+        return val !== undefined ? String(val) : '0';
+      });
+
+      // Remove whitespace
+      expressao = expressao.replace(/\s/g, '');
+
+      // Validate: only allow digits, arithmetic operators, decimal points, and parentheses
+      if (!/^[\d+\-*/().]+$/.test(expressao)) {
+        return 0;
+      }
+
+      // Evaluate using Function with sanitized expression
+      // eslint-disable-next-line no-new-func
+      const resultado = new Function(`return (${expressao})`)();
+
+      if (typeof resultado !== 'number' || !isFinite(resultado)) {
+        return 0;
+      }
+
+      return resultado;
+    } catch {
+      return 0;
+    }
+  };
+
   const getCalculatedData = (u: Unidade) => {
     const year = parseISO(selectedDate).getFullYear();
     const month = parseISO(selectedDate).getMonth() + 1;
@@ -410,6 +443,29 @@ const Dashboard = ({
     const mediaAFaturar = diasRestantes > 0 ? saldoDeficit / diasRestantes : 0;
 
     const genericData = Object.fromEntries(indicadores.map(i => [i.id, getValor(u.id, i.id)]));
+
+    // Process calculated indicators with formulas in dependency order (topological sort)
+    const formulaIndicadores = indicadores.filter(ind => !ind.digitavel && ind.formula);
+    const getDeps = (formula: string): string[] => {
+      const deps: string[] = [];
+      formula.replace(/\[([^\]]+)\]/g, (_, id) => { deps.push(id.trim()); return ''; });
+      return deps;
+    };
+    const visited = new Set<string>();
+    const evaluate = (ind: typeof formulaIndicadores[number], stack: Set<string> = new Set()): void => {
+      if (visited.has(ind.id)) return;
+      if (stack.has(ind.id)) return; // circular reference guard
+      stack.add(ind.id);
+      const deps = getDeps(ind.formula!);
+      for (const depId of deps) {
+        const depInd = formulaIndicadores.find(i => i.id === depId);
+        if (depInd) evaluate(depInd, stack);
+      }
+      genericData[ind.id] = avaliarFormula(ind.formula!, genericData);
+      visited.add(ind.id);
+      stack.delete(ind.id);
+    };
+    for (const ind of formulaIndicadores) evaluate(ind);
 
     return {
       ...genericData,
@@ -744,10 +800,12 @@ const Cadastros = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState<'unidade' | 'indicador' | 'categoria' | 'meta' | null>(null);
   const [editingItem, setEditingItem] = useState<any>(null);
+  const [isDigitavel, setIsDigitavel] = useState(true);
 
   const handleOpenModal = (type: 'unidade' | 'indicador' | 'categoria' | 'meta', item: any = null) => {
     setModalType(type);
     setEditingItem(item);
+    setIsDigitavel(type === 'indicador' ? (item ? item.digitavel : true) : true);
     setIsModalOpen(true);
   };
 
@@ -865,13 +923,15 @@ const Cadastros = ({
                 const categoria = formData.get('categoria') as any;
                 const unidade_medida = formData.get('unidade_medida') as string;
                 const digitavel = formData.get('digitavel') === 'on';
+                const formula = formData.get('formula') as string;
                 if (nome) {
                   await onSaveIndicador({
                     id: editingItem?.id || crypto.randomUUID(),
                     nome,
                     categoria,
                     unidade_medida,
-                    digitavel
+                    digitavel,
+                    formula: !digitavel && formula ? formula : undefined
                   });
                 }
               } else if (modalType === 'meta') {
@@ -925,9 +985,22 @@ const Cadastros = ({
                     <Input name="unidade_medida" defaultValue={editingItem?.unidade_medida} placeholder="Ex: TON., R$, %" required />
                   </div>
                   <div className="flex items-center gap-2">
-                    <input type="checkbox" name="digitavel" defaultChecked={editingItem ? editingItem.digitavel : true} id="digitavel-check" />
+                    <input type="checkbox" name="digitavel" checked={isDigitavel} onChange={(e) => setIsDigitavel(e.target.checked)} id="digitavel-check" />
                     <label htmlFor="digitavel-check" className="text-sm font-medium text-slate-700">Indicador Digitável</label>
                   </div>
+                  {!isDigitavel && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-bold text-slate-700">Fórmula de Cálculo</label>
+                      <Input
+                        name="formula"
+                        defaultValue={editingItem?.formula || ''}
+                        placeholder="Ex: [f1] / [v1]"
+                      />
+                      <p className="text-xs text-slate-400">
+                        💡 Use [id] para referenciar outros indicadores. Ex: [f1] / [v1] para Ticket Médio.
+                      </p>
+                    </div>
+                  )}
                 </>
               )}
               {modalType === 'categoria' && (
