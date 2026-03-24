@@ -172,69 +172,106 @@ export default function PricingDetailModal({
 
   const exportToPDF = (pricing: PricingRecord) => {
     const doc = new jsPDF();
+    const cod = pricing.formattedCod || (pricing.cod ? String(pricing.cod).padStart(4, '0') : pricing.id.slice(-8));
+    const freight = pricing.factors?.freight ?? 0;
+    const freightLabel = freight > 0 ? 'CIF' : 'FOB';
 
-    doc.setFontSize(20);
-    doc.text(appSettings.companyName, 14, 22);
-    doc.setFontSize(10);
-    doc.text(`Data: ${new Date(pricing.date).toLocaleDateString()}`, 14, 30);
+    // Título compacto
+    doc.setFontSize(16);
+    doc.setFont(undefined as any, 'bold');
+    doc.text(appSettings.companyName, 14, 15);
+    doc.setFontSize(9);
+    doc.setFont(undefined as any, 'normal');
+    doc.text('PROPOSTA COMERCIAL', 14, 20);
 
-    // Client Info Table
+    // Dados gerais compactos (2 linhas ao invés de 5 linhas em tabela)
     autoTable(doc, {
-      startY: 40,
-      head: [['Item', 'Detalhe']],
+      startY: 25,
+      head: [['DADOS GERAIS']],
       body: [
-        ['Cliente', pricing.factors?.client?.name || 'N/A'],
-        ['Documento', pricing.factors?.client?.document || 'N/A'],
-        ['Agente', pricing.factors?.agent?.name || 'N/A'],
-        ['Status', pricing.status],
-        ['Aprovação', pricing.approvalStatus || 'Pendente']
+        [`COD: ${cod}  |  Data: ${new Date(pricing.date).toLocaleString('pt-BR')}  |  Cliente: ${pricing.factors?.client?.name || 'N/A'}  |  Agente: ${pricing.factors?.agent?.name || 'N/A'}`],
+        [`Status: ${pricing.status}  |  Aprovação: ${pricing.approvalStatus || 'Pendente'}  |  Frete: ${freightLabel}${freight > 0 ? ` (R$ ${freight.toFixed(2)}/ton)` : ''}`]
       ],
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [26, 26, 46], fontSize: 8, fontStyle: 'bold' },
     });
 
-    let currentY = (doc as any).lastAutoTable.finalY + 10;
+    let currentY = (doc as any).lastAutoTable.finalY + 6;
 
     // Iterate over calculations
     const calcs = pricing.calculations && pricing.calculations.length > 0 ? pricing.calculations : [pricing];
 
     calcs.forEach((calc, idx) => {
-      if (idx > 0 && currentY > 200) {
+      if (idx > 0 && currentY > 230) {
         doc.addPage();
-        currentY = 20;
+        currentY = 15;
       }
 
-      doc.setFontSize(14);
-      doc.setFont(undefined, 'bold');
+      doc.setFontSize(11);
+      doc.setFont(undefined as any, 'bold');
       doc.text(`Fórmula: ${calc.formula || pricing.factors.targetFormula}`, 14, currentY);
       currentY += 5;
 
-      // Products
+      // Products - novo layout com Frete
       const productsData = [...(calc.macros || pricing.macros), ...(calc.micros || pricing.micros)]
         .filter(p => p.quantity > 0)
-        .map(p => [p.name, `${p.quantity} kg`, `R$ ${p.price}`, `R$ ${((p.quantity / 1000) * p.price).toFixed(2)}`]);
+        .map(p => [
+          p.name,
+          freightLabel,
+          (p.quantity / 1000).toFixed(2),
+          `R$ ${Number(p.price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+          freight > 0 ? `R$ ${freight.toFixed(0)}` : 'R$ 0',
+          `R$ ${((p.quantity / 1000) * Number(p.price) + (p.quantity / 1000) * freight).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+        ]);
 
       autoTable(doc, {
         startY: currentY,
-        head: [['Produto', 'Qtd', 'Preço/ton', 'Total']],
+        head: [['Produto', 'Frete', 'Qtd(ton)', 'Preço/Ton', 'Frete/Ton', 'Total']],
         body: productsData,
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [26, 26, 46], fontSize: 8, fontStyle: 'bold' },
+        columnStyles: {
+          0: { cellWidth: 50 },
+          1: { cellWidth: 18, halign: 'center' as const },
+          2: { cellWidth: 22, halign: 'right' as const },
+          3: { cellWidth: 30, halign: 'right' as const },
+          4: { cellWidth: 28, halign: 'right' as const },
+          5: { cellWidth: 32, halign: 'right' as const },
+        }
       });
 
-      currentY = (doc as any).lastAutoTable.finalY + 5;
+      currentY = (doc as any).lastAutoTable.finalY + 4;
 
-      // Totals
+      // Resumo compacto
       autoTable(doc, {
         startY: currentY,
-        head: [['Resumo Financeiro', 'Valor']],
+        head: [['Resumo', 'Valor']],
         body: [
-          ['Custo Base', `R$ ${calc.summary?.baseCost.toFixed(2) || pricing.summary.baseCost.toFixed(2)}`],
-          ['Preço Final', `R$ ${calc.summary?.finalPrice.toFixed(2) || pricing.summary.finalPrice.toFixed(2)}`],
+          ['Custo Base', `R$ ${(calc.summary?.baseCost || pricing.summary.baseCost).toFixed(2)}`],
+          ['Preço Final/ton', `R$ ${(calc.summary?.finalPrice || pricing.summary.finalPrice).toFixed(2)}`],
           ['N-P-K Real', formatNPK(calc.formula, calc.summary?.resultingN || 0, calc.summary?.resultingP || 0, calc.summary?.resultingK || 0)],
         ],
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [26, 26, 46], fontSize: 8, fontStyle: 'bold' },
       });
 
-      currentY = (doc as any).lastAutoTable.finalY + 15;
+      currentY = (doc as any).lastAutoTable.finalY + 8;
     });
 
-    doc.save(`precificacao_${pricing.id}.pdf`);
+    // Observação Comercial (grande, destaque)
+    const obs = pricing.factors?.commercialObservation || '';
+    if (obs) {
+      autoTable(doc, {
+        startY: currentY,
+        head: [['OBSERVAÇÃO COMERCIAL']],
+        body: [[obs]],
+        styles: { fontSize: 9, cellPadding: 4, halign: 'left' as const },
+        headStyles: { fillColor: [245, 158, 11], textColor: [0, 0, 0], fontSize: 9, fontStyle: 'bold' },
+        bodyStyles: { minCellHeight: 20 },
+      });
+    }
+
+    doc.save(`proposta-${cod}.pdf`);
   };
 
   const exportToExcel = (pricing: PricingRecord) => {
