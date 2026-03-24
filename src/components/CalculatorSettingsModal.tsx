@@ -171,14 +171,14 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
                   <label className="text-stone-500 font-semibold mb-1">Fixo (kg)</label>
                   <input
                     type="number"
-                    value={p.quantity === 0 ? '' : p.quantity}
+                    value={(p.minQty === p.maxQty && p.minQty > 0) ? p.minQty : ''}
                     onChange={(e) => {
                       if (!localFormula) return;
                       const val = Number(e.target.value);
                       const arrKey = type === 'macro' ? 'macros' : 'micros';
                       setLocalFormula({
                         ...localFormula,
-                        [arrKey]: localFormula[arrKey].map(m => m.id === p.id ? { ...m, quantity: val, minQty: val, maxQty: val } : m)
+                        [arrKey]: localFormula[arrKey].map(m => m.id === p.id ? { ...m, minQty: val, maxQty: val } : m)
                       });
                     }}
                     placeholder="Auto"

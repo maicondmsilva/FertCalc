@@ -1156,9 +1156,9 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
                               onChange={(e) => {
                                 const val = Number(e.target.value);
                                 if (m.type === 'macro') {
-                                  updateCalculation(calc.id, 'macros', calc.macros.map(mac => mac.id === m.id ? { ...mac, minQty: val, quantity: val } : mac));
+                                  updateCalculation(calc.id, 'macros', calc.macros.map(mac => mac.id === m.id ? { ...mac, minQty: val } : mac));
                                 } else {
-                                  updateCalculation(calc.id, 'micros', calc.micros.map(mic => mic.id === m.id ? { ...mic, minQty: val, quantity: val } : mic));
+                                  updateCalculation(calc.id, 'micros', calc.micros.map(mic => mic.id === m.id ? { ...mic, minQty: val } : mic));
                                 }
                               }}
                               className="w-14 px-1 py-0.5 text-right border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500 bg-white"
