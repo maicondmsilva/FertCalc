@@ -478,6 +478,7 @@ export default function App() {
                   unreadCount={unreadCount}
                   onMarkAsRead={(id) => markAsRead(id)}
                   onClearAll={clearAll}
+                  onSettings={() => { setIsNotificationsOpen(false); navigate('/settings'); }}
                 />
               </div>
             

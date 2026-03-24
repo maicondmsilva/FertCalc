@@ -12,6 +12,7 @@ interface NotificationPanelProps {
   unreadCount?: number;
   onMarkAsRead: (id: string) => void;
   onClearAll: () => void;
+  onSettings?: () => void;
 }
 
 export const NotificationPanel: React.FC<NotificationPanelProps> = ({
@@ -20,7 +21,8 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
   notifications,
   unreadCount = 0,
   onMarkAsRead,
-  onClearAll
+  onClearAll,
+  onSettings
 }) => {
   const getIcon = (type: string) => {
     switch (type) {
@@ -135,7 +137,7 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
                 >
                   Limpar Tudo
                 </button>
-                <button className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 flex items-center">
+                <button onClick={onSettings} className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 flex items-center">
                   <Settings className="w-4 h-4 mr-1" />
                   Configurar
                 </button>
