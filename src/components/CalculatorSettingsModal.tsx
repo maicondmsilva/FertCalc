@@ -37,18 +37,36 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
     if (!localFormula) return;
     
     const arrKey = type === 'macro' ? 'macros' : 'micros';
-    const products = localFormula[arrKey].length > 0 ? localFormula[arrKey] : (type === 'macro' ? globalMacros : globalMicros);
+    const savedArr = localFormula[arrKey] || [];
+    const globalSource = type === 'macro' ? globalMacros : globalMicros;
     
-    const updatedArr = products.map(p => 
-      p.id === productId ? { 
-        ...p, 
-        selected: !p.selected, 
-        minQty: !p.selected ? (p.minQuantity || 0) : (p.minQty || 0),
-        quantity: !p.selected ? (p.minQuantity || 0) : (p.quantity || 0) 
-      } : p
-    );
+    const isSelected = savedArr.some(p => p.id === productId);
     
-    setLocalFormula({ ...localFormula, [arrKey]: updatedArr });
+    if (isSelected) {
+      // Deselect -> remove from array
+      setLocalFormula({ 
+        ...localFormula, 
+        [arrKey]: savedArr.filter(p => p.id !== productId) 
+      });
+    } else {
+      // Select -> add to array
+      const globalP = globalSource.find(p => p.id === productId);
+      if (globalP) {
+        setLocalFormula({ 
+          ...localFormula, 
+          [arrKey]: [
+            ...savedArr, 
+            { 
+              ...globalP, 
+              selected: true, 
+              minQty: globalP.minQuantity || 0,
+              maxQty: 0,
+              quantity: 0
+            }
+          ] 
+        });
+      }
+    }
   };
 
   const handleConfirm = () => {
@@ -59,36 +77,98 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
   };
 
   const renderProducts = (f: TargetFormula, type: 'macro' | 'micro') => {
-    const products = type === 'macro' ? f.macros : f.micros;
+    const savedProducts = type === 'macro' ? (f.macros || []) : (f.micros || []);
     const globalSource = type === 'macro' ? globalMacros : globalMicros;
     
-    const currentProducts = products.length > 0 ? products : globalSource;
+    // Map all global products to show them all, but inject state if they are selected
+    const currentProducts = globalSource.map(globalP => {
+      const savedP = savedProducts.find(s => s.id === globalP.id);
+      return savedP ? savedP : { ...globalP, selected: false, minQty: 0, maxQty: 0, quantity: 0 };
+    });
+
     const filtered = currentProducts.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
 
     return (
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-4">
         {filtered.map(p => (
           <div 
             key={p.id}
-            onClick={() => handleSelectProduct(p.id, type)}
-            className={`p-3 rounded-lg border cursor-pointer transition-colors flex flex-col justify-between ${
+            className={`p-3 rounded-lg border transition-colors flex flex-col ${
               p.selected 
-                ? 'bg-blue-50 border-blue-500 text-blue-700' 
-                : 'bg-white border-stone-200 text-stone-600 hover:border-blue-300'
+                ? 'bg-blue-50 border-blue-500' 
+                : 'bg-white border-stone-200 hover:border-blue-300'
             }`}
           >
-            <div>
-              <div className="text-sm font-medium">{p.name}</div>
-              <div className="text-xs opacity-70 mt-1">
-                {type === 'macro' 
-                  ? `N: ${p.n}% | P: ${p.p}% | K: ${p.k}%` 
-                  : `Garantias: ${p.microGuarantees?.length ? p.microGuarantees.map((g: any) => `${g.name} ${g.value}%`).join(', ') : 'N/A'}`}
+            {/* Header / Selection Toggle */}
+            <div 
+              className="flex items-start gap-3 cursor-pointer" 
+              onClick={() => handleSelectProduct(p.id, type)}
+            >
+              <div className="mt-1">
+                <input 
+                  type="checkbox" 
+                  checked={!!p.selected} 
+                  readOnly 
+                  className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 cursor-pointer"
+                />
+              </div>
+              <div className="flex-1">
+                <div className={`text-sm font-medium ${p.selected ? 'text-blue-800' : 'text-stone-700'}`}>
+                  {p.name}
+                </div>
+                <div className="text-xs opacity-70 mt-1 pb-2">
+                  {type === 'macro' 
+                    ? `N: ${p.n}% | P: ${p.p}% | K: ${p.k}%` 
+                    : `Garantias: ${p.microGuarantees?.length ? p.microGuarantees.map((g: any) => `${g.name} ${g.value}%`).join(', ') : 'N/A'}`}
+                </div>
               </div>
             </div>
+            
+            {/* Extended Input Fields */}
             {p.selected && (
-              <div className="mt-3 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
-                <span className="text-xs font-semibold">Qtd Mín. (kg):</span>
-                <div className="flex items-center gap-1">
+              <div className="mt-2 pt-3 border-t border-blue-200/50 flex flex-wrap gap-2 text-xs">
+                <div className="flex flex-col flex-1 min-w-[30%]">
+                  <label className="text-stone-500 font-semibold mb-1">Mínimo (kg)</label>
+                  <input
+                    type="number"
+                    value={p.minQty === 0 && p.minQuantity === 0 ? '' : p.minQty}
+                    onChange={(e) => {
+                      if (!localFormula) return;
+                      const val = Number(e.target.value);
+                      const arrKey = type === 'macro' ? 'macros' : 'micros';
+                      setLocalFormula({
+                        ...localFormula,
+                        [arrKey]: localFormula[arrKey].map(m => m.id === p.id ? { ...m, minQty: val } : m)
+                      });
+                    }}
+                    placeholder={`Ex: ${p.minQuantity || 0}`}
+                    min={0}
+                    className="w-full px-2 py-1.5 border border-blue-300 rounded focus:outline-none focus:border-blue-500 bg-white text-stone-800"
+                  />
+                </div>
+                
+                <div className="flex flex-col flex-1 min-w-[30%]">
+                  <label className="text-stone-500 font-semibold mb-1">Máximo (kg)</label>
+                  <input
+                    type="number"
+                    value={p.maxQty === 0 ? '' : p.maxQty}
+                    onChange={(e) => {
+                      if (!localFormula) return;
+                      const val = Number(e.target.value);
+                      const arrKey = type === 'macro' ? 'macros' : 'micros';
+                      setLocalFormula({
+                        ...localFormula,
+                        [arrKey]: localFormula[arrKey].map(m => m.id === p.id ? { ...m, maxQty: val } : m)
+                      });
+                    }}
+                    placeholder="Sem Limite"
+                    min={0}
+                    className="w-full px-2 py-1.5 border border-blue-300 rounded focus:outline-none focus:border-blue-500 bg-white text-stone-800"
+                  />
+                </div>
+                
+                <div className="flex flex-col flex-1 min-w-[30%]">
+                  <label className="text-stone-500 font-semibold mb-1">Fixo (kg)</label>
                   <input
                     type="number"
                     value={p.quantity === 0 ? '' : p.quantity}
@@ -96,14 +176,15 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
                       if (!localFormula) return;
                       const val = Number(e.target.value);
                       const arrKey = type === 'macro' ? 'macros' : 'micros';
-                      const updatedArr = localFormula[arrKey].map((m: any) =>
-                        m.id === p.id ? { ...m, quantity: val, minQty: val } : m
-                      );
-                      setLocalFormula({ ...localFormula, [arrKey]: updatedArr });
+                      setLocalFormula({
+                        ...localFormula,
+                        [arrKey]: localFormula[arrKey].map(m => m.id === p.id ? { ...m, quantity: val, minQty: val, maxQty: val } : m)
+                      });
                     }}
-                    placeholder={`Mín: ${p.minQuantity || 0}`}
+                    placeholder="Auto"
                     min={0}
-                    className="w-20 px-2 py-1 border border-blue-300 rounded text-sm text-right focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full px-2 py-1.5 border border-blue-300 rounded focus:outline-none focus:border-blue-500 bg-white text-stone-800"
+                    title="Preencher isso força a usar exatamente essa quantidade (iguala min e max)"
                   />
                 </div>
               </div>
@@ -115,15 +196,17 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+        {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-stone-100">
-          <h2 className="text-xl font-bold text-stone-800">Configurações de Produtos</h2>
+          <h2 className="text-xl font-bold text-stone-800">Produtos da Fórmula</h2>
           <button onClick={onClose} className="p-2 text-stone-400 hover:text-stone-600 rounded-full hover:bg-stone-50">
             <X size={20} />
           </button>
         </div>
 
+        {/* Filters/Tabs */}
         <div className="p-4 border-b border-stone-100 flex gap-4">
           <button
             onClick={() => setActiveTab('macros')}
@@ -131,7 +214,7 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
               activeTab === 'macros' ? 'bg-blue-600 text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
             }`}
           >
-            Macros
+            Matérias-Primas (Macro)
           </button>
           <button
             onClick={() => setActiveTab('micros')}
@@ -139,7 +222,7 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
               activeTab === 'micros' ? 'bg-blue-600 text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
             }`}
           >
-            Micros
+            Micronutrientes
           </button>
           
           <div className="ml-auto relative">
@@ -154,19 +237,26 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
           </div>
         </div>
 
+        {/* Content */}
         <div className="p-6 overflow-y-auto flex-1 bg-stone-50/50">
           {!localFormula ? (
-            <div className="text-center text-stone-500 py-8">Nenhuma fórmula encontrada.</div>
+            <div className="text-center text-stone-500 py-8">Nenhuma fórmula selecionada.</div>
           ) : (
             <div className="bg-white p-5 rounded-xl border border-stone-200 shadow-sm">
-              <h3 className="font-semibold text-stone-800 border-b border-stone-100 pb-3 mb-4">
-                Fórmula: <span className="text-blue-600">{localFormula.formula || 'Sem nome'}</span>
+              <h3 className="font-semibold text-stone-800 border-b border-stone-100 pb-3 mb-4 flex justify-between items-center">
+                <span>
+                  Configurando Fórmula: <span className="text-blue-600">{localFormula.formula || 'Sem nome'}</span>
+                </span>
+                <span className="text-xs font-normal text-stone-500 hidden sm:block">
+                  Selecione os produtos e defina suas restrições (Mín/Máx/Fixo)
+                </span>
               </h3>
               {renderProducts(localFormula, activeTab === 'macros' ? 'macro' : 'micro')}
             </div>
           )}
         </div>
 
+        {/* Footer */}
         <div className="p-6 border-t border-stone-100 flex justify-end gap-3 bg-white rounded-b-xl">
           <button
             onClick={onClose}

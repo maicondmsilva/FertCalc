@@ -1272,9 +1272,15 @@ export default function Calculator({ initialData, initialFormulaToLoad, initialB
                           <p className="text-[10px] font-bold text-stone-400 uppercase mb-2">Matérias-Primas Utilizadas</p>
                           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-1">
                             {[...calc.macros, ...calc.micros].filter(m => m.quantity > 0).map(m => (
-                              <div key={m.id} className="flex justify-between text-[11px] bg-stone-50 px-2 py-1 rounded">
-                                <span className="text-stone-600 font-medium truncate pr-1">{m.name}</span>
-                                <span className="text-emerald-600 font-bold shrink-0">{m.quantity.toFixed(1)} kg</span>
+                              <div key={m.id} className="flex flex-col gap-0.5 text-[11px] bg-stone-50 border border-stone-100 px-2 py-1.5 rounded">
+                                <div className="flex justify-between">
+                                  <span className="text-stone-700 font-bold truncate pr-1" title={m.name}>{m.name}</span>
+                                  <span className="text-emerald-600 font-black shrink-0">{m.quantity.toFixed(1)} kg</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-[9px] text-stone-400">R$ {m.price.toFixed(2)}/t</span>
+                                  <span className="text-[10px] text-stone-600 font-semibold shrink-0">R$ {((m.quantity / 1000) * m.price).toFixed(2)}</span>
+                                </div>
                               </div>
                             ))}
                           </div>
