@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS management_indicadores (
   unidade_medida TEXT NOT NULL,
   digitavel BOOLEAN DEFAULT TRUE,
   ordem INTEGER DEFAULT 0,
+  formula TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -100,3 +101,6 @@ CREATE POLICY "allow_all_management_configs" ON management_configuracoes_indicad
 ALTER TABLE management_dias_uteis ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "allow_all_management_dias_uteis" ON management_dias_uteis;
 CREATE POLICY "allow_all_management_dias_uteis" ON management_dias_uteis FOR ALL USING (true) WITH CHECK (true);
+
+-- Adicionar coluna formula à tabela management_indicadores (migração para bancos existentes)
+ALTER TABLE management_indicadores ADD COLUMN IF NOT EXISTS formula TEXT;

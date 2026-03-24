@@ -41,7 +41,8 @@ db.exec(`
     categoria TEXT NOT NULL,
     unidade_medida TEXT NOT NULL,
     digitavel INTEGER DEFAULT 1,
-    ordem INTEGER DEFAULT 0
+    ordem INTEGER DEFAULT 0,
+    formula TEXT
   );
 
   CREATE TABLE IF NOT EXISTS lancamentos (
@@ -82,6 +83,13 @@ db.exec(`
   );
 `);
 
+// Migrate existing databases: add formula column if it doesn't exist
+try {
+  db.exec("ALTER TABLE indicadores ADD COLUMN formula TEXT");
+} catch {
+  // Column already exists, ignore
+}
+
 // Seed initial data only if tables are empty
 const seedUnidades = db.prepare("SELECT COUNT(*) as count FROM unidades").get() as { count: number };
 if (seedUnidades.count === 0) {
@@ -111,17 +119,17 @@ if (seedCategorias.count === 0) {
 
 const seedIndicadores = db.prepare("SELECT COUNT(*) as count FROM indicadores").get() as { count: number };
 if (seedIndicadores.count === 0) {
-  const insertIndicador = db.prepare("INSERT INTO indicadores (id, nome, categoria, unidade_medida, digitavel, ordem) VALUES (?, ?, ?, ?, ?, ?)");
+  const insertIndicador = db.prepare("INSERT INTO indicadores (id, nome, categoria, unidade_medida, digitavel, ordem, formula) VALUES (?, ?, ?, ?, ?, ?, ?)");
   const seedIndicadoresData = [
-    ['v1', 'Tons Vendido no Dia', 'Faturamento', 'TON.', 1, 1],
-    ['v2', 'Rentabilidade do Dia', 'Rentabilidade', '%', 1, 2],
-    ['v3', 'Entrada Geral Pedidos', 'Entrada de Pedidos', 'R$', 1, 3],
-    ['v4', 'Cancelamento Bruto Dia', 'Cancelamentos', 'TON.', 1, 4],
-    ['v5', 'Carteira Total Ano', 'Carteira de Pedidos', 'R$', 1, 5],
-    ['c1', 'Produção do Dia', 'Produção', 'TON.', 1, 6],
-    ['f1', 'Faturamento Venda', 'Faturamento', 'R$', 1, 7],
-    ['f2', 'Faturamento Consignado', 'Faturamento', 'R$', 1, 8],
-    ['f3', 'Remessa Conta e Ordem', 'Faturamento', 'R$', 1, 9],
+    ['v1', 'Tons Vendido no Dia', 'Faturamento', 'TON.', 1, 1, null],
+    ['v2', 'Rentabilidade do Dia', 'Rentabilidade', '%', 1, 2, null],
+    ['v3', 'Entrada Geral Pedidos', 'Entrada de Pedidos', 'R$', 1, 3, null],
+    ['v4', 'Cancelamento Bruto Dia', 'Cancelamentos', 'TON.', 1, 4, null],
+    ['v5', 'Carteira Total Ano', 'Carteira de Pedidos', 'R$', 1, 5, null],
+    ['c1', 'Produção do Dia', 'Produção', 'TON.', 1, 6, null],
+    ['f1', 'Faturamento Venda', 'Faturamento', 'R$', 1, 7, null],
+    ['f2', 'Faturamento Consignado', 'Faturamento', 'R$', 1, 8, null],
+    ['f3', 'Remessa Conta e Ordem', 'Faturamento', 'R$', 1, 9, null],
   ];
   for (const i of seedIndicadoresData) insertIndicador.run(...i);
 }
@@ -228,8 +236,8 @@ async function startServer() {
     try {
       const i = req.body;
       db.prepare(
-        "INSERT INTO indicadores (id, nome, categoria, unidade_medida, digitavel, ordem) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET nome=excluded.nome, categoria=excluded.categoria, unidade_medida=excluded.unidade_medida, digitavel=excluded.digitavel, ordem=excluded.ordem"
-      ).run(i.id, i.nome, i.categoria, i.unidade_medida, i.digitavel ? 1 : 0, i.ordem ?? 0);
+        "INSERT INTO indicadores (id, nome, categoria, unidade_medida, digitavel, ordem, formula) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET nome=excluded.nome, categoria=excluded.categoria, unidade_medida=excluded.unidade_medida, digitavel=excluded.digitavel, ordem=excluded.ordem, formula=excluded.formula"
+      ).run(i.id, i.nome, i.categoria, i.unidade_medida, i.digitavel ? 1 : 0, i.ordem ?? 0, i.formula ?? null);
       res.json(rowToIndicador({ ...i, digitavel: i.digitavel ? 1 : 0 }));
     } catch (e: any) {
       res.status(500).json({ error: e.message });
