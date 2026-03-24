@@ -11,6 +11,28 @@ export interface FinishedProduct {
   minQuantity?: number;
 }
 
+export interface UnifiedProduct {
+  id: string;
+  name: string;
+  code: string;
+  type: NutrientType;
+  minQuantity: number;
+  categories: string[];
+  
+  // Specific fields mapped from macro/micro/finished
+  n?: number;
+  p?: number;
+  k?: number;
+  s?: number;
+  ca?: number;
+  microGuarantees?: MicroGuarantee[];
+  brandId?: string;
+  formulaSuffix?: string;
+  isPremiumLine?: boolean;
+  description?: string;
+  price?: number;
+}
+
 export interface MicroGuarantee {
   name: string;
   value: number;

@@ -32,8 +32,6 @@ import Approvals from './components/Approvals';
 import PrdModule from './components/PrdModule';
 import ManagementReportsModule from './components/ManagementReportsModule';
 
-import MacroManager from './components/MacroManager';
-import MicroManager from './components/MicroManager';
 import BrandManager from './components/BrandManager';
 import ProductManager from './components/ProductManager';
 import IncompatibilityManager from './components/IncompatibilityManager';
@@ -237,10 +235,8 @@ export default function App() {
           permission: 'priceLists',
           type: 'parent',
           children: [
-            { id: 'materials_macro', label: 'Macro', icon: Database, permission: 'priceLists' },
-            { id: 'materials_micro', label: 'Micronutriente', icon: Database, permission: 'priceLists' },
-            { id: 'materials_brand', label: 'Marca Produto', icon: Tag, permission: 'priceLists' },
             { id: 'products', label: 'Produtos', icon: Package, permission: 'priceLists' },
+            { id: 'materials_brand', label: 'Marcas', icon: Tag, permission: 'priceLists' },
             { id: 'incompatibilities', label: 'Incompatibilidades', icon: AlertTriangle, permission: 'priceLists' },
           ]
         },
@@ -632,8 +628,6 @@ export default function App() {
             {activeModule === 'pricing' && activeTab === 'commissionReport' && <CommissionReport currentUser={currentUser} />}
             {activeModule === 'pricing' && activeTab === 'pricingBySeller' && <PricingBySeller currentUser={currentUser} />}
             {activeModule === 'pricing' && activeTab === 'pricelists' && <PriceListManager currentUser={currentUser} />}
-            {activeModule === 'pricing' && activeTab === 'materials_macro' && <MacroManager currentUser={currentUser} />}
-            {activeModule === 'pricing' && activeTab === 'materials_micro' && <MicroManager currentUser={currentUser} />}
             {activeModule === 'pricing' && activeTab === 'materials_brand' && <BrandManager />}
             {activeModule === 'pricing' && activeTab === 'products' && <ProductManager />}
             {activeModule === 'pricing' && activeTab === 'incompatibilities' && <IncompatibilityManager />}

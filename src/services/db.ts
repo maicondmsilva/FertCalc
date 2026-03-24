@@ -23,6 +23,8 @@ import {
   FertigranPFormula,
   ComparisonHistory,
   CompatibilityCategory,
+  UnifiedProduct,
+  NutrientType,
   Unidade,
   Categoria,
   Indicador,
@@ -557,6 +559,70 @@ export async function updateFinishedProduct(id: string, product: Partial<Finishe
 export async function deleteFinishedProduct(id: string): Promise<void> {
   const { error } = await supabase.from('finished_products').delete().eq('id', id);
   if (error) throw error;
+}
+
+// ============================================================
+// UNIFIED PRODUCT HELPERS
+// ============================================================
+export async function getUnifiedProducts(): Promise<UnifiedProduct[]> {
+  const [macros, micros, finished] = await Promise.all([
+    getMacroMaterials(),
+    getMicroMaterials(),
+    getFinishedProducts()
+  ]);
+
+  const unified: UnifiedProduct[] = [
+    ...macros.map(m => ({
+      id: m.id, type: 'macro' as NutrientType, name: m.name, code: m.code || '',
+      minQuantity: m.minQuantity || 0, categories: m.categories || [],
+      n: m.n, p: m.p, k: m.k, s: m.s, ca: m.ca, microGuarantees: m.microGuarantees,
+      brandId: m.brandId, formulaSuffix: m.formulaSuffix, isPremiumLine: m.isPremiumLine
+    })),
+    ...micros.map(m => ({
+      id: m.id, type: 'micro' as NutrientType, name: m.name, code: m.code || '',
+      minQuantity: m.minQuantity || 0, categories: m.categories || [],
+      microGuarantees: m.microGuarantees
+    })),
+    ...finished.map(f => ({
+      id: f.id, type: 'finished' as NutrientType, name: f.name, code: f.code || '',
+      minQuantity: f.minQuantity || 0, categories: [],
+      description: f.description, price: f.price
+    }))
+  ];
+  return unified;
+}
+
+export async function saveUnifiedProduct(p: Partial<UnifiedProduct>, id?: string): Promise<void> {
+  if (p.type === 'macro') {
+    const macroData = {
+      name: p.name!, code: p.code, minQuantity: p.minQuantity, categories: p.categories || [],
+      n: p.n || 0, p: p.p || 0, k: p.k || 0, s: p.s || 0, ca: p.ca || 0,
+      microGuarantees: p.microGuarantees || [], brandId: p.brandId,
+      formulaSuffix: p.formulaSuffix, isPremiumLine: p.isPremiumLine
+    };
+    if (id) await updateMacroMaterial(id, macroData);
+    else await createMacroMaterial(macroData as any);
+  } else if (p.type === 'micro') {
+    const microData = {
+      name: p.name!, code: p.code, minQuantity: p.minQuantity, categories: p.categories || [],
+      microGuarantees: p.microGuarantees || []
+    };
+    if (id) await updateMicroMaterial(id, microData);
+    else await createMicroMaterial(microData as any);
+  } else if (p.type === 'finished') {
+    const finishedData = {
+      name: p.name!, code: p.code!, minQuantity: p.minQuantity,
+      description: p.description, price: p.price
+    };
+    if (id) await updateFinishedProduct(id, finishedData);
+    else await createFinishedProduct(finishedData as any);
+  }
+}
+
+export async function deleteUnifiedProduct(id: string, type: NutrientType): Promise<void> {
+  if (type === 'macro') await deleteMacroMaterial(id);
+  else if (type === 'micro') await deleteMicroMaterial(id);
+  else if (type === 'finished') await deleteFinishedProduct(id);
 }
 
 // ============================================================

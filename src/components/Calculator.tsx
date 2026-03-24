@@ -38,7 +38,7 @@ const getAutoWidth = (val: any) => {
 
 export default function Calculator({ initialData, initialFormulaToLoad, initialBranchId, initialPriceListId, onClearEditing, onSaveSuccess, currentUser }: CalculatorProps) {
   const { showSuccess, showError } = useToast();
-  const { isSettingsOpen, openSettings, closeSettings } = useCalculatorSettings();
+  const { isSettingsOpen, activeFormulaId, openSettings, closeSettings } = useCalculatorSettings();
   const [status, setStatus] = useState<'Em Andamento' | 'Fechada' | 'Perdida'>('Em Andamento');
 
   const [isFertigranPModalOpen, setIsFertigranPModalOpen] = useState(false);
