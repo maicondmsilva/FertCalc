@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   LayoutDashboard, 
   FileEdit, 
@@ -17,7 +17,8 @@ import {
   Download,
   Upload,
   Trash2,
-  Edit2
+  Edit2,
+  BookOpen
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, startOfMonth, eachDayOfInterval, isSameDay, parseISO } from 'date-fns';
@@ -202,10 +203,12 @@ const Modal = ({
 
 const SortableIndicadorRow = ({ 
   indicador, 
+  visualId,
   onEdit, 
   onDelete 
 }: { 
-  indicador: Indicador; 
+  indicador: Indicador;
+  visualId?: string;
   onEdit: (i: Indicador) => void; 
   onDelete: (id: string) => void;
 }) => {
@@ -234,7 +237,9 @@ const SortableIndicadorRow = ({
       </td>
       <td className="px-4 py-3">
         <span className="font-medium text-slate-900">{indicador.nome}</span>
-        <span className="block text-[10px] text-slate-400 font-mono">ID: {indicador.id}</span>
+        {visualId && (
+          <span className="block text-[10px] text-indigo-500 font-mono font-bold">ID: {visualId}</span>
+        )}
       </td>
       <td className="px-4 py-3 text-slate-600">{indicador.unidade_medida}</td>
       <td className="px-4 py-3">
@@ -302,6 +307,55 @@ const SortableCategoryRow = ({
 
 // --- Pages ---
 
+// --- Visual ID helpers ---
+
+const DEFAULT_WORKING_DAYS_PER_MONTH = 22;
+
+const CATEGORY_PREFIXES: Record<string, string> = {
+  'Faturamento': 'f',
+  'Carregamento': 'c',
+  'Rentabilidade': 'r',
+  'Cancelamentos': 'n',
+  'Entrada de Pedidos': 'e',
+  'Carteira de Pedidos': 't',
+  'Produção': 'p',
+};
+
+function getCategoryPrefix(categoryName: string): string {
+  if (CATEGORY_PREFIXES[categoryName]) return CATEGORY_PREFIXES[categoryName];
+  return categoryName[0]?.toLowerCase() || 'x';
+}
+
+function generateVisualIdMaps(
+  indicadores: Indicador[],
+  categorias: Categoria[]
+): { visualIdMap: Record<string, string>; reverseVisualIdMap: Record<string, string> } {
+  const visualIdMap: Record<string, string> = {};
+  const reverseVisualIdMap: Record<string, string> = {};
+  const counters: Record<string, number> = {};
+
+  const sortedCats = [...categorias].sort((a, b) => a.ordem - b.ordem);
+
+  for (const cat of sortedCats) {
+    const prefix = getCategoryPrefix(cat.nome);
+    const catIndicadores = indicadores
+      .filter(i => i.categoria === cat.nome)
+      .sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
+
+    let count = counters[prefix] || 1;
+    for (const ind of catIndicadores) {
+      const visualId = `${prefix}${count}`;
+      visualIdMap[ind.id] = visualId;
+      reverseVisualIdMap[visualId] = ind.id;
+      count++;
+    }
+    counters[prefix] = count;
+  }
+
+  return { visualIdMap, reverseVisualIdMap };
+}
+
+
 const Dashboard = ({ 
   unidades, 
   indicadores, 
@@ -322,6 +376,8 @@ const Dashboard = ({
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   
   const activeUnidades = unidades.filter(u => u.ativo).sort((a, b) => a.ordem_exibicao - b.ordem_exibicao);
+
+  const { reverseVisualIdMap } = useMemo(() => generateVisualIdMaps(indicadores, categorias), [indicadores, categorias]);
   
   const getValor = (unidadeId: string, indicadorId: string, date: string = selectedDate) => {
     return lancamentos.find(l => l.unidade_id === unidadeId && l.indicador_id === indicadorId && l.data === date)?.valor || 0;
@@ -362,11 +418,110 @@ const Dashboard = ({
   weekEnd.setDate(weekStart.getDate() + 6);
   weekEnd.setHours(23,59,59,999);
 
-  const avaliarFormula = (formula: string, valores: Record<string, number>): number => {
+  interface FormulaContext {
+    lancamentos: Lancamento[];
+    metas: MetaMensal[];
+    diasUteis: DiasUteisMes[];
+    unidadeId: string;
+    selectedDate: string;
+    reverseVisualIdMap: Record<string, string>;
+    weekStart: Date;
+    currentMonthStart: Date;
+    currentYearStart: Date;
+  }
+
+  const avaliarFormula = (formula: string, valores: Record<string, number>, ctx?: FormulaContext): number => {
     try {
-      // Replace [id] references with their numeric values
-      let expressao = formula.replace(/\[([^\]]+)\]/g, (_, id) => {
-        const val = valores[id.trim()];
+      let expressao = formula;
+
+      if (ctx) {
+        const { lancamentos: lnc, metas: mts, diasUteis: du, unidadeId, selectedDate: sd, reverseVisualIdMap, weekStart: ws, currentMonthStart: cms, currentYearStart: cys } = ctx;
+        const selectedDateObj = parseISO(sd);
+        const year = selectedDateObj.getFullYear();
+        const month = selectedDateObj.getMonth() + 1;
+
+        const resolveId = (visualId: string): string => reverseVisualIdMap[visualId.trim()] || visualId.trim();
+
+        // DIAS_UTEIS()
+        expressao = expressao.replace(/DIAS_UTEIS\(\)/g, () => {
+          const total = du.find(d => d.unidade_id === unidadeId && d.ano === year && d.mes === month)?.total_dias_uteis ?? DEFAULT_WORKING_DAYS_PER_MONTH;
+          return String(total);
+        });
+
+        // DIAS_RESTANTES()
+        expressao = expressao.replace(/DIAS_RESTANTES\(\)/g, () => {
+          const total = du.find(d => d.unidade_id === unidadeId && d.ano === year && d.mes === month)?.total_dias_uteis ?? DEFAULT_WORKING_DAYS_PER_MONTH;
+          const daysWithEntries = new Set(
+            lnc.filter(l => l.unidade_id === unidadeId && parseISO(l.data) >= cms && parseISO(l.data) <= selectedDateObj && l.valor > 0).map(l => l.data)
+          ).size;
+          return String(Math.max(0, total - daysWithEntries));
+        });
+
+        // SOMA_MES([id])
+        expressao = expressao.replace(/SOMA_MES\(\[([^\]]+)\]\)/g, (_, vId) => {
+          const internalId = resolveId(vId);
+          const soma = lnc.filter(l => l.unidade_id === unidadeId && l.indicador_id === internalId && parseISO(l.data) >= cms && parseISO(l.data) <= selectedDateObj).reduce((acc, l) => acc + l.valor, 0);
+          return String(soma);
+        });
+
+        // SOMA_ANO([id])
+        expressao = expressao.replace(/SOMA_ANO\(\[([^\]]+)\]\)/g, (_, vId) => {
+          const internalId = resolveId(vId);
+          const soma = lnc.filter(l => l.unidade_id === unidadeId && l.indicador_id === internalId && parseISO(l.data) >= cys && parseISO(l.data) <= selectedDateObj).reduce((acc, l) => acc + l.valor, 0);
+          return String(soma);
+        });
+
+        // SOMA_SEMANA([id])
+        expressao = expressao.replace(/SOMA_SEMANA\(\[([^\]]+)\]\)/g, (_, vId) => {
+          const internalId = resolveId(vId);
+          const soma = lnc.filter(l => l.unidade_id === unidadeId && l.indicador_id === internalId && parseISO(l.data) >= ws && parseISO(l.data) <= selectedDateObj).reduce((acc, l) => acc + l.valor, 0);
+          return String(soma);
+        });
+
+        // MEDIA_MES([id])
+        expressao = expressao.replace(/MEDIA_MES\(\[([^\]]+)\]\)/g, (_, vId) => {
+          const internalId = resolveId(vId);
+          const periodLanc = lnc.filter(l => l.unidade_id === unidadeId && l.indicador_id === internalId && parseISO(l.data) >= cms && parseISO(l.data) <= selectedDateObj);
+          const sum = periodLanc.reduce((acc, l) => acc + l.valor, 0);
+          const count = new Set(periodLanc.map(l => l.data)).size;
+          return count > 0 ? String(sum / count) : '0';
+        });
+
+        // MEDIA_PONDERADA_MES([id],[peso]) — uses a Map for O(n) lookup
+        expressao = expressao.replace(/MEDIA_PONDERADA_MES\(\[([^\]]+)\],\[([^\]]+)\]\)/g, (_, vId1, vId2) => {
+          const internalId1 = resolveId(vId1);
+          const internalId2 = resolveId(vId2);
+          const periodLanc = lnc.filter(l => l.unidade_id === unidadeId && parseISO(l.data) >= cms && parseISO(l.data) <= selectedDateObj);
+          // Build lookup map: date → { indicador_id → valor }
+          const byDate = new Map<string, Map<string, number>>();
+          for (const l of periodLanc) {
+            if (!byDate.has(l.data)) byDate.set(l.data, new Map());
+            byDate.get(l.data)!.set(l.indicador_id, l.valor);
+          }
+          let weightedSum = 0;
+          let totalWeight = 0;
+          byDate.forEach(indMap => {
+            const val = indMap.get(internalId1) ?? 0;
+            const weight = indMap.get(internalId2) ?? 0;
+            weightedSum += val * weight;
+            totalWeight += weight;
+          });
+          return totalWeight > 0 ? String(weightedSum / totalWeight) : '0';
+        });
+
+        // META_MES([id])
+        expressao = expressao.replace(/META_MES\(\[([^\]]+)\]\)/g, (_, vId) => {
+          const internalId = resolveId(vId);
+          const meta = mts.find(m => m.unidade_id === unidadeId && m.ano === year && m.mes === month && m.indicador_id === internalId)?.valor_meta || 0;
+          return String(meta);
+        });
+      }
+
+      // Replace [id] references with their numeric values, resolving visual IDs if context available
+      expressao = expressao.replace(/\[([^\]]+)\]/g, (_, id) => {
+        const trimmedId = id.trim();
+        const internalId = ctx?.reverseVisualIdMap[trimmedId] || trimmedId;
+        const val = valores[internalId];
         return val !== undefined ? String(val) : '0';
       });
 
@@ -431,7 +586,7 @@ const Dashboard = ({
     const metaMes = metas.find(m => m.unidade_id === u.id && m.ano === year && m.mes === month && m.indicador_id === 'f1')?.valor_meta || 0;
     const saldoDeficit = metaMes - fatAcumuladoMes;
     
-    const totalDiasUteis = diasUteis.find(d => d.unidade_id === u.id && d.ano === year && d.mes === month)?.total_dias_uteis || 22;
+    const totalDiasUteis = diasUteis.find(d => d.unidade_id === u.id && d.ano === year && d.mes === month)?.total_dias_uteis || DEFAULT_WORKING_DAYS_PER_MONTH;
     // Count days with invoicing
     const daysWithInvoicing = new Set(
       lancamentos
@@ -444,11 +599,30 @@ const Dashboard = ({
 
     const genericData = Object.fromEntries(indicadores.map(i => [i.id, getValor(u.id, i.id)]));
 
+    // Build formula context for aggregation functions
+    const formulaCtx: FormulaContext = {
+      lancamentos,
+      metas,
+      diasUteis,
+      unidadeId: u.id,
+      selectedDate,
+      reverseVisualIdMap,
+      weekStart,
+      currentMonthStart,
+      currentYearStart,
+    };
+
     // Process calculated indicators with formulas in dependency order (topological sort)
     const formulaIndicadores = indicadores.filter(ind => !ind.digitavel && ind.formula);
     const getDeps = (formula: string): string[] => {
       const deps: string[] = [];
-      formula.replace(/\[([^\]]+)\]/g, (_, id) => { deps.push(id.trim()); return ''; });
+      // Extract [id] references, resolving visual IDs to internal IDs
+      formula.replace(/\[([^\]]+)\]/g, (_, id) => {
+        const trimmedId = id.trim();
+        const internalId = reverseVisualIdMap[trimmedId] || trimmedId;
+        deps.push(internalId);
+        return '';
+      });
       return deps;
     };
     const visited = new Set<string>();
@@ -461,7 +635,7 @@ const Dashboard = ({
         const depInd = formulaIndicadores.find(i => i.id === depId);
         if (depInd) evaluate(depInd, stack);
       }
-      genericData[ind.id] = avaliarFormula(ind.formula!, genericData);
+      genericData[ind.id] = avaliarFormula(ind.formula!, genericData, formulaCtx);
       visited.add(ind.id);
       stack.delete(ind.id);
     };
@@ -795,12 +969,14 @@ const Cadastros = ({
   onDeleteConfig: (unidade_id: string, indicador_id: string) => Promise<void>;
   onDeleteDiasUteis: (unidade_id: string, ano: number, mes: number) => Promise<void>;
 }) => {
-  const [activeTab, setActiveTab] = useState<'indicadores' | 'categorias' | 'metas' | 'config-unidades' | 'dias-uteis'>('categorias');
+  const [activeTab, setActiveTab] = useState<'indicadores' | 'categorias' | 'metas' | 'config-unidades' | 'dias-uteis' | 'guia-formulas' | 'unidades'>('categorias');
   const [selectedUnidade, setSelectedUnidade] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState<'unidade' | 'indicador' | 'categoria' | 'meta' | null>(null);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [isDigitavel, setIsDigitavel] = useState(true);
+
+  const { visualIdMap } = useMemo(() => generateVisualIdMaps(indicadores, categorias), [indicadores, categorias]);
 
   const handleOpenModal = (type: 'unidade' | 'indicador' | 'categoria' | 'meta', item: any = null) => {
     setModalType(type);
@@ -869,6 +1045,7 @@ const Cadastros = ({
           { id: 'metas', label: 'Metas Mensais', icon: Target },
           { id: 'config-unidades', label: 'Personalização', icon: Settings },
           { id: 'dias-uteis', label: 'Dias Úteis', icon: CalendarIcon },
+          { id: 'guia-formulas', label: 'Guia de Fórmulas', icon: BookOpen },
         ].map(tab => (
           <button
             key={tab.id}
@@ -1197,7 +1374,8 @@ const Cadastros = ({
                               {catIndicadores.map(i => (
                                 <SortableIndicadorRow 
                                   key={i.id} 
-                                  indicador={i} 
+                                  indicador={i}
+                                  visualId={visualIdMap[i.id]}
                                   onEdit={(ind) => handleOpenModal('indicador', ind)}
                                   onDelete={onDeleteIndicador}
                                 />
@@ -1401,6 +1579,292 @@ const Cadastros = ({
             </Card>
           </MotionDiv>
         )}
+        {activeTab === 'guia-formulas' && (
+          <MotionDiv key="guia-formulas" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
+
+            {/* Seção 1 - Como Funciona */}
+            <Card>
+              <div className="px-6 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white">
+                <div className="flex items-center gap-3">
+                  <BookOpen className="w-6 h-6" />
+                  <div>
+                    <h2 className="text-lg font-bold">Como Funciona</h2>
+                    <p className="text-indigo-100 text-sm">Crie indicadores calculados automaticamente com fórmulas</p>
+                  </div>
+                </div>
+              </div>
+              <div className="p-6">
+                <ol className="space-y-3">
+                  {[
+                    { n: 1, text: 'Vá em Cadastros → Indicadores' },
+                    { n: 2, text: 'Identifique os IDs visuais dos indicadores base (ex: f1, f2, r1) listados abaixo do nome de cada indicador' },
+                    { n: 3, text: 'Crie um novo indicador (ex: "Ticket Médio Diário")' },
+                    { n: 4, text: 'Desmarque a opção "Indicador Digitável"' },
+                    { n: 5, text: 'Digite a fórmula usando os IDs visuais entre colchetes (ex: [f2] / [f1])' },
+                    { n: 6, text: 'Salve — o valor será calculado automaticamente no Dashboard' },
+                  ].map(step => (
+                    <li key={step.n} className="flex items-start gap-3">
+                      <span className="flex-shrink-0 w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 font-bold text-sm flex items-center justify-center">{step.n}</span>
+                      <span className="text-sm text-slate-700 pt-0.5">{step.text}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </Card>
+
+            {/* Seção 2 - Referenciando Indicadores */}
+            <Card>
+              <div className="px-6 py-4 bg-slate-50 border-b border-slate-200">
+                <h2 className="text-base font-bold text-slate-900">📌 Referenciando Indicadores</h2>
+              </div>
+              <div className="p-6 space-y-3">
+                <p className="text-sm text-slate-600">Use <code className="bg-slate-100 px-1.5 py-0.5 rounded font-mono text-indigo-700">[id]</code> para referenciar o valor do dia de outro indicador. O ID visual é exibido abaixo do nome de cada indicador na lista.</p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm border border-slate-200 rounded-lg overflow-hidden">
+                    <thead className="bg-slate-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left font-semibold text-slate-700">Sintaxe</th>
+                        <th className="px-4 py-2 text-left font-semibold text-slate-700">Resultado</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      <tr>
+                        <td className="px-4 py-2 font-mono text-indigo-700">[f1]</td>
+                        <td className="px-4 py-2 text-slate-600">Valor do indicador f1 no dia selecionado</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 font-mono text-indigo-700">[f2] / [f1]</td>
+                        <td className="px-4 py-2 text-slate-600">Divisão entre f2 e f1 no dia (ex: Ticket Médio)</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </Card>
+
+            {/* Seção 3 - Operadores */}
+            <Card>
+              <div className="px-6 py-4 bg-slate-50 border-b border-slate-200">
+                <h2 className="text-base font-bold text-slate-900">➕ Operadores Matemáticos</h2>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {[
+                    { op: '+', desc: 'Adição', ex: '[f1] + [f2]' },
+                    { op: '-', desc: 'Subtração', ex: '[f1] - [f2]' },
+                    { op: '*', desc: 'Multiplicação', ex: '[f1] * 1.1' },
+                    { op: '/', desc: 'Divisão', ex: '[f2] / [f1]' },
+                  ].map(item => (
+                    <div key={item.op} className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                      <span className="text-2xl font-bold text-indigo-600">{item.op}</span>
+                      <p className="text-xs font-semibold text-slate-700 mt-1">{item.desc}</p>
+                      <code className="text-[10px] text-slate-500 font-mono">{item.ex}</code>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-start gap-2 text-sm text-slate-600 bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <span className="text-blue-600 font-bold">💡</span>
+                  <span>Use parênteses para controlar a ordem das operações: <code className="font-mono bg-blue-100 px-1 rounded">(META_MES([f2]) - SOMA_MES([f2])) / DIAS_RESTANTES()</code></span>
+                </div>
+              </div>
+            </Card>
+
+            {/* Seção 4 - Funções de Agregação */}
+            <Card>
+              <div className="px-6 py-4 bg-slate-50 border-b border-slate-200">
+                <h2 className="text-base font-bold text-slate-900">📊 Funções de Agregação Temporal</h2>
+                <p className="text-sm text-slate-500">Calculam sobre todos os lançamentos do período, não apenas o dia atual</p>
+              </div>
+              <div className="p-6">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm border border-slate-200 rounded-lg overflow-hidden">
+                    <thead className="bg-slate-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left font-semibold text-slate-700">Função</th>
+                        <th className="px-4 py-2 text-left font-semibold text-slate-700">Descrição</th>
+                        <th className="px-4 py-2 text-left font-semibold text-slate-700">Exemplo</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {[
+                        { fn: 'SOMA_MES([id])', desc: 'Soma todos os lançamentos do mês/ano da data selecionada', ex: 'SOMA_MES([f2])' },
+                        { fn: 'SOMA_ANO([id])', desc: 'Soma todos os lançamentos do ano da data selecionada', ex: 'SOMA_ANO([f1])' },
+                        { fn: 'SOMA_SEMANA([id])', desc: 'Soma os lançamentos da semana (seg–dom) da data selecionada', ex: 'SOMA_SEMANA([n1])' },
+                        { fn: 'MEDIA_MES([id])', desc: 'Média dos valores no mês (soma ÷ quantidade de dias com lançamento)', ex: 'MEDIA_MES([r1])' },
+                        { fn: 'MEDIA_PONDERADA_MES([id],[peso])', desc: 'Média ponderada: Σ(valor × peso) ÷ Σ(peso), cruzando por data', ex: 'MEDIA_PONDERADA_MES([r1],[f1])' },
+                      ].map(row => (
+                        <tr key={row.fn} className="hover:bg-slate-50">
+                          <td className="px-4 py-2.5 font-mono text-indigo-700 text-xs whitespace-nowrap">{row.fn}</td>
+                          <td className="px-4 py-2.5 text-slate-600">{row.desc}</td>
+                          <td className="px-4 py-2.5 font-mono text-xs text-emerald-700">{row.ex}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </Card>
+
+            {/* Seção 5 - Funções Especiais */}
+            <Card>
+              <div className="px-6 py-4 bg-slate-50 border-b border-slate-200">
+                <h2 className="text-base font-bold text-slate-900">⚙️ Funções Especiais</h2>
+              </div>
+              <div className="p-6">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm border border-slate-200 rounded-lg overflow-hidden">
+                    <thead className="bg-slate-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left font-semibold text-slate-700">Função</th>
+                        <th className="px-4 py-2 text-left font-semibold text-slate-700">Descrição</th>
+                        <th className="px-4 py-2 text-left font-semibold text-slate-700">Exemplo de uso</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      <tr className="hover:bg-slate-50">
+                        <td className="px-4 py-2.5 font-mono text-indigo-700 text-xs">META_MES([id])</td>
+                        <td className="px-4 py-2.5 text-slate-600">Retorna o valor da meta mensal cadastrada para o indicador na unidade</td>
+                        <td className="px-4 py-2.5 font-mono text-xs text-emerald-700">META_MES([f2])</td>
+                      </tr>
+                      <tr className="hover:bg-slate-50">
+                        <td className="px-4 py-2.5 font-mono text-indigo-700 text-xs">DIAS_UTEIS()</td>
+                        <td className="px-4 py-2.5 text-slate-600">Total de dias úteis do mês cadastrado para a unidade (padrão: 22)</td>
+                        <td className="px-4 py-2.5 font-mono text-xs text-emerald-700">SOMA_MES([p1]) / DIAS_UTEIS()</td>
+                      </tr>
+                      <tr className="hover:bg-slate-50">
+                        <td className="px-4 py-2.5 font-mono text-indigo-700 text-xs">DIAS_RESTANTES()</td>
+                        <td className="px-4 py-2.5 text-slate-600">Dias úteis restantes no mês (total − dias com lançamento até hoje)</td>
+                        <td className="px-4 py-2.5 font-mono text-xs text-emerald-700">(META_MES([f2]) - SOMA_MES([f2])) / DIAS_RESTANTES()</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </Card>
+
+            {/* Seção 6 - 10 Exemplos Práticos */}
+            <Card>
+              <div className="px-6 py-4 bg-slate-50 border-b border-slate-200">
+                <h2 className="text-base font-bold text-slate-900">💡 10 Exemplos Práticos</h2>
+              </div>
+              <div className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {[
+                    { nome: 'Ticket Médio Diário', formula: '[f2] / [f1]', desc: 'Faturamento dividido por toneladas no dia', badge: 'Cálculo Diário', badgeColor: 'bg-blue-100 text-blue-700' },
+                    { nome: 'Faturamento Acumulado Mês', formula: 'SOMA_MES([f2]) + SOMA_MES([f3]) + SOMA_MES([f4])', desc: 'Soma de todos os tipos de faturamento no mês', badge: 'Acumulado Mensal', badgeColor: 'bg-indigo-100 text-indigo-700' },
+                    { nome: 'Tons Acumulado Ano', formula: 'SOMA_ANO([f1])', desc: 'Total de toneladas acumuladas no ano', badge: 'Acumulado Anual', badgeColor: 'bg-purple-100 text-purple-700' },
+                    { nome: 'Cancelamento Semana', formula: 'SOMA_SEMANA([n1])', desc: 'Total de cancelamentos na semana atual', badge: 'Acumulado Semanal', badgeColor: 'bg-orange-100 text-orange-700' },
+                    { nome: 'Média Rentabilidade Mês', formula: 'MEDIA_MES([r1])', desc: 'Média simples da rentabilidade no mês', badge: 'Média Mensal', badgeColor: 'bg-emerald-100 text-emerald-700' },
+                    { nome: 'Rentabilidade Média Ponderada', formula: 'MEDIA_PONDERADA_MES([r1],[f1])', desc: 'Rentabilidade ponderada pelo volume de toneladas', badge: 'Média Ponderada', badgeColor: 'bg-teal-100 text-teal-700' },
+                    { nome: 'Saldo/Déficit Meta', formula: 'META_MES([f2]) - SOMA_MES([f2])', desc: 'Quanto falta (ou sobra) para bater a meta', badge: 'Meta', badgeColor: 'bg-red-100 text-red-700' },
+                    { nome: 'Média a Faturar/Dia', formula: '(META_MES([f2]) - SOMA_MES([f2])) / DIAS_RESTANTES()', desc: 'Quanto precisa faturar por dia para atingir a meta', badge: 'Meta + Projeção', badgeColor: 'bg-rose-100 text-rose-700' },
+                    { nome: 'Ticket Médio Mensal', formula: 'SOMA_MES([f2]) / SOMA_MES([f1])', desc: 'Faturamento acumulado dividido por tons acumuladas no mês', badge: 'Cálculo Mensal', badgeColor: 'bg-sky-100 text-sky-700' },
+                    { nome: 'Média Diária Produção', formula: 'SOMA_MES([p1]) / DIAS_UTEIS()', desc: 'Produção acumulada dividida pelos dias úteis do mês', badge: 'Cálculo Mensal', badgeColor: 'bg-sky-100 text-sky-700' },
+                  ].map((ex, idx) => (
+                    <div key={idx} className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="text-sm font-bold text-slate-900">{idx + 1}. {ex.nome}</span>
+                        <span className={cn('px-2 py-0.5 rounded-full text-[10px] font-bold uppercase whitespace-nowrap', ex.badgeColor)}>{ex.badge}</span>
+                      </div>
+                      <code className="block text-xs font-mono bg-white border border-slate-200 rounded-lg px-3 py-2 text-indigo-700 break-all">{ex.formula}</code>
+                      <p className="text-xs text-slate-500">{ex.desc}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Card>
+
+            {/* Seção 7 - Dicas e Cuidados */}
+            <Card>
+              <div className="px-6 py-4 bg-slate-50 border-b border-slate-200">
+                <h2 className="text-base font-bold text-slate-900">⚠️ Dicas e Cuidados</h2>
+              </div>
+              <div className="p-6 space-y-3">
+                <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-4">
+                  <span className="text-amber-500 text-lg">⚠️</span>
+                  <div>
+                    <p className="text-sm font-bold text-amber-800">Divisão por Zero</p>
+                    <p className="text-xs text-amber-700 mt-0.5">Se o divisor for zero, a fórmula retorna 0 automaticamente. Ex: se não houver tons lançados, <code className="font-mono bg-amber-100 px-1 rounded">[f2] / [f1]</code> retorna 0.</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-xl p-4">
+                  <span className="text-blue-500 text-lg">🏷️</span>
+                  <div>
+                    <p className="text-sm font-bold text-blue-800">IDs São Dinâmicos</p>
+                    <p className="text-xs text-blue-700 mt-0.5">Os IDs visuais (f1, r1, p1...) são gerados automaticamente com base na categoria e ordem. Se você reordenar indicadores, os IDs podem mudar. Verifique sempre a seção "IDs dos Indicadores Atuais" abaixo.</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 bg-green-50 border border-green-200 rounded-xl p-4">
+                  <span className="text-green-500 text-lg">✅</span>
+                  <div>
+                    <p className="text-sm font-bold text-green-800">Parênteses</p>
+                    <p className="text-xs text-green-700 mt-0.5">Use parênteses para garantir a ordem correta das operações. A fórmula é validada antes da execução — expressões inválidas retornam 0.</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 bg-purple-50 border border-purple-200 rounded-xl p-4">
+                  <span className="text-purple-500 text-lg">🔗</span>
+                  <div>
+                    <p className="text-sm font-bold text-purple-800">Combinando Funções</p>
+                    <p className="text-xs text-purple-700 mt-0.5">Você pode combinar funções de agregação com operadores e referências simples. Ex: <code className="font-mono bg-purple-100 px-1 rounded">SOMA_MES([f2]) * [r1] / 100</code> aplica a rentabilidade do dia ao acumulado mensal.</p>
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            {/* Seção 8 - IDs dos Indicadores Atuais */}
+            <Card>
+              <div className="px-6 py-4 bg-slate-50 border-b border-slate-200">
+                <h2 className="text-base font-bold text-slate-900">🏷️ IDs dos Indicadores Atuais</h2>
+                <p className="text-sm text-slate-500">Use estes IDs nas suas fórmulas</p>
+              </div>
+              <div className="p-6">
+                {indicadores.length === 0 ? (
+                  <p className="text-sm text-slate-400 italic text-center py-4">Nenhum indicador cadastrado ainda.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm border border-slate-200 rounded-lg overflow-hidden">
+                      <thead className="bg-slate-50">
+                        <tr>
+                          <th className="px-4 py-2 text-left font-semibold text-slate-700">ID Visual</th>
+                          <th className="px-4 py-2 text-left font-semibold text-slate-700">Nome</th>
+                          <th className="px-4 py-2 text-left font-semibold text-slate-700">Categoria</th>
+                          <th className="px-4 py-2 text-left font-semibold text-slate-700">Tipo</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {[...categorias].sort((a, b) => a.ordem - b.ordem).flatMap(cat =>
+                          indicadores
+                            .filter(ind => ind.categoria === cat.nome)
+                            .sort((a, b) => (a.ordem || 0) - (b.ordem || 0))
+                            .map(ind => (
+                              <tr key={ind.id} className="hover:bg-slate-50">
+                                <td className="px-4 py-2">
+                                  {visualIdMap[ind.id] ? (
+                                    <code className="bg-indigo-100 text-indigo-700 font-mono font-bold px-2 py-0.5 rounded text-xs">{visualIdMap[ind.id]}</code>
+                                  ) : (
+                                    <span className="text-slate-400 text-xs italic">—</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-2 font-medium text-slate-900">{ind.nome}</td>
+                                <td className="px-4 py-2 text-slate-600">{ind.categoria}</td>
+                                <td className="px-4 py-2">
+                                  <span className={cn('px-2 py-0.5 rounded-full text-[10px] font-bold uppercase', ind.digitavel ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600')}>
+                                    {ind.digitavel ? 'Digitável' : 'Calculado'}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </Card>
+
+          </MotionDiv>
+        )}
+
       </AnimatePresenceComponent>
     </div>
   );
