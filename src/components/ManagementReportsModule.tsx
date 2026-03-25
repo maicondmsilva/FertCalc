@@ -556,6 +556,7 @@ const Dashboard = ({
 
     // Process calculated indicators with formulas in dependency order (topological sort)
     const formulaIndicadores = indicadores.filter(ind => !ind.digitavel && ind.formula);
+    const formulaIndMap = new Map(formulaIndicadores.map(i => [i.id, i]));
     const getDeps = (formula: string): string[] => {
       const deps: string[] = [];
       // Combine all patterns into one to correctly distinguish between them
@@ -571,21 +572,42 @@ const Dashboard = ({
       }
       return deps;
     };
-    const visited = new Set<string>();
-    const evaluate = (ind: typeof formulaIndicadores[number], stack: Set<string> = new Set()): void => {
-      if (visited.has(ind.id)) return;
-      if (stack.has(ind.id)) return; // circular reference guard
-      stack.add(ind.id);
-      const deps = getDeps(ind.formula!);
-      for (const depId of deps) {
-        const depInd = formulaIndicadores.find(i => i.id === depId);
-        if (depInd) evaluate(depInd, stack);
-      }
-      genericData[ind.id] = avaliarFormula(ind.formula!, genericData, genericDataMes, genericDataAno, genericDataMesAnt, genericDataAnoAnt);
-      visited.add(ind.id);
-      stack.delete(ind.id);
+
+    // Reusable topological evaluator: resolves each indicator's formula into the given target context
+    const makeEvaluator = (
+      target: Record<string, number>,
+      valores: Record<string, number>,
+      valoresMes: Record<string, number>,
+      valoresAno: Record<string, number>,
+    ) => {
+      const visited = new Set<string>();
+      const evaluate = (ind: typeof formulaIndicadores[number], stack: Set<string> = new Set()): void => {
+        if (visited.has(ind.id)) return;
+        if (stack.has(ind.id)) return; // circular reference guard
+        stack.add(ind.id);
+        const deps = getDeps(ind.formula!);
+        for (const depId of deps) {
+          const depInd = formulaIndMap.get(depId);
+          if (depInd) evaluate(depInd, stack);
+        }
+        target[ind.id] = avaliarFormula(ind.formula!, valores, valoresMes, valoresAno, genericDataMesAnt, genericDataAnoAnt);
+        visited.add(ind.id);
+        stack.delete(ind.id);
+      };
+      return evaluate;
     };
+
+    // Resolve formulas for the current day context
+    const evaluate = makeEvaluator(genericData, genericData, genericDataMes, genericDataAno);
     for (const ind of formulaIndicadores) evaluate(ind);
+
+    // Propagate calculated indicators into the monthly accumulation context
+    const evaluateMes = makeEvaluator(genericDataMes, genericDataMes, genericDataMes, genericDataAno);
+    for (const ind of formulaIndicadores) evaluateMes(ind);
+
+    // Propagate calculated indicators into the yearly accumulation context
+    const evaluateAno = makeEvaluator(genericDataAno, genericDataAno, genericDataMes, genericDataAno);
+    for (const ind of formulaIndicadores) evaluateAno(ind);
 
     return {
       ...genericData,
@@ -922,10 +944,25 @@ const Cadastros = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'indicadores' | 'categorias' | 'metas' | 'config-unidades' | 'dias-uteis' | 'guia'>('categorias');
   const [selectedUnidade, setSelectedUnidade] = useState('');
+  const [localNomes, setLocalNomes] = useState<Record<string, string>>({});
+  const [localVisiveis, setLocalVisiveis] = useState<Record<string, boolean>>({});
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState<'unidade' | 'indicador' | 'categoria' | 'meta' | null>(null);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [isDigitavel, setIsDigitavel] = useState(true);
+
+  useEffect(() => {
+    if (!selectedUnidade) return;
+    const nomesInit: Record<string, string> = {};
+    const visiveisInit: Record<string, boolean> = {};
+    indicadores.forEach(i => {
+      const config = configs.find(c => c.unidade_id === selectedUnidade && c.indicador_id === i.id);
+      nomesInit[i.id] = config?.nome_personalizado || '';
+      visiveisInit[i.id] = config?.visivel ?? true;
+    });
+    setLocalNomes(nomesInit);
+    setLocalVisiveis(visiveisInit);
+  }, [selectedUnidade, configs, indicadores]);
 
   const { visualIdMap } = useMemo(
     () => gerarIdsVisuais(indicadores, categorias),
@@ -1428,19 +1465,19 @@ const Cadastros = ({
                           <td className="px-4 py-3">
                             <Input 
                               placeholder={i.nome} 
-                              defaultValue={config?.nome_personalizado || ''} 
-                              onBlur={(e) => onSaveConfig({ unidade_id: selectedUnidade, indicador_id: i.id, nome_personalizado: e.target.value, visivel: config?.visivel ?? true })}
+                              value={localNomes[i.id] ?? ''}
+                              onChange={(e) => setLocalNomes(prev => ({ ...prev, [i.id]: e.target.value }))}
                             />
                           </td>
                           <td className="px-4 py-3">
                             <input 
                               type="checkbox" 
-                              checked={config?.visivel ?? true} 
-                              onChange={(e) => onSaveConfig({ unidade_id: selectedUnidade, indicador_id: i.id, nome_personalizado: config?.nome_personalizado || '', visivel: e.target.checked })}
+                              checked={localVisiveis[i.id] ?? true}
+                              onChange={(e) => setLocalVisiveis(prev => ({ ...prev, [i.id]: e.target.checked }))}
                             />
                           </td>
                           <td className="px-4 py-3 text-right flex justify-end gap-2">
-                            <Button variant="ghost" size="icon" onClick={() => onSaveConfig({ unidade_id: selectedUnidade, indicador_id: i.id, nome_personalizado: config?.nome_personalizado || '', visivel: config?.visivel ?? true })} title="Salvar">
+                            <Button variant="ghost" size="icon" onClick={() => onSaveConfig({ unidade_id: selectedUnidade, indicador_id: i.id, nome_personalizado: localNomes[i.id] ?? '', visivel: localVisiveis[i.id] ?? true })} title="Salvar">
                               <Save className="w-4 h-4" />
                             </Button>
                             <Button variant="ghost" size="icon" onClick={() => onDeleteConfig(selectedUnidade, i.id)} className="text-red-500 hover:text-red-700 hover:bg-red-50" title="Excluir Personalização">
@@ -1646,7 +1683,7 @@ const Cadastros = ({
                       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                         <p className="font-bold text-xs text-indigo-600 mb-2">MENSAL: ACUM_MES[id]</p>
                         <p className="text-[10px] text-slate-500 leading-relaxed">
-                          Soma todos os lançamentos do indicador do <strong>dia 01 do mês até o dia selecionado</strong>.
+                          Soma todos os lançamentos do indicador do <strong>dia 01 do mês até o dia selecionado</strong>. Também funciona com <strong>indicadores calculados</strong> (sem lançamentos diretos).
                         </p>
                         <div className="mt-2 text-[10px] font-mono bg-slate-50 p-2 rounded">
                           Ex: ACUM_MES[f1]
