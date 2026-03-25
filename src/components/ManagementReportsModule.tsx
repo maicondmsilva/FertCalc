@@ -435,14 +435,23 @@ const Dashboard = ({
     valoresAnoAnt: Record<string, number> = {}
   ): number => {
     try {
-      // Replace [visualId] references
-      let expressao = formula.replace(/\[([^\]]+)\]/g, (_, visualId) => {
+      let expressao = formula;
+
+      // 1. Specific accumulation tags FIRST (to avoid breaking them with general bracket replacements)
+      // Support ACUM_MES_ANT[id] and ACUM_ANO_ANT[id]
+      expressao = expressao.replace(/ACUM_MES_ANT\[([^\]]+)\]/g, (_, visualId) => {
         const idInterno = reverseVisualIdMap[visualId.trim()] || visualId.trim();
-        const val = valores[idInterno];
+        const val = valoresMesAnt[idInterno];
         return val !== undefined ? String(val) : '0';
       });
 
-      // New: Support ACUM_MES[id] and ACUM_ANO[id]
+      expressao = expressao.replace(/ACUM_ANO_ANT\[([^\]]+)\]/g, (_, visualId) => {
+        const idInterno = reverseVisualIdMap[visualId.trim()] || visualId.trim();
+        const val = valoresAnoAnt[idInterno];
+        return val !== undefined ? String(val) : '0';
+      });
+
+      // 2. Standard accumulation tags
       expressao = expressao.replace(/ACUM_MES\[([^\]]+)\]/g, (_, visualId) => {
         const idInterno = reverseVisualIdMap[visualId.trim()] || visualId.trim();
         const val = valoresMes[idInterno];
@@ -455,16 +464,10 @@ const Dashboard = ({
         return val !== undefined ? String(val) : '0';
       });
 
-      // New: Support ACUM_MES_ANT[id] and ACUM_ANO_ANT[id]
-      expressao = expressao.replace(/ACUM_MES_ANT\[([^\]]+)\]/g, (_, visualId) => {
+      // 3. Simple [visualId] references LAST
+      expressao = expressao.replace(/\[([^\]]+)\]/g, (_, visualId) => {
         const idInterno = reverseVisualIdMap[visualId.trim()] || visualId.trim();
-        const val = valoresMesAnt[idInterno];
-        return val !== undefined ? String(val) : '0';
-      });
-
-      expressao = expressao.replace(/ACUM_ANO_ANT\[([^\]]+)\]/g, (_, visualId) => {
-        const idInterno = reverseVisualIdMap[visualId.trim()] || visualId.trim();
-        const val = valoresAnoAnt[idInterno];
+        const val = valores[idInterno];
         return val !== undefined ? String(val) : '0';
       });
 
@@ -555,12 +558,15 @@ const Dashboard = ({
     const formulaIndicadores = indicadores.filter(ind => !ind.digitavel && ind.formula);
     const getDeps = (formula: string): string[] => {
       const deps: string[] = [];
-      // Combine normal tags and accumulation tags (including _ANT)
-      const regex = /\[([^\]]+)\]|ACUM_MES(_ANT)?\[([^\]]+)\]|ACUM_ANO(_ANT)?\[([^\]]+)\]/g;
+      // Combine all patterns into one to correctly distinguish between them
+      // We want to extract the content inside [ ] regardless of prefix
+      const regex = /(?:ACUM_MES(?:_ANT)?|ACUM_ANO(?:_ANT)?|\[)\s*([^\]\s]+)\s*\]/g;
+      
       let match;
       while ((match = regex.exec(formula)) !== null) {
-        const visualId = (match[1] || match[3] || match[5] || '').trim();
-        const idInterno = reverseVisualIdMap[visualId] || visualId;
+        // match[1] should contain the ID or visual ID
+        const rawId = match[1].trim();
+        const idInterno = reverseVisualIdMap[rawId] || rawId;
         deps.push(idInterno);
       }
       return deps;
