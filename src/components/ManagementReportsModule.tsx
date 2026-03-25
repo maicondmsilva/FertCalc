@@ -1683,27 +1683,27 @@ const Cadastros = ({
                       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                         <p className="font-bold text-xs text-indigo-600 mb-2">MENSAL: ACUM_MES[id]</p>
                         <p className="text-[10px] text-slate-500 leading-relaxed">
-                          Soma todos os lançamentos do indicador do <strong>dia 01 do mês até o dia selecionado</strong>. Também funciona com <strong>indicadores calculados</strong> (sem lançamentos diretos).
+                          Soma todos os valores do indicador do <strong>dia 01 do mês até o dia selecionado</strong>. Funciona com indicadores <strong>digitáveis</strong> (soma os lançamentos diários) e também com <strong>indicadores calculados</strong> (soma os resultados diários da fórmula), permitindo criar cadeias de cálculo complexas.
                         </p>
-                        <div className="mt-2 text-[10px] font-mono bg-slate-50 p-2 rounded">
-                          Ex: ACUM_MES[f1]
+                        <div className="mt-2 text-[10px] font-mono bg-slate-50 p-2 rounded text-indigo-600">
+                          Ex: ACUM_MES[f1] &nbsp;·&nbsp; ACUM_MES[r3]
                         </div>
                       </div>
                       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                         <p className="font-bold text-xs text-indigo-600 mb-2">ANUAL: ACUM_ANO[id]</p>
                         <p className="text-[10px] text-slate-500 leading-relaxed">
-                          Soma todos os lançamentos do indicador do <strong>dia 01 de Janeiro até a data selecionada</strong>.
+                          Soma todos os valores do indicador do <strong>dia 01 de Janeiro até a data selecionada</strong>. Assim como ACUM_MES, funciona tanto com indicadores digitáveis quanto com <strong>indicadores calculados</strong>.
                         </p>
-                        <div className="mt-2 text-[10px] font-mono bg-slate-50 p-2 rounded">
-                          Ex: ACUM_ANO[f1]
+                        <div className="mt-2 text-[10px] font-mono bg-slate-50 p-2 rounded text-indigo-600">
+                          Ex: ACUM_ANO[f1] &nbsp;·&nbsp; ACUM_ANO[r3]
                         </div>
                       </div>
                       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                         <p className="font-bold text-xs text-indigo-600 mb-2">DIA ANTERIOR: ACUM_MES_ANT[id]</p>
                         <p className="text-[10px] text-slate-500 leading-relaxed">
-                          Soma o acumulado mensal até o <strong>dia anterior</strong> à data selecionada.
+                          Soma o acumulado mensal até o <strong>dia anterior</strong> à data selecionada. Útil para comparar o resultado do dia com o acumulado até ontem.
                         </p>
-                        <div className="mt-2 text-[10px] font-mono bg-slate-50 p-2 rounded">
+                        <div className="mt-2 text-[10px] font-mono bg-slate-50 p-2 rounded text-indigo-600">
                           Ex: ACUM_MES_ANT[f1]
                         </div>
                       </div>
@@ -1720,6 +1720,153 @@ const Cadastros = ({
                         <strong>Resultado:</strong> Ao selecionar o dia 25, se usar <code className="bg-white px-1 rounded border border-indigo-200">ACUM_MES_ANT[f1]</code>, o sistema mostrará <strong>300</strong> (soma de 23 e 24).
                       </p>
                     </div>
+                  </div>
+                </div>
+
+                {/* SEÇÃO: Indicadores Calculados como Base para Acumulados */}
+                <div className="bg-white p-6 rounded-2xl border border-slate-200 space-y-5">
+                  <h4 className="font-bold text-slate-800 flex items-center gap-2">
+                    <div className="w-2 h-2 bg-indigo-500 rounded-full"></div>
+                    🔗 Usando Indicadores Calculados como Base para Acumulados
+                  </h4>
+                  <p className="text-[11px] text-slate-600 leading-relaxed">
+                    O sistema suporta o uso de <strong>indicadores calculados</strong> (sem lançamentos diretos) como base para acumulados mensais e anuais. Isso permite criar <strong>cadeias de cálculo complexas</strong>.
+                  </p>
+
+                  {/* Sub-seção: Rentabilidade */}
+                  <div className="space-y-3">
+                    <p className="font-bold text-xs text-slate-700">Exemplo do indicador Rentabilidade (caso real):</p>
+                    <div className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
+                      <table className="w-full text-[10px] text-left">
+                        <thead className="bg-slate-100 border-b border-slate-200">
+                          <tr>
+                            <th className="px-3 py-2 font-semibold text-slate-600">Passo</th>
+                            <th className="px-3 py-2 font-semibold text-slate-600">Indicador</th>
+                            <th className="px-3 py-2 font-semibold text-slate-600">Tipo</th>
+                            <th className="px-3 py-2 font-semibold text-slate-600">Fórmula</th>
+                            <th className="px-3 py-2 font-semibold text-slate-600">O que faz</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          <tr>
+                            <td className="px-3 py-2 font-bold text-slate-500">1</td>
+                            <td className="px-3 py-2">Quantidade (r1)</td>
+                            <td className="px-3 py-2 text-slate-500">Digitável</td>
+                            <td className="px-3 py-2 text-slate-400 italic">—</td>
+                            <td className="px-3 py-2 text-slate-500">Valor digitado diariamente</td>
+                          </tr>
+                          <tr>
+                            <td className="px-3 py-2 font-bold text-slate-500">2</td>
+                            <td className="px-3 py-2">Rentabilidade % (r2)</td>
+                            <td className="px-3 py-2 text-slate-500">Digitável</td>
+                            <td className="px-3 py-2 text-slate-400 italic">—</td>
+                            <td className="px-3 py-2 text-slate-500">Valor digitado diariamente</td>
+                          </tr>
+                          <tr className="bg-indigo-50/40">
+                            <td className="px-3 py-2 font-bold text-indigo-600">3</td>
+                            <td className="px-3 py-2 font-semibold">Qtd × Rent (r3)</td>
+                            <td className="px-3 py-2 font-semibold text-indigo-600">Calculado</td>
+                            <td className="px-3 py-2 font-mono text-indigo-600">[r1] * [r2]</td>
+                            <td className="px-3 py-2 text-slate-500">Resultado do dia, não tem lançamento</td>
+                          </tr>
+                          <tr className="bg-emerald-50/40">
+                            <td className="px-3 py-2 font-bold text-emerald-600">4</td>
+                            <td className="px-3 py-2 font-semibold">Soma Qtd × Rent Mês (r4)</td>
+                            <td className="px-3 py-2 font-semibold text-emerald-600">Calculado</td>
+                            <td className="px-3 py-2 font-mono text-emerald-600">ACUM_MES[r3]</td>
+                            <td className="px-3 py-2 text-slate-500">Acumula o resultado de r3 no mês ✅</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Exemplo de dados reais */}
+                  <div className="space-y-2">
+                    <p className="font-bold text-xs text-slate-700">Exemplo de dados reais:</p>
+                    <div className="font-mono bg-slate-50 p-3 rounded-xl border border-slate-200 text-[10px] text-slate-700 space-y-1">
+                      <div>Dia 01/Mar: r1 = 100, &nbsp;r2 = 2.5 &nbsp;→ &nbsp;r3 (dia) = 250</div>
+                      <div>Dia 02/Mar: r1 = 150, &nbsp;r2 = 3.0 &nbsp;→ &nbsp;r3 (dia) = 450</div>
+                      <div>Dia 03/Mar: r1 = 200, &nbsp;r2 = 2.8 &nbsp;→ &nbsp;r3 (dia) = 560</div>
+                      <div className="border-t border-slate-300 pt-1 mt-1 text-slate-400">─────────────────────────────────────────────────</div>
+                      <div className="text-emerald-700 font-bold">ACUM_MES[r3] em 03/Mar = 250 + 450 + 560 = 1.260 ✅</div>
+                    </div>
+                  </div>
+
+                  {/* O que NÃO funciona */}
+                  <div className="bg-red-50/60 p-4 rounded-xl border border-red-200 space-y-3">
+                    <p className="font-bold text-xs text-red-700">⚠️ Atenção: O que NÃO funciona:</p>
+                    <ul className="text-[10px] space-y-2">
+                      <li className="flex items-start gap-2">
+                        <span className="text-red-500 font-bold shrink-0">❌</span>
+                        <span><code className="font-mono bg-white px-1 rounded border border-red-200 text-red-700">[r1] * ACUM_MES[r2]</code> — <strong>Não é acumulado correto.</strong> Multiplica o valor do <em>dia</em> de r1 pelo acumulado mensal de r2. Mistura contextos diferentes.</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-red-500 font-bold shrink-0">❌</span>
+                        <span><code className="font-mono bg-white px-1 rounded border border-red-200 text-red-700">ACUM_MES[r1] * ACUM_MES[r2]</code> — <strong>Não é acumulado correto.</strong> Multiplica os totais mensais brutos, não soma os produtos diários.</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-emerald-600 font-bold shrink-0">✅</span>
+                        <span><code className="font-mono bg-white px-1 rounded border border-emerald-200 text-emerald-700">ACUM_MES[r3]</code> onde r3 = <code className="font-mono bg-white px-1 rounded border border-emerald-200 text-emerald-700">[r1] * [r2]</code> — <strong>Correto.</strong> Soma os produtos calculados a cada dia.</span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  {/* Sub-seção: Ticket Médio */}
+                  <div className="space-y-3">
+                    <p className="font-bold text-xs text-slate-700">Outro exemplo — Ticket Médio Acumulado:</p>
+                    <div className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
+                      <table className="w-full text-[10px] text-left">
+                        <thead className="bg-slate-100 border-b border-slate-200">
+                          <tr>
+                            <th className="px-3 py-2 font-semibold text-slate-600">Passo</th>
+                            <th className="px-3 py-2 font-semibold text-slate-600">Indicador</th>
+                            <th className="px-3 py-2 font-semibold text-slate-600">Tipo</th>
+                            <th className="px-3 py-2 font-semibold text-slate-600">Fórmula</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          <tr>
+                            <td className="px-3 py-2 font-bold text-slate-500">1</td>
+                            <td className="px-3 py-2">Faturamento (f1)</td>
+                            <td className="px-3 py-2 text-slate-500">Digitável</td>
+                            <td className="px-3 py-2 text-slate-400 italic">—</td>
+                          </tr>
+                          <tr>
+                            <td className="px-3 py-2 font-bold text-slate-500">2</td>
+                            <td className="px-3 py-2">Qtd Vendida (f2)</td>
+                            <td className="px-3 py-2 text-slate-500">Digitável</td>
+                            <td className="px-3 py-2 text-slate-400 italic">—</td>
+                          </tr>
+                          <tr className="bg-indigo-50/40">
+                            <td className="px-3 py-2 font-bold text-indigo-600">3</td>
+                            <td className="px-3 py-2 font-semibold">Ticket Médio Dia (f3)</td>
+                            <td className="px-3 py-2 font-semibold text-indigo-600">Calculado</td>
+                            <td className="px-3 py-2 font-mono text-indigo-600">[f1] / [f2]</td>
+                          </tr>
+                          <tr className="bg-emerald-50/40">
+                            <td className="px-3 py-2 font-bold text-emerald-600">4</td>
+                            <td className="px-3 py-2 font-semibold">Ticket Médio Acumulado Mês (f4)</td>
+                            <td className="px-3 py-2 font-semibold text-emerald-600">Calculado</td>
+                            <td className="px-3 py-2 font-mono text-emerald-600">ACUM_MES[f1] / ACUM_MES[f2]</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="text-[10px] text-slate-500 italic">
+                      💡 Para ticket médio acumulado, a forma correta é dividir os acumulados dos indicadores digitáveis diretamente (não usar ACUM_MES do calculado f3).
+                    </p>
+                  </div>
+
+                  {/* Resumo */}
+                  <div className="bg-emerald-50/70 p-4 rounded-xl border border-emerald-200 space-y-2">
+                    <p className="font-bold text-xs text-emerald-800">📌 Resumo — Quando usar ACUM_MES de um calculado?</p>
+                    <p className="text-[11px] text-emerald-900 leading-relaxed">
+                      Use <code className="font-mono bg-white px-1 rounded border border-emerald-200">ACUM_MES[indicadorCalculado]</code> quando você precisa <strong>somar resultados de multiplicações ou operações diárias</strong> ao longo do mês. É o equivalente a: <strong>Σ(operação diária)</strong>.
+                    </p>
+                    <p className="text-[10px] text-emerald-700">
+                      Exemplos: receita diária (quantidade × preço), pontos acumulados, volume × fator diário.
+                    </p>
                   </div>
                 </div>
 
