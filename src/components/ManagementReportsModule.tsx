@@ -1489,6 +1489,7 @@ const Cadastros = ({
               </table>
             </Card>
           </MotionDiv>
+        )}
         {activeTab === 'guia' && (
           <MotionDiv key="guia" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
             <Card className="p-8">
