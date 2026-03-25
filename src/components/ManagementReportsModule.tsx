@@ -598,7 +598,7 @@ const Dashboard = ({
       const deps: string[] = [];
       // Combine all patterns into one to correctly distinguish between them
       // We want to extract the content inside [ ] regardless of prefix
-      const regex = /(?:ACUM_MES(?:_ANT)?|ACUM_ANO(?:_ANT)?|ACUM_SEM|\[)\s*([^\]\s]+)\s*\]/g;
+      const regex = /(?:(?:ACUM_MES(?:_ANT)?|ACUM_ANO(?:_ANT)?|ACUM_SEM)\[|\[)([^\]\s]+)\]/g;
       
       let match;
       while ((match = regex.exec(formula)) !== null) {
@@ -740,29 +740,33 @@ const Dashboard = ({
         .map(l => l.data)
     )];
 
-    // Resolve formulas for the current day context
+    // Pre-compute per-day sums for all accumulation contexts BEFORE evaluating the day context.
+    // This ensures that when the day evaluator processes an indicator like ACUM_MES[r7]
+    // (where r7 is itself a calculated indicator), it can read the correct monthly sum
+    // for r7 from genericDataMes rather than the initial getSomaPeriodo value of 0.
+    recalcularSomasPeriodo(genericDataMes, daysInMonth);
+    recalcularSomasPeriodo(genericDataAno, daysInYear);
+    recalcularSomasPeriodo(genericDataSem, daysInWeek);
+    recalcularSomasPeriodo(genericDataMesAnt, daysInMonthAnt);
+    recalcularSomasPeriodo(genericDataAnoAnt, daysInYearAnt);
+
+    // Resolve formulas for the current day context.
+    // genericDataMes/Ano/Sem are already populated with correct per-day sums above,
+    // so ACUM_* references in day-context formulas resolve to the right values.
     const evaluate = makeEvaluator(genericData, genericData, genericDataMes, genericDataAno, genericDataSem);
     for (const ind of formulaIndicadores) evaluate(ind);
 
-    // For each accumulation context:
-    // 1. recalcularSomasPeriodo: set correct per-day sums for indicators without ACUM_* tags
-    // 2. makeEvaluator(onlyAccum=true): evaluate indicators that DO use ACUM_* tags,
-    //    which can now read the corrected values from the accumulation dictionaries.
-    recalcularSomasPeriodo(genericDataMes, daysInMonth);
+    // For each accumulation context, evaluate indicators that use ACUM_* tags.
+    // recalcularSomasPeriodo already set correct values for non-ACUM indicators;
+    // makeEvaluator(onlyAccum=true) skips those and only evaluates ACUM_* indicators.
     const evaluateMes = makeEvaluator(genericDataMes, genericDataMes, genericDataMes, genericDataAno, genericDataSem, true);
     for (const ind of formulaIndicadores) evaluateMes(ind);
 
-    recalcularSomasPeriodo(genericDataAno, daysInYear);
     const evaluateAno = makeEvaluator(genericDataAno, genericDataAno, genericDataMes, genericDataAno, genericDataSem, true);
     for (const ind of formulaIndicadores) evaluateAno(ind);
 
-    recalcularSomasPeriodo(genericDataSem, daysInWeek);
     const evaluateSem = makeEvaluator(genericDataSem, genericDataSem, genericDataMes, genericDataAno, genericDataSem, true);
     for (const ind of formulaIndicadores) evaluateSem(ind);
-
-    // Fix ant contexts (used by ACUM_MES_ANT / ACUM_ANO_ANT references)
-    recalcularSomasPeriodo(genericDataMesAnt, daysInMonthAnt);
-    recalcularSomasPeriodo(genericDataAnoAnt, daysInYearAnt);
 
     return {
       ...genericData,
