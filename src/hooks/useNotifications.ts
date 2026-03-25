@@ -55,15 +55,23 @@ export function useNotifications(userId: string) {
 
   // Optionally extend markAsRead to also update Supabase
   const markAsReadDb = async (id: string) => {
-    store.markAsRead(id);
-    if (!userId) return;
-    await markNotificationAsRead(id, userId);
+    try {
+      store.markAsRead(id);
+      if (!userId) return;
+      await markNotificationAsRead(id, userId);
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
   };
 
   const clearAllDb = async () => {
-    store.clearAll();
-    if (!userId) return;
-    await deleteAllNotifications(userId);
+    try {
+      store.clearAll();
+      if (!userId) return;
+      await deleteAllNotifications(userId);
+    } catch (error) {
+      console.error('Error clearing notifications:', error);
+    }
   };
 
   return {

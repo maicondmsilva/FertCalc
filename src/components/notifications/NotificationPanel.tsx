@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, CheckCircle, Edit, ArrowRightLeft, Info, Trash2, Settings } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
@@ -40,10 +41,14 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
     }
   };
 
-  const handleNotificationClick = (notification: Notification) => {
+  const navigate = useNavigate();
+  
+  const handleNotificationClick = (e: React.MouseEvent, notification: Notification) => {
+    e.stopPropagation();
     onMarkAsRead(notification.id);
     if (notification.action_url) {
-      window.location.href = notification.action_url;
+      navigate(notification.action_url);
+      onClose();
     }
   };
 
@@ -96,7 +101,7 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
                   {notifications.map((notification) => (
                     <li 
                       key={notification.id}
-                      onClick={() => handleNotificationClick(notification)}
+                      onClick={(e) => handleNotificationClick(e, notification)}
                       className={`p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors ${
                         !notification.is_read ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''
                       }`}
@@ -137,7 +142,14 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
                 >
                   Limpar Tudo
                 </button>
-                <button onClick={onSettings} className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 flex items-center">
+                <button 
+                  onClick={() => {
+                    if (onSettings) onSettings();
+                    else navigate('/settings');
+                    onClose();
+                  }}
+                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 flex items-center"
+                >
                   <Settings className="w-4 h-4 mr-1" />
                   Configurar
                 </button>

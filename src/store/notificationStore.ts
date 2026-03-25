@@ -18,8 +18,7 @@ export const useNotificationStore = create<NotificationState>((set) => ({
   activeToasts: [],
   
   addNotification: (notification) => set((state) => ({
-    // Keep only the latest 5 notifications as per the panel UI requirements (or just slice to 5 for now)
-    notifications: [notification, ...state.notifications].slice(0, 5),
+    notifications: [notification, ...state.notifications].slice(0, 20),
     unreadCount: state.unreadCount + 1,
     activeToasts: [notification, ...state.activeToasts].slice(0, 3)
   })),
@@ -42,7 +41,7 @@ export const useNotificationStore = create<NotificationState>((set) => ({
 
   // Define todas as notificações iniciais
   setNotifications: (notifications) => set({
-    notifications: notifications.slice(0, 5),
+    notifications: notifications.slice(0, 20),
     unreadCount: notifications.filter(n => !n.is_read).length
   }),
   
