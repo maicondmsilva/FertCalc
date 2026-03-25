@@ -610,18 +610,27 @@ const Dashboard = ({
       return deps;
     };
 
-    // Reusable topological evaluator: resolves each indicator's formula into the given target context
+    // Reusable topological evaluator: resolves each indicator's formula into the given target context.
+    // When onlyAccum is true, indicators without ACUM_* tags are skipped (their values were already
+    // correctly set by recalcularSomasPeriodo and must not be overwritten).
     const makeEvaluator = (
       target: Record<string, number>,
       valores: Record<string, number>,
       valoresMes: Record<string, number>,
       valoresAno: Record<string, number>,
       valoresSem: Record<string, number> = {},
+      onlyAccum = false,
     ) => {
       const visited = new Set<string>();
       const evaluate = (ind: typeof formulaIndicadores[number], stack: Set<string> = new Set()): void => {
         if (visited.has(ind.id)) return;
         if (stack.has(ind.id)) return; // circular reference guard
+        const usesAccum = /ACUM_MES|ACUM_ANO|ACUM_SEM/.test(ind.formula!);
+        if (onlyAccum && !usesAccum) {
+          // Already correctly set by recalcularSomasPeriodo; mark visited and keep the value.
+          visited.add(ind.id);
+          return;
+        }
         stack.add(ind.id);
         const deps = getDeps(ind.formula!);
         for (const depId of deps) {
@@ -635,21 +644,125 @@ const Dashboard = ({
       return evaluate;
     };
 
+    // Evaluates a single calculated indicator for one specific day, resolving its formula
+    // dependencies recursively (topological order) before evaluating. Raw (digitavel) values
+    // for the day should already be present in valoresDia before calling this.
+    const avaliarIndicadorDia = (
+      ind: typeof formulaIndicadores[number],
+      valoresDia: Record<string, number>,
+      visitedDay: Set<string>,
+    ): number => {
+      if (visitedDay.has(ind.id)) return valoresDia[ind.id] ?? 0;
+      visitedDay.add(ind.id);
+      const deps = getDeps(ind.formula!);
+      for (const depId of deps) {
+        const depInd = formulaIndMap.get(depId);
+        if (depInd) avaliarIndicadorDia(depInd, valoresDia, visitedDay);
+      }
+      valoresDia[ind.id] = avaliarFormula(ind.formula!, valoresDia, {}, {}, {}, {}, {});
+      return valoresDia[ind.id];
+    };
+
+    // Computes the correct accumulated value for a calculated indicator by summing its formula
+    // result day-by-day over the given period. This ensures that ACUM_MES[r7] where r7=[r5]*[r6]
+    // stores Σ(r5_day * r6_day) in the accumulation context instead of sum_r5 * sum_r6.
+    const calcularSomaDiaria = (
+      ind: typeof formulaIndicadores[number],
+      days: string[],
+      visitedCalc: Set<string>,
+      target: Record<string, number>,
+    ): void => {
+      if (visitedCalc.has(ind.id)) return;
+      // Resolve period-sum dependencies first (topological order)
+      const deps = getDeps(ind.formula!);
+      for (const depId of deps) {
+        const depInd = formulaIndMap.get(depId);
+        if (depInd && !visitedCalc.has(depInd.id)) {
+          calcularSomaDiaria(depInd, days, visitedCalc, target);
+        }
+      }
+      visitedCalc.add(ind.id);
+      // Sum the formula result for each day in the period
+      target[ind.id] = days.reduce((acc, d) => {
+        const valoresDia: Record<string, number> = {};
+        indicadores.forEach(i => { valoresDia[i.id] = getValor(u.id, i.id, d); });
+        // Recursively resolve any calculated dependencies for this specific day
+        const visitedDay = new Set<string>();
+        for (const depId of deps) {
+          const depInd = formulaIndMap.get(depId);
+          if (depInd) avaliarIndicadorDia(depInd, valoresDia, visitedDay);
+        }
+        return acc + avaliarFormula(ind.formula!, valoresDia, {}, {}, {}, {}, {});
+      }, 0);
+    };
+
+    // For each accumulation context, replace the initial getSomaPeriodo value (which is 0 for
+    // calculated indicators) with the correct per-day sum for indicators whose formulas do not
+    // themselves contain ACUM_* tags. Indicators with ACUM_* tags are handled separately by
+    // makeEvaluator (onlyAccum=true) so they can read the corrected values from valoresMes/valoresAno.
+    const recalcularSomasPeriodo = (
+      target: Record<string, number>,
+      days: string[],
+    ): void => {
+      const visitedCalc = new Set<string>();
+      for (const ind of formulaIndicadores) {
+        const usesAccum = /ACUM_MES|ACUM_ANO|ACUM_SEM/.test(ind.formula!);
+        if (!usesAccum) {
+          calcularSomaDiaria(ind, days, visitedCalc, target);
+        }
+      }
+    };
+
+    // Collect unique days with lancamentos for each accumulation period
+    const daysInMonth = [...new Set(
+      lancamentos
+        .filter(l => l.unidade_id === u.id && parseISO(l.data) >= currentMonthStart && parseISO(l.data) <= selectedDateObj)
+        .map(l => l.data)
+    )];
+    const daysInYear = [...new Set(
+      lancamentos
+        .filter(l => l.unidade_id === u.id && parseISO(l.data) >= currentYearStart && parseISO(l.data) <= selectedDateObj)
+        .map(l => l.data)
+    )];
+    const daysInWeek = [...new Set(
+      lancamentos
+        .filter(l => l.unidade_id === u.id && parseISO(l.data) >= weekStart && parseISO(l.data) <= selectedDateObj)
+        .map(l => l.data)
+    )];
+    const daysInMonthAnt = [...new Set(
+      lancamentos
+        .filter(l => l.unidade_id === u.id && parseISO(l.data) >= currentMonthStart && parseISO(l.data) <= yesterday)
+        .map(l => l.data)
+    )];
+    const daysInYearAnt = [...new Set(
+      lancamentos
+        .filter(l => l.unidade_id === u.id && parseISO(l.data) >= currentYearStart && parseISO(l.data) <= yesterday)
+        .map(l => l.data)
+    )];
+
     // Resolve formulas for the current day context
     const evaluate = makeEvaluator(genericData, genericData, genericDataMes, genericDataAno, genericDataSem);
     for (const ind of formulaIndicadores) evaluate(ind);
 
-    // Propagate calculated indicators into the monthly accumulation context
-    const evaluateMes = makeEvaluator(genericDataMes, genericDataMes, genericDataMes, genericDataAno, genericDataSem);
+    // For each accumulation context:
+    // 1. recalcularSomasPeriodo: set correct per-day sums for indicators without ACUM_* tags
+    // 2. makeEvaluator(onlyAccum=true): evaluate indicators that DO use ACUM_* tags,
+    //    which can now read the corrected values from the accumulation dictionaries.
+    recalcularSomasPeriodo(genericDataMes, daysInMonth);
+    const evaluateMes = makeEvaluator(genericDataMes, genericDataMes, genericDataMes, genericDataAno, genericDataSem, true);
     for (const ind of formulaIndicadores) evaluateMes(ind);
 
-    // Propagate calculated indicators into the yearly accumulation context
-    const evaluateAno = makeEvaluator(genericDataAno, genericDataAno, genericDataMes, genericDataAno, genericDataSem);
+    recalcularSomasPeriodo(genericDataAno, daysInYear);
+    const evaluateAno = makeEvaluator(genericDataAno, genericDataAno, genericDataMes, genericDataAno, genericDataSem, true);
     for (const ind of formulaIndicadores) evaluateAno(ind);
 
-    // Propagate calculated indicators into the weekly accumulation context
-    const evaluateSem = makeEvaluator(genericDataSem, genericDataSem, genericDataMes, genericDataAno, genericDataSem);
+    recalcularSomasPeriodo(genericDataSem, daysInWeek);
+    const evaluateSem = makeEvaluator(genericDataSem, genericDataSem, genericDataMes, genericDataAno, genericDataSem, true);
     for (const ind of formulaIndicadores) evaluateSem(ind);
+
+    // Fix ant contexts (used by ACUM_MES_ANT / ACUM_ANO_ANT references)
+    recalcularSomasPeriodo(genericDataMesAnt, daysInMonthAnt);
+    recalcularSomasPeriodo(genericDataAnoAnt, daysInYearAnt);
 
     return {
       ...genericData,
