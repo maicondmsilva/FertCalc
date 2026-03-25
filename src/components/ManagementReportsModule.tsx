@@ -426,12 +426,30 @@ const Dashboard = ({
   weekEnd.setDate(weekStart.getDate() + 6);
   weekEnd.setHours(23,59,59,999);
 
-  const avaliarFormula = (formula: string, valores: Record<string, number>): number => {
+  const avaliarFormula = (
+    formula: string, 
+    valores: Record<string, number>, 
+    valoresMes: Record<string, number> = {}, 
+    valoresAno: Record<string, number> = {}
+  ): number => {
     try {
-      // Replace [visualId] references — resolve to internal id via reverseVisualIdMap first
+      // Replace [visualId] references
       let expressao = formula.replace(/\[([^\]]+)\]/g, (_, visualId) => {
         const idInterno = reverseVisualIdMap[visualId.trim()] || visualId.trim();
         const val = valores[idInterno];
+        return val !== undefined ? String(val) : '0';
+      });
+
+      // New: Support ACUM_MES[id] and ACUM_ANO[id]
+      expressao = expressao.replace(/ACUM_MES\[([^\]]+)\]/g, (_, visualId) => {
+        const idInterno = reverseVisualIdMap[visualId.trim()] || visualId.trim();
+        const val = valoresMes[idInterno];
+        return val !== undefined ? String(val) : '0';
+      });
+
+      expressao = expressao.replace(/ACUM_ANO\[([^\]]+)\]/g, (_, visualId) => {
+        const idInterno = reverseVisualIdMap[visualId.trim()] || visualId.trim();
+        const val = valoresAno[idInterno];
         return val !== undefined ? String(val) : '0';
       });
 
@@ -508,16 +526,21 @@ const Dashboard = ({
     const mediaAFaturar = diasRestantes > 0 ? saldoDeficit / diasRestantes : 0;
 
     const genericData = Object.fromEntries(indicadores.map(i => [i.id, getValor(u.id, i.id)]));
+    const genericDataMes = Object.fromEntries(indicadores.map(i => [i.id, getSomaPeriodo(u.id, i.id, currentMonthStart, selectedDateObj)]));
+    const genericDataAno = Object.fromEntries(indicadores.map(i => [i.id, getSomaPeriodo(u.id, i.id, currentYearStart, selectedDateObj)]));
 
     // Process calculated indicators with formulas in dependency order (topological sort)
     const formulaIndicadores = indicadores.filter(ind => !ind.digitavel && ind.formula);
     const getDeps = (formula: string): string[] => {
       const deps: string[] = [];
-      formula.replace(/\[([^\]]+)\]/g, (_, visualId) => {
-        const idInterno = reverseVisualIdMap[visualId.trim()] || visualId.trim();
+      // Combine normal tags and accumulation tags
+      const regex = /\[([^\]]+)\]|ACUM_MES\[([^\]]+)\]|ACUM_ANO\[([^\]]+)\]/g;
+      let match;
+      while ((match = regex.exec(formula)) !== null) {
+        const visualId = (match[1] || match[2] || match[3] || '').trim();
+        const idInterno = reverseVisualIdMap[visualId] || visualId;
         deps.push(idInterno);
-        return '';
-      });
+      }
       return deps;
     };
     const visited = new Set<string>();
@@ -530,7 +553,7 @@ const Dashboard = ({
         const depInd = formulaIndicadores.find(i => i.id === depId);
         if (depInd) evaluate(depInd, stack);
       }
-      genericData[ind.id] = avaliarFormula(ind.formula!, genericData);
+      genericData[ind.id] = avaliarFormula(ind.formula!, genericData, genericDataMes, genericDataAno);
       visited.add(ind.id);
       stack.delete(ind.id);
     };
@@ -1579,6 +1602,47 @@ const Cadastros = ({
                         <li><strong>Deseja ver o acumulado do ano?</strong> Filtre o Dashboard por ano.</li>
                       </ul>
                       <p className="text-[11px] font-bold text-indigo-600">O sistema usa os mesmos lançamentos diários para calcular todos os períodos.</p>
+                    </div>
+                  </div>
+
+                  {/* NOVO: SEÇÃO DE ACUMULADOS */}
+                  <div className="mt-8 pt-6 border-t border-slate-100">
+                    <h4 className="flex items-center gap-2 text-sm font-bold text-slate-800 mb-4">
+                      <ArrowRightLeft className="w-4 h-4 text-indigo-500" />
+                      Cálculos de Acumulados (Sumatória Dinâmica)
+                    </h4>
+                    <p className="text-[11px] text-slate-600 mb-4">
+                      Para criar indicadores que somam os valores desde o primeiro dia do período até a data selecionada, utilize as tags especiais:
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                        <p className="font-bold text-xs text-indigo-600 mb-2">MENSAL: ACUM_MES[id]</p>
+                        <p className="text-[10px] text-slate-500 leading-relaxed">
+                          Soma todos os lançamentos do indicador do <strong>dia 01 do mês até o dia selecionado</strong>.
+                        </p>
+                        <div className="mt-2 text-[10px] font-mono bg-slate-50 p-2 rounded">
+                          Ex: ACUM_MES[f1]
+                        </div>
+                      </div>
+                      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                        <p className="font-bold text-xs text-indigo-600 mb-2">ANUAL: ACUM_ANO[id]</p>
+                        <p className="text-[10px] text-slate-500 leading-relaxed">
+                          Soma todos os lançamentos do indicador do <strong>dia 01 de Janeiro até a data selecionada</strong>.
+                        </p>
+                        <div className="mt-2 text-[10px] font-mono bg-slate-50 p-2 rounded">
+                          Ex: ACUM_ANO[f1]
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="mt-4 p-4 bg-indigo-50/50 rounded-xl border border-indigo-100">
+                      <p className="font-bold text-xs text-indigo-900 mb-2">Exemplo do Usuário:</p>
+                      <p className="text-[10px] text-indigo-800 leading-relaxed italic">
+                        "Se no dia 23 tive 100 ton, dia 24 tive 200 ton e dia 25 tive 250 ton... ao selecionar o dia 25, quero ver 550."
+                      </p>
+                      <p className="text-[11px] text-indigo-900 mt-2">
+                        <strong>Como fazer:</strong> Crie um indicador calculado com a fórmula: <code className="bg-white px-1 rounded border border-indigo-200">ACUM_MES[f1]</code> (onde f1 é o faturamento).
+                      </p>
                     </div>
                   </div>
                 </div>
