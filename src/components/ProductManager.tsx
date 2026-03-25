@@ -206,10 +206,17 @@ export default function ProductManager() {
             <div className="p-6 overflow-y-auto flex-1 space-y-5">
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="md:col-span-2">
+                <div className={tab === 'finished' ? 'md:col-span-2' : ''}>
                   <label className="block text-sm font-medium text-stone-600 mb-1">Nome do Produto <span className="text-red-500">*</span></label>
                   <input type="text" disabled={viewMode} value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 disabled:bg-stone-50" />
                 </div>
+                
+                {(tab === 'macro' || tab === 'micro') && (
+                  <div>
+                    <label className="block text-sm font-medium text-stone-600 mb-1">Sufixo da Fórmula (ex: S, M, P)</label>
+                    <input type="text" disabled={viewMode} value={form.formulaSuffix || ''} onChange={e => setForm(p => ({ ...p, formulaSuffix: e.target.value }))} className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 disabled:bg-stone-50" />
+                  </div>
+                )}
                 
                 {tab === 'macro' && (
                   <div>

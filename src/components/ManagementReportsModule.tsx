@@ -1546,17 +1546,39 @@ const Cadastros = ({
                     Exemplos Práticos (Faturamento)
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6" id="calculo-dia-mes-ano">
-                    <div>
-                      <p className="font-bold text-xs mb-1">Somatória Mensal de Faturamento:</p>
+                    <div className="space-y-3">
+                      <p className="font-bold text-xs mb-1">Passo a Passo (Somatória Automática):</p>
+                      <div className="bg-white p-3 rounded-lg border border-slate-200 overflow-hidden">
+                        <table className="w-full text-[10px] text-left">
+                          <thead className="bg-slate-50 border-b border-slate-100">
+                            <tr>
+                              <th className="px-2 py-1">Data</th>
+                              <th className="px-2 py-1">Lançamento</th>
+                              <th className="px-2 py-1">Indicador</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-50">
+                            <tr><td className="px-2 py-1">10/Mar</td><td className="px-2 py-1">R$ 5.000</td><td className="px-2 py-1">Faturamento</td></tr>
+                            <tr><td className="px-2 py-1">15/Mar</td><td className="px-2 py-1">R$ 10.000</td><td className="px-2 py-1">Faturamento</td></tr>
+                            <tr className="bg-indigo-50/50 font-bold"><td className="px-2 py-1">Total Mês</td><td className="px-2 py-1">R$ 15.000</td><td className="px-2 py-1 text-indigo-600">Dashboard Mensal</td></tr>
+                          </tbody>
+                        </table>
+                      </div>
                       <p className="text-[11px] leading-relaxed">
-                        Crie um indicador "Faturamento" ([f1]). Ao visualizar o Dashboard em modo <strong>MÊS</strong>, o sistema somará todos os faturamentos diários de 01 a 31 automaticamente.
+                        Você registra os valores <strong>dia por dia</strong>. Quando você muda o filtro do Dashboard para <strong>"MÊS"</strong>, o sistema soma automaticamente todos os dias de Março.
                       </p>
                     </div>
-                    <div>
-                      <p className="font-bold text-xs mb-1">Somatória Anual:</p>
+                    <div className="space-y-3">
+                      <p className="font-bold text-xs mb-1">Como criar campos de somatória?</p>
                       <p className="text-[11px] leading-relaxed">
-                        Ao mudar a visualização para <strong>ANO</strong>, o sistema consolidará todos os lançamentos de Janeiro a Dezembro no indicador final.
+                        <strong>Não é necessário</strong> criar campos separados. Crie apenas um indicador (ex: "Faturamento"). O sistema cuidará do resto:
                       </p>
+                      <ul className="text-[10px] space-y-1 list-disc pl-4 text-slate-500">
+                        <li><strong>Deseja ver por dia?</strong> Filtre o Dashboard por dia.</li>
+                        <li><strong>Deseja ver o total do mês?</strong> Filtre o Dashboard por mês.</li>
+                        <li><strong>Deseja ver o acumulado do ano?</strong> Filtre o Dashboard por ano.</li>
+                      </ul>
+                      <p className="text-[11px] font-bold text-indigo-600">O sistema usa os mesmos lançamentos diários para calcular todos os períodos.</p>
                     </div>
                   </div>
                 </div>

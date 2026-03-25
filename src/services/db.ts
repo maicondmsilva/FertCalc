@@ -581,7 +581,7 @@ export async function getUnifiedProducts(): Promise<UnifiedProduct[]> {
     ...micros.map(m => ({
       id: m.id, type: 'micro' as NutrientType, name: m.name, code: m.code || '',
       minQuantity: m.minQuantity || 0, categories: m.categories || [],
-      microGuarantees: m.microGuarantees
+      microGuarantees: m.microGuarantees, formulaSuffix: m.formulaSuffix
     })),
     ...finished.map(f => ({
       id: f.id, type: 'finished' as NutrientType, name: f.name, code: f.code || '',
@@ -605,7 +605,8 @@ export async function saveUnifiedProduct(p: Partial<UnifiedProduct>, id?: string
   } else if (p.type === 'micro') {
     const microData = {
       name: p.name!, code: p.code, minQuantity: p.minQuantity, categories: p.categories || [],
-      microGuarantees: p.microGuarantees || []
+      microGuarantees: p.microGuarantees || [],
+      formulaSuffix: p.formulaSuffix
     };
     if (id) await updateMicroMaterial(id, microData);
     else await createMicroMaterial(microData as any);

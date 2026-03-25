@@ -42,16 +42,16 @@ export const generatePricingPDF = (record: PricingRecord, settings: AppSettings,
   if (validCalcs.length > 0) {
     validCalcs.forEach((calc, idx) => {
       // DATA HIERARCHY: calc.factors > record.factors
-      const fCr = calc.factors || {};
-      const fGl = record.factors || {};
+      const fCr = calc.factors;
+      const fGl = record.factors;
 
-      const rowDueDateStr = fCr.dueDate || fGl.dueDate;
+      const rowDueDateStr = fCr?.dueDate || fGl?.dueDate;
       const rowDueDate = rowDueDateStr ? new Date(rowDueDateStr).toLocaleDateString('pt-BR') : '—';
       
-      const rowFreightPerTon = fCr.freight ?? fGl.freight ?? 0;
+      const rowFreightPerTon = fCr?.freight ?? fGl?.freight ?? 0;
       const rowFreightType = rowFreightPerTon > 0 ? 'CIF' : 'FOB';
       
-      const qty = fCr.totalTons || fGl.totalTons || 0;
+      const qty = fCr?.totalTons || fGl?.totalTons || 0;
       const finalPrice = calc.summary?.finalPrice || 0;
       const totalRow = qty * finalPrice;
       grandTotal += totalRow;
@@ -66,9 +66,7 @@ export const generatePricingPDF = (record: PricingRecord, settings: AppSettings,
               <td style="padding:8px 6px;text-align:center;font-size:10px;color:#1a1a2e;">${rowDueDate}</td>
               <td style="padding:8px 6px;text-align:center;font-size:10px;font-weight:700;color:#1a1a2e;">${rowFreightType}</td>
               <td style="padding:8px 6px;text-align:center;font-size:11px;font-weight:700;">${fmtN(qty)}</td>
-              <td style="padding:8px 6px;text-align:right;font-size:10px;">${fmt(totalFreightLine)}</td>
-              <td style="padding:8px 6px;text-align:right;font-size:10px;">${fmt(priceWithoutFreight)}</td>
-              <td style="padding:8px 6px;text-align:right;font-size:10px;">${fmt(rowFreightPerTon)}</td>
+              <td style="padding:8px 6px;text-align:right;font-size:10px;">${fmt(finalPrice)}</td>
               <td style="padding:8px 6px;text-align:right;font-weight:800;font-size:11px;color:#1a1a2e;background:#f0f4f8;">${fmt(totalRow)}</td>
             </tr>`;
     });
@@ -131,16 +129,14 @@ export const generatePricingPDF = (record: PricingRecord, settings: AppSettings,
             <th style="padding:8px 6px;text-align:center;font-size:10px;text-transform:uppercase;">Vencimento</th>
             <th style="padding:8px 6px;text-align:center;font-size:10px;text-transform:uppercase;">Tipo Frete</th>
             <th style="padding:8px 6px;text-align:center;font-size:10px;text-transform:uppercase;">Qtd (ton)</th>
-            <th style="padding:8px 6px;text-align:right;font-size:10px;text-transform:uppercase;">Valor Frete</th>
             <th style="padding:8px 6px;text-align:right;font-size:10px;text-transform:uppercase;">Preço/Ton</th>
-            <th style="padding:8px 6px;text-align:right;font-size:10px;text-transform:uppercase;">Frete/Ton</th>
             <th style="padding:8px 6px;text-align:right;font-size:11px;text-transform:uppercase;background:#0f172a;">Total</th>
           </tr>
         </thead>
         <tbody>
           ${productRows}
           <tr style="background:#f8fafc;border-top:2px solid #1a1a2e;">
-            <td style="padding:10px 8px;font-weight:900;font-size:13px;color:#1a1a2e;" colspan="7">VALOR TOTAL DA COMPRA</td>
+            <td style="padding:10px 8px;font-weight:900;font-size:13px;color:#1a1a2e;" colspan="5">VALOR TOTAL DA COMPRA</td>
             <td style="padding:10px 8px;text-align:right;font-weight:900;font-size:14px;color:#fff;background:#1a1a2e;">${fmt(grandTotal)}</td>
           </tr>
         </tbody>
