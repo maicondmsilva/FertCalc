@@ -17,7 +17,8 @@ import {
   Download,
   Upload,
   Trash2,
-  Edit2
+  Edit2,
+  HelpCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, startOfMonth, eachDayOfInterval, isSameDay, parseISO } from 'date-fns';
@@ -868,7 +869,7 @@ const Cadastros = ({
   onDeleteConfig: (unidade_id: string, indicador_id: string) => Promise<void>;
   onDeleteDiasUteis: (unidade_id: string, ano: number, mes: number) => Promise<void>;
 }) => {
-  const [activeTab, setActiveTab] = useState<'indicadores' | 'categorias' | 'metas' | 'config-unidades' | 'dias-uteis'>('categorias');
+  const [activeTab, setActiveTab] = useState<'indicadores' | 'categorias' | 'metas' | 'config-unidades' | 'dias-uteis' | 'guia'>('categorias');
   const [selectedUnidade, setSelectedUnidade] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState<'unidade' | 'indicador' | 'categoria' | 'meta' | null>(null);
@@ -947,6 +948,7 @@ const Cadastros = ({
           { id: 'metas', label: 'Metas Mensais', icon: Target },
           { id: 'config-unidades', label: 'Personalização', icon: Settings },
           { id: 'dias-uteis', label: 'Dias Úteis', icon: CalendarIcon },
+          { id: 'guia', label: 'Guia de Cálculos', icon: HelpCircle },
         ].map(tab => (
           <button
             key={tab.id}
@@ -1485,6 +1487,88 @@ const Cadastros = ({
                   ))}
                 </tbody>
               </table>
+            </Card>
+          </MotionDiv>
+        {activeTab === 'guia' && (
+          <MotionDiv key="guia" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
+            <Card className="p-8">
+              <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4">
+                <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg">
+                  <HelpCircle className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Guia de Cálculos Automáticos</h3>
+                  <p className="text-sm text-slate-500">Aprenda a criar fórmulas e entender as periodicidades.</p>
+                </div>
+              </div>
+
+              <div className="space-y-8 text-sm text-slate-600">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 space-y-4">
+                    <h4 className="font-bold text-slate-800 flex items-center gap-2">
+                      <div className="w-2 h-2 bg-indigo-500 rounded-full"></div>
+                      Entendendo as Variáveis
+                    </h4>
+                    <p>Utilize os <strong>IDs</strong> dos indicadores entre colchetes para criar cálculos:</p>
+                    <div className="bg-white p-3 rounded-lg border border-slate-200 font-mono text-indigo-600 text-xs">
+                      [v1] + [v2]
+                    </div>
+                    <p className="text-xs text-slate-500 italic">O ID visual de cada indicador é exibido na aba "Indicadores".</p>
+                  </div>
+
+                  <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100 space-y-4">
+                    <h4 className="font-bold text-indigo-900 flex items-center gap-2">
+                      <div className="w-2 h-2 bg-indigo-500 rounded-full"></div>
+                      Cálculos de Dia, Mês e Ano
+                    </h4>
+                    <p>O sistema processa as fórmulas baseando-se na periodicidade selecionada:</p>
+                    <ul className="space-y-2 text-xs">
+                      <li className="flex items-start gap-2">
+                        <span className="font-bold text-indigo-700 w-12">DIA:</span> 
+                        <span>Usa o valor exato lançado naquele dia específico.</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="font-bold text-indigo-700 w-12">MÊS:</span> 
+                        <span>Calcula sobre a somatória de todos os lançamentos do mês selecionado.</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="font-bold text-indigo-700 w-12">ANO:</span> 
+                        <span>Calcula sobre a somatória acumulada de todos os meses do ano.</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+
+                <div className="bg-emerald-50/50 p-6 rounded-2xl border border-emerald-100 space-y-4">
+                  <h4 className="font-bold text-emerald-900 flex items-center gap-2">
+                    <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
+                    Exemplos Práticos (Faturamento)
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6" id="calculo-dia-mes-ano">
+                    <div>
+                      <p className="font-bold text-xs mb-1">Somatória Mensal de Faturamento:</p>
+                      <p className="text-[11px] leading-relaxed">
+                        Crie um indicador "Faturamento" ([f1]). Ao visualizar o Dashboard em modo <strong>MÊS</strong>, o sistema somará todos os faturamentos diários de 01 a 31 automaticamente.
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-bold text-xs mb-1">Somatória Anual:</p>
+                      <p className="text-[11px] leading-relaxed">
+                        Ao mudar a visualização para <strong>ANO</strong>, o sistema consolidará todos os lançamentos de Janeiro a Dezembro no indicador final.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-amber-50 p-6 rounded-2xl border border-amber-200">
+                  <h4 className="font-bold text-amber-900 flex items-center gap-2 mb-2">
+                    💡 Dica Importante
+                  </h4>
+                  <p>
+                    Você <strong>não</strong> precisa criar uma fórmula diferente para cada período. O sistema é inteligente: ele aplica a mesma fórmula lógica sobre os dados já agrupados por Dia, Mês ou Ano conforme sua escolha no Dashboard principal.
+                  </p>
+                </div>
+              </div>
             </Card>
           </MotionDiv>
         )}

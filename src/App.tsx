@@ -240,7 +240,7 @@ export default function App() {
       const allItems = [
         {
           id: 'managementReports_group',
-          label: 'RELATÓRIO DIÁRIO',
+          label: 'RELATÓRIOS GERENCIAIS',
           icon: BarChart3,
           permission: 'managementReports',
           type: 'parent',
@@ -496,6 +496,7 @@ export default function App() {
                   if (moduleId === 'config') navigate('/users');
                   if (moduleId === 'managementReports') {
                     setIsReportsExpanded(true);
+                    // The label in Home should also be updated if it exists there
                     navigate('/managementReports_dashboard');
                   }
                   if (moduleId === 'prd') navigate('/prd');
