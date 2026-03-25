@@ -430,7 +430,9 @@ const Dashboard = ({
     formula: string, 
     valores: Record<string, number>, 
     valoresMes: Record<string, number> = {}, 
-    valoresAno: Record<string, number> = {}
+    valoresAno: Record<string, number> = {},
+    valoresMesAnt: Record<string, number> = {},
+    valoresAnoAnt: Record<string, number> = {}
   ): number => {
     try {
       // Replace [visualId] references
@@ -450,6 +452,19 @@ const Dashboard = ({
       expressao = expressao.replace(/ACUM_ANO\[([^\]]+)\]/g, (_, visualId) => {
         const idInterno = reverseVisualIdMap[visualId.trim()] || visualId.trim();
         const val = valoresAno[idInterno];
+        return val !== undefined ? String(val) : '0';
+      });
+
+      // New: Support ACUM_MES_ANT[id] and ACUM_ANO_ANT[id]
+      expressao = expressao.replace(/ACUM_MES_ANT\[([^\]]+)\]/g, (_, visualId) => {
+        const idInterno = reverseVisualIdMap[visualId.trim()] || visualId.trim();
+        const val = valoresMesAnt[idInterno];
+        return val !== undefined ? String(val) : '0';
+      });
+
+      expressao = expressao.replace(/ACUM_ANO_ANT\[([^\]]+)\]/g, (_, visualId) => {
+        const idInterno = reverseVisualIdMap[visualId.trim()] || visualId.trim();
+        const val = valoresAnoAnt[idInterno];
         return val !== undefined ? String(val) : '0';
       });
 
@@ -528,16 +543,23 @@ const Dashboard = ({
     const genericData = Object.fromEntries(indicadores.map(i => [i.id, getValor(u.id, i.id)]));
     const genericDataMes = Object.fromEntries(indicadores.map(i => [i.id, getSomaPeriodo(u.id, i.id, currentMonthStart, selectedDateObj)]));
     const genericDataAno = Object.fromEntries(indicadores.map(i => [i.id, getSomaPeriodo(u.id, i.id, currentYearStart, selectedDateObj)]));
+    
+    // Previous day accumulation (selectedDate - 1)
+    const yesterday = new Date(selectedDateObj);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    const genericDataMesAnt = Object.fromEntries(indicadores.map(i => [i.id, getSomaPeriodo(u.id, i.id, currentMonthStart, yesterday)]));
+    const genericDataAnoAnt = Object.fromEntries(indicadores.map(i => [i.id, getSomaPeriodo(u.id, i.id, currentYearStart, yesterday)]));
 
     // Process calculated indicators with formulas in dependency order (topological sort)
     const formulaIndicadores = indicadores.filter(ind => !ind.digitavel && ind.formula);
     const getDeps = (formula: string): string[] => {
       const deps: string[] = [];
-      // Combine normal tags and accumulation tags
-      const regex = /\[([^\]]+)\]|ACUM_MES\[([^\]]+)\]|ACUM_ANO\[([^\]]+)\]/g;
+      // Combine normal tags and accumulation tags (including _ANT)
+      const regex = /\[([^\]]+)\]|ACUM_MES(_ANT)?\[([^\]]+)\]|ACUM_ANO(_ANT)?\[([^\]]+)\]/g;
       let match;
       while ((match = regex.exec(formula)) !== null) {
-        const visualId = (match[1] || match[2] || match[3] || '').trim();
+        const visualId = (match[1] || match[3] || match[5] || '').trim();
         const idInterno = reverseVisualIdMap[visualId] || visualId;
         deps.push(idInterno);
       }
@@ -553,7 +575,7 @@ const Dashboard = ({
         const depInd = formulaIndicadores.find(i => i.id === depId);
         if (depInd) evaluate(depInd, stack);
       }
-      genericData[ind.id] = avaliarFormula(ind.formula!, genericData, genericDataMes, genericDataAno);
+      genericData[ind.id] = avaliarFormula(ind.formula!, genericData, genericDataMes, genericDataAno, genericDataMesAnt, genericDataAnoAnt);
       visited.add(ind.id);
       stack.delete(ind.id);
     };
@@ -1633,15 +1655,26 @@ const Cadastros = ({
                           Ex: ACUM_ANO[f1]
                         </div>
                       </div>
+                      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                        <p className="font-bold text-xs text-indigo-600 mb-2">DIA ANTERIOR: ACUM_MES_ANT[id]</p>
+                        <p className="text-[10px] text-slate-500 leading-relaxed">
+                          Soma o acumulado mensal até o <strong>dia anterior</strong> à data selecionada.
+                        </p>
+                        <div className="mt-2 text-[10px] font-mono bg-slate-50 p-2 rounded">
+                          Ex: ACUM_MES_ANT[f1]
+                        </div>
+                      </div>
                     </div>
                     
                     <div className="mt-4 p-4 bg-indigo-50/50 rounded-xl border border-indigo-100">
-                      <p className="font-bold text-xs text-indigo-900 mb-2">Exemplo do Usuário:</p>
-                      <p className="text-[10px] text-indigo-800 leading-relaxed italic">
-                        "Se no dia 23 tive 100 ton, dia 24 tive 200 ton e dia 25 tive 250 ton... ao selecionar o dia 25, quero ver 550."
-                      </p>
+                      <p className="font-bold text-xs text-indigo-900 mb-2">Exemplo do Usuário (Acumulado Anterior):</p>
+                      <ul className="text-[10px] text-indigo-800 space-y-1 pl-4 list-disc">
+                        <li>Dia 23: 100 ton</li>
+                        <li>Dia 24: 200 ton</li>
+                        <li>Dia 25: 250 ton</li>
+                      </ul>
                       <p className="text-[11px] text-indigo-900 mt-2">
-                        <strong>Como fazer:</strong> Crie um indicador calculado com a fórmula: <code className="bg-white px-1 rounded border border-indigo-200">ACUM_MES[f1]</code> (onde f1 é o faturamento).
+                        <strong>Resultado:</strong> Ao selecionar o dia 25, se usar <code className="bg-white px-1 rounded border border-indigo-200">ACUM_MES_ANT[f1]</code>, o sistema mostrará <strong>300</strong> (soma de 23 e 24).
                       </p>
                     </div>
                   </div>
