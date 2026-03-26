@@ -153,6 +153,7 @@ export interface Categoria {
   id: string;
   nome: string;
   ordem: number;
+  visivel_capa?: boolean; // true = aparece na capa (default), false = oculta da capa
 }
 
 export interface Indicador {

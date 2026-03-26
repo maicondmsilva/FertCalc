@@ -316,11 +316,13 @@ const SortableIndicadorRow = ({
 const SortableCategoryRow = ({ 
   categoria, 
   onEdit, 
-  onDelete 
+  onDelete,
+  onToggleVisivelCapa
 }: { 
   categoria: Categoria; 
   onEdit: (c: Categoria) => void; 
   onDelete: (id: string) => void;
+  onToggleVisivelCapa: (c: Categoria) => void;
 }) => {
   const {
     attributes,
@@ -338,6 +340,8 @@ const SortableCategoryRow = ({
     opacity: isDragging ? 0.5 : 1,
   };
 
+  const visivelCapa = categoria.visivel_capa ?? true;
+
   return (
     <tr ref={setNodeRef} style={style} className={cn("hover:bg-slate-50", isDragging && "bg-slate-100 shadow-inner")}>
       <td className="px-4 py-3">
@@ -345,8 +349,31 @@ const SortableCategoryRow = ({
           <GripVertical className="w-4 h-4 text-slate-400" />
         </button>
       </td>
-      <td className="px-4 py-3 font-medium text-slate-900">{categoria.nome}</td>
+      <td className="px-4 py-3 font-medium text-slate-900">
+        {categoria.nome}
+        <span className={cn(
+          'ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full',
+          visivelCapa ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
+        )}>
+          {visivelCapa ? 'Na capa' : 'Oculta da capa'}
+        </span>
+      </td>
       <td className="px-4 py-3 text-slate-600">{categoria.ordem}</td>
+      <td className="px-4 py-3 text-center">
+        <button
+          onClick={() => onToggleVisivelCapa(categoria)}
+          className={cn(
+            'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2',
+            visivelCapa ? 'bg-indigo-600' : 'bg-slate-300'
+          )}
+          title={visivelCapa ? 'Categoria visível na capa — clique para ocultar' : 'Categoria oculta da capa — clique para mostrar'}
+        >
+          <span className={cn(
+            'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform',
+            visivelCapa ? 'translate-x-6' : 'translate-x-1'
+          )} />
+        </button>
+      </td>
       <td className="px-4 py-3 text-right flex justify-end gap-2">
         <Button variant="ghost" size="icon" onClick={() => onEdit(categoria)}>
           <Edit2 className="w-4 h-4" />
@@ -386,6 +413,7 @@ const Dashboard = ({
   );
   
   const activeUnidades = unidades.filter(u => u.ativo).sort((a, b) => a.ordem_exibicao - b.ordem_exibicao);
+  const categoriasVisiveis = categorias.filter(cat => cat.visivel_capa !== false);
   
   const getValor = (unidadeId: string, indicadorId: string, date: string = selectedDate) => {
     return lancamentos.find(l => l.unidade_id === unidadeId && l.indicador_id === indicadorId && l.data === date)?.valor || 0;
@@ -921,7 +949,7 @@ const Dashboard = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
-            {[...categorias].sort((a, b) => a.ordem - b.ordem).map(cat => {
+            {[...categoriasVisiveis].sort((a, b) => a.ordem - b.ordem).map(cat => {
               const catIndicadores = indicadores
                 .filter(i => i.categoria === cat.nome)
                 .sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
@@ -1163,6 +1191,8 @@ const Cadastros = ({
   const [selectedUnidade, setSelectedUnidade] = useState('');
   const [localNomes, setLocalNomes] = useState<Record<string, string>>({});
   const [localVisiveis, setLocalVisiveis] = useState<Record<string, boolean>>({});
+  const [savingConfigs, setSavingConfigs] = useState<Record<string, boolean>>({});
+  const [deletingConfigs, setDeletingConfigs] = useState<Record<string, boolean>>({});
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState<'unidade' | 'indicador' | 'categoria' | 'meta' | null>(null);
   const [editingItem, setEditingItem] = useState<any>(null);
@@ -1296,11 +1326,13 @@ const Cadastros = ({
               } else if (modalType === 'categoria') {
                 const nome = formData.get('nome') as string;
                 const ordem = parseInt(formData.get('ordem') as string);
+                const visivel_capa = formData.get('visivel_capa') === 'on';
                 if (nome) {
                   await onSaveCategoria({
                     id: editingItem?.id || crypto.randomUUID(),
                     nome,
-                    ordem: ordem || categorias.length + 1
+                    ordem: ordem || categorias.length + 1,
+                    visivel_capa,
                   });
                 }
               } else if (modalType === 'indicador') {
@@ -1404,6 +1436,18 @@ const Cadastros = ({
                   <div className="space-y-2">
                     <label className="text-sm font-bold text-slate-700">Ordem de Exibição</label>
                     <Input name="ordem" type="number" defaultValue={editingItem?.ordem} placeholder="Ex: 1" />
+                  </div>
+                  <div className="flex items-center gap-3 pt-2">
+                    <input
+                      type="checkbox"
+                      name="visivel_capa"
+                      id="visivel_capa_modal"
+                      defaultChecked={editingItem?.visivel_capa ?? true}
+                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <label htmlFor="visivel_capa_modal" className="text-sm font-medium text-slate-700">
+                      Mostrar esta categoria na capa do dashboard
+                    </label>
                   </div>
                 </>
               )}
@@ -1518,6 +1562,7 @@ const Cadastros = ({
                       <th className="w-10 px-4 py-3"></th>
                       <th className="px-4 py-3 font-semibold text-slate-700">Nome</th>
                       <th className="px-4 py-3 font-semibold text-slate-700">Ordem</th>
+                      <th className="px-4 py-3 font-semibold text-slate-700 text-center">Mostrar na Capa</th>
                       <th className="px-4 py-3 font-semibold text-slate-700 text-right">Ações</th>
                     </tr>
                   </thead>
@@ -1532,6 +1577,7 @@ const Cadastros = ({
                           categoria={c} 
                           onEdit={(cat) => handleOpenModal('categoria', cat)}
                           onDelete={onDeleteCategoria}
+                          onToggleVisivelCapa={(cat) => onSaveCategoria({ ...cat, visivel_capa: !(cat.visivel_capa ?? true) })}
                         />
                       ))}
                     </SortableContext>
@@ -1693,11 +1739,35 @@ const Cadastros = ({
                             />
                           </td>
                           <td className="px-4 py-3 text-right flex justify-end gap-2">
-                            <Button variant="ghost" size="icon" onClick={() => onSaveConfig({ unidade_id: selectedUnidade, indicador_id: i.id, nome_personalizado: localNomes[i.id] ?? '', visivel: localVisiveis[i.id] ?? true })} title="Salvar">
-                              <Save className="w-4 h-4" />
+                            <Button
+                              variant="ghost" size="icon"
+                              disabled={savingConfigs[i.id]}
+                              onClick={async () => {
+                                setSavingConfigs(prev => ({ ...prev, [i.id]: true }));
+                                try {
+                                  await onSaveConfig({ unidade_id: selectedUnidade, indicador_id: i.id, nome_personalizado: localNomes[i.id] ?? '', visivel: localVisiveis[i.id] ?? true });
+                                } finally {
+                                  setSavingConfigs(prev => ({ ...prev, [i.id]: false }));
+                                }
+                              }}
+                              title="Salvar">
+                              {savingConfigs[i.id] ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={() => onDeleteConfig(selectedUnidade, i.id)} className="text-red-500 hover:text-red-700 hover:bg-red-50" title="Excluir Personalização">
-                              <Trash2 className="w-4 h-4" />
+                            <Button
+                              variant="ghost" size="icon"
+                              disabled={deletingConfigs[i.id]}
+                              onClick={async () => {
+                                if (!confirm('Tem certeza que deseja excluir esta personalização?')) return;
+                                setDeletingConfigs(prev => ({ ...prev, [i.id]: true }));
+                                try {
+                                  await onDeleteConfig(selectedUnidade, i.id);
+                                } finally {
+                                  setDeletingConfigs(prev => ({ ...prev, [i.id]: false }));
+                                }
+                              }}
+                              className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                              title="Excluir Personalização">
+                              {deletingConfigs[i.id] ? <Loader2 className="w-4 h-4 animate-spin text-red-500" /> : <Trash2 className="w-4 h-4" />}
                             </Button>
                           </td>
                         </tr>
@@ -2278,15 +2348,17 @@ export default function ManagementReportsModule({ currentUser, activeTab }: Mana
               }
             }}
             onDeleteConfig={async (uId, iId) => {
-              if (confirm('Tem certeza que deseja excluir esta personalização?')) {
-                try {
-                  await deleteMgmtConfig(uId, iId);
-                  await fetchData();
-                  showToast('Personalização excluída com sucesso', 'success');
-                } catch (error) {
-                  console.error('Erro ao excluir personalização:', error);
-                  showToast('❌ Erro ao excluir personalização. Tente novamente.', 'error');
-                }
+              if (!uId) {
+                showToast('Selecione uma unidade primeiro', 'error');
+                return;
+              }
+              try {
+                await deleteMgmtConfig(uId, iId);
+                await fetchData();
+                showToast('Personalização excluída com sucesso', 'success');
+              } catch (error) {
+                console.error('Erro ao excluir personalização:', error);
+                showToast('❌ Erro ao excluir personalização. Tente novamente.', 'error');
               }
             }}
             onDeleteDiasUteis={async (uId, ano, mes) => {
