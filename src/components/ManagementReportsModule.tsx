@@ -349,7 +349,15 @@ const SortableCategoryRow = ({
           <GripVertical className="w-4 h-4 text-slate-400" />
         </button>
       </td>
-      <td className="px-4 py-3 font-medium text-slate-900">{categoria.nome}</td>
+      <td className="px-4 py-3 font-medium text-slate-900">
+        {categoria.nome}
+        <span className={cn(
+          'ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full',
+          visivelCapa ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
+        )}>
+          {visivelCapa ? 'Na capa' : 'Oculta da capa'}
+        </span>
+      </td>
       <td className="px-4 py-3 text-slate-600">{categoria.ordem}</td>
       <td className="px-4 py-3">
         <button
@@ -2351,15 +2359,17 @@ export default function ManagementReportsModule({ currentUser, activeTab }: Mana
               }
             }}
             onDeleteConfig={async (uId, iId) => {
-              if (confirm('Tem certeza que deseja excluir esta personalização?')) {
-                try {
-                  await deleteMgmtConfig(uId, iId);
-                  await fetchData();
-                  showToast('Personalização excluída com sucesso', 'success');
-                } catch (error) {
-                  console.error('Erro ao excluir personalização:', error);
-                  showToast('❌ Erro ao excluir personalização. Tente novamente.', 'error');
-                }
+              if (!uId) {
+                showToast('Selecione uma unidade primeiro', 'error');
+                return;
+              }
+              try {
+                await deleteMgmtConfig(uId, iId);
+                await fetchData();
+                showToast('Personalização excluída com sucesso', 'success');
+              } catch (error) {
+                console.error('Erro ao excluir personalização:', error);
+                showToast('❌ Erro ao excluir personalização. Tente novamente.', 'error');
               }
             }}
             onDeleteDiasUteis={async (uId, ano, mes) => {
