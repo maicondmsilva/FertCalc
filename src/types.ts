@@ -153,6 +153,7 @@ export interface Categoria {
   id: string;
   nome: string;
   ordem: number;
+  visivel_capa?: boolean;
 }
 
 export interface Indicador {
