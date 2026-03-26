@@ -433,13 +433,16 @@ const Dashboard = ({
     valoresAno: Record<string, number> = {},
     valoresMesAnt: Record<string, number> = {},
     valoresAnoAnt: Record<string, number> = {},
-    valoresSem: Record<string, number> = {}
+    valoresSem: Record<string, number> = {},
+    valoresSemAnt: Record<string, number> = {},
+    diasComLancMes = 1,
+    diasComLancAno = 1,
+    diasComLancSem = 1,
   ): number => {
     try {
       let expressao = formula;
 
-      // 1. Specific accumulation tags FIRST (to avoid breaking them with general bracket replacements)
-      // Support ACUM_MES_ANT[id] and ACUM_ANO_ANT[id]
+      // 1. Specific accumulation tags FIRST (longer prefixes before shorter ones to avoid partial matches)
       expressao = expressao.replace(/ACUM_MES_ANT\[([^\]]+)\]/g, (_, visualId) => {
         const idInterno = reverseVisualIdMap[visualId.trim()] || visualId.trim();
         const val = valoresMesAnt[idInterno];
@@ -452,7 +455,33 @@ const Dashboard = ({
         return val !== undefined ? String(val) : '0';
       });
 
-      // 1b. Weekly accumulation tag
+      // Previous-week accumulation tag
+      expressao = expressao.replace(/ACUM_SEM_ANT\[([^\]]+)\]/g, (_, visualId) => {
+        const idInterno = reverseVisualIdMap[visualId.trim()] || visualId.trim();
+        const val = valoresSemAnt[idInterno];
+        return val !== undefined ? String(val) : '0';
+      });
+
+      // Average tags: ACUM / number-of-days-with-data
+      expressao = expressao.replace(/MEDIA_MES\[([^\]]+)\]/g, (_, visualId) => {
+        const idInterno = reverseVisualIdMap[visualId.trim()] || visualId.trim();
+        const val = valoresMes[idInterno] ?? 0;
+        return String(diasComLancMes > 0 ? val / diasComLancMes : 0);
+      });
+
+      expressao = expressao.replace(/MEDIA_ANO\[([^\]]+)\]/g, (_, visualId) => {
+        const idInterno = reverseVisualIdMap[visualId.trim()] || visualId.trim();
+        const val = valoresAno[idInterno] ?? 0;
+        return String(diasComLancAno > 0 ? val / diasComLancAno : 0);
+      });
+
+      expressao = expressao.replace(/MEDIA_SEM\[([^\]]+)\]/g, (_, visualId) => {
+        const idInterno = reverseVisualIdMap[visualId.trim()] || visualId.trim();
+        const val = valoresSem[idInterno] ?? 0;
+        return String(diasComLancSem > 0 ? val / diasComLancSem : 0);
+      });
+
+      // Weekly accumulation tag
       expressao = expressao.replace(/ACUM_SEM\[([^\]]+)\]/g, (_, visualId) => {
         const idInterno = reverseVisualIdMap[visualId.trim()] || visualId.trim();
         const val = valoresSem[idInterno];
@@ -591,18 +620,30 @@ const Dashboard = ({
     const genericDataMesAnt = Object.fromEntries(indicadores.map(i => [i.id, getSomaPeriodo(u.id, i.id, currentMonthStart, yesterday)]));
     const genericDataAnoAnt = Object.fromEntries(indicadores.map(i => [i.id, getSomaPeriodo(u.id, i.id, currentYearStart, yesterday)]));
 
+    // Previous-week accumulation (Mon–Sun of the week before the current one).
+    // Initialized here so it is available as a closure inside makeEvaluator.
+    const prevWeekStartInit = new Date(weekStart);
+    prevWeekStartInit.setDate(prevWeekStartInit.getDate() - 7);
+    const prevWeekEndInit = new Date(weekEnd);
+    prevWeekEndInit.setDate(prevWeekEndInit.getDate() - 7);
+    const genericDataSemAnt = Object.fromEntries(indicadores.map(i => [i.id, getSomaPeriodo(u.id, i.id, prevWeekStartInit, prevWeekEndInit)]));
+
+    // These day-count variables are used by MEDIA_* tags inside makeEvaluator (closure access).
+    // They are assigned their real values after daysInMonth/Year/Week are computed below.
+    let diasComLancMes = 1;
+    let diasComLancAno = 1;
+    let diasComLancSem = 1;
+
     // Process calculated indicators with formulas in dependency order (topological sort)
     const formulaIndicadores = indicadores.filter(ind => !ind.digitavel && ind.formula);
     const formulaIndMap = new Map(formulaIndicadores.map(i => [i.id, i]));
     const getDeps = (formula: string): string[] => {
       const deps: string[] = [];
-      // Combine all patterns into one to correctly distinguish between them
-      // We want to extract the content inside [ ] regardless of prefix
-      const regex = /(?:(?:ACUM_MES(?:_ANT)?|ACUM_ANO(?:_ANT)?|ACUM_SEM)\[|\[)([^\]\s]+)\]/g;
-      
+      // Longer prefixes listed before shorter ones to avoid partial matches.
+      // The prefix is optional so plain [id] references are also captured.
+      const regex = /(?:ACUM_MES_ANT|ACUM_ANO_ANT|ACUM_SEM_ANT|ACUM_MES|ACUM_ANO|ACUM_SEM|MEDIA_MES|MEDIA_ANO|MEDIA_SEM)?\[([^\]\s]+)\]/g;
       let match;
       while ((match = regex.exec(formula)) !== null) {
-        // match[1] should contain the ID or visual ID
         const rawId = match[1].trim();
         const idInterno = reverseVisualIdMap[rawId] || rawId;
         deps.push(idInterno);
@@ -620,12 +661,13 @@ const Dashboard = ({
       valoresAno: Record<string, number>,
       valoresSem: Record<string, number> = {},
       onlyAccum = false,
+      valoresSemAnt: Record<string, number> = {},
     ) => {
       const visited = new Set<string>();
       const evaluate = (ind: typeof formulaIndicadores[number], stack: Set<string> = new Set()): void => {
         if (visited.has(ind.id)) return;
         if (stack.has(ind.id)) return; // circular reference guard
-        const usesAccum = /ACUM_MES|ACUM_ANO|ACUM_SEM/.test(ind.formula!);
+        const usesAccum = /ACUM_MES|ACUM_ANO|ACUM_SEM|MEDIA_MES|MEDIA_ANO|MEDIA_SEM/.test(ind.formula!);
         if (onlyAccum && !usesAccum) {
           // Already correctly set by recalcularSomasPeriodo; mark visited and keep the value.
           visited.add(ind.id);
@@ -637,7 +679,7 @@ const Dashboard = ({
           const depInd = formulaIndMap.get(depId);
           if (depInd) evaluate(depInd, stack);
         }
-        target[ind.id] = avaliarFormula(ind.formula!, valores, valoresMes, valoresAno, genericDataMesAnt, genericDataAnoAnt, valoresSem);
+        target[ind.id] = avaliarFormula(ind.formula!, valores, valoresMes, valoresAno, genericDataMesAnt, genericDataAnoAnt, valoresSem, valoresSemAnt, diasComLancMes, diasComLancAno, diasComLancSem);
         visited.add(ind.id);
         stack.delete(ind.id);
       };
@@ -698,7 +740,7 @@ const Dashboard = ({
 
     // For each accumulation context, replace the initial getSomaPeriodo value (which is 0 for
     // calculated indicators) with the correct per-day sum for indicators whose formulas do not
-    // themselves contain ACUM_* tags. Indicators with ACUM_* tags are handled separately by
+    // themselves contain ACUM_* or MEDIA_* tags. Indicators with those tags are handled separately by
     // makeEvaluator (onlyAccum=true) so they can read the corrected values from valoresMes/valoresAno.
     const recalcularSomasPeriodo = (
       target: Record<string, number>,
@@ -706,7 +748,7 @@ const Dashboard = ({
     ): void => {
       const visitedCalc = new Set<string>();
       for (const ind of formulaIndicadores) {
-        const usesAccum = /ACUM_MES|ACUM_ANO|ACUM_SEM/.test(ind.formula!);
+        const usesAccum = /ACUM_MES|ACUM_ANO|ACUM_SEM|MEDIA_MES|MEDIA_ANO|MEDIA_SEM/.test(ind.formula!);
         if (!usesAccum) {
           calcularSomaDiaria(ind, days, visitedCalc, target);
         }
@@ -740,6 +782,21 @@ const Dashboard = ({
         .map(l => l.data)
     )];
 
+    // Previous week range (same start/end used for genericDataSemAnt above)
+    const daysInWeekAnt = [...new Set(
+      lancamentos
+        .filter(l => l.unidade_id === u.id && parseISO(l.data) >= prevWeekStartInit && parseISO(l.data) <= prevWeekEndInit)
+        .map(l => l.data)
+    )];
+
+    // Number of distinct days with data for each period; assigned to the let variables declared
+    // earlier so makeEvaluator closures pick up the real values before the evaluators run.
+    // Using || 1 is safe because ACUM_MES/ANO/SEM for an indicator also equals 0 when there
+    // are no days with data, so MEDIA_* would correctly return 0/1 = 0 in that case.
+    diasComLancMes = daysInMonth.length || 1;
+    diasComLancAno = daysInYear.length || 1;
+    diasComLancSem = daysInWeek.length || 1;
+
     // Pre-compute per-day sums for all accumulation contexts BEFORE evaluating the day context.
     // This ensures that when the day evaluator processes an indicator like ACUM_MES[r7]
     // (where r7 is itself a calculated indicator), it can read the correct monthly sum
@@ -749,23 +806,24 @@ const Dashboard = ({
     recalcularSomasPeriodo(genericDataSem, daysInWeek);
     recalcularSomasPeriodo(genericDataMesAnt, daysInMonthAnt);
     recalcularSomasPeriodo(genericDataAnoAnt, daysInYearAnt);
+    recalcularSomasPeriodo(genericDataSemAnt, daysInWeekAnt);
 
     // Resolve formulas for the current day context.
     // genericDataMes/Ano/Sem are already populated with correct per-day sums above,
     // so ACUM_* references in day-context formulas resolve to the right values.
-    const evaluate = makeEvaluator(genericData, genericData, genericDataMes, genericDataAno, genericDataSem);
+    const evaluate = makeEvaluator(genericData, genericData, genericDataMes, genericDataAno, genericDataSem, false, genericDataSemAnt);
     for (const ind of formulaIndicadores) evaluate(ind);
 
-    // For each accumulation context, evaluate indicators that use ACUM_* tags.
+    // For each accumulation context, evaluate indicators that use ACUM_* or MEDIA_* tags.
     // recalcularSomasPeriodo already set correct values for non-ACUM indicators;
-    // makeEvaluator(onlyAccum=true) skips those and only evaluates ACUM_* indicators.
-    const evaluateMes = makeEvaluator(genericDataMes, genericDataMes, genericDataMes, genericDataAno, genericDataSem, true);
+    // makeEvaluator(onlyAccum=true) skips those and only evaluates ACUM_*/MEDIA_* indicators.
+    const evaluateMes = makeEvaluator(genericDataMes, genericDataMes, genericDataMes, genericDataAno, genericDataSem, true, genericDataSemAnt);
     for (const ind of formulaIndicadores) evaluateMes(ind);
 
-    const evaluateAno = makeEvaluator(genericDataAno, genericDataAno, genericDataMes, genericDataAno, genericDataSem, true);
+    const evaluateAno = makeEvaluator(genericDataAno, genericDataAno, genericDataMes, genericDataAno, genericDataSem, true, genericDataSemAnt);
     for (const ind of formulaIndicadores) evaluateAno(ind);
 
-    const evaluateSem = makeEvaluator(genericDataSem, genericDataSem, genericDataMes, genericDataAno, genericDataSem, true);
+    const evaluateSem = makeEvaluator(genericDataSem, genericDataSem, genericDataMes, genericDataAno, genericDataSem, true, genericDataSemAnt);
     for (const ind of formulaIndicadores) evaluateSem(ind);
 
     return {
@@ -1788,6 +1846,10 @@ const Cadastros = ({
                         <tr className="bg-slate-50/50"><td className="px-3 py-2 font-mono text-indigo-600">ACUM_ANO[id]</td><td className="px-3 py-2">Ano (01/Jan → dia)</td><td className="px-3 py-2 font-mono text-slate-600">ACUM_ANO[r1]</td><td className="px-3 py-2 text-emerald-600 font-bold">✅</td></tr>
                         <tr><td className="px-3 py-2 font-mono text-indigo-600">ACUM_MES_ANT[id]</td><td className="px-3 py-2">Mês até ontem</td><td className="px-3 py-2 font-mono text-slate-600">ACUM_MES_ANT[r1]</td><td className="px-3 py-2 text-emerald-600 font-bold">✅</td></tr>
                         <tr className="bg-slate-50/50"><td className="px-3 py-2 font-mono text-indigo-600">ACUM_ANO_ANT[id]</td><td className="px-3 py-2">Ano até ontem</td><td className="px-3 py-2 font-mono text-slate-600">ACUM_ANO_ANT[r1]</td><td className="px-3 py-2 text-emerald-600 font-bold">✅</td></tr>
+                        <tr><td className="px-3 py-2 font-mono text-indigo-600">ACUM_SEM_ANT[id]</td><td className="px-3 py-2">Semana anterior (seg–dom)</td><td className="px-3 py-2 font-mono text-slate-600">ACUM_SEM_ANT[r1]</td><td className="px-3 py-2 text-emerald-600 font-bold">✅</td></tr>
+                        <tr className="bg-slate-50/50"><td className="px-3 py-2 font-mono text-indigo-600">MEDIA_SEM[id]</td><td className="px-3 py-2">Média diária da semana</td><td className="px-3 py-2 font-mono text-slate-600">MEDIA_SEM[r1]</td><td className="px-3 py-2 text-emerald-600 font-bold">✅</td></tr>
+                        <tr><td className="px-3 py-2 font-mono text-indigo-600">MEDIA_MES[id]</td><td className="px-3 py-2">Média diária do mês</td><td className="px-3 py-2 font-mono text-slate-600">MEDIA_MES[r1]</td><td className="px-3 py-2 text-emerald-600 font-bold">✅</td></tr>
+                        <tr className="bg-slate-50/50"><td className="px-3 py-2 font-mono text-indigo-600">MEDIA_ANO[id]</td><td className="px-3 py-2">Média diária do ano</td><td className="px-3 py-2 font-mono text-slate-600">MEDIA_ANO[r1]</td><td className="px-3 py-2 text-emerald-600 font-bold">✅</td></tr>
                       </tbody>
                     </table>
                   </div>
@@ -1845,7 +1907,10 @@ const Cadastros = ({
                       <div>Acumulado Faturamento Mês: &nbsp;&nbsp;&nbsp; ACUM_MES[f1]</div>
                       <div>Acumulado Tons Ano: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ACUM_ANO[r1]</div>
                       <div>Acumulado Semana: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ACUM_SEM[r1]</div>
+                      <div>Semana Anterior: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ACUM_SEM_ANT[r1]</div>
                       <div>Ticket Médio Acumulado Mês: &nbsp;&nbsp; ACUM_MES[f1] / ACUM_MES[f2]</div>
+                      <div>Média Diária do Mês: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; MEDIA_MES[r1]</div>
+                      <div>Média Diária da Semana: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; MEDIA_SEM[r1]</div>
                     </div>
                   </div>
 
@@ -1910,6 +1975,36 @@ const Cadastros = ({
                       <div>IF(ACUM_MES_ANT[f1]&gt;0, ([f1]/ACUM_MES_ANT[f1])*100, 0)</div>
                       <div className="pt-1 text-slate-400">// Peso médio com limite mínimo:</div>
                       <div>MAX(ACUM_MES[r1] / ACUM_MES[r2], 0)</div>
+                      <div className="pt-1 text-slate-400">// Média ponderada semanal (qtd × rent / qtd):</div>
+                      <div>IF(ACUM_SEM[r6]&gt;0, ACUM_SEM[r7]/ACUM_SEM[r6], 0)</div>
+                      <div className="pt-1 text-slate-400">// Comparação semana atual vs anterior:</div>
+                      <div>ACUM_SEM[r1] - ACUM_SEM_ANT[r1]</div>
+                      <div className="pt-1 text-slate-400">// Operação mista com constante:</div>
+                      <div>ACUM_MES[r3] * 100 / ACUM_MES[r1]</div>
+                    </div>
+                  </div>
+
+                  {/* Nível 6 — Encadeamento triplo */}
+                  <div className="space-y-3">
+                    <p className="font-bold text-xs text-slate-700">Nível 6 — Encadeamento triplo (calculado → acumulado → média ponderada):</p>
+                    <div className="overflow-x-auto rounded-xl border border-slate-200">
+                      <table className="w-full text-[10px] text-left">
+                        <thead className="bg-slate-100 border-b border-slate-200">
+                          <tr>
+                            <th className="px-3 py-2 font-semibold text-slate-600">Passo</th>
+                            <th className="px-3 py-2 font-semibold text-slate-600">ID</th>
+                            <th className="px-3 py-2 font-semibold text-slate-600">Nome</th>
+                            <th className="px-3 py-2 font-semibold text-slate-600">Tipo</th>
+                            <th className="px-3 py-2 font-semibold text-slate-600">Fórmula</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          <tr><td className="px-3 py-2 font-bold text-slate-500">1</td><td className="px-3 py-2 font-mono text-indigo-600">r5</td><td className="px-3 py-2">Quantidade</td><td className="px-3 py-2 text-slate-500">Digitável</td><td className="px-3 py-2 text-slate-400 italic">—</td></tr>
+                          <tr className="bg-slate-50/50"><td className="px-3 py-2 font-bold text-slate-500">2</td><td className="px-3 py-2 font-mono text-indigo-600">r6</td><td className="px-3 py-2">Rentabilidade %</td><td className="px-3 py-2 text-slate-500">Digitável</td><td className="px-3 py-2 text-slate-400 italic">—</td></tr>
+                          <tr className="bg-indigo-50/40"><td className="px-3 py-2 font-bold text-indigo-600">3</td><td className="px-3 py-2 font-mono text-indigo-600">r7</td><td className="px-3 py-2 font-semibold">Qtd × Rent (dia)</td><td className="px-3 py-2 font-semibold text-indigo-600">Calculado</td><td className="px-3 py-2 font-mono text-indigo-600">[r5] * [r6]</td></tr>
+                          <tr className="bg-emerald-50/40"><td className="px-3 py-2 font-bold text-emerald-600">4</td><td className="px-3 py-2 font-mono text-emerald-600">r8</td><td className="px-3 py-2 font-semibold">Média ponderada Sem</td><td className="px-3 py-2 font-semibold text-emerald-600">Calculado</td><td className="px-3 py-2 font-mono text-emerald-600">IF(ACUM_SEM[r5]&gt;0, ACUM_SEM[r7]/ACUM_SEM[r5], 0) ✅</td></tr>
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 </div>
