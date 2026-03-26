@@ -1,0 +1,1 @@
+ALTER TABLE management_categorias ADD COLUMN IF NOT EXISTS visivel_capa BOOLEAN DEFAULT TRUE;

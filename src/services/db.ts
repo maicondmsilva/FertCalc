@@ -1221,7 +1221,12 @@ export async function getMgmtCategorias(): Promise<Categoria[]> {
 export async function upsertMgmtCategoria(c: Categoria): Promise<void> {
   const { error } = await supabase
     .from('management_categorias')
-    .upsert(c, { onConflict: 'id' });
+    .upsert({
+      id: c.id,
+      nome: c.nome,
+      ordem: c.ordem,
+      visivel_capa: c.visivel_capa ?? true,
+    }, { onConflict: 'id' });
   if (error) throw error;
 }
 
