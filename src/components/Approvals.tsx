@@ -278,7 +278,7 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
             <div key={p.id} className="p-4 border border-stone-200 rounded-lg flex justify-between items-center bg-stone-50">
               <div>
                 <p className="font-bold text-stone-700">{p.factors.client.name}</p>
-                <p className="text-xs text-stone-500">Solicitado por: {p.userName} | Vendedor: {p.userCode}</p>
+                <p className="text-xs text-stone-500">Solicitado por: {p.userName} | Vendedor: @{p.userCode}</p>
                 <p className="text-xs font-bold text-emerald-600 mt-1">Status: {p.status}</p>
               </div>
               <div className="flex gap-2">

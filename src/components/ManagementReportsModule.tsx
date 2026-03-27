@@ -21,8 +21,10 @@ import {
   HelpCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { format, startOfMonth, eachDayOfInterval, isSameDay, parseISO } from 'date-fns';
+import { format, startOfMonth, eachDayOfInterval, isSameDay, parseISO, startOfISOWeek, endOfISOWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import {
@@ -916,12 +918,101 @@ const Dashboard = ({
     </tr>
   );
 
+  const generatePDF = () => {
+    const doc = new jsPDF('l', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.getWidth();
+    
+    // Header
+    doc.setFontSize(18);
+    doc.setTextColor(30, 41, 59); // slate-800
+    doc.text('RELATÓRIO DIÁRIO', 14, 15);
+    
+    doc.setFontSize(10);
+    doc.setTextColor(100, 116, 139); // slate-500
+    doc.text(`Data: ${format(parseISO(selectedDate), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}`, 14, 22);
+    doc.text('Gestão de unidades', 14, 27);
+    
+    const tableData: any[][] = [];
+    const tableHeaders = ['Indicador', ...activeUnidades.map(u => u.nome), 'Total'];
+    
+    const categoriasVisiveis = [...categorias].filter(cat => cat.visivel_capa !== false).sort((a, b) => a.ordem - b.ordem);
+
+    categoriasVisiveis.forEach(cat => {
+      const catIndicadores = indicadores
+        .filter(i => i.categoria === cat.nome)
+        .sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
+
+      // Category row
+      tableData.push([
+        { content: cat.nome.toUpperCase(), colSpan: tableHeaders.length, styles: { fillColor: [79, 70, 229], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 } }
+      ]);
+
+      catIndicadores.forEach(ind => {
+        const isVisibleGlobal = (uId: string) => {
+          const cfg = configs.find(c => c.unidade_id === uId && c.indicador_id === ind.id);
+          return cfg ? cfg.visivel : true;
+        };
+        const isVisibleAny = activeUnidades.some(u => isVisibleGlobal(u.id));
+        if (!isVisibleAny) return;
+
+        const row: any[] = [ind.nome];
+        
+        activeUnidades.forEach(u => {
+          const uDat = unitData.find(ud => ud.unidade.id === u.id);
+          const val = (uDat?.data as any)?.[ind.id] || 0;
+          const cfg = configs.find(c => c.unidade_id === u.id && c.indicador_id === ind.id);
+          const isVis = cfg ? cfg.visivel : true;
+          const bgColorHex = cfg?.cor_fundo || '';
+          
+          let fill: [number, number, number] | undefined = undefined;
+          if (isVis && bgColorHex && bgColorHex.startsWith('#')) {
+             const r = parseInt(bgColorHex.slice(1,3), 16);
+             const g = parseInt(bgColorHex.slice(3,5), 16);
+             const b = parseInt(bgColorHex.slice(5,7), 16);
+             fill = [r, g, b];
+          }
+
+          row.push({
+            content: isVis ? formatValue(val, ind.id) : '-',
+            styles: { fillColor: fill, halign: 'right' }
+          });
+        });
+
+        const total = unitData.reduce((acc, curr) => {
+          const cfg = configs.find(c => c.unidade_id === curr.unidade.id && c.indicador_id === ind.id);
+          if (cfg && !cfg.visivel) return acc;
+          return acc + ((curr.data as any)[ind.id] || 0);
+        }, 0);
+        row.push({ content: formatValue(total, ind.id), styles: { fontStyle: 'bold', halign: 'right', fillColor: [240, 249, 255] } });
+        
+        tableData.push(row);
+      });
+    });
+
+    autoTable(doc, {
+      head: [tableHeaders],
+      body: tableData,
+      startY: 35,
+      styles: { fontSize: 8, cellPadding: 2, font: 'helvetica' },
+      headStyles: { fillColor: [30, 41, 59], textColor: [248, 250, 252], fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      margin: { top: 35 },
+      didDrawPage: (data) => {
+        doc.setFontSize(8);
+        doc.setTextColor(148, 163, 184);
+        doc.text(`Página ${data.pageNumber}`, pageWidth - 20, doc.internal.pageSize.getHeight() - 10);
+      }
+    });
+
+    doc.save(`relatorio-diario-${format(parseISO(selectedDate), 'yyyy-MM-dd')}.pdf`);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Capa / Relatório Consolidado</h1>
-          <p className="text-slate-500">Gestão de Unidades - ONE Superfast</p>
+          <h1 className="text-2xl font-black text-slate-800 tracking-tight">RELATÓRIO DIÁRIO</h1>
+          <p className="text-slate-500 font-medium">Gestão de unidades</p>
         </div>
         <div className="flex items-center gap-3">
           <Input 
@@ -930,7 +1021,7 @@ const Dashboard = ({
             onChange={(e) => setSelectedDate(e.target.value)}
             className="w-auto"
           />
-          <Button variant="outline" size="icon">
+          <Button variant="outline" size="icon" onClick={generatePDF} title="Gerar PDF">
             <Download className="w-4 h-4" />
           </Button>
         </div>
@@ -956,42 +1047,80 @@ const Dashboard = ({
               return (
                 <React.Fragment key={cat.id}>
                   <tr className="bg-slate-50">
-                    <td colSpan={activeUnidades.length + 2} className="px-4 py-1 font-black text-indigo-600 text-[10px] uppercase">
+                    <td colSpan={activeUnidades.map(u => u.id).length + 2} className="px-4 py-1 font-black text-indigo-600 text-[10px] uppercase">
                       {cat.nome}
                     </td>
                   </tr>
-                  {catIndicadores.map(ind => (
-                    <React.Fragment key={ind.id}>
-                      {renderRow(ind.nome, ind.id as any, ind.id)}
-                      
-                      {/* Special Variations */}
-                      {ind.id === 'v1' && (
-                        <>
-                          {renderRow('Acumulado Tons Semana', 'tonsSemana', 'v1')}
-                          {renderRow('Acumulado Tons Mês', 'tonsMes', 'v1')}
-                        </>
-                      )}
-                      {ind.id === 'v2' && renderRow('Média Rentabilidade Mês', 'mediaRentMes', 'v2')}
-                      {ind.id === 'v4' && renderRow('Cancelamento Semana', 'cancelamentoSemana', 'v4')}
-                      {ind.id === 'c1' && (
-                        <>
-                          {renderRow('Acumulado Produção Mês', 'prodMes', 'c1')}
-                          {renderRow('Acumulado Produção Ano', 'prodAno', 'c1')}
-                        </>
-                      )}
-                      {ind.id === 'f3' && (
-                        <>
-                          {renderRow('Total Faturado Dia', 'fatTotalDia', 'f1', true)}
-                          {renderRow('Total Acumulado Mês', 'fatAcumuladoMes', 'f1')}
-                          {renderRow('Meta do Mês', 'metaMes', 'f1')}
-                          {renderRow('Saldo / Déficit', 'saldoDeficit', 'f1')}
-                          {renderRow('Dias Restantes', 'diasRestantes')}
-                          {renderRow('Média a Faturar / Dia', 'mediaAFaturar', 'f1')}
-                          {renderRow('Faturamento Acumulado Ano', 'fatAcumuladoAno', 'f1')}
-                        </>
-                      )}
-                    </React.Fragment>
-                  ))}
+                  {catIndicadores.map(ind => {
+                    const isVisibleGlobal = (uId: string) => {
+                      const cfg = configs.find(c => c.unidade_id === uId && c.indicador_id === ind.id);
+                      return cfg ? cfg.visivel : true;
+                    };
+
+                    // Check if indicator is visible in at least one unit
+                    const isVisibleAny = activeUnidades.some(u => isVisibleGlobal(u.id));
+                    if (!isVisibleAny) return null;
+
+                    return (
+                      <React.Fragment key={ind.id}>
+                        <tr className={cn("hover:bg-slate-50 transition-colors")}>
+                          <td className="px-4 py-2 font-medium text-slate-900 sticky left-0 bg-white group-hover:bg-slate-50 border-r border-slate-100">
+                            {ind.nome}
+                          </td>
+                          {unitData.map(({ data, unidade }) => {
+                            const val = (data as any)[ind.id] || 0;
+                            const cfg = configs.find(c => c.unidade_id === unidade.id && c.indicador_id === ind.id);
+                            const isVis = cfg ? cfg.visivel : true;
+                            const bgColor = cfg?.cor_fundo || '';
+                            
+                            return (
+                              <td 
+                                key={unidade.id} 
+                                className="px-4 py-2 text-right font-mono text-slate-600 border-r border-slate-100"
+                                style={{ backgroundColor: isVis ? bgColor : '#f8fafc', opacity: isVis ? 1 : 0.3 }}
+                              >
+                                {isVis ? formatValue(val, ind.id) : '-'}
+                              </td>
+                            );
+                          })}
+                          <td className="px-4 py-2 text-right font-bold text-indigo-700 bg-indigo-50/50">
+                            {formatValue(unitData.reduce((acc, curr) => {
+                              const cfg = configs.find(c => c.unidade_id === curr.unidade.id && c.indicador_id === ind.id);
+                              if (cfg && !cfg.visivel) return acc;
+                              return acc + ((curr.data as any)[ind.id] || 0);
+                            }, 0), ind.id)}
+                          </td>
+                        </tr>
+                        
+                        {/* Special Variations */}
+                        {ind.id === 'v1' && (
+                          <>
+                            {renderRow('Acumulado Tons Semana', 'tonsSemana', 'v1')}
+                            {renderRow('Acumulado Tons Mês', 'tonsMes', 'v1')}
+                          </>
+                        )}
+                        {ind.id === 'v2' && renderRow('Média Rentabilidade Mês', 'mediaRentMes', 'v2')}
+                        {ind.id === 'v4' && renderRow('Cancelamento Semana', 'cancelamentoSemana', 'v4')}
+                        {ind.id === 'c1' && (
+                          <>
+                            {renderRow('Acumulado Produção Mês', 'prodMes', 'c1')}
+                            {renderRow('Acumulado Produção Ano', 'prodAno', 'c1')}
+                          </>
+                        )}
+                        {ind.id === 'f3' && (
+                          <>
+                            {renderRow('Total Faturado Dia', 'fatTotalDia', 'f1', true)}
+                            {renderRow('Total Acumulado Mês', 'fatAcumuladoMes', 'f1')}
+                            {renderRow('Meta do Mês', 'metaMes', 'f1')}
+                            {renderRow('Saldo / Déficit', 'saldoDeficit', 'f1')}
+                            {renderRow('Dias Restantes', 'diasRestantes')}
+                            {renderRow('Média a Faturar / Dia', 'mediaAFaturar', 'f1')}
+                            {renderRow('Faturamento Acumulado Ano', 'fatAcumuladoAno', 'f1')}
+                          </>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
                 </React.Fragment>
               );
             })}
@@ -1735,16 +1864,25 @@ const Cadastros = ({
                           <td className="px-4 py-3">
                             <Input 
                               placeholder={i.nome} 
-                              value={localNomes[i.id] ?? ''}
+                              value={localNomes[i.id] ?? (config?.nome_personalizado || '')}
                               onChange={(e) => setLocalNomes(prev => ({ ...prev, [i.id]: e.target.value }))}
                             />
                           </td>
                           <td className="px-4 py-3">
-                            <input 
-                              type="checkbox" 
-                              checked={localVisiveis[i.id] ?? true}
-                              onChange={(e) => setLocalVisiveis(prev => ({ ...prev, [i.id]: e.target.checked }))}
-                            />
+                            <div className="flex items-center gap-4">
+                              <input 
+                                type="checkbox" 
+                                checked={localVisiveis[i.id] ?? (config ? config.visivel : true)}
+                                onChange={(e) => setLocalVisiveis(prev => ({ ...prev, [i.id]: e.target.checked }))}
+                              />
+                              <input 
+                                type="color" 
+                                value={localCores[i.id] ?? (config?.cor_fundo || '#ffffff')}
+                                onChange={(e) => setLocalCores(prev => ({ ...prev, [i.id]: e.target.value }))}
+                                className="w-8 h-8 rounded border-0 cursor-pointer"
+                                title="Cor de fundo da coluna"
+                              />
+                            </div>
                           </td>
                           <td className="px-4 py-3 text-right flex justify-end gap-2">
                             <Button
@@ -1754,7 +1892,13 @@ const Cadastros = ({
                               onClick={async () => {
                                 setSavingConfigs(prev => ({ ...prev, [i.id]: true }));
                                 try {
-                                  await onSaveConfig({ unidade_id: selectedUnidade, indicador_id: i.id, nome_personalizado: localNomes[i.id] ?? '', visivel: localVisiveis[i.id] ?? true });
+                                  await onSaveConfig({ 
+                                    unidade_id: selectedUnidade, 
+                                    indicador_id: i.id, 
+                                    nome_personalizado: localNomes[i.id] ?? (config?.nome_personalizado || ''), 
+                                    visivel: localVisiveis[i.id] ?? (config ? config.visivel : true),
+                                    cor_fundo: localCores[i.id] ?? (config?.cor_fundo || '#ffffff')
+                                  });
                                 } finally {
                                   setSavingConfigs(prev => ({ ...prev, [i.id]: false }));
                                 }
@@ -1766,11 +1910,16 @@ const Cadastros = ({
                             <Button
                               variant="ghost"
                               size="icon"
-                              disabled={deletingConfigs[i.id]}
+                              disabled={deletingConfigs[i.id] || !config}
                               onClick={async () => {
+                                if (!config) return;
                                 setDeletingConfigs(prev => ({ ...prev, [i.id]: true }));
                                 try {
                                   await onDeleteConfig(selectedUnidade, i.id);
+                                  // Clear local state for this indicator to force reset
+                                  setLocalNomes(prev => { const n = {...prev}; delete n[i.id]; return n; });
+                                  setLocalVisiveis(prev => { const n = {...prev}; delete n[i.id]; return n; });
+                                  setLocalCores(prev => { const n = {...prev}; delete n[i.id]; return n; });
                                 } finally {
                                   setDeletingConfigs(prev => ({ ...prev, [i.id]: false }));
                                 }
@@ -2234,7 +2383,7 @@ export default function ManagementReportsModule({ currentUser, activeTab }: Mana
       <div className="h-full flex items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
-          <p className="text-slate-500 font-medium">Carregando RELATÓRIOS GERENCIAIS...</p>
+          <p className="text-slate-500 font-medium">Carregando RELATÓRIO DIÁRIO...</p>
         </div>
       </div>
     );

@@ -12,8 +12,10 @@ export default function UserManager() {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    customCode: '',
+    nickname: '',
+    idNumeric: 0,
     password: '',
+    ativo: true,
     role: 'user' as 'master' | 'user' | 'manager' | 'admin',
     managedUserIds: [] as string[],
     permissions: {
@@ -52,7 +54,7 @@ export default function UserManager() {
     { id: 'branches', name: 'Filiais' },
     { id: 'settings', name: 'Personalização' },
     { id: 'prd', name: 'Documentação PRD' },
-    { id: 'managementReports', name: 'Relatórios Gerenciais' }
+    { id: 'managementReports', name: 'Relatório Diário' }
   ];
 
   useEffect(() => {
@@ -126,12 +128,15 @@ export default function UserManager() {
     setLoading(true);
 
     try {
+      // Nickname checking or validation can happen here if needed
+
       if (editingId) {
         const payload: any = {
           name: formData.name,
           email: formData.email,
-          customCode: formData.customCode || null,
+          nickname: formData.nickname,
           role: formData.role,
+          ativo: formData.ativo,
           managedUserIds: formData.role === 'manager' ? formData.managedUserIds : [],
           permissions: formData.permissions,
         };
@@ -140,11 +145,13 @@ export default function UserManager() {
         setEditingId(null);
       } else {
         await createUser({
+          idNumeric: 0, // Database SERIAL takes over
           name: formData.name,
           email: formData.email,
-          customCode: formData.customCode || null,
+          nickname: formData.nickname,
           password: formData.password,
           role: formData.role,
+          ativo: formData.ativo,
           managedUserIds: formData.role === 'manager' ? formData.managedUserIds : [],
           permissions: formData.permissions as any,
         });
@@ -155,8 +162,10 @@ export default function UserManager() {
       setFormData({
         name: '',
         email: '',
-        customCode: '',
+        nickname: '',
+        idNumeric: 0,
         password: '',
+        ativo: true,
         role: 'user',
         managedUserIds: [],
         permissions: getDefaultPermissions('user') as any
@@ -179,8 +188,10 @@ export default function UserManager() {
     setFormData({
       name: user.name,
       email: user.email,
-      customCode: user.customCode,
+      nickname: user.nickname,
+      idNumeric: user.idNumeric,
       password: '',
+      ativo: user.ativo,
       role: user.role as any,
       managedUserIds: user.managedUserIds || [],
       permissions: (user.permissions || getDefaultPermissions(user.role)) as any
@@ -192,8 +203,10 @@ export default function UserManager() {
     setFormData({
       name: '',
       email: '',
-      customCode: '',
+      nickname: '',
+      idNumeric: 0,
       password: '',
+      ativo: true,
       role: 'user',
       managedUserIds: [],
       permissions: getDefaultPermissions('user') as any
@@ -253,13 +266,14 @@ export default function UserManager() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-stone-600 mb-1">Código</label>
+              <label className="block text-sm font-medium text-stone-600 mb-1">Usuário (Nickname)</label>
               <input
                 type="text"
-                value={formData.customCode}
-                onChange={(e) => setFormData({ ...formData, customCode: e.target.value })}
+                value={formData.nickname}
+                onChange={(e) => setFormData({ ...formData, nickname: e.target.value })}
                 className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                placeholder="Ex: VEND-001"
+                placeholder="Ex: joao.silva"
+                required
               />
             </div>
             <div>
@@ -285,6 +299,17 @@ export default function UserManager() {
                 <option value="admin">Administrador</option>
                 <option value="master">Master</option>
               </select>
+            </div>
+            <div className="flex items-center pt-6">
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.ativo}
+                  onChange={(e) => setFormData({ ...formData, ativo: e.target.checked })}
+                  className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                />
+                <span className="text-sm font-bold text-stone-700">Conta Ativa</span>
+              </label>
             </div>
           </div>
 
@@ -500,12 +525,22 @@ export default function UserManager() {
             </thead>
             <tbody className="divide-y divide-stone-100">
               {users.map(user => (
-                <tr key={user.id} className="hover:bg-stone-50 transition-colors">
+                <tr key={user.id} className={`hover:bg-stone-50 transition-colors ${!user.ativo ? 'opacity-60 grayscale' : ''}`}>
                   <td className="px-6 py-4">
-                    <p className="font-bold text-stone-800">{user.name}</p>
-                    <p className="text-xs text-stone-500">{user.email}</p>
+                    <div className="flex items-center gap-3">
+                      <div className={`w-2 h-2 rounded-full ${user.ativo ? 'bg-emerald-500' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]'}`} title={user.ativo ? 'Ativa' : 'Desativada'} />
+                      <div>
+                        <p className="font-bold text-stone-800">{user.name}</p>
+                        <p className="text-xs text-stone-500">{user.email}</p>
+                      </div>
+                    </div>
                   </td>
-                  <td className="px-6 py-4 font-mono text-xs text-stone-500">{user.customCode}</td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-2">
+                       <span className="bg-stone-100 px-2 py-1 rounded border border-stone-200 font-mono text-xs text-stone-600" title="ID Interno">#{user.idNumeric}</span>
+                       <span className="bg-emerald-50 px-2 py-1 rounded border border-emerald-100 text-xs text-emerald-700 font-medium" title="Nickname de Login">@{user.nickname}</span>
+                    </div>
+                  </td>
                   <td className="px-6 py-4">
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${user.role === 'master' ? 'bg-purple-100 text-purple-700' :
                       user.role === 'admin' ? 'bg-red-100 text-red-700' :

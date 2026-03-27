@@ -42,10 +42,23 @@ export const markNotificationAsRead = async (notificationId: string, userId: str
   }
 };
 
-export const deleteAllNotifications = async (userId: string): Promise<void> => {
+export const markAllNotificationsAsRead = async (userId: string): Promise<void> => {
   const { error } = await supabase
     .from('notifications')
     .update({ is_read: true })
+    .eq('user_id', userId)
+    .eq('is_read', false);
+
+  if (error) {
+    console.error('Error marking all notifications as read:', error);
+    throw error;
+  }
+};
+
+export const deleteAllNotifications = async (userId: string): Promise<void> => {
+  const { error } = await supabase
+    .from('notifications')
+    .delete()
     .eq('user_id', userId);
 
   if (error) {

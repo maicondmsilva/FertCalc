@@ -10,7 +10,8 @@ interface LoginProps {
 export default function Login({ onLogin }: LoginProps) {
   const [view, setView] = useState<'login' | 'forgot'>('login');
   const [resetMessage, setResetMessage] = useState('');
-  const [email, setEmail] = useState('');
+  const [emailOrNickname, setEmailOrNickname] = useState('');
+  const [resetEmail, setResetEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -21,12 +22,22 @@ export default function Login({ onLogin }: LoginProps) {
     setError('');
 
     try {
-      const user = await getUserByEmail(email);
+      // Tenta buscar por e-mail ou por nickname
+      const user = await getUserByEmail(emailOrNickname);
 
-      if (user && user.password === password) {
-        onLogin(user);
+      if (user) {
+         if (!user.ativo && user.role !== 'master') {
+          setError('Esta conta está desativada. Entre em contato com o administrador.');
+          return;
+        }
+
+        if (user.password === password) {
+          onLogin(user);
+        } else {
+          setError('Senha incorreta. Verifique e tente novamente.');
+        }
       } else {
-        setError('Credenciais inválidas. Verifique seu e-mail e senha.');
+        setError('Usuário não encontrado. Verifique seu e-mail/usuário.');
       }
     } catch (err) {
       setError('Erro ao conectar ao servidor. Tente novamente.');
@@ -42,7 +53,7 @@ export default function Login({ onLogin }: LoginProps) {
     setResetMessage('');
 
     try {
-      const { success, message } = await requestPasswordReset(email);
+      const { success, message } = await requestPasswordReset(resetEmail);
       if (success) {
         setResetMessage(message);
       } else {
@@ -79,15 +90,15 @@ export default function Login({ onLogin }: LoginProps) {
               </div>
             )}
             <div>
-              <label className="block text-sm font-medium text-stone-700 mb-1">E-mail</label>
+              <label className="block text-sm font-medium text-stone-700 mb-1">E-mail ou Usuário (Nickname)</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-stone-400 w-4 h-4" />
                 <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  type="text"
+                  value={emailOrNickname}
+                  onChange={(e) => setEmailOrNickname(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
-                  placeholder="seu@email.com"
+                  placeholder="seu@email.com ou joao.silva"
                   required
                 />
               </div>
@@ -145,8 +156,8 @@ export default function Login({ onLogin }: LoginProps) {
                 <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-stone-400 w-4 h-4" />
                 <input
                   type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
                   placeholder="seu@email.com"
                   required

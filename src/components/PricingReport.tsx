@@ -339,7 +339,7 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
           {(currentUser.role === 'admin' || currentUser.role === 'master' || currentUser.role === 'manager') && (
             <select value={userFilter} onChange={e => setUserFilter(e.target.value)} className="px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
               <option value="">Todos Vendedores</option>
-              {users.map(u => <option key={u.id} value={u.id}>{u.name} ({u.customCode})</option>)}
+              {users.map(u => <option key={u.id} value={u.id}>{u.name} (@{u.nickname})</option>)}
             </select>
           )}
           <div className="flex items-center gap-1">

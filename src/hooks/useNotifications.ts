@@ -3,7 +3,7 @@ import { useNotificationStore } from '../store/notificationStore';
 import { subscribeToNotifications } from '../services/notificationSubscription';
 import { useNotificationPreferences } from './useNotificationPreferences';
 import { useNotificationSound } from './useNotificationSound';
-import { getNotifications, markNotificationAsRead, deleteAllNotifications } from '../services/notificationService';
+import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead, deleteAllNotifications } from '../services/notificationService';
 
 export function useNotifications(userId: string) {
   const store = useNotificationStore();
@@ -74,6 +74,16 @@ export function useNotifications(userId: string) {
     }
   };
 
+  const markAllReadDb = async () => {
+    try {
+      store.markAllAsRead();
+      if (!userId) return;
+      await markAllNotificationsAsRead(userId);
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
+    }
+  };
+
   return {
     notifications: store.notifications,
     unreadCount: store.unreadCount,
@@ -81,6 +91,7 @@ export function useNotifications(userId: string) {
     addNotification: store.addNotification,
     removeToast: store.removeToast,
     markAsRead: markAsReadDb,
+    markAllRead: markAllReadDb,
     clearAll: clearAllDb
   };
 }

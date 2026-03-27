@@ -45,6 +45,8 @@ import { AnimatePresence } from 'framer-motion';
 export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
+  const searchParams = new URLSearchParams(location.search);
+  const isStandalone = searchParams.get('standalone') === 'true';
   const pathParts = location.pathname.split('/').filter(Boolean);
   const activeTab = pathParts[0] || '';
 
@@ -65,7 +67,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   
   // Custom Hook replaces local state and intervals
-  const { notifications, unreadCount, activeToasts, removeToast, markAsRead, clearAll } = useNotifications(currentUser?.id || '');
+  const { notifications, unreadCount, activeToasts, removeToast, markAsRead, markAllRead, clearAll } = useNotifications(currentUser?.id || '');
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [appSettings, setAppSettings] = useState<AppSettings>({
     companyName: 'FertCalc Pro',
@@ -123,11 +125,33 @@ export default function App() {
     // Initialize timer
     resetTimer();
 
+    // Sincronizar logout entre abas
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'current_user' && !e.newValue) {
+        setCurrentUser(null);
+        navigate('/');
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+
+    // Fechar menus ao clicar fora
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('aside') && !target.closest('.notification-trigger')) {
+        setIsMaterialsExpanded(false);
+        setIsReportsExpanded(false);
+        setIsNotificationsOpen(false);
+      }
+    };
+    window.document.addEventListener('mousedown', handleClickOutside);
+
     return () => {
       events.forEach(event => window.removeEventListener(event, resetTimer));
+      window.removeEventListener('storage', handleStorageChange);
+      window.document.removeEventListener('mousedown', handleClickOutside);
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [currentUser]);
+  }, [currentUser, navigate]);
 
   const handleInstallClick = () => {
     if (deferredPrompt) {
@@ -173,6 +197,7 @@ export default function App() {
       const allItems = [
         { id: 'dashboard', label: 'Dashboard', icon: BarChart3, permission: 'dashboard' },
         { id: 'calculator', label: 'Calculadora', icon: CalcIcon, permission: 'calculator' },
+        { id: 'simplified_calculator', label: 'Calculadora Simplificada', icon: CalcIcon, permission: 'calculator' },
         { id: 'saved_formulas', label: 'Batidas Salvas', icon: Beaker, permission: 'calculator' },
         {
           id: 'materials_group',
@@ -240,7 +265,7 @@ export default function App() {
       const allItems = [
         {
           id: 'managementReports_group',
-          label: 'RELATÓRIOS GERENCIAIS',
+          label: 'RELATÓRIO DIÁRIO',
           icon: BarChart3,
           permission: 'managementReports',
           type: 'parent',
@@ -278,7 +303,7 @@ export default function App() {
         className={`bg-white border-r border-stone-200 flex flex-col transition-all duration-300 z-50
           ${isSidebarExpanded ? 'w-64' : 'w-20'} 
           ${isMobileMenuOpen ? 'fixed inset-y-0 left-0' : 'hidden md:flex relative'}
-          ${!activeModule ? 'hidden' : ''}
+          ${!activeModule || isStandalone ? 'hidden' : ''}
         `}
       >
         {/* Logo Area */}
@@ -365,10 +390,14 @@ export default function App() {
                           return (
                             <Link
                               key={child.id}
-                              to={`/${child.id}`}
-                              onClick={() => {
-                                setInitialFormulaContext({ formula: null, branchId: '', priceListId: '' });
-                                setIsMobileMenuOpen(false);
+                              to={`/${child.id}?standalone=true`}
+                              onClick={(e) => {
+                                if (!e.ctrlKey && !e.metaKey) {
+                                  e.preventDefault();
+                                  setInitialFormulaContext({ formula: null, branchId: '', priceListId: '' });
+                                  setIsMobileMenuOpen(false);
+                                  navigate(`/${child.id}`);
+                                }
                               }}
                               className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-colors ${isChildActive ? 'bg-emerald-50 text-emerald-700 font-medium' : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900'}`}
                               title={!isSidebarExpanded ? child.label : undefined}
@@ -389,12 +418,16 @@ export default function App() {
               return (
                 <Link
                   key={item.id}
-                  to={`/${item.id}`}
-                  onClick={() => {
-                    if (item.id !== 'calculator') {
-                      setInitialFormulaContext({ formula: null, branchId: '', priceListId: '' });
+                  to={`/${item.id}?standalone=true`}
+                  onClick={(e) => {
+                    if (!e.ctrlKey && !e.metaKey) {
+                      e.preventDefault();
+                      if (item.id !== 'calculator') {
+                        setInitialFormulaContext({ formula: null, branchId: '', priceListId: '' });
+                      }
+                      setIsMobileMenuOpen(false);
+                      navigate(`/${item.id}`);
                     }
-                    setIsMobileMenuOpen(false);
                   }}
                   className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-colors ${isActive
                     ? 'bg-emerald-50 text-emerald-700 font-medium'
@@ -418,7 +451,7 @@ export default function App() {
             {isSidebarExpanded && (
               <div className="overflow-hidden">
                 <p className="text-sm font-bold text-stone-800 truncate">{currentUser.name}</p>
-                <p className="text-xs text-stone-500 truncate">{currentUser.customCode}</p>
+                <p className="text-xs text-stone-500 truncate">@{currentUser.nickname}</p>
               </div>
             )}
             <button
@@ -435,7 +468,8 @@ export default function App() {
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="h-16 bg-white border-b border-stone-200 flex items-center justify-between px-4 sm:px-6">
+        {!isStandalone && (
+          <header className="h-16 bg-white border-b border-stone-200 flex items-center justify-between px-4 sm:px-6">
           <div className="flex items-center">
             {/* Mobile Menu Toggle */}
             <button
@@ -465,10 +499,16 @@ export default function App() {
               </button>
             )}
             
-              <div className="relative">
+              <div className="relative notification-trigger">
                 <NotificationBell 
                   unreadCount={unreadCount} 
-                  onBellClick={() => setIsNotificationsOpen(!isNotificationsOpen)} 
+                  onBellClick={() => {
+                    const nextState = !isNotificationsOpen;
+                    setIsNotificationsOpen(nextState);
+                    if (nextState) {
+                      markAllRead();
+                    }
+                  }} 
                 />
 
                 <NotificationPanel 
@@ -484,6 +524,7 @@ export default function App() {
             
           </div>
         </header>
+        )}
 
         {/* Main Content Scrollable Area */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">

@@ -96,7 +96,7 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
     doc.text('Relatório Consolidado de Precificações', 10, 35);
     doc.setFontSize(10);
     doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')} `, 10, 40);
-    doc.text(`Usuário: ${currentUser.name} (${currentUser.customCode})`, 10, 45);
+    doc.text(`Usuário: ${currentUser.name} (${currentUser.nickname})`, 10, 45);
     doc.line(10, 48, pageWidth - 10, 48);
 
     const tableBody = filteredPricings.map(p => [

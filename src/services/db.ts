@@ -86,12 +86,13 @@ export async function getManagersOfUser(userId: string): Promise<User[]> {
   return data.map(mapUser);
 }
 
-export async function getUserByEmail(email: string): Promise<User | null> {
+export async function getUserByEmail(emailOrNickname: string): Promise<User | null> {
   const { data, error } = await supabase
     .from('app_users')
     .select('*')
-    .eq('email', email)
-    .single();
+    .or(`email.eq."${emailOrNickname}",nickname.eq."${emailOrNickname}"`)
+    .maybeSingle();
+    
   if (error || !data) return null;
   return mapUser(data);
 }
@@ -102,9 +103,10 @@ export async function createUser(user: Omit<User, 'id'> & { password: string }):
     .insert({
       email: user.email,
       name: user.name,
-      custom_code: user.customCode,
+      nickname: user.nickname,
       password: user.password,
       role: user.role,
+      ativo: user.ativo ?? true,
       managed_user_ids: user.managedUserIds || [],
       permissions: user.permissions || {},
     })
@@ -118,9 +120,10 @@ export async function updateUser(id: string, user: Partial<User> & { password?: 
   const payload: any = { updated_at: new Date().toISOString() };
   if (user.email !== undefined) payload.email = user.email;
   if (user.name !== undefined) payload.name = user.name;
-  if (user.customCode !== undefined) payload.custom_code = user.customCode;
+  if (user.nickname !== undefined) payload.nickname = user.nickname;
   if (user.password !== undefined && user.password !== '') payload.password = user.password;
   if (user.role !== undefined) payload.role = user.role;
+  if (user.ativo !== undefined) payload.ativo = user.ativo;
   if (user.managedUserIds !== undefined) payload.managed_user_ids = user.managedUserIds;
   if (user.permissions !== undefined) payload.permissions = user.permissions;
   const { error } = await supabase.from('app_users').update(payload).eq('id', id);
@@ -135,10 +138,12 @@ export async function deleteUser(id: string): Promise<void> {
 function mapUser(data: any): User {
   return {
     id: data.id,
+    idNumeric: data.id_numeric,
     email: data.email,
     name: data.name,
-    customCode: data.custom_code,
+    nickname: data.nickname || data.custom_code || '',
     password: data.password,
+    ativo: !!data.ativo,
     role: data.role,
     managedUserIds: data.managed_user_ids || [],
     permissions: data.permissions || {},
@@ -869,7 +874,7 @@ export async function acceptPricingTransfer(id: string, user: User): Promise<voi
     .update({
       user_id: user.id,
       user_name: user.name,
-      user_code: user.customCode,
+      user_code: user.nickname,
       transfer_to_user_id: null,
       transfer_to_user_name: null,
       history: newHistory,

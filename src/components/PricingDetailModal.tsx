@@ -403,7 +403,7 @@ export default function PricingDetailModal({
                 >
                   <option value="">Selecione um vendedor...</option>
                   {availableSellers.map(s => (
-                    <option key={s.id} value={s.id}>{s.name} ({s.customCode})</option>
+                    <option key={s.id} value={s.id}>{s.name} (@{s.nickname})</option>
                   ))}
                 </select>
               </div>

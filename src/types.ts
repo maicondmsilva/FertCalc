@@ -80,10 +80,12 @@ export interface CompatibilityCategory {
 
 export interface User {
   id: string;
+  idNumeric: number;
   email: string;
   name: string;
-  customCode: string;
+  nickname: string;
   password?: string;
+  ativo: boolean;
   role: 'admin' | 'user' | 'manager' | 'master';
   managedUserIds?: string[];
   permissions?: {
