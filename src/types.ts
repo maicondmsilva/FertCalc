@@ -144,6 +144,7 @@ export interface User {
 
 export interface Unidade {
   id: string;
+  id_numeric?: number;
   nome: string;
   ordem_exibicao: number;
   ativo: boolean;
@@ -259,7 +260,9 @@ export interface PriceList {
 
 export interface Branch {
   id: string;
+  id_numeric?: number;
   name: string;
+  ativo?: boolean;
 }
 
 export interface Brand {

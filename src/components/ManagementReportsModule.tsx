@@ -1640,17 +1640,19 @@ const Cadastros = ({
 
         {activeTab === 'unidades' && (
           <MotionDiv key="unidades" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
-            <div className="flex justify-end">
-              <Button onClick={() => handleOpenModal('unidade')} className="gap-2">
-                <Plus className="w-4 h-4" /> Nova Unidade
-              </Button>
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
+              <HelpCircle className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-blue-800">Filiais gerenciadas em Configurações</p>
+                <p className="text-xs text-blue-600 mt-0.5">O cadastro de filiais é feito em <strong>Configurações → Filiais</strong>. Aqui você pode ativar/desativar filiais para este módulo de relatórios.</p>
+              </div>
             </div>
             <Card>
               <table className="w-full text-sm text-left">
                 <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
-                    <th className="px-4 py-3 font-semibold text-slate-700">Nome</th>
-                    <th className="px-4 py-3 font-semibold text-slate-700">Ordem</th>
+                    <th className="px-4 py-3 font-semibold text-slate-700 w-16">ID</th>
+                    <th className="px-4 py-3 font-semibold text-slate-700">Nome da Filial</th>
                     <th className="px-4 py-3 font-semibold text-slate-700">Status</th>
                     <th className="px-4 py-3 font-semibold text-slate-700 text-right">Ações</th>
                   </tr>
@@ -1658,26 +1660,27 @@ const Cadastros = ({
                 <tbody className="divide-y divide-slate-100">
                   {unidades.map(u => (
                     <tr key={u.id} className="hover:bg-slate-50">
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-100 text-emerald-700 font-bold text-sm">
+                          {u.id_numeric ?? u.ordem_exibicao}
+                        </span>
+                      </td>
                       <td className="px-4 py-3 font-medium text-slate-900">{u.nome}</td>
-                      <td className="px-4 py-3 text-slate-600">{u.ordem_exibicao}</td>
                       <td className="px-4 py-3">
                         <span className={cn('px-2 py-1 rounded-full text-[10px] font-bold uppercase', u.ativo ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600')}>
-                          {u.ativo ? 'Ativo' : 'Inativo'}
+                          {u.ativo ? 'Ativa' : 'Inativa'}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right flex justify-end gap-2">
-                        <Button variant="ghost" size="icon" onClick={() => handleOpenModal('unidade', u)}>
-                          <Edit2 className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => onSaveUnidade({ ...u, ativo: !u.ativo })} title={u.ativo ? 'Desativar' : 'Ativar'}>
+                        <Button variant="ghost" size="icon" onClick={() => onSaveUnidade({ ...u, ativo: !u.ativo })} title={u.ativo ? 'Desativar para Relatórios' : 'Ativar para Relatórios'}>
                           <ArrowRightLeft className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => onDeleteUnidade(u.id)} className="text-red-500 hover:text-red-700 hover:bg-red-50">
-                          <Trash2 className="w-4 h-4" />
                         </Button>
                       </td>
                     </tr>
                   ))}
+                  {unidades.length === 0 && (
+                    <tr><td colSpan={4} className="px-4 py-8 text-center text-slate-400 italic">Nenhuma filial encontrada. Cadastre filiais em Configurações → Filiais.</td></tr>
+                  )}
                 </tbody>
               </table>
             </Card>

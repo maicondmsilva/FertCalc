@@ -154,23 +154,26 @@ function mapUser(data: any): User {
 // BRANCHES
 // ============================================================
 export async function getBranches(): Promise<Branch[]> {
-  const { data, error } = await supabase.from('branches').select('*').order('name');
+  const { data, error } = await supabase.from('branches').select('*').order('id_numeric');
   if (error || !data) return [];
-  return data.map(d => ({ id: d.id, name: d.name }));
+  return data.map(d => ({ id: d.id, id_numeric: d.id_numeric, name: d.name, ativo: d.ativo ?? true }));
 }
 
 export async function createBranch(branch: Omit<Branch, 'id'>): Promise<Branch> {
   const { data, error } = await supabase
     .from('branches')
-    .insert({ name: branch.name })
+    .insert({ name: branch.name, ativo: branch.ativo ?? true })
     .select()
     .single();
   if (error) throw error;
-  return { id: data.id, name: data.name };
+  return { id: data.id, id_numeric: data.id_numeric, name: data.name, ativo: data.ativo };
 }
 
 export async function updateBranch(id: string, branch: Partial<Branch>): Promise<void> {
-  const { error } = await supabase.from('branches').update({ name: branch.name }).eq('id', id);
+  const payload: any = {};
+  if (branch.name !== undefined) payload.name = branch.name;
+  if (branch.ativo !== undefined) payload.ativo = branch.ativo;
+  const { error } = await supabase.from('branches').update(payload).eq('id', id);
   if (error) throw error;
 }
 
@@ -1183,31 +1186,32 @@ export async function deleteCompatibilityCategory(id: string): Promise<void> {
 }
 
 // ============================================================
-// MANAGEMENT REPORTS - UNIDADES
+// MANAGEMENT REPORTS - UNIDADES (usa tabela branches como fonte única)
 // ============================================================
 export async function getMgmtUnidades(): Promise<Unidade[]> {
   const { data, error } = await supabase
-    .from('unidades')
+    .from('branches')
     .select('*')
-    .order('ordem_exibicao');
+    .order('id_numeric');
   if (error || !data) return [];
-  return data.map((d: any) => ({
-    id: d.id,
-    nome: d.nome,
-    ativo: d.ativo ?? true,
-    ordem_exibicao: d.ordem_exibicao ?? 0
+  return data.map((b: any) => ({
+    id: b.id,
+    id_numeric: b.id_numeric,
+    nome: b.name,
+    ativo: b.ativo ?? true,
+    ordem_exibicao: b.id_numeric ?? 0
   }));
 }
 
 export async function upsertMgmtUnidade(u: Unidade): Promise<void> {
   const { error } = await supabase
-    .from('unidades')
-    .upsert({ id: u.id, nome: u.nome, ativo: u.ativo, ordem_exibicao: u.ordem_exibicao }, { onConflict: 'id' });
+    .from('branches')
+    .upsert({ id: u.id, name: u.nome, ativo: u.ativo }, { onConflict: 'id' });
   if (error) throw error;
 }
 
 export async function deleteMgmtUnidade(id: string): Promise<void> {
-  const { error } = await supabase.from('unidades').delete().eq('id', id);
+  const { error } = await supabase.from('branches').delete().eq('id', id);
   if (error) throw error;
 }
 
