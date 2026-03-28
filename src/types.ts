@@ -194,6 +194,7 @@ export interface ConfiguracaoIndicador {
   indicador_id: string;
   nome_personalizado: string;
   visivel: boolean;
+  cor_fundo?: string;
 }
 
 export interface DiasUteisMes {

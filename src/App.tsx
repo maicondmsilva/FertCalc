@@ -422,7 +422,7 @@ export default function App() {
                   onClick={(e) => {
                     if (!e.ctrlKey && !e.metaKey) {
                       e.preventDefault();
-                      if (item.id !== 'calculator') {
+                      if (item.id !== 'calculator' && item.id !== 'simplified_calculator') {
                         setInitialFormulaContext({ formula: null, branchId: '', priceListId: '' });
                       }
                       setIsMobileMenuOpen(false);
@@ -545,9 +545,10 @@ export default function App() {
               />
             )}
             {activeModule === 'pricing' && activeTab === 'dashboard' && <Dashboard currentUser={currentUser} />}
-            {activeModule === 'pricing' && activeTab === 'calculator' && (
+            {(activeTab === 'calculator' || activeTab === 'simplified_calculator') && (
               <Calculator
                 currentUser={currentUser}
+                isSimplified={activeTab === 'simplified_calculator'}
                 initialData={editingPricing}
                 initialFormulaToLoad={initialFormulaContext.formula}
                 initialBranchId={initialFormulaContext.branchId}

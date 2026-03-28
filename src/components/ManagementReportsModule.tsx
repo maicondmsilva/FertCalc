@@ -1319,6 +1319,7 @@ const Cadastros = ({
   const [selectedUnidade, setSelectedUnidade] = useState('');
   const [localNomes, setLocalNomes] = useState<Record<string, string>>({});
   const [localVisiveis, setLocalVisiveis] = useState<Record<string, boolean>>({});
+  const [localCores, setLocalCores] = useState<Record<string, string>>({});
   const [savingConfigs, setSavingConfigs] = useState<Record<string, boolean>>({});
   const [deletingConfigs, setDeletingConfigs] = useState<Record<string, boolean>>({});
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -1330,13 +1331,16 @@ const Cadastros = ({
     if (!selectedUnidade) return;
     const nomesInit: Record<string, string> = {};
     const visiveisInit: Record<string, boolean> = {};
+    const coresInit: Record<string, string> = {};
     indicadores.forEach(i => {
       const config = configs.find(c => c.unidade_id === selectedUnidade && c.indicador_id === i.id);
       nomesInit[i.id] = config?.nome_personalizado || '';
       visiveisInit[i.id] = config?.visivel ?? true;
+      coresInit[i.id] = config?.cor_fundo || '#ffffff';
     });
     setLocalNomes(nomesInit);
     setLocalVisiveis(visiveisInit);
+    setLocalCores(coresInit);
   }, [selectedUnidade, configs, indicadores]);
 
   const { visualIdMap } = useMemo(

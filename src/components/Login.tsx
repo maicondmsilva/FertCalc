@@ -76,8 +76,7 @@ export default function Login({ onLogin }: LoginProps) {
           <h1 className="text-3xl font-black text-stone-800 tracking-tight">
             FertCalc <span className="text-emerald-600">Pro</span>
           </h1>
-          <p className="text-stone-500 font-medium text-sm mt-1">fertcalc.vercel.app</p>
-          <p className="text-stone-500 text-sm">
+          <p className="text-stone-500 text-sm mt-2">
             {view === 'login' ? 'Entre com suas credenciais' : 'Recupere sua senha'}
           </p>
         </div>
@@ -104,8 +103,19 @@ export default function Login({ onLogin }: LoginProps) {
               </div>
             </div>
             <div>
-              <div className="flex justify-between items-center mb-1">
-                <label className="block text-sm font-medium text-stone-700">Senha</label>
+              <label className="block text-sm font-medium text-stone-700 mb-1">Senha</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-stone-400 w-4 h-4" />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                  placeholder="••••••••"
+                  required
+                />
+              </div>
+              <div className="flex justify-end mt-2">
                 <button
                   type="button"
                   onClick={() => {
@@ -117,17 +127,6 @@ export default function Login({ onLogin }: LoginProps) {
                 >
                   Esqueceu a senha?
                 </button>
-              </div>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-stone-400 w-4 h-4" />
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
-                  placeholder="••••••••"
-                  required
-                />
               </div>
             </div>
             <button

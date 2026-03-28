@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+﻿import React, { useState, useMemo, useEffect } from 'react';
 import solver from 'javascript-lp-solver';
 import { Plus, Trash2, Save, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle2, Calculator as CalculatorIcon, Building2, Database, Search, User, UserCheck, Tag, LayoutDashboard, Settings, X, Beaker } from 'lucide-react';
 import { RawMaterial, PricingFactors, PricingRecord, PricingSummary, Branch, PriceList, Client, Agent, User as AppUser, PricingHistoryEntry, TargetFormula, IncompatibilityRule, SavedFormula } from '../types';
@@ -14,7 +14,7 @@ const defaultMacros: RawMaterial[] = [
   { id: 'm1', type: 'macro', name: 'Ureia', price: 2500, n: 45, p: 0, k: 0, s: 0, ca: 0, microGuarantees: [], minQty: 50, maxQty: 1000, selected: true, quantity: 0 },
   { id: 'm2', type: 'macro', name: 'MAP', price: 3200, n: 11, p: 52, k: 0, s: 0, ca: 0, microGuarantees: [], minQty: 50, maxQty: 1000, selected: true, quantity: 0 },
   { id: 'm3', type: 'macro', name: 'KCL', price: 2800, n: 0, p: 0, k: 60, s: 0, ca: 0, microGuarantees: [], minQty: 50, maxQty: 1000, selected: true, quantity: 0 },
-  { id: 'm4', type: 'macro', name: 'Enchimento (Areia/Calc�rio)', price: 100, n: 0, p: 0, k: 0, s: 0, ca: 0, microGuarantees: [], minQty: 0, maxQty: 1000, selected: true, quantity: 0 },
+  { id: 'm4', type: 'macro', name: 'Enchimento (Areia/Calcário)', price: 100, n: 0, p: 0, k: 0, s: 0, ca: 0, microGuarantees: [], minQty: 0, maxQty: 1000, selected: true, quantity: 0 },
 ];
 
 const defaultMicros: RawMaterial[] = [
@@ -31,6 +31,15 @@ interface CalculatorProps {
   onSaveSuccess?: (record: PricingRecord) => void;
   currentUser: AppUser;
   isSimplified?: boolean;
+}
+interface Dummy {
+  initialData?: PricingRecord | null;
+  initialFormulaToLoad?: SavedFormula | null;
+  initialBranchId?: string;
+  initialPriceListId?: string;
+  onClearEditing?: () => void;
+  onSaveSuccess?: (record: PricingRecord) => void;
+  currentUser: AppUser;
 }
 
 const getAutoWidth = (val: any) => {
@@ -172,13 +181,13 @@ export default function Calculator({
     if (factors.priceListId) {
       const selectedList = priceLists.find(l => l.id === factors.priceListId);
       if (selectedList) {
-        // Macros da Linha Diferenciada chegam desmarcadas por padr�o
+        // Macros da Linha Diferenciada chegam desmarcadas por padrão
         const newMacros = selectedList.macros.map(m => ({
           ...m,
           selected: m.isPremiumLine ? false : (m.selected ?? true),
           minQty: m.minQuantity !== undefined ? m.minQuantity : (m.type === 'macro' && !m.name.toLowerCase().includes('enchimento') ? 50 : (m.minQty || 0))
         }));
-        // Micros chegam sempre desmarcados � usu�rio escolhe quais usar
+        // Micros chegam sempre desmarcados — usuário escolhe quais usar
         const newMicros = selectedList.micros.map(m => ({ 
           ...m, 
           selected: false, 
@@ -191,7 +200,7 @@ export default function Calculator({
 
         setCalculations(prevCalculations => 
           prevCalculations.map(calc => {
-            if (!calc.selected) return calc; // Apenas nas selecionadas atualiza os pre�os e disponibilidades
+            if (!calc.selected) return calc; // Apenas nas selecionadas atualiza os preços e disponibilidades
             
             const updatedCalcMacros = newMacros.map(newP => {
               const savedP = calc.macros.find(s => s.id === newP.id);
@@ -224,7 +233,7 @@ export default function Calculator({
     const nextMacros = macros.map(m => m.id === id ? { ...m, [field]: value } : m);
     setMacros(nextMacros);
     
-    // Sincronizar sele��o manual com as f�rmulas em andamento para refletir as altera��es na calculadora
+    // Sincronizar seleção manual com as fórmulas em andamento para refletir as alterações na calculadora
     setCalculations(calculations.map(calc => {
       // Create new macros array for this calculation, with the updated field for the specific ID
       const updatedCalcMacros = (calc.macros.length > 0 ? calc.macros : macros).map(m => 
@@ -241,7 +250,7 @@ export default function Calculator({
     const nextMicros = micros.map(m => m.id === id ? { ...m, [field]: value } : m);
     setMicros(nextMicros);
     
-    // Sincronizar sele��o manual com as f�rmulas em andamento para refletir as altera��es na calculadora
+    // Sincronizar seleção manual com as fórmulas em andamento para refletir as alterações na calculadora
     setCalculations(calculations.map(calc => {
       // Create new micros array for this calculation, with the updated field for the specific ID
       const updatedCalcMicros = (calc.micros.length > 0 ? calc.micros : micros).map(m => 
@@ -280,14 +289,14 @@ export default function Calculator({
       : calculations.filter(c => c.selected);
 
     if (formulasToCalculate.length === 0 && !targetFormulaId) {
-      alert("Selecione ao menos uma f�rmula para calcular.");
+      alert("Selecione ao menos uma fórmula para calcular.");
       return;
     }
 
     const updatedCalculations = [...calculations];
 
     formulasToCalculate.forEach(calc => {
-      // Usar macros/micros espec�ficos da f�rmula se dispon�veis (para respeitar sele��es por categoria)
+      // Usar macros/micros específicos da fórmula se disponíveis (para respeitar seleções por categoria)
       const currentMacros = (calc.macros && calc.macros.length > 0) ? calc.macros : macros;
       const currentMicros = microsInGear ? (calc.micros.length > 0 ? calc.micros : micros) : micros;
 
@@ -338,7 +347,7 @@ export default function Calculator({
           [maxLiner]: 1
         };
 
-        // Vari�vel bin�ria normal para controlar se o produto entra ou n�o (respeitando minQty)
+        // Variável binária normal para controlar se o produto entra ou não (respeitando minQty)
         model.variables[useVar] = {
           cost: 0.01,
           [minLiner]: -(Number(m.minQty) || 0),
@@ -349,14 +358,14 @@ export default function Calculator({
         model.constraints[minLiner] = { min: 0 };
         model.constraints[maxLiner] = { max: 0 };
 
-        // For�ar a entrada na f�rmula quando o usu�rio definir Fixo (m�nimo igual ao m�ximo e > 0)
+        // Forçar a entrada na fórmula quando o usuário definir Fixo (mínimo igual ao máximo e > 0)
         if (Number(m.minQty) === Number(m.maxQty) && Number(m.minQty) > 0) {
           model.constraints[`force_${m.id}`] = { equal: Number(m.minQty) };
           model.variables[m.id][`force_${m.id}`] = 1;
         }
       });
 
-      // Constraints de incompatibilidade (usando as vari�veis bin�rias j� definidas)
+      // Constraints de incompatibilidade (usando as variáveis binárias já definidas)
       incompatibilityRules.forEach((rule, idx) => {
         const matA = availableMaterials.find(m => m.id === rule.materialAId);
         const matB = availableMaterials.find(m => m.id === rule.materialBId);
@@ -391,7 +400,7 @@ export default function Calculator({
           };
         }
       } else {
-        showError(`A formula��o ${calc.formula} n�o fecha com os produtos selecionados. Verifique as restri��es ou adicione enchimento.`);
+        showError(`A formulação ${calc.formula} não fecha com os produtos selecionados. Verifique as restrições ou adicione enchimento.`);
         // Even if not feasible, we keep the previous state but update summary to show what we have
         const calcIndex = updatedCalculations.findIndex(c => c.id === calc.id);
         if (calcIndex !== -1) {
@@ -520,7 +529,7 @@ export default function Calculator({
       if (c.id === id) {
         let updatedFormula = { ...c, [field]: value };
         
-        // Se a mudan�a for na categoria, vamos auto-selecionar os produtos
+        // Se a mudança for na categoria, vamos auto-selecionar os produtos
         if (field === 'category') {
             const isAll = value === 'all';
             
@@ -544,7 +553,7 @@ export default function Calculator({
             updatedFormula.macros = newMacros;
             updatedFormula.micros = newMicros;
 
-            // Sincroniza com os estados globais para o usu�rio ver o feedback visual nas tabelas principais
+            // Sincroniza com os estados globais para o usuário ver o feedback visual nas tabelas principais
             setMacros(newMacros);
             setMicros(newMicros);
         }
@@ -642,11 +651,11 @@ export default function Calculator({
 
   const savePricing = async () => {
     if (isLocked) {
-      showError('Esta precifica��o est� finalizada e n�o pode ser alterada.');
+      showError('Esta precificação está finalizada e não pode ser alterada.');
       return;
     }
     if (!factors?.client?.id) {
-      showError('N�o � poss�vel salvar precifica��o sem cliente.');
+      showError('Não é possível salvar precificação sem cliente.');
       return;
     }
 
@@ -694,7 +703,7 @@ export default function Calculator({
         await updatePricingRecord(initialData.id, record);
         savedRecord = { ...record, id: initialData.id };
 
-        // ? Notificar Edi��o
+        // ? Notificar Edição
         await notifyPricingEdited(savedRecord, currentUser);
 
         if (wasApproved || wasRejected) {
@@ -707,10 +716,10 @@ export default function Calculator({
           for (const targetId of notifyIds) {
             await createNotification({
               userId: targetId,
-              title: wasApproved ? 'Precifica��o Aprovada Alterada' : 'Reenvio de Precifica��o Reprovada',
+              title: wasApproved ? 'Precificação Aprovada Alterada' : 'Reenvio de Precificação Reprovada',
               message: wasApproved 
-                ? `${currentUser.name} alterou a precifica��o aprovada para ${factors.client.name}. Revis�o necess�ria para nova aprova��o.`
-                : `${currentUser.name} corrigiu e reenviou a precifica��o de ${factors.client.name} que havia sido reprovada.`,
+                ? `${currentUser.name} alterou a precificação aprovada para ${factors.client.name}. Revisão necessária para nova aprovação.`
+                : `${currentUser.name} corrigiu e reenviou a precificação de ${factors.client.name} que havia sido reprovada.`,
               date: new Date().toISOString(),
               read: false,
               type: 'pricing_approval',
@@ -721,7 +730,7 @@ export default function Calculator({
       } else {
         savedRecord = await createPricingRecord(record);
         
-        // ? Notificar Cria��o
+        // ? Notificar Criação
         await notifyPricingCreated(savedRecord, currentUser);
 
         const managersList = await getManagersOfUser(currentUser.id);
@@ -733,8 +742,8 @@ export default function Calculator({
         for (const targetId of notifyIds) {
           await createNotification({
             userId: targetId,
-            title: 'Nova Precifica��o Pendente',
-            message: `${currentUser.name} gerou uma nova precifica��o para ${factors.client.name} que requer aprova��o.`,
+            title: 'Nova Precificação Pendente',
+            message: `${currentUser.name} gerou uma nova precificação para ${factors.client.name} que requer aprovação.`,
             date: new Date().toISOString(),
             read: false,
             type: 'pricing_approval',
@@ -742,13 +751,13 @@ export default function Calculator({
           });
         }
       }
-      showSuccess(`Precifica��o ${(wasApproved || wasRejected) ? 'atualizada' : 'salva'} com sucesso!${(wasApproved || wasRejected) ? ' Notifica��o enviada aos gerentes.' : ''}`);
+      showSuccess(`Precificação ${(wasApproved || wasRejected) ? 'atualizada' : 'salva'} com sucesso!${(wasApproved || wasRejected) ? ' Notificação enviada aos gerentes.' : ''}`);
       setClientSearch('');
       setAgentSearch('');
       if (onClearEditing) onClearEditing();
       if (onSaveSuccess) onSaveSuccess(savedRecord);
     } catch (error) {
-      showError('Erro ao salvar precifica��o.');
+      showError('Erro ao salvar precificação.');
       console.error(error);
     }
   };
@@ -756,7 +765,7 @@ export default function Calculator({
   const saveToFormulasList = async () => {
     const selectedCalc = calculations.find(c => c.selected);
     if (!selectedCalc) {
-      showError('Calcule e selecione uma f�rmula para salvar a batida.');
+      showError('Calcule e selecione uma fórmula para salvar a batida.');
       return;
     }
 
@@ -777,7 +786,7 @@ export default function Calculator({
 
     const defaultName = getDetailedFormulaName(selectedCalc.formula, selectedCalc.macros, selectedCalc.micros, selectedCalc.summary?.resultingMicros);
 
-    const name = prompt('D� um nome para esta Batida Salva:', defaultName);
+    const name = prompt('Dê um nome para esta Batida Salva:', defaultName);
     if (!name?.trim()) return;
 
     try {
@@ -811,7 +820,7 @@ export default function Calculator({
       });
 
       if (duplicate) {
-        if (confirm(`J� existe uma batida salva ("${duplicate.name}") com a mesma composi��o. Deseja atualizar a batida existente com o novo nome e data?`)) {
+        if (confirm(`Já existe uma batida salva ("${duplicate.name}") com a mesma composição. Deseja atualizar a batida existente com o novo nome e data?`)) {
           await updateSavedFormula(duplicate.id, {
             name: name.trim(),
             date: new Date().toISOString(),
@@ -826,7 +835,7 @@ export default function Calculator({
 
       // Check for name duplicate separately as it's a constraint in the current prompt logic too
       if (existing.some(f => f.userId === currentUser.id && f.name.trim().toLowerCase() === name.trim().toLowerCase())) {
-        showError('Voc� j� possui uma f�rmula salva com esse nome. Escolha outro nome.');
+        showError('Você já possui uma fórmula salva com esse nome. Escolha outro nome.');
         return;
       }
 
@@ -839,7 +848,7 @@ export default function Calculator({
         macros: selectedCalc.macros || macros,
         micros: selectedCalc.micros || micros
       });
-      showSuccess('Batida salva com sucesso nas suas F�rmulas!');
+      showSuccess('Batida salva com sucesso nas suas Fórmulas!');
     } catch (error: any) {
       console.error('[saveToFormulasList] Erro completo:', error);
       const msg = error?.message || error?.error_description || JSON.stringify(error) || 'Tente novamente.';
@@ -853,11 +862,11 @@ export default function Calculator({
         {/* Header Info */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold text-stone-800">Informa��es Gerais</h2>
+            <h2 className="text-lg font-semibold text-stone-800">Informações Gerais</h2>
             <div className="flex items-center gap-4">
               {isLocked && (
                 <span className="text-xs font-bold text-red-500 bg-red-50 px-2 py-1 rounded border border-red-100 uppercase">
-                  Bloqueada para Edi��o
+                  Bloqueada para Edição
                 </span>
               )}
               {initialData && (
@@ -869,9 +878,7 @@ export default function Calculator({
                   }}
                   className="text-xs bg-stone-100 text-stone-600 px-3 py-1 rounded-lg hover:bg-stone-200 font-bold"
                 >
-                  Nova Cota��o
-                </button>
-              )}
+                  Nova Cotação
             </div>
           </div>
 
@@ -881,7 +888,7 @@ export default function Calculator({
               <div className="md:col-span-2 bg-stone-50 p-4 rounded-lg border border-stone-200 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Tag className="w-4 h-4 text-stone-400" />
-                  <span className="text-sm font-bold text-stone-600 uppercase">Status da Precifica��o</span>
+                  <span className="text-sm font-bold text-stone-600 uppercase">Status da Precificação</span>
                 </div>
                 <select
                   value={status}
@@ -900,9 +907,9 @@ export default function Calculator({
 
               {/* Client Selection */}
               <div className="space-y-4">
-                <h3 className="text-sm font-bold text-stone-500 uppercase tracking-wider">Sele��o do Cliente</h3>
+                <h3 className="text-sm font-bold text-stone-500 uppercase tracking-wider">Seleção do Cliente</h3>
                 <div className="relative">
-                  <label className="block text-xs font-medium text-stone-600 mb-1">Buscar Cliente (Nome ou C�digo)</label>
+                  <label className="block text-xs font-medium text-stone-600 mb-1">Buscar Cliente (Nome ou Código)</label>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-stone-400 w-4 h-4" />
                     <input
@@ -915,7 +922,7 @@ export default function Calculator({
                       }}
                       onFocus={() => setShowClientResults(true)}
                       className={`w-full pl-10 pr-4 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none ${isLocked ? 'bg-stone-50 cursor-not-allowed' : ''}`}
-                      placeholder="Digite nome ou c�digo..."
+                      placeholder="Digite nome ou código..."
                     />
                   </div>
                   {showClientResults && clientSearch && (
@@ -943,7 +950,7 @@ export default function Calculator({
                     <div className="mt-2 p-3 bg-emerald-50 rounded-lg border border-emerald-100 flex justify-between items-center">
                       <div>
                         <p className="text-sm font-bold text-emerald-800">{factors.client.name}</p>
-                        <p className="text-[10px] text-emerald-600">C�d: {factors.client.code} | Doc: {factors.client.document}</p>
+                        <p className="text-[10px] text-emerald-600">Cód: {factors.client.code} | Doc: {factors.client.document}</p>
                       </div>
                       <button
                         disabled={isLocked}
@@ -962,9 +969,9 @@ export default function Calculator({
 
               {/* Agent Selection */}
               <div className="space-y-4">
-                <h3 className="text-sm font-bold text-stone-500 uppercase tracking-wider">Sele��o do Agente</h3>
+                <h3 className="text-sm font-bold text-stone-500 uppercase tracking-wider">Seleção do Agente</h3>
                 <div className="relative">
-                  <label className="block text-xs font-medium text-stone-600 mb-1">Buscar Agente (Nome ou C�digo)</label>
+                  <label className="block text-xs font-medium text-stone-600 mb-1">Buscar Agente (Nome ou Código)</label>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-stone-400 w-4 h-4" />
                     <input
@@ -977,7 +984,7 @@ export default function Calculator({
                       }}
                       onFocus={() => setShowAgentResults(true)}
                       className={`w-full pl-10 pr-4 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none ${isLocked ? 'bg-stone-50 cursor-not-allowed' : ''}`}
-                      placeholder="Digite nome ou c�digo..."
+                      placeholder="Digite nome ou código..."
                     />
                   </div>
                   {showAgentResults && agentSearch && (
@@ -1005,7 +1012,7 @@ export default function Calculator({
                     <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-100 flex justify-between items-center">
                       <div>
                         <p className="text-sm font-bold text-blue-800">{factors.agent.name}</p>
-                        <p className="text-[10px] text-blue-600">C�d: {factors.agent.code} | Doc: {factors.agent.document}</p>
+                        <p className="text-[10px] text-blue-600">Cód: {factors.agent.code} | Doc: {factors.agent.document}</p>
                       </div>
                       <button
                         disabled={isLocked}
@@ -1022,7 +1029,7 @@ export default function Calculator({
                 </div>
               </div>
             </div>
-          )}
+          )}`n              </div>`n            </div>`n          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 pt-6 border-t border-stone-100">
             <div>
@@ -1047,7 +1054,7 @@ export default function Calculator({
             </div>
             <div>
               <label className="block text-sm font-medium text-stone-600 mb-1 flex items-center">
-                <Database className="w-4 h-4 mr-1" /> Lista de Pre�o
+                <Database className="w-4 h-4 mr-1" /> Lista de Preço
               </label>
               <select
                 value={factors.priceListId}
@@ -1063,9 +1070,15 @@ export default function Calculator({
             </div>
           </div>
 
+          {/* Status da Precifica\u00e7\u00e3o \u2014 full-width */}
+          <div className="mt-6 pt-6 border-t border-stone-100">
+            </select>
+          </div>
+          )}
+
           {/* F\u00f3rmulas Alvo \u2014 full-width below status */}
           <div className="mt-4 pt-4 border-t border-stone-100">
-            <label className="block text-sm font-medium text-stone-600 mb-2">F�rmulas Alvo</label>
+            <label className="block text-sm font-medium text-stone-600 mb-2">Fórmulas Alvo</label>
             <div className="space-y-3">
               {calculations.map((calc) => (
                 <div key={calc.id} className="relative p-2 bg-stone-50 rounded-lg border border-stone-200 space-y-2">
@@ -1095,7 +1108,7 @@ export default function Calculator({
                         value={(calc.targetCa || 0) === 0 ? '' : calc.targetCa}
                         onChange={(e) => updateCalculation(calc.id, 'targetCa', e.target.value === '' ? 0 : Number(e.target.value))}
                         placeholder="0"
-                        title="C�lcio alvo (%)"
+                        title="Cálcio alvo (%)"
                         className="w-14 px-1.5 py-1 text-xs border border-amber-300 rounded focus:ring-1 focus:ring-amber-400 bg-amber-50"
                       />
                     </div>
@@ -1117,7 +1130,7 @@ export default function Calculator({
                       value={calc.category || 'all'}
                       onChange={(e) => updateCalculation(calc.id, 'category', e.target.value)}
                       className="px-2 py-1 text-xs border border-stone-300 rounded focus:ring-2 focus:ring-emerald-500 w-24"
-                      title="Tipo de F�rmula"
+                      title="Tipo de Fórmula"
                     >
                       <option value="all">Todas</option>
                       {compCategories.map(cat => (
@@ -1141,7 +1154,7 @@ export default function Calculator({
                     <button
                       onClick={() => calculateFormula(calc.id)}
                       className="p-1.5 bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-colors"
-                      title="Calcular esta f�rmula"
+                      title="Calcular esta fórmula"
                     >
                       <CalculatorIcon className="w-3.5 h-3.5" />
                     </button>
@@ -1161,7 +1174,7 @@ export default function Calculator({
                         {[...calc.macros, ...calc.micros].filter(m => m.selected).map(m => (
                           <div key={m.id} className="flex items-center gap-2 bg-stone-50 border border-stone-200 rounded px-2 py-1 text-xs shadow-sm">
                             <span className="font-medium text-stone-700 truncate max-w-[120px]" title={m.name}>{m.name}</span>
-                            <span className="text-[10px] text-stone-400">(M�n: {m.minQuantity || 0})</span>
+                            <span className="text-[10px] text-stone-400">(Mín: {m.minQuantity || 0})</span>
                             <input
                               type="number"
                               min="0"
@@ -1176,7 +1189,7 @@ export default function Calculator({
                               }}
                               className="w-14 px-1 py-0.5 text-right border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500 bg-white"
                               placeholder="0"
-                              title="Ajuste a quantidade m�nima"
+                              title="Ajuste a quantidade mínima"
                             />
                             <span className="text-stone-500 font-medium">kg</span>
                             <button
@@ -1188,7 +1201,7 @@ export default function Calculator({
                                 }
                               }}
                               className="text-stone-400 hover:text-red-500 ml-1 transition-colors"
-                              title="Remover produto da f�rmula"
+                              title="Remover produto da fórmula"
                             >
                               <X className="w-3.5 h-3.5" />
                             </button>
@@ -1206,7 +1219,7 @@ export default function Calculator({
                     >
                       <div className="flex justify-between items-center border-b border-stone-100 pb-2">
                         <div className="flex items-center gap-4">
-                          <h4 className="text-xs font-bold text-stone-500 uppercase">? {calc.formula || 'F�rmula'}</h4>
+                          <h4 className="text-xs font-bold text-stone-500 uppercase">? {calc.formula || 'Fórmula'}</h4>
                           {calc.summary && (currentUser.role === 'master' || currentUser.role === 'admin' || currentUser.role === 'manager' || (currentUser.permissions as any)?.calculator_fertigranP !== false) && (
                             <button
                               onClick={() => {
@@ -1234,7 +1247,7 @@ export default function Calculator({
                         <p className="text-[10px] font-bold text-stone-400 uppercase mb-2">Fatores Comerciais</p>
                         <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
                           <div>
-                            <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">Fator (�)</label>
+                            <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">Fator (×)</label>
                             <input type="number" step="0.01" value={calc.factors.factor}
                               onChange={(e) => updateCalculationFactors(calc.id, 'factor', Number(e.target.value))}
                               className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500" />
@@ -1246,13 +1259,13 @@ export default function Calculator({
                               className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500" />
                           </div>
                           <div>
-                            <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">Al�quota (%)</label>
+                            <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">Alíquota (%)</label>
                             <input type="number" step="0.1" value={calc.factors.taxRate === 0 ? '' : calc.factors.taxRate}
                               onChange={(e) => updateCalculationFactors(calc.id, 'taxRate', e.target.value === '' ? 0 : Number(e.target.value))}
                               className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500" />
                           </div>
                           <div>
-                            <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">Comiss�o (%)</label>
+                            <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">Comissão (%)</label>
                             <input type="number" step="0.1" value={calc.factors.commission === 0 ? '' : calc.factors.commission}
                               onChange={(e) => updateCalculationFactors(calc.id, 'commission', e.target.value === '' ? 0 : Number(e.target.value))}
                               className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500" />
@@ -1285,10 +1298,11 @@ export default function Calculator({
                             <input type="checkbox" id={`exempt-${calc.id}`} checked={calc.factors.exemptCurrentMonth}
                               onChange={(e) => updateCalculationFactors(calc.id, 'exemptCurrentMonth', e.target.checked)}
                               className="rounded text-emerald-600 focus:ring-emerald-500 mr-2" />
-                            <label htmlFor={`exempt-${calc.id}`} className="text-[10px] font-bold text-stone-500 uppercase">Isentar juros m�s atual</label>
+                            <label htmlFor={`exempt-${calc.id}`} className="text-[10px] font-bold text-stone-500 uppercase">Isentar juros mês atual</label>
                           </div>
                         </div>
                       </div>
+                      )}
 
                       {/* Resultado Real */}
                       {calc.summary && (
@@ -1315,10 +1329,10 @@ export default function Calculator({
                         </div>
                       )}
 
-                      {/* Mat�rias-Primas Utilizadas */}
+                      {/* Matérias-Primas Utilizadas */}
                       {calc.summary && (
                         <div className="pt-2 border-t border-stone-100">
-                          <p className="text-[10px] font-bold text-stone-400 uppercase mb-2">Mat�rias-Primas Utilizadas</p>
+                          <p className="text-[10px] font-bold text-stone-400 uppercase mb-2">Matérias-Primas Utilizadas</p>
                           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-1">
                             {[...calc.macros, ...calc.micros].filter(m => m.quantity > 0).map(m => (
                               <div key={m.id} className="flex flex-col gap-0.5 text-[11px] bg-stone-50 border border-stone-100 px-2 py-1.5 rounded">
@@ -1360,7 +1374,7 @@ export default function Calculator({
                   {calc.summary && (
                     <div className="grid grid-cols-3 gap-2 pt-2 border-t border-stone-200">
                       <div className="text-center">
-                        <p className="text-[8px] text-stone-400 uppercase font-bold">Pre�o Final</p>
+                        <p className="text-[8px] text-stone-400 uppercase font-bold">Preço Final</p>
                         <p className="text-xs font-bold text-emerald-600">R$ {calc.summary.finalPrice.toFixed(2)}</p>
                       </div>
                       <div className="text-center border-x border-stone-100">
@@ -1389,7 +1403,7 @@ export default function Calculator({
                   onClick={addTargetFormula}
                   className="w-full py-2 border-2 border-dashed border-stone-300 rounded-lg text-stone-500 hover:border-emerald-500 hover:text-emerald-600 transition-all text-xs font-bold flex items-center justify-center"
                 >
-                  <Plus className="w-4 h-4 mr-1" /> Adicionar F�rmula Alvo
+                  <Plus className="w-4 h-4 mr-1" /> Adicionar Fórmula Alvo
                 </button>
               </div>
               {calculations.some(c => c.selected) && (
@@ -1397,24 +1411,24 @@ export default function Calculator({
                   onClick={() => calculateFormula()}
                   className="w-full py-2 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 transition-colors shadow-sm text-sm flex items-center justify-center"
                 >
-                  <CalculatorIcon className="w-4 h-4 mr-2" /> Calcular F�rmulas Selecionadas
+                  <CalculatorIcon className="w-4 h-4 mr-2" /> Calcular Fórmulas Selecionadas
                 </button>
               )}
             </div>
           </div>
         </div>
 
-        {/* O Modal de configura��es substituiu as tabelas de Macros e Micros */}
+        {/* O Modal de configurações substituiu as tabelas de Macros e Micros */}
 
         {!isSimplified && (
         <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
-          <h2 className="text-lg font-semibold text-stone-800 mb-4">Observa��o Comercial (para PDF)</h2>
+          <h2 className="text-lg font-semibold text-stone-800 mb-4">Observação Comercial (para PDF)</h2>
           <textarea
             value={factors.commercialObservation || ''}
             disabled={isLocked}
             onChange={(e) => handleFactorChange('commercialObservation', e.target.value)}
             className={`w-full px-3 py-2 border border-stone-300 rounded-lg h-24 ${isLocked ? 'bg-stone-50 cursor-not-allowed' : ''}`}
-            placeholder="Ex: Condi��es de pagamento especiais..."
+            placeholder="Ex: Condições de pagamento especiais..."
           />
         </div>
         )}
@@ -1423,7 +1437,7 @@ export default function Calculator({
       {/* Summary Panel */}
       <div className="space-y-6">
         <div className="bg-stone-900 text-white p-6 rounded-xl shadow-lg sticky top-6 max-h-[calc(100vh-4rem)] overflow-y-auto">
-          <h2 className="text-xl font-bold mb-6 border-b border-stone-700 pb-4">Resumo das F�rmulas</h2>
+          <h2 className="text-xl font-bold mb-6 border-b border-stone-700 pb-4">Resumo das Fórmulas</h2>
 
           <div className="space-y-6">
             {calculations.filter(c => c.summary).map((calc) => (
@@ -1435,7 +1449,7 @@ export default function Calculator({
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-[10px] text-stone-500 uppercase font-bold">Pre�o Final</p>
+                    <p className="text-[10px] text-stone-500 uppercase font-bold">Preço Final</p>
                     <p className="text-lg font-bold text-white">R$ {calc.summary?.finalPrice.toFixed(2)}</p>
                   </div>
                   <div className="text-right">
@@ -1469,7 +1483,7 @@ export default function Calculator({
 
                 {/* Materials List in Summary */}
                 <div className="pt-2 border-t border-stone-700">
-                  <p className="text-[9px] text-stone-500 uppercase font-bold mb-1">Composi��o (kg)</p>
+                  <p className="text-[9px] text-stone-500 uppercase font-bold mb-1">Composição (kg)</p>
                   <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
                     {[...calc.macros, ...calc.micros].filter(m => m.quantity > 0).map(m => (
                       <div key={m.id} className="flex justify-between text-[9px]">
@@ -1484,7 +1498,7 @@ export default function Calculator({
 
             {calculations.filter(c => c.summary).length === 0 && (
               <div className="py-8 text-center text-stone-500 italic text-sm">
-                Nenhum c�lculo realizado ainda.
+                Nenhum cálculo realizado ainda.
               </div>
             )}
           </div>
@@ -1498,7 +1512,7 @@ export default function Calculator({
                   ${isLocked ? 'bg-stone-500 text-stone-300 cursor-not-allowed' : 'bg-emerald-500 hover:bg-emerald-600 border-2 border-emerald-400 shadow-xl shadow-emerald-500/20'}`}
               >
                 <Save className="w-5 h-5 mr-3" />
-                {initialData ? 'Atualizar Precifica��o' : 'Criar Nova Precifica��o'}
+                {initialData ? 'Atualizar Precificação' : 'Criar Nova Precificação'}
               </button>
             )}
             {((currentUser.role === 'master' || currentUser.role === 'admin' || currentUser.role === 'manager') || (currentUser.permissions as any)?.calculator_saveFormula !== false) && (
@@ -1509,7 +1523,7 @@ export default function Calculator({
                   ${isLocked ? 'hidden' : 'bg-stone-800 hover:bg-stone-700 border border-stone-600 text-stone-200 shadow-lg shadow-black/20'}`}
               >
                 <Beaker className="w-4 h-4 mr-2" />
-                Salvar F�rmula/Batida
+                Salvar Fórmula/Batida
               </button>
             )}
           </div>
@@ -1535,7 +1549,7 @@ export default function Calculator({
                 id: `f_${Date.now()}` 
               }
             ]);
-            showSuccess('Receita Fertigran adicionada na Precifica��o!');
+            showSuccess('Receita Fertigran adicionada na Precificação!');
           }}
         />
       )}
