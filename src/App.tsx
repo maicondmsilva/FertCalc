@@ -51,7 +51,7 @@ export default function App() {
   const activeTab = pathParts[0] || '';
 
   let activeModule: 'pricing' | 'config' | 'prd' | 'managementReports' | null = null;
-  if (['dashboard', 'calculator', 'saved_formulas', 'history', 'goals', 'approvals', 'reports', 'pricingReport', 'commissionReport', 'pricingBySeller', 'pricelists', 'materials_macro', 'materials_micro', 'materials_brand', 'products', 'incompatibilities', 'clients', 'agents'].includes(activeTab)) {
+  if (['dashboard', 'calculator', 'simplified_calculator', 'saved_formulas', 'history', 'goals', 'approvals', 'reports', 'pricingReport', 'commissionReport', 'pricingBySeller', 'pricelists', 'materials_macro', 'materials_micro', 'materials_brand', 'products', 'incompatibilities', 'clients', 'agents'].includes(activeTab)) {
     activeModule = 'pricing';
   } else if (['branches', 'settings', 'users'].includes(activeTab)) {
     activeModule = 'config';
