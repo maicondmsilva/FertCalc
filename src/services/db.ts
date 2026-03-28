@@ -1187,27 +1187,27 @@ export async function deleteCompatibilityCategory(id: string): Promise<void> {
 // ============================================================
 export async function getMgmtUnidades(): Promise<Unidade[]> {
   const { data, error } = await supabase
-    .from('branches')
+    .from('unidades')
     .select('*')
-    .order('name');
+    .order('ordem_exibicao');
   if (error || !data) return [];
-  return data.map((b, idx) => ({
-    id: b.id,
-    nome: b.name,
-    ativo: true,
-    ordem_exibicao: idx
+  return data.map((d: any) => ({
+    id: d.id,
+    nome: d.nome,
+    ativo: d.ativo ?? true,
+    ordem_exibicao: d.ordem_exibicao ?? 0
   }));
 }
 
 export async function upsertMgmtUnidade(u: Unidade): Promise<void> {
   const { error } = await supabase
-    .from('management_unidades')
-    .upsert({ ...u, updated_at: new Date().toISOString() }, { onConflict: 'id' });
+    .from('unidades')
+    .upsert({ id: u.id, nome: u.nome, ativo: u.ativo, ordem_exibicao: u.ordem_exibicao }, { onConflict: 'id' });
   if (error) throw error;
 }
 
 export async function deleteMgmtUnidade(id: string): Promise<void> {
-  const { error } = await supabase.from('management_unidades').delete().eq('id', id);
+  const { error } = await supabase.from('unidades').delete().eq('id', id);
   if (error) throw error;
 }
 
@@ -1315,21 +1315,24 @@ export async function deleteMgmtMeta(id: string): Promise<void> {
 // MANAGEMENT REPORTS - CONFIGURAÇÕES DE INDICADORES
 // ============================================================
 export async function getMgmtConfigs(): Promise<ConfiguracaoIndicador[]> {
-  const { data, error } = await supabase.from('management_configuracoes_indicadores').select('*');
+  const { data, error } = await supabase.from('management_configs').select('*');
   if (error || !data) return [];
   return data;
 }
 
 export async function upsertMgmtConfig(c: ConfiguracaoIndicador): Promise<void> {
   const { error } = await supabase
-    .from('management_configuracoes_indicadores')
-    .upsert(c, { onConflict: 'unidade_id,indicador_id' });
+    .from('management_configs')
+    .upsert(
+      { unidade_id: c.unidade_id, indicador_id: c.indicador_id, nome_personalizado: c.nome_personalizado, visivel: c.visivel },
+      { onConflict: 'unidade_id,indicador_id' }
+    );
   if (error) throw error;
 }
 
 export async function deleteMgmtConfig(unidade_id: string, indicador_id: string): Promise<void> {
   const { error } = await supabase
-    .from('management_configuracoes_indicadores')
+    .from('management_configs')
     .delete()
     .eq('unidade_id', unidade_id)
     .eq('indicador_id', indicador_id);
