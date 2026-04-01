@@ -31,6 +31,8 @@ export default function ProfitabilityModal({
   const [commission, setCommission] = useState(calc.factors.commission);
   const [freight, setFreight] = useState(calc.factors.freight);
   const [interestRate, setInterestRate] = useState(calc.factors.monthlyInterestRate);
+  const [dueDate, setDueDate] = useState<string>(calc.factors?.dueDate || '');
+  const [exemptCurrentMonth, setExemptCurrentMonth] = useState<boolean>(calc.factors?.exemptCurrentMonth || false);
   const [unitaryPrice, setUnitaryPrice] = useState<number | ''>('');
 
   const [pricingSearch, setPricingSearch] = useState('');
@@ -38,11 +40,12 @@ export default function ProfitabilityModal({
   const [selectedRecord, setSelectedRecord] = useState<PricingRecord | null>(null);
   const [selectedProductIdx, setSelectedProductIdx] = useState<number>(-1);
   const [linkedPricingRecordId, setLinkedPricingRecordId] = useState<string | undefined>(initialPricingRecordId);
+  const [isSearchingPricing, setIsSearchingPricing] = useState(false);
 
   const [result, setResult] = useState<ReturnType<typeof calcRentability> | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [isSearching, setIsSearching] = useState(false);
 
+  // Reset on open
   useEffect(() => {
     if (isOpen) {
       setFactor(calc.factors.factor);
@@ -50,6 +53,8 @@ export default function ProfitabilityModal({
       setCommission(calc.factors.commission);
       setFreight(calc.factors.freight);
       setInterestRate(calc.factors.monthlyInterestRate);
+      setDueDate(calc.factors?.dueDate || '');
+      setExemptCurrentMonth(calc.factors?.exemptCurrentMonth || false);
       setUnitaryPrice('');
       setResult(null);
       setPricingSearch('');
@@ -60,39 +65,61 @@ export default function ProfitabilityModal({
     }
   }, [isOpen, calc, initialPricingRecordId]);
 
-  const handleSearchPricing = async () => {
-    if (!pricingSearch.trim()) return;
-    setIsSearching(true);
-    try {
-      const all = await getPricingRecords();
-      const term = pricingSearch.trim().toLowerCase();
-      const filtered = all.filter(r => {
-        const cod = r.cod ? String(r.cod).padStart(4, '0') : '';
-        const clientName = (r.factors?.client?.name || '').toLowerCase();
-        return cod.includes(term) || clientName.includes(term);
-      });
-      setPricingResults(filtered.slice(0, 10));
-    } catch {
-      showError('Erro ao buscar precificações.');
-    } finally {
-      setIsSearching(false);
+  // Busca reativa com debounce de 400ms
+  useEffect(() => {
+    if (!pricingSearch.trim()) {
+      setPricingResults([]);
+      return;
     }
-  };
+
+    const timer = setTimeout(async () => {
+      setIsSearchingPricing(true);
+      try {
+        const all = await getPricingRecords();
+        const term = pricingSearch.trim().toLowerCase();
+        const filtered = all.filter(r => {
+          const cod = r.cod ? String(r.cod).padStart(4, '0') : '';
+          const formattedCod = r.formattedCod?.toLowerCase() || '';
+          const clientName = (r.factors?.client?.name || '').toLowerCase();
+          return cod.includes(term) || formattedCod.includes(term) || clientName.includes(term);
+        });
+        setPricingResults(filtered.slice(0, 10));
+      } catch {
+        // silencioso
+      } finally {
+        setIsSearchingPricing(false);
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [pricingSearch]);
 
   const handleSelectRecord = (record: PricingRecord) => {
     setSelectedRecord(record);
     setSelectedProductIdx(-1);
     setLinkedPricingRecordId(record.id);
+    setPricingSearch(`#${record.formattedCod || String(record.cod).padStart(4, '0')} — ${record.factors?.client?.name || ''}`);
+    setPricingResults([]);
   };
 
-  const handleSelectProduct = (idx: number) => {
-    if (!selectedRecord) return;
+  const handleSelectProduct = (record: PricingRecord, idx: number) => {
     setSelectedProductIdx(idx);
-    const calcs = selectedRecord.calculations && selectedRecord.calculations.length > 0
-      ? selectedRecord.calculations
-      : [];
+    const calcs = record.calculations || [];
     const prod = calcs[idx];
-    if (prod?.summary?.finalPrice) {
+    if (!prod) return;
+
+    // Migração automática dos fatores do produto selecionado
+    const f = prod.factors || record.factors;
+    if (f) {
+      setFreight(f.freight ?? freight);
+      setCommission(f.commission ?? commission);
+      setInterestRate(f.monthlyInterestRate ?? interestRate);
+      setTaxRate(f.taxRate ?? taxRate);
+      setDueDate(f.dueDate || '');
+      setExemptCurrentMonth(f.exemptCurrentMonth || false);
+    }
+
+    if (prod.summary?.finalPrice) {
       setUnitaryPrice(prod.summary.finalPrice);
     }
   };
@@ -108,6 +135,8 @@ export default function ProfitabilityModal({
       commissionRate: commission,
       interestRate,
       taxRate,
+      dueDate,
+      exemptCurrentMonth,
     });
     setResult(res);
   };
@@ -140,6 +169,9 @@ export default function ProfitabilityModal({
       netRevenue: result.netRevenue,
       profitability: result.profitability,
       profitabilityPercent: result.profitabilityPercent,
+      dueDate,
+      exemptCurrentMonth,
+      daysOfInterest: result.daysOfInterest,
       analyzedByUserId: currentUser.id,
       analyzedByName: currentUser.name,
       analyzedAt: new Date().toISOString(),
@@ -157,10 +189,13 @@ export default function ProfitabilityModal({
     }
   };
 
+  const handleNumericFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    if (e.target.value === '0' || e.target.value === '0.00') e.target.select();
+  };
+
   if (!isOpen) return null;
 
   const isPositive = result ? result.profitability >= 0 : false;
-  const price = typeof unitaryPrice === 'number' ? unitaryPrice : 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
@@ -196,6 +231,7 @@ export default function ProfitabilityModal({
                   type="number" step="0.01"
                   value={factor}
                   onChange={(e) => setFactor(Number(e.target.value))}
+                  onFocus={handleNumericFocus}
                   className="w-full px-2 py-1.5 text-sm border border-stone-300 rounded-lg focus:ring-1 focus:ring-orange-500 focus:border-orange-500 outline-none"
                 />
               </div>
@@ -205,6 +241,7 @@ export default function ProfitabilityModal({
                   type="number" step="0.1"
                   value={taxRate}
                   onChange={(e) => setTaxRate(Number(e.target.value))}
+                  onFocus={handleNumericFocus}
                   className="w-full px-2 py-1.5 text-sm border border-stone-300 rounded-lg focus:ring-1 focus:ring-orange-500 focus:border-orange-500 outline-none"
                 />
               </div>
@@ -214,6 +251,7 @@ export default function ProfitabilityModal({
                   type="number" step="0.1"
                   value={commission}
                   onChange={(e) => setCommission(Number(e.target.value))}
+                  onFocus={handleNumericFocus}
                   className="w-full px-2 py-1.5 text-sm border border-stone-300 rounded-lg focus:ring-1 focus:ring-orange-500 focus:border-orange-500 outline-none"
                 />
               </div>
@@ -223,6 +261,7 @@ export default function ProfitabilityModal({
                   type="number"
                   value={freight}
                   onChange={(e) => setFreight(Number(e.target.value))}
+                  onFocus={handleNumericFocus}
                   className="w-full px-2 py-1.5 text-sm border border-stone-300 rounded-lg focus:ring-1 focus:ring-orange-500 focus:border-orange-500 outline-none"
                 />
               </div>
@@ -232,6 +271,16 @@ export default function ProfitabilityModal({
                   type="number" step="0.01"
                   value={interestRate}
                   onChange={(e) => setInterestRate(Number(e.target.value))}
+                  onFocus={handleNumericFocus}
+                  className="w-full px-2 py-1.5 text-sm border border-stone-300 rounded-lg focus:ring-1 focus:ring-orange-500 focus:border-orange-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">Data de Vencimento</label>
+                <input
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
                   className="w-full px-2 py-1.5 text-sm border border-stone-300 rounded-lg focus:ring-1 focus:ring-orange-500 focus:border-orange-500 outline-none"
                 />
               </div>
@@ -241,11 +290,21 @@ export default function ProfitabilityModal({
                   type="number" step="0.01"
                   value={unitaryPrice}
                   onChange={(e) => setUnitaryPrice(e.target.value === '' ? '' : Number(e.target.value))}
+                  onFocus={handleNumericFocus}
                   placeholder="Digite ou vincule"
                   className="w-full px-2 py-1.5 text-sm border border-orange-300 rounded-lg focus:ring-1 focus:ring-orange-500 focus:border-orange-500 outline-none bg-orange-50 font-bold"
                 />
               </div>
             </div>
+            <label className="flex items-center gap-2 cursor-pointer mt-3">
+              <input
+                type="checkbox"
+                checked={exemptCurrentMonth}
+                onChange={(e) => setExemptCurrentMonth(e.target.checked)}
+                className="rounded text-orange-500 focus:ring-orange-400"
+              />
+              <span className="text-sm font-medium text-stone-600">Isentar juros no mês atual</span>
+            </label>
           </div>
 
           {/* Link to a pricing record */}
@@ -254,65 +313,54 @@ export default function ProfitabilityModal({
               <Link2 className="w-4 h-4 text-stone-500" />
               <p className="text-xs font-bold text-stone-500 uppercase">Vincular a uma Precificação (opcional)</p>
             </div>
-            <div className="flex gap-2">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-stone-400" />
               <input
                 type="text"
                 value={pricingSearch}
                 onChange={(e) => setPricingSearch(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSearchPricing()}
-                placeholder="COD ou nome do cliente..."
-                className="flex-1 px-3 py-2 text-sm border border-stone-300 rounded-lg focus:ring-1 focus:ring-stone-500 outline-none"
+                placeholder="Digite o COD ou nome do cliente..."
+                className="w-full px-3 py-2 pl-9 border border-stone-300 rounded-lg focus:ring-2 focus:ring-orange-400 outline-none text-sm"
               />
-              <button
-                onClick={handleSearchPricing}
-                disabled={isSearching}
-                className="flex items-center gap-1.5 px-3 py-2 bg-stone-800 text-white text-xs font-bold rounded-lg hover:bg-stone-700 transition-colors disabled:opacity-60"
-              >
-                <Search className="w-3.5 h-3.5" />
-                {isSearching ? 'Buscando...' : 'Buscar'}
-              </button>
+              {isSearchingPricing && (
+                <span className="absolute right-3 top-2.5 text-xs text-stone-400">buscando...</span>
+              )}
+              {pricingResults.length > 0 && (
+                <div className="absolute z-50 top-full left-0 right-0 bg-white border border-stone-200 rounded-lg shadow-xl mt-1 max-h-48 overflow-y-auto">
+                  {pricingResults.map(r => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => handleSelectRecord(r)}
+                      className="w-full px-4 py-2.5 text-left hover:bg-orange-50 text-sm border-b border-stone-100 last:border-0"
+                    >
+                      <span className="font-bold text-orange-700">#{r.formattedCod || String(r.cod).padStart(4, '0')}</span>
+                      <span className="text-stone-600 ml-2">{r.factors?.client?.name}</span>
+                      <span className="text-stone-400 text-xs ml-2">{r.date ? new Date(r.date).toLocaleDateString('pt-BR') : ''}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-
-            {pricingResults.length > 0 && (
-              <div className="space-y-1 max-h-40 overflow-y-auto">
-                {pricingResults.map((r) => (
-                  <button
-                    key={r.id}
-                    onClick={() => handleSelectRecord(r)}
-                    className={`w-full text-left px-3 py-2 text-xs rounded-lg border transition-colors ${
-                      selectedRecord?.id === r.id
-                        ? 'bg-orange-50 border-orange-300 text-orange-700 font-bold'
-                        : 'bg-stone-50 border-stone-200 hover:border-orange-200 hover:bg-orange-50'
-                    }`}
-                  >
-                    <span className="font-mono font-bold">#{r.cod ? String(r.cod).padStart(4, '0') : r.id.slice(-4)}</span>
-                    {' | '}
-                    <span>{r.factors?.client?.name || '—'}</span>
-                    {' | '}
-                    <span className="text-stone-400">{r.date ? new Date(r.date).toLocaleDateString('pt-BR') : ''}</span>
-                  </button>
-                ))}
-              </div>
-            )}
 
             {selectedRecord && selectedRecord.calculations && selectedRecord.calculations.length > 0 && (
               <div>
-                <p className="text-[10px] text-stone-400 uppercase font-bold mb-1">Selecione o produto para puxar o Valor Unitário</p>
+                <p className="text-[10px] text-stone-400 uppercase font-bold mb-1">Selecione o produto para puxar os dados</p>
                 <div className="space-y-1">
-                  {selectedRecord.calculations.map((calc, originalIdx) => (
-                    calc.summary ? (
+                  {selectedRecord.calculations.map((c, originalIdx) => (
+                    c.summary ? (
                       <button
                         key={originalIdx}
-                        onClick={() => handleSelectProduct(originalIdx)}
+                        onClick={() => handleSelectProduct(selectedRecord, originalIdx)}
                         className={`w-full text-left px-3 py-2 text-xs rounded-lg border transition-colors ${
                           selectedProductIdx === originalIdx
                             ? 'bg-emerald-50 border-emerald-300 text-emerald-700 font-bold'
                             : 'bg-stone-50 border-stone-200 hover:border-emerald-200 hover:bg-emerald-50'
                         }`}
                       >
-                        {calc.formula}
-                        {calc.summary && (
-                          <span className="ml-2 text-stone-400">— R$ {calc.summary.finalPrice.toFixed(2)}/t</span>
+                        {c.formula}
+                        {c.summary && (
+                          <span className="ml-2 text-stone-400">— R$ {c.summary.finalPrice.toFixed(2)}/t</span>
                         )}
                       </button>
                     ) : null
@@ -325,7 +373,7 @@ export default function ProfitabilityModal({
               <p className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
                 <span>✓</span> Vinculado ao registro: {
                   selectedRecord
-                    ? `#${selectedRecord.cod ? String(selectedRecord.cod).padStart(4, '0') : selectedRecord.id.slice(-4)} — ${selectedRecord.factors?.client?.name || ''}`
+                    ? `#${selectedRecord.formattedCod || String(selectedRecord.cod).padStart(4, '0')} — ${selectedRecord.factors?.client?.name || ''}`
                     : linkedPricingRecordId
                 }
               </p>
@@ -366,7 +414,7 @@ export default function ProfitabilityModal({
                   <span className="font-mono">- R$ {result.commissionDeduction.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-red-600">
-                  <span>(-) Juros ({interestRate}%):</span>
+                  <span>(-) Juros ({interestRate}% a.m. × {result.daysOfInterest} dias):</span>
                   <span className="font-mono">- R$ {result.interestDeduction.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-red-600">
@@ -409,3 +457,4 @@ export default function ProfitabilityModal({
     </div>
   );
 }
+

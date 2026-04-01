@@ -857,7 +857,7 @@ export default function PricingDetailModal({
                     onClick={() => generatePricingPDF(selectedPricing, appSettings, showAgentInPDF)}
                     className="flex items-center gap-2 px-4 py-2 bg-stone-700 text-white font-bold rounded-lg hover:bg-stone-800 transition-colors text-sm"
                   >
-                    <FileDown className="w-4 h-4" /> PDF Simplificado
+                    <FileDown className="w-4 h-4" /> Proposta Comercial
                   </button>
                   <button
                     onClick={() => exportToPDF(selectedPricing)}
