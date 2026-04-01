@@ -113,6 +113,7 @@ export interface User {
     calculator_generatePDF?: boolean;
     calculator_saveFormula?: boolean;
     calculator_fertigranP?: boolean;
+    calculator_profitabilityCheck?: boolean;
     // Sub-permissões de Histórico
     history_changeStatus?: boolean;
     history_editPricing?: boolean;
@@ -298,6 +299,29 @@ export interface MicroMaterial {
   minQuantity?: number;
 }
 
+export interface ProfitabilityAnalysis {
+  pricingRecordId: string;
+  calculationIndex: number;
+  formulaName: string;
+  unitaryPrice: number;
+  factor: number;
+  baseCost: number;
+  baseCostAfterFactor: number;
+  freightDeduction: number;
+  commissionRate: number;
+  commissionDeduction: number;
+  interestRate: number;
+  interestDeduction: number;
+  taxRate: number;
+  taxDeduction: number;
+  netRevenue: number;
+  profitability: number;
+  profitabilityPercent: number;
+  analyzedByUserId: string;
+  analyzedByName: string;
+  analyzedAt: string;
+}
+
 export interface TargetFormula {
   id: string;
   formula: string;
@@ -312,6 +336,7 @@ export interface TargetFormula {
   targetK?: number;
   targetCa?: number;
   targetS?: number;
+  profitabilityAnalysis?: ProfitabilityAnalysis;
 }
 
 export interface SavedFormula {

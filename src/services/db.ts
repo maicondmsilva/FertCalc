@@ -31,7 +31,8 @@ import {
   Lancamento,
   MetaMensal,
   ConfiguracaoIndicador,
-  DiasUteisMes
+  DiasUteisMes,
+  ProfitabilityAnalysis
 } from '../types';
 
 // ============================================================
@@ -764,6 +765,34 @@ export async function updatePricingRecord(id: string, record: Partial<PricingRec
 
 export async function deletePricingRecord(id: string): Promise<void> {
   const { error } = await supabase.from('pricing_records').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function saveProfitabilityToCalc(
+  pricingRecordId: string,
+  calcIndex: number,
+  analysis: ProfitabilityAnalysis
+): Promise<void> {
+  const { data, error: fetchError } = await supabase
+    .from('pricing_records')
+    .select('calculations')
+    .eq('id', pricingRecordId)
+    .single();
+  if (fetchError) throw fetchError;
+
+  const calculations = data.calculations ? [...data.calculations] : [];
+
+  if (calculations[calcIndex]) {
+    calculations[calcIndex] = {
+      ...calculations[calcIndex],
+      profitabilityAnalysis: analysis,
+    };
+  }
+
+  const { error } = await supabase
+    .from('pricing_records')
+    .update({ calculations, updated_at: new Date().toISOString() })
+    .eq('id', pricingRecordId);
   if (error) throw error;
 }
 

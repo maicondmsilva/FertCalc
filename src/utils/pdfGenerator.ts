@@ -89,7 +89,7 @@ export const generatePricingPDF = (record: PricingRecord, settings: AppSettings,
         </div>
       </div>
       <div style="text-align:right;">
-        <div style="font-size:18px;font-weight:950;color:#1a1a2e;letter-spacing:1px;margin-bottom:6px;">PROPOSTA COMERCIAL SIMPLIFICADA</div>
+        <div style="font-size:18px;font-weight:950;color:#1a1a2e;letter-spacing:1px;margin-bottom:6px;">PROPOSTA COMERCIAL</div>
         <div style="display:flex;gap:12px;justify-content:flex-end;">
           <div style="background:#f0f4f8;border-radius:6px;padding:4px 12px;text-align:center;border:1px solid #d1d9e6;">
             <span style="font-size:8px;color:#666;text-transform:uppercase;font-weight:700;display:block;margin-bottom:1px;">COD</span>
@@ -203,7 +203,7 @@ export const generatePricingPDF = (record: PricingRecord, settings: AppSettings,
       }
     }
 
-    pdf.save(`proposta-simplificada-${cod}.pdf`);
+    pdf.save(`proposta-comercial-${cod}.pdf`);
     document.body.removeChild(el);
   });
 };
