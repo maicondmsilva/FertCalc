@@ -32,7 +32,7 @@ import {
   MetaMensal,
   ConfiguracaoIndicador,
   DiasUteisMes,
-  ProfitabilityAnalysis
+  ProfitabilityResult
 } from '../types';
 
 // ============================================================
@@ -771,7 +771,7 @@ export async function deletePricingRecord(id: string): Promise<void> {
 export async function saveProfitabilityToCalc(
   pricingRecordId: string,
   calcIndex: number,
-  analysis: ProfitabilityAnalysis
+  result: ProfitabilityResult
 ): Promise<void> {
   const { data, error: fetchError } = await supabase
     .from('pricing_records')
@@ -785,7 +785,7 @@ export async function saveProfitabilityToCalc(
   if (calculations[calcIndex]) {
     calculations[calcIndex] = {
       ...calculations[calcIndex],
-      profitabilityAnalysis: analysis,
+      profitabilityResult: result,
     };
   }
 

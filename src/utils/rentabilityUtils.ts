@@ -1,43 +1,66 @@
-interface RentabilityInput {
-  unitaryPrice: number;
-  factor: number;
-  baseCost: number;
-  freightDeduction: number;
-  commissionRate: number;
-  interestRate: number;
-  taxRate: number;
-}
+import { ProfitabilityInput, ProfitabilityResult } from '../types';
 
-export function calcRentability(input: RentabilityInput): {
-  baseCostAfterFactor: number;
-  commissionDeduction: number;
-  interestDeduction: number;
-  taxDeduction: number;
-  netRevenue: number;
-  profitability: number;
-  profitabilityPercent: number;
-} {
-  const { unitaryPrice, factor, baseCost, freightDeduction, commissionRate, interestRate, taxRate } = input;
+export function calculateProfitability(input: ProfitabilityInput): ProfitabilityResult {
+  const {
+    unitaryPrice,
+    factor,
+    baseCost,
+    freightDeduction,
+    commissionRate,
+    monthlyInterestRate,
+    taxRate,
+    dueDate,
+    exemptCurrentMonth,
+  } = input;
 
-  const baseCostAfterFactor = baseCost * factor;
+  // custoPósFator = baseCost × fator
+  const costAfterFactor = baseCost * (factor || 1);
 
-  const commissionDeduction = unitaryPrice * (commissionRate / 100);
-  const interestDeduction = unitaryPrice * (interestRate / 100);
-  const taxDeduction = unitaryPrice * (taxRate / 100);
+  // Calcular dias de juros — lógica idêntica ao Calculator.tsx
+  let days = 0;
+  if (dueDate) {
+    const due = new Date(dueDate);
+    const today = new Date();
 
-  const netRevenue = unitaryPrice - freightDeduction - commissionDeduction - interestDeduction - taxDeduction;
+    if (exemptCurrentMonth) {
+      const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      if (due > endOfMonth) {
+        const diffTime = due.getTime() - endOfMonth.getTime();
+        days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      }
+    } else {
+      const diffTime = due.getTime() - today.getTime();
+      days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    }
+    if (days < 0) days = 0;
+  }
 
-  const profitability = netRevenue - baseCostAfterFactor;
+  // Juros incidem sobre custoPósFator
+  const dailyInterest = (monthlyInterestRate || 0) / 30;
+  const interestDeduction = costAfterFactor * (dailyInterest / 100) * days;
 
-  const profitabilityPercent = baseCostAfterFactor > 0 ? (profitability / baseCostAfterFactor) * 100 : 0;
+  // Alíquota e comissão incidem sobre unitaryPrice
+  const taxDeduction = unitaryPrice * ((taxRate || 0) / 100);
+  const commissionDeduction = unitaryPrice * ((commissionRate || 0) / 100);
+  const freight = freightDeduction || 0;
+
+  // resultadoLíquido = preçoUnitário - alíquota - frete - comissão - juros
+  const netResult = unitaryPrice - taxDeduction - freight - commissionDeduction - interestDeduction;
+
+  // rentabilidade = resultadoLíquido - custoPósFator
+  const profitability = netResult - costAfterFactor;
 
   return {
-    baseCostAfterFactor,
+    unitaryPrice,
+    baseCost,
+    costAfterFactor,
+    freightDeduction: freight,
     commissionDeduction,
     interestDeduction,
     taxDeduction,
-    netRevenue,
+    netResult,
     profitability,
-    profitabilityPercent,
+    daysOfInterest: days,
+    isProfitable: profitability >= 0,
   };
 }

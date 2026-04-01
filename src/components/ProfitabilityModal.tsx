@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, TrendingUp, Search, Link2, Calculator } from 'lucide-react';
-import { TargetFormula, User, ProfitabilityAnalysis, PricingRecord } from '../types';
-import { calcRentability } from '../utils/rentabilityUtils';
+import { TargetFormula, User, PricingRecord, ProfitabilityInput, ProfitabilityResult } from '../types';
+import { calculateProfitability } from '../utils/rentabilityUtils';
 import { saveProfitabilityToCalc, getPricingRecords } from '../services/db';
 import { useToast } from './Toast';
 
@@ -31,6 +31,8 @@ export default function ProfitabilityModal({
   const [commission, setCommission] = useState(calc.factors.commission);
   const [freight, setFreight] = useState(calc.factors.freight);
   const [interestRate, setInterestRate] = useState(calc.factors.monthlyInterestRate);
+  const [dueDate, setDueDate] = useState(calc.factors.dueDate || '');
+  const [exemptCurrentMonth, setExemptCurrentMonth] = useState(calc.factors.exemptCurrentMonth || false);
   const [unitaryPrice, setUnitaryPrice] = useState<number | ''>('');
 
   const [pricingSearch, setPricingSearch] = useState('');
@@ -39,7 +41,7 @@ export default function ProfitabilityModal({
   const [selectedProductIdx, setSelectedProductIdx] = useState<number>(-1);
   const [linkedPricingRecordId, setLinkedPricingRecordId] = useState<string | undefined>(initialPricingRecordId);
 
-  const [result, setResult] = useState<ReturnType<typeof calcRentability> | null>(null);
+  const [result, setResult] = useState<ProfitabilityResult | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
 
@@ -50,6 +52,8 @@ export default function ProfitabilityModal({
       setCommission(calc.factors.commission);
       setFreight(calc.factors.freight);
       setInterestRate(calc.factors.monthlyInterestRate);
+      setDueDate(calc.factors.dueDate || '');
+      setExemptCurrentMonth(calc.factors.exemptCurrentMonth || false);
       setUnitaryPrice('');
       setResult(null);
       setPricingSearch('');
@@ -88,28 +92,40 @@ export default function ProfitabilityModal({
   const handleSelectProduct = (idx: number) => {
     if (!selectedRecord) return;
     setSelectedProductIdx(idx);
-    const calcs = selectedRecord.calculations && selectedRecord.calculations.length > 0
-      ? selectedRecord.calculations
-      : [];
+    const calcs = selectedRecord.calculations || [];
     const prod = calcs[idx];
     if (prod?.summary?.finalPrice) {
       setUnitaryPrice(prod.summary.finalPrice);
+    }
+    // Migrate commercial factors from selected product
+    const f = prod?.factors || selectedRecord.factors;
+    if (f) {
+      setFreight(f.freight ?? freight);
+      setCommission(f.commission ?? commission);
+      setInterestRate(f.monthlyInterestRate ?? interestRate);
+      setTaxRate(f.taxRate ?? taxRate);
+      setDueDate(f.dueDate || dueDate);
+      setExemptCurrentMonth(f.exemptCurrentMonth ?? exemptCurrentMonth);
+      setFactor(f.factor ?? factor);
     }
   };
 
   const handleCalculate = () => {
     const price = typeof unitaryPrice === 'number' ? unitaryPrice : 0;
     const baseCost = calc.summary?.baseCost ?? 0;
-    const res = calcRentability({
+    const input: ProfitabilityInput = {
       unitaryPrice: price,
       factor,
       baseCost,
       freightDeduction: freight,
       commissionRate: commission,
-      interestRate,
+      monthlyInterestRate: interestRate,
       taxRate,
-    });
-    setResult(res);
+      dueDate: dueDate || undefined,
+      exemptCurrentMonth,
+    };
+    const r = calculateProfitability(input);
+    setResult(r);
   };
 
   const handleSave = async () => {
@@ -119,35 +135,12 @@ export default function ProfitabilityModal({
       return;
     }
 
-    const price = typeof unitaryPrice === 'number' ? unitaryPrice : 0;
-    const baseCost = calc.summary?.baseCost ?? 0;
-
-    const analysis: ProfitabilityAnalysis = {
-      pricingRecordId: linkedPricingRecordId,
-      calculationIndex: calcIndex,
-      formulaName: calc.formula,
-      unitaryPrice: price,
-      factor,
-      baseCost,
-      baseCostAfterFactor: result.baseCostAfterFactor,
-      freightDeduction: freight,
-      commissionRate: commission,
-      commissionDeduction: result.commissionDeduction,
-      interestRate,
-      interestDeduction: result.interestDeduction,
-      taxRate,
-      taxDeduction: result.taxDeduction,
-      netRevenue: result.netRevenue,
-      profitability: result.profitability,
-      profitabilityPercent: result.profitabilityPercent,
-      analyzedByUserId: currentUser.id,
-      analyzedByName: currentUser.name,
-      analyzedAt: new Date().toISOString(),
-    };
+    // Use the selected product index in the linked record, otherwise fall back to current calc index
+    const saveIndex = selectedProductIdx >= 0 ? selectedProductIdx : calcIndex;
 
     setIsSaving(true);
     try {
-      await saveProfitabilityToCalc(linkedPricingRecordId, calcIndex, analysis);
+      await saveProfitabilityToCalc(linkedPricingRecordId, saveIndex, result);
       showSuccess('Rentabilidade gravada com sucesso!');
       if (onSaved) onSaved();
     } catch {
@@ -159,7 +152,7 @@ export default function ProfitabilityModal({
 
   if (!isOpen) return null;
 
-  const isPositive = result ? result.profitability >= 0 : false;
+  const isPositive = result ? result.isProfitable : false;
   const price = typeof unitaryPrice === 'number' ? unitaryPrice : 0;
 
   return (
@@ -177,7 +170,7 @@ export default function ProfitabilityModal({
         </div>
 
         <div className="p-5 space-y-5">
-          {/* Formula name */}
+          {/* Formula name + base cost */}
           <div className="px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg">
             <p className="text-[10px] text-stone-400 uppercase font-bold">Fórmula</p>
             <p className="text-sm font-bold text-stone-700">{calc.formula}</p>
@@ -196,6 +189,7 @@ export default function ProfitabilityModal({
                   type="number" step="0.01"
                   value={factor}
                   onChange={(e) => setFactor(Number(e.target.value))}
+                  onFocus={(e) => e.target.select()}
                   className="w-full px-2 py-1.5 text-sm border border-stone-300 rounded-lg focus:ring-1 focus:ring-orange-500 focus:border-orange-500 outline-none"
                 />
               </div>
@@ -205,6 +199,7 @@ export default function ProfitabilityModal({
                   type="number" step="0.1"
                   value={taxRate}
                   onChange={(e) => setTaxRate(Number(e.target.value))}
+                  onFocus={(e) => e.target.select()}
                   className="w-full px-2 py-1.5 text-sm border border-stone-300 rounded-lg focus:ring-1 focus:ring-orange-500 focus:border-orange-500 outline-none"
                 />
               </div>
@@ -214,6 +209,7 @@ export default function ProfitabilityModal({
                   type="number" step="0.1"
                   value={commission}
                   onChange={(e) => setCommission(Number(e.target.value))}
+                  onFocus={(e) => e.target.select()}
                   className="w-full px-2 py-1.5 text-sm border border-stone-300 rounded-lg focus:ring-1 focus:ring-orange-500 focus:border-orange-500 outline-none"
                 />
               </div>
@@ -223,27 +219,51 @@ export default function ProfitabilityModal({
                   type="number"
                   value={freight}
                   onChange={(e) => setFreight(Number(e.target.value))}
+                  onFocus={(e) => e.target.select()}
                   className="w-full px-2 py-1.5 text-sm border border-stone-300 rounded-lg focus:ring-1 focus:ring-orange-500 focus:border-orange-500 outline-none"
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">Juros (%)</label>
+                <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">Juros Mensais (%)</label>
                 <input
                   type="number" step="0.01"
                   value={interestRate}
                   onChange={(e) => setInterestRate(Number(e.target.value))}
+                  onFocus={(e) => e.target.select()}
                   className="w-full px-2 py-1.5 text-sm border border-stone-300 rounded-lg focus:ring-1 focus:ring-orange-500 focus:border-orange-500 outline-none"
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">Valor Unitário (R$/ton)</label>
+                <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1 text-orange-600">Valor Unitário (R$/ton)</label>
                 <input
                   type="number" step="0.01"
                   value={unitaryPrice}
                   onChange={(e) => setUnitaryPrice(e.target.value === '' ? '' : Number(e.target.value))}
+                  onFocus={(e) => e.target.select()}
                   placeholder="Digite ou vincule"
                   className="w-full px-2 py-1.5 text-sm border border-orange-300 rounded-lg focus:ring-1 focus:ring-orange-500 focus:border-orange-500 outline-none bg-orange-50 font-bold"
                 />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">Data de Vencimento</label>
+                <input
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  className="w-full px-2 py-1.5 text-sm border border-stone-300 rounded-lg focus:ring-1 focus:ring-orange-500 focus:border-orange-500 outline-none"
+                />
+              </div>
+              <div className="flex items-center gap-2 pt-4">
+                <input
+                  type="checkbox"
+                  id="exemptCurrentMonth"
+                  checked={exemptCurrentMonth}
+                  onChange={(e) => setExemptCurrentMonth(e.target.checked)}
+                  className="w-4 h-4 rounded border-stone-300 text-orange-600 focus:ring-orange-500"
+                />
+                <label htmlFor="exemptCurrentMonth" className="text-[10px] font-bold text-stone-500 uppercase leading-tight cursor-pointer">
+                  Isentar juros no mês atual
+                </label>
               </div>
             </div>
           </div>
@@ -299,8 +319,8 @@ export default function ProfitabilityModal({
               <div>
                 <p className="text-[10px] text-stone-400 uppercase font-bold mb-1">Selecione o produto para puxar o Valor Unitário</p>
                 <div className="space-y-1">
-                  {selectedRecord.calculations.map((calc, originalIdx) => (
-                    calc.summary ? (
+                  {selectedRecord.calculations.map((product, originalIdx) => (
+                    product.summary ? (
                       <button
                         key={originalIdx}
                         onClick={() => handleSelectProduct(originalIdx)}
@@ -310,9 +330,9 @@ export default function ProfitabilityModal({
                             : 'bg-stone-50 border-stone-200 hover:border-emerald-200 hover:bg-emerald-50'
                         }`}
                       >
-                        {calc.formula}
-                        {calc.summary && (
-                          <span className="ml-2 text-stone-400">— R$ {calc.summary.finalPrice.toFixed(2)}/t</span>
+                        {product.formula}
+                        {product.summary && (
+                          <span className="ml-2 text-stone-400">— R$ {product.summary.finalPrice.toFixed(2)}/t</span>
                         )}
                       </button>
                     ) : null
@@ -350,12 +370,16 @@ export default function ProfitabilityModal({
               </div>
               <div className="p-4 space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-stone-500">Custo (base):</span>
-                  <span className="font-mono">R$ {(calc.summary?.baseCost ?? 0).toFixed(2)}</span>
+                  <span className="text-stone-500">Preço de Venda:</span>
+                  <span className="font-mono">R$ {price.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-stone-500">× Fator ({factor}):</span>
-                  <span className="font-mono">R$ {result.baseCostAfterFactor.toFixed(2)}</span>
+                <div className="flex justify-between text-stone-400 text-xs">
+                  <span>Custo Base × Fator ({factor}):</span>
+                  <span className="font-mono">R$ {result.costAfterFactor.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-red-600">
+                  <span>(-) Alíquota ({taxRate}%):</span>
+                  <span className="font-mono">- R$ {result.taxDeduction.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-red-600">
                   <span>(-) Frete:</span>
@@ -366,19 +390,19 @@ export default function ProfitabilityModal({
                   <span className="font-mono">- R$ {result.commissionDeduction.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-red-600">
-                  <span>(-) Juros ({interestRate}%):</span>
+                  <span>(-) Juros ({interestRate}% a.m. × {result.daysOfInterest} dias):</span>
                   <span className="font-mono">- R$ {result.interestDeduction.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between text-red-600">
-                  <span>(-) Alíquota ({taxRate}%):</span>
-                  <span className="font-mono">- R$ {result.taxDeduction.toFixed(2)}</span>
-                </div>
                 <div className="flex justify-between font-bold border-t border-stone-200 pt-2">
-                  <span>= Receita Líquida:</span>
-                  <span className="font-mono">R$ {result.netRevenue.toFixed(2)}</span>
+                  <span>= Resultado Líquido:</span>
+                  <span className="font-mono">R$ {result.netResult.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-stone-500 text-xs">
+                  <span>(-) Custo após Fator:</span>
+                  <span className="font-mono">- R$ {result.costAfterFactor.toFixed(2)}</span>
                 </div>
                 <div className={`flex justify-between text-lg font-black pt-1 ${isPositive ? 'text-emerald-700' : 'text-red-700'}`}>
-                  <span>RENTABILIDADE ({result.profitabilityPercent.toFixed(2)}%):</span>
+                  <span>RENTABILIDADE:</span>
                   <span className="font-mono">{isPositive ? '+' : ''}R$ {result.profitability.toFixed(2)}</span>
                 </div>
               </div>

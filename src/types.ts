@@ -322,6 +322,32 @@ export interface ProfitabilityAnalysis {
   analyzedAt: string;
 }
 
+export interface ProfitabilityInput {
+  unitaryPrice: number;
+  factor: number;
+  baseCost: number;
+  freightDeduction: number;
+  commissionRate: number;
+  monthlyInterestRate: number;
+  taxRate: number;
+  dueDate?: string;
+  exemptCurrentMonth?: boolean;
+}
+
+export interface ProfitabilityResult {
+  unitaryPrice: number;
+  baseCost: number;
+  costAfterFactor: number;
+  freightDeduction: number;
+  commissionDeduction: number;
+  interestDeduction: number;
+  taxDeduction: number;
+  netResult: number;
+  profitability: number;
+  daysOfInterest: number;
+  isProfitable: boolean;
+}
+
 export interface TargetFormula {
   id: string;
   formula: string;
@@ -337,6 +363,7 @@ export interface TargetFormula {
   targetCa?: number;
   targetS?: number;
   profitabilityAnalysis?: ProfitabilityAnalysis;
+  profitabilityResult?: ProfitabilityResult;
 }
 
 export interface SavedFormula {

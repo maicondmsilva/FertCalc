@@ -261,28 +261,38 @@ export default function PricingDetailModal({
       currentY = (doc as any).lastAutoTable.finalY + 8;
 
       // Rentabilidade (se existir)
+      const pr = (calc as any).profitabilityResult;
       const pa = (calc as any).profitabilityAnalysis;
-      if (pa) {
-        const isPosRent = pa.profitability >= 0;
+      const rentData = pr || pa;
+      if (rentData) {
+        const isPosRent = rentData.profitability >= 0;
+        const costAfterFactorVal = pr ? pr.costAfterFactor : pa.baseCostAfterFactor;
+        const netResultVal = pr ? pr.netResult : pa.netRevenue;
+        const daysInfo = pr ? ` (${pr.daysOfInterest} dias)` : '';
+        const percentInfo = pa && !pr ? ` (${Number(pa.profitabilityPercent).toFixed(2)}%)` : '';
         if (currentY > 220) { doc.addPage(); currentY = 15; }
+
+        const rentBody: any[] = [
+          ['Valor Unitário (Venda)', `R$ ${Number(rentData.unitaryPrice).toFixed(2)}`],
+          ['Custo × Fator', `R$ ${Number(costAfterFactorVal).toFixed(2)}`],
+          ['(-) Alíquota', `R$ ${Number(rentData.taxDeduction).toFixed(2)}`],
+          ['(-) Frete', `R$ ${Number(rentData.freightDeduction).toFixed(2)}`],
+          ['(-) Comissão', `R$ ${Number(rentData.commissionDeduction).toFixed(2)}`],
+          [`(-) Juros${daysInfo}`, `R$ ${Number(rentData.interestDeduction).toFixed(2)}`],
+          ['= Resultado Líquido', `R$ ${Number(netResultVal).toFixed(2)}`],
+          [
+            `RENTABILIDADE${percentInfo}`,
+            `${isPosRent ? '+' : ''}R$ ${Number(rentData.profitability).toFixed(2)}`
+          ],
+        ];
+        if (pa && pa.analyzedByName) {
+          rentBody.push(['Analisado por', `${pa.analyzedByName} em ${new Date(pa.analyzedAt).toLocaleString('pt-BR')}`]);
+        }
 
         autoTable(doc, {
           startY: currentY,
           head: [['ANÁLISE DE RENTABILIDADE']],
-          body: [
-            ['Valor Unitário (Venda)', `R$ ${Number(pa.unitaryPrice).toFixed(2)}`],
-            [`Custo × Fator (${pa.factor})`, `R$ ${Number(pa.baseCostAfterFactor).toFixed(2)}`],
-            ['(-) Frete', `R$ ${Number(pa.freightDeduction).toFixed(2)}`],
-            [`(-) Comissão (${pa.commissionRate}%)`, `R$ ${Number(pa.commissionDeduction).toFixed(2)}`],
-            [`(-) Juros (${pa.interestRate}%)`, `R$ ${Number(pa.interestDeduction).toFixed(2)}`],
-            [`(-) Alíquota (${pa.taxRate}%)`, `R$ ${Number(pa.taxDeduction).toFixed(2)}`],
-            ['= Receita Líquida', `R$ ${Number(pa.netRevenue).toFixed(2)}`],
-            [
-              `RENTABILIDADE (${Number(pa.profitabilityPercent).toFixed(2)}%)`,
-              `${isPosRent ? '+' : ''}R$ ${Number(pa.profitability).toFixed(2)}`
-            ],
-            ['Analisado por', `${pa.analyzedByName} em ${new Date(pa.analyzedAt).toLocaleString('pt-BR')}`],
-          ],
+          body: rentBody,
           styles: { fontSize: 8, cellPadding: 2 },
           headStyles: {
             fillColor: isPosRent ? [5, 150, 105] : [220, 38, 38],
@@ -750,50 +760,58 @@ export default function PricingDetailModal({
                 </div>
 
                 {/* Análise de Rentabilidade (se existir) */}
-                {(calc as any).profitabilityAnalysis && (() => {
+                {((calc as any).profitabilityResult || (calc as any).profitabilityAnalysis) && (() => {
+                  const pr = (calc as any).profitabilityResult;
                   const pa = (calc as any).profitabilityAnalysis;
-                  const isPaPositive = pa.profitability >= 0;
+                  const rentData = pr || pa;
+                  const isPositive = rentData.profitability >= 0;
+                  const costAfterFactorVal = pr ? pr.costAfterFactor : pa.baseCostAfterFactor;
+                  const netResultVal = pr ? pr.netResult : pa.netRevenue;
+                  const daysInfo = pr ? ` (${pr.daysOfInterest} dias)` : '';
+                  const percentInfo = pa && !pr ? ` (${Number(pa.profitabilityPercent).toFixed(2)}%)` : '';
                   return (
-                    <div className={`p-4 rounded-xl border ${isPaPositive ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
-                      <h4 className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: isPaPositive ? '#065f46' : '#991b1b' }}>
+                    <div className={`p-4 rounded-xl border ${isPositive ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+                      <h4 className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: isPositive ? '#065f46' : '#991b1b' }}>
                         📊 Análise de Rentabilidade
                       </h4>
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
                           <span className="text-stone-500">Valor Unitário (Venda)</span>
-                          <span className="font-mono">R$ {Number(pa.unitaryPrice).toFixed(2)}</span>
+                          <span className="font-mono">R$ {Number(rentData.unitaryPrice).toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-stone-500">Custo × Fator ({pa.factor})</span>
-                          <span className="font-mono">R$ {Number(pa.baseCostAfterFactor).toFixed(2)}</span>
+                          <span className="text-stone-500">Custo × Fator</span>
+                          <span className="font-mono">R$ {Number(costAfterFactorVal).toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-red-600">
+                          <span>(-) Alíquota</span>
+                          <span className="font-mono">- R$ {Number(rentData.taxDeduction).toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between text-red-600">
                           <span>(-) Frete</span>
-                          <span className="font-mono">- R$ {Number(pa.freightDeduction).toFixed(2)}</span>
+                          <span className="font-mono">- R$ {Number(rentData.freightDeduction).toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between text-red-600">
-                          <span>(-) Comissão ({pa.commissionRate}%)</span>
-                          <span className="font-mono">- R$ {Number(pa.commissionDeduction).toFixed(2)}</span>
+                          <span>(-) Comissão</span>
+                          <span className="font-mono">- R$ {Number(rentData.commissionDeduction).toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between text-red-600">
-                          <span>(-) Juros ({pa.interestRate}%)</span>
-                          <span className="font-mono">- R$ {Number(pa.interestDeduction).toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between text-red-600">
-                          <span>(-) Alíquota ({pa.taxRate}%)</span>
-                          <span className="font-mono">- R$ {Number(pa.taxDeduction).toFixed(2)}</span>
+                          <span>(-) Juros{daysInfo}</span>
+                          <span className="font-mono">- R$ {Number(rentData.interestDeduction).toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between font-bold border-t border-stone-200 pt-2">
-                          <span>= Receita Líquida</span>
-                          <span className="font-mono">R$ {Number(pa.netRevenue).toFixed(2)}</span>
+                          <span>= Resultado Líquido</span>
+                          <span className="font-mono">R$ {Number(netResultVal).toFixed(2)}</span>
                         </div>
-                        <div className={`flex justify-between text-lg font-black pt-1 ${isPaPositive ? 'text-emerald-700' : 'text-red-700'}`}>
-                          <span>RENTABILIDADE ({Number(pa.profitabilityPercent).toFixed(2)}%)</span>
-                          <span className="font-mono">{isPaPositive ? '+' : ''}R$ {Number(pa.profitability).toFixed(2)}</span>
+                        <div className={`flex justify-between text-lg font-black pt-1 ${isPositive ? 'text-emerald-700' : 'text-red-700'}`}>
+                          <span>RENTABILIDADE{percentInfo}</span>
+                          <span className="font-mono">{isPositive ? '+' : ''}R$ {Number(rentData.profitability).toFixed(2)}</span>
                         </div>
-                        <p className="text-[10px] text-stone-400 mt-2">
-                          Analisado por {pa.analyzedByName} em {new Date(pa.analyzedAt).toLocaleString('pt-BR')}
-                        </p>
+                        {pa && pa.analyzedByName && (
+                          <p className="text-[10px] text-stone-400 mt-2">
+                            Analisado por {pa.analyzedByName} em {new Date(pa.analyzedAt).toLocaleString('pt-BR')}
+                          </p>
+                        )}
                       </div>
                     </div>
                   );
