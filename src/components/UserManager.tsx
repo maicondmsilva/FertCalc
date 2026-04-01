@@ -35,7 +35,8 @@ export default function UserManager() {
       commissionReport: true,
       pricingBySeller: false,
       prd: true,
-      managementReports: true
+      managementReports: true,
+      calculator_profitabilityCheck: false
     }
   });
 
@@ -87,20 +88,21 @@ export default function UserManager() {
       commissionReport: true,
       pricingBySeller: false,
       prd: false,
-      managementReports: false
+      managementReports: false,
+      calculator_profitabilityCheck: false
     };
 
     if (role === 'master' || role === 'admin') {
       const allCrud = ['clients', 'agents', 'priceLists', 'branches', 'macro', 'micro'].reduce((acc, resource) => {
         return { ...acc, [`${resource}_create`]: true, [`${resource}_edit`]: true, [`${resource}_delete`]: true, [resource]: true };
       }, {});
-      return Object.keys(base).reduce((acc, key) => ({ ...acc, [key]: true }), { approvals_canApprove: true, ...allCrud });
+      return Object.keys(base).reduce((acc, key) => ({ ...acc, [key]: true }), { approvals_canApprove: true, calculator_profitabilityCheck: true, ...allCrud });
     }
     if (role === 'manager') {
       const allCrud = ['clients', 'agents', 'priceLists', 'branches', 'macro', 'micro'].reduce((acc, resource) => {
         return { ...acc, [`${resource}_create`]: true, [`${resource}_edit`]: true, [`${resource}_delete`]: true, [resource]: true };
       }, {});
-      return { ...base, approvals: true, approvals_canApprove: true, reports: true, pricingReport: true, commissionReport: true, pricingBySeller: true, goals: true, ...allCrud };
+      return { ...base, approvals: true, approvals_canApprove: true, reports: true, pricingReport: true, commissionReport: true, pricingBySeller: true, goals: true, calculator_profitabilityCheck: true, ...allCrud };
     }
     return base;
   };

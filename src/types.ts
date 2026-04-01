@@ -317,6 +317,9 @@ export interface ProfitabilityAnalysis {
   netRevenue: number;
   profitability: number;
   profitabilityPercent: number;
+  dueDate?: string;
+  exemptCurrentMonth?: boolean;
+  daysOfInterest?: number;
   analyzedByUserId: string;
   analyzedByName: string;
   analyzedAt: string;
