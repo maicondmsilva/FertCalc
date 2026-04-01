@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import solver from 'javascript-lp-solver';
-import { Plus, Trash2, Save, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle2, Calculator as CalculatorIcon, Building2, Database, Search, User, UserCheck, Tag, LayoutDashboard, Settings, X, Beaker } from 'lucide-react';
+import { Plus, Trash2, Save, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle2, Calculator as CalculatorIcon, Building2, Database, Search, User, UserCheck, Tag, LayoutDashboard, Settings, X, Beaker, TrendingUp } from 'lucide-react';
 import { RawMaterial, PricingFactors, PricingRecord, PricingSummary, Branch, PriceList, Client, Agent, User as AppUser, PricingHistoryEntry, TargetFormula, IncompatibilityRule, SavedFormula } from '../types';
 import { getClients, getAgents, getBranches, getPriceLists, getIncompatibilityRules, createPricingRecord, updatePricingRecord, createSavedFormula, getSavedFormulas, updateSavedFormula, createNotification, getUsers, getManagersOfUser, getCompatibilityCategories } from '../services/db';
 import { useToast } from './Toast';
@@ -9,6 +9,7 @@ import { FertigranPComparisonModal } from './FertigranPComparisonModal';
 import { useCalculatorSettings } from '../hooks/useCalculatorSettings';
 import { CalculatorSettingsModal } from './CalculatorSettingsModal';
 import { notifyPricingCreated, notifyPricingEdited } from '../services/notificationService';
+import ProfitabilityModal from './ProfitabilityModal';
 
 const defaultMacros: RawMaterial[] = [
   { id: 'm1', type: 'macro', name: 'Ureia', price: 2500, n: 45, p: 0, k: 0, s: 0, ca: 0, microGuarantees: [], minQty: 50, maxQty: 1000, selected: true, quantity: 0 },
@@ -54,6 +55,11 @@ export default function Calculator({
 
   const [isFertigranPModalOpen, setIsFertigranPModalOpen] = useState(false);
   const [currentComparisonFormula, setCurrentComparisonFormula] = useState<{formulaName: string, n: number, p: number, k: number} | null>(null);
+
+  const [isProfitabilityModalOpen, setIsProfitabilityModalOpen] = useState(false);
+  const [profitabilityTargetCalc, setProfitabilityTargetCalc] = useState<TargetFormula | null>(null);
+  const [profitabilityTargetIndex, setProfitabilityTargetIndex] = useState<number>(0);
+  const [savedPricingId, setSavedPricingId] = useState<string | undefined>(initialData?.id || undefined);
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [priceLists, setPriceLists] = useState<PriceList[]>([]);
@@ -745,6 +751,7 @@ export default function Calculator({
       showSuccess(`Precificação ${(wasApproved || wasRejected) ? 'atualizada' : 'salva'} com sucesso!${(wasApproved || wasRejected) ? ' Notificação enviada aos gerentes.' : ''}`);
       setClientSearch('');
       setAgentSearch('');
+      setSavedPricingId(savedRecord.id);
       if (onClearEditing) onClearEditing();
       if (onSaveSuccess) onSaveSuccess(savedRecord);
     } catch (error) {
@@ -1067,7 +1074,7 @@ export default function Calculator({
           <div className="mt-4 pt-4 border-t border-stone-100">
             <label className="block text-sm font-medium text-stone-600 mb-2">Fórmulas Alvo</label>
             <div className="space-y-3">
-              {calculations.map((calc) => (
+              {calculations.map((calc, calcIdx) => (
                 <div key={calc.id} className="relative p-2 bg-stone-50 rounded-lg border border-stone-200 space-y-2">
                   {/* Main row: checkbox + formula + CA/S + type + gear + calc + delete */}
                   <div className="flex flex-wrap items-center gap-1.5">
@@ -1382,6 +1389,22 @@ export default function Calculator({
                       </div>
                     </div>
                   )}
+
+                  {/* Conferir Rentabilidade — only in Simplified mode */}
+                  {isSimplified && calc.summary && (currentUser.permissions as any)?.calculator_profitabilityCheck !== false && (
+                    <div className="pt-2 border-t border-stone-200">
+                      <button
+                        onClick={() => {
+                          setProfitabilityTargetCalc(calc);
+                          setProfitabilityTargetIndex(calcIdx);
+                          setIsProfitabilityModalOpen(true);
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 text-orange-700 border border-orange-200 font-bold rounded-lg hover:bg-orange-100 transition-colors text-xs"
+                      >
+                        <TrendingUp className="w-3.5 h-3.5" /> Conferir Rentabilidade
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
               <div className="flex gap-2">
@@ -1549,6 +1572,20 @@ export default function Calculator({
           setCalculations(calculations.map(c => c.id === updatedFormula.id ? updatedFormula : c));
         }}
       />
+
+      {isProfitabilityModalOpen && profitabilityTargetCalc && (
+        <ProfitabilityModal
+          isOpen={isProfitabilityModalOpen}
+          onClose={() => setIsProfitabilityModalOpen(false)}
+          calc={profitabilityTargetCalc}
+          calcIndex={profitabilityTargetIndex}
+          pricingRecordId={savedPricingId}
+          currentUser={currentUser}
+          onSaved={() => {
+            setIsProfitabilityModalOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }

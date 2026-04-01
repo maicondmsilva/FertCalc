@@ -185,7 +185,7 @@ export default function PricingDetailModal({
     doc.text(appSettings.companyName, 14, 15);
     doc.setFontSize(9);
     doc.setFont(undefined as any, 'normal');
-    doc.text('PROPOSTA COMERCIAL', 14, 20);
+    doc.text('PROPOSTA COMPLETA', 14, 20);
 
     // Dados gerais compactos (3 linhas com frete e vencimento)
     autoTable(doc, {
@@ -259,6 +259,45 @@ export default function PricingDetailModal({
       });
 
       currentY = (doc as any).lastAutoTable.finalY + 8;
+
+      // Rentabilidade (se existir)
+      const pa = (calc as any).profitabilityAnalysis;
+      if (pa) {
+        const isPosRent = pa.profitability >= 0;
+        if (currentY > 220) { doc.addPage(); currentY = 15; }
+
+        autoTable(doc, {
+          startY: currentY,
+          head: [['ANÁLISE DE RENTABILIDADE']],
+          body: [
+            ['Valor Unitário (Venda)', `R$ ${Number(pa.unitaryPrice).toFixed(2)}`],
+            [`Custo × Fator (${pa.factor})`, `R$ ${Number(pa.baseCostAfterFactor).toFixed(2)}`],
+            ['(-) Frete', `R$ ${Number(pa.freightDeduction).toFixed(2)}`],
+            [`(-) Comissão (${pa.commissionRate}%)`, `R$ ${Number(pa.commissionDeduction).toFixed(2)}`],
+            [`(-) Juros (${pa.interestRate}%)`, `R$ ${Number(pa.interestDeduction).toFixed(2)}`],
+            [`(-) Alíquota (${pa.taxRate}%)`, `R$ ${Number(pa.taxDeduction).toFixed(2)}`],
+            ['= Receita Líquida', `R$ ${Number(pa.netRevenue).toFixed(2)}`],
+            [
+              `RENTABILIDADE (${Number(pa.profitabilityPercent).toFixed(2)}%)`,
+              `${isPosRent ? '+' : ''}R$ ${Number(pa.profitability).toFixed(2)}`
+            ],
+            ['Analisado por', `${pa.analyzedByName} em ${new Date(pa.analyzedAt).toLocaleString('pt-BR')}`],
+          ],
+          styles: { fontSize: 8, cellPadding: 2 },
+          headStyles: {
+            fillColor: isPosRent ? [5, 150, 105] : [220, 38, 38],
+            fontSize: 8, fontStyle: 'bold'
+          },
+          didParseCell: (data: any) => {
+            if (data.row.index === 7) {
+              data.cell.styles.fontStyle = 'bold';
+              data.cell.styles.fillColor = isPosRent ? [209, 250, 229] : [254, 226, 226];
+              data.cell.styles.textColor = isPosRent ? [5, 150, 105] : [220, 38, 38];
+            }
+          }
+        });
+        currentY = (doc as any).lastAutoTable.finalY + 8;
+      }
     });
 
     // Observação Comercial (grande, destaque)
@@ -274,7 +313,7 @@ export default function PricingDetailModal({
       });
     }
 
-    doc.save(`proposta-${cod}.pdf`);
+    doc.save(`proposta-completa-${cod}.pdf`);
   };
 
   const exportToExcel = (pricing: PricingRecord) => {
@@ -709,6 +748,56 @@ export default function PricingDetailModal({
                     </div>
                   )}
                 </div>
+
+                {/* Análise de Rentabilidade (se existir) */}
+                {(calc as any).profitabilityAnalysis && (() => {
+                  const pa = (calc as any).profitabilityAnalysis;
+                  const isPaPositive = pa.profitability >= 0;
+                  return (
+                    <div className={`p-4 rounded-xl border ${isPaPositive ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+                      <h4 className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: isPaPositive ? '#065f46' : '#991b1b' }}>
+                        📊 Análise de Rentabilidade
+                      </h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-stone-500">Valor Unitário (Venda)</span>
+                          <span className="font-mono">R$ {Number(pa.unitaryPrice).toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-stone-500">Custo × Fator ({pa.factor})</span>
+                          <span className="font-mono">R$ {Number(pa.baseCostAfterFactor).toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-red-600">
+                          <span>(-) Frete</span>
+                          <span className="font-mono">- R$ {Number(pa.freightDeduction).toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-red-600">
+                          <span>(-) Comissão ({pa.commissionRate}%)</span>
+                          <span className="font-mono">- R$ {Number(pa.commissionDeduction).toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-red-600">
+                          <span>(-) Juros ({pa.interestRate}%)</span>
+                          <span className="font-mono">- R$ {Number(pa.interestDeduction).toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-red-600">
+                          <span>(-) Alíquota ({pa.taxRate}%)</span>
+                          <span className="font-mono">- R$ {Number(pa.taxDeduction).toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between font-bold border-t border-stone-200 pt-2">
+                          <span>= Receita Líquida</span>
+                          <span className="font-mono">R$ {Number(pa.netRevenue).toFixed(2)}</span>
+                        </div>
+                        <div className={`flex justify-between text-lg font-black pt-1 ${isPaPositive ? 'text-emerald-700' : 'text-red-700'}`}>
+                          <span>RENTABILIDADE ({Number(pa.profitabilityPercent).toFixed(2)}%)</span>
+                          <span className="font-mono">{isPaPositive ? '+' : ''}R$ {Number(pa.profitability).toFixed(2)}</span>
+                        </div>
+                        <p className="text-[10px] text-stone-400 mt-2">
+                          Analisado por {pa.analyzedByName} em {new Date(pa.analyzedAt).toLocaleString('pt-BR')}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             ))}
           </div>
@@ -774,7 +863,7 @@ export default function PricingDetailModal({
                     onClick={() => exportToPDF(selectedPricing)}
                     className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition-colors text-sm"
                   >
-                    <Download className="w-4 h-4" /> PDF
+                    <Download className="w-4 h-4" /> Proposta Completa
                   </button>
                   <button
                     onClick={() => exportToExcel(selectedPricing)}

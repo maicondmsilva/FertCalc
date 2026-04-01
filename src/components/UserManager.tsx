@@ -384,6 +384,7 @@ export default function UserManager() {
                   { id: 'calculator_generatePDF', name: 'Gerar PDF' },
                   { id: 'calculator_saveFormula', name: 'Salvar Batida/Fórmula' },
                   { id: 'calculator_fertigranP', name: 'Acessar Comparador Fertigran P' },
+                  { id: 'calculator_profitabilityCheck', name: 'Conferir Rentabilidade' },
                 ].map(m => (
                   <button key={m.id} type="button"
                     onClick={() => setFormData({ ...formData, permissions: { ...formData.permissions, [m.id]: !(formData.permissions as any)[m.id] } })}
