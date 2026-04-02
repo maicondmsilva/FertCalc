@@ -192,7 +192,10 @@ async function createAuditEntry(expenseId: string, action: AuditAction, userId: 
     user_name: userName,
     observation: observation || null,
   });
-  if (error) console.error('Failed to create audit entry:', error);
+  if (error) {
+    console.error('Failed to create audit entry:', error);
+    throw new Error(`Falha ao registrar auditoria: ${error.message}`);
+  }
 }
 
 // ============================================================
