@@ -398,12 +398,12 @@ export default function ProfitabilityModal({
               </div>
               <div className="p-4 space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-stone-500">Custo (base):</span>
-                  <span className="font-mono">R$ {(calc.summary?.baseCost ?? 0).toFixed(2)}</span>
+                  <span className="text-stone-500">Valor Unitário (Venda):</span>
+                  <span className="font-mono">R$ {(typeof unitaryPrice === 'number' ? unitaryPrice : 0).toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-stone-500">× Fator ({factor}):</span>
-                  <span className="font-mono">R$ {result.baseCostAfterFactor.toFixed(2)}</span>
+                <div className="flex justify-between text-red-600">
+                  <span>(-) Alíquota ({taxRate}%):</span>
+                  <span className="font-mono">- R$ {result.taxDeduction.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-red-600">
                   <span>(-) Frete:</span>
@@ -417,13 +417,13 @@ export default function ProfitabilityModal({
                   <span>(-) Juros ({interestRate}% a.m. × {result.daysOfInterest} dias):</span>
                   <span className="font-mono">- R$ {result.interestDeduction.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between text-red-600">
-                  <span>(-) Alíquota ({taxRate}%):</span>
-                  <span className="font-mono">- R$ {result.taxDeduction.toFixed(2)}</span>
-                </div>
                 <div className="flex justify-between font-bold border-t border-stone-200 pt-2">
                   <span>= Receita Líquida:</span>
                   <span className="font-mono">R$ {result.netRevenue.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-red-600 border-t border-stone-200 pt-2">
+                  <span>(-) Custo × Fator ({factor}):</span>
+                  <span className="font-mono">- R$ {result.baseCostAfterFactor.toFixed(2)}</span>
                 </div>
                 <div className={`flex justify-between text-lg font-black pt-1 ${isPositive ? 'text-emerald-700' : 'text-red-700'}`}>
                   <span>RENTABILIDADE ({result.profitabilityPercent.toFixed(2)}%):</span>

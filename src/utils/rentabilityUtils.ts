@@ -43,14 +43,19 @@ export function calcRentability(input: RentabilityInput): {
     if (days < 0) days = 0;
   }
 
-  // Taxa diária usando base de 30 dias/mês (regra de negócio padrão, igual ao Calculator.tsx)
-  const dailyInterest = (interestRate || 0) / 30;
-  const interestDeduction = baseCostAfterFactor * (dailyInterest / 100) * days;
+  // Juros compostos mensais sobre (unitaryPrice - freightDeduction)
+  // Modelo de dedução: Saldo(m+1) = Saldo(m) × (1 - taxaMensal/100)
+  // jurosTotal = Saldo(0) × (1 − (1 − taxaMensal/100)^(dias/30))
+  const interestBase = unitaryPrice - freightDeduction;
+  const monthFraction = days / 30;
+  const interestDeduction = days > 0 && (interestRate || 0) > 0
+    ? interestBase * (1 - Math.pow(1 - (interestRate || 0) / 100, monthFraction))
+    : 0;
 
-  const commissionDeduction = unitaryPrice * (commissionRate / 100);
   const taxDeduction = unitaryPrice * (taxRate / 100);
+  const commissionDeduction = unitaryPrice * (commissionRate / 100);
 
-  const netRevenue = unitaryPrice - freightDeduction - commissionDeduction - interestDeduction - taxDeduction;
+  const netRevenue = unitaryPrice - taxDeduction - freightDeduction - commissionDeduction - interestDeduction;
 
   const profitability = netRevenue - baseCostAfterFactor;
 

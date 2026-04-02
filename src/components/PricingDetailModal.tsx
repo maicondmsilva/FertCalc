@@ -271,12 +271,12 @@ export default function PricingDetailModal({
           head: [['ANÁLISE DE RENTABILIDADE']],
           body: [
             ['Valor Unitário (Venda)', `R$ ${Number(pa.unitaryPrice).toFixed(2)}`],
-            [`Custo × Fator (${pa.factor})`, `R$ ${Number(pa.baseCostAfterFactor).toFixed(2)}`],
+            [`(-) Alíquota (${pa.taxRate}%)`, `R$ ${Number(pa.taxDeduction).toFixed(2)}`],
             ['(-) Frete', `R$ ${Number(pa.freightDeduction).toFixed(2)}`],
             [`(-) Comissão (${pa.commissionRate}%)`, `R$ ${Number(pa.commissionDeduction).toFixed(2)}`],
             [`(-) Juros (${pa.interestRate}%)`, `R$ ${Number(pa.interestDeduction).toFixed(2)}`],
-            [`(-) Alíquota (${pa.taxRate}%)`, `R$ ${Number(pa.taxDeduction).toFixed(2)}`],
             ['= Receita Líquida', `R$ ${Number(pa.netRevenue).toFixed(2)}`],
+            [`(-) Custo × Fator (${pa.factor})`, `R$ ${Number(pa.baseCostAfterFactor).toFixed(2)}`],
             [
               `RENTABILIDADE (${Number(pa.profitabilityPercent).toFixed(2)}%)`,
               `${isPosRent ? '+' : ''}R$ ${Number(pa.profitability).toFixed(2)}`
