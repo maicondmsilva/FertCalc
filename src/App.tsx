@@ -22,7 +22,7 @@ import Home from './components/Home';
 // import Dashboard from './components/Dashboard';
 import Dashboard from './components/Dashboard';
 import SavedFormulas from './components/SavedFormulas';
-import { LayoutDashboard, History as HistoryIcon, Database, Users, UserCheck, Building2, Settings, LogOut, Leaf, ShieldCheck, Menu, X, Target, Bell, Download, ChevronLeft, ChevronRight, Home as HomeIcon, BarChart3, ChevronDown, FileEdit, Tag, Package, AlertTriangle, Calculator as CalcIcon, Beaker } from 'lucide-react';
+import { LayoutDashboard, History as HistoryIcon, Database, Users, UserCheck, Building2, Settings, LogOut, Leaf, ShieldCheck, Menu, X, Target, Bell, Download, ChevronLeft, ChevronRight, Home as HomeIcon, BarChart3, ChevronDown, FileEdit, Tag, Package, AlertTriangle, Calculator as CalcIcon, Beaker, CreditCard } from 'lucide-react';
 import { PricingRecord, User, AppSettings, NavItem, SavedFormula } from './types';
 import { getAppSettings, markNotificationsAsRead } from './services/db';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
@@ -35,6 +35,8 @@ import ManagementReportsModule from './components/ManagementReportsModule';
 import BrandManager from './components/BrandManager';
 import ProductManager from './components/ProductManager';
 import IncompatibilityManager from './components/IncompatibilityManager';
+
+import ExpenseDashboard from './components/ExpenseManagement/ExpenseDashboard';
 
 import { useNotifications } from './hooks/useNotifications';
 import { NotificationBell } from './components/notifications/NotificationBell';
@@ -50,7 +52,7 @@ export default function App() {
   const pathParts = location.pathname.split('/').filter(Boolean);
   const activeTab = pathParts[0] || '';
 
-  let activeModule: 'pricing' | 'config' | 'prd' | 'managementReports' | null = null;
+  let activeModule: 'pricing' | 'config' | 'prd' | 'managementReports' | 'expenses' | null = null;
   if (['dashboard', 'calculator', 'simplified_calculator', 'saved_formulas', 'history', 'goals', 'approvals', 'reports', 'pricingReport', 'commissionReport', 'pricingBySeller', 'pricelists', 'materials_macro', 'materials_micro', 'materials_brand', 'products', 'incompatibilities', 'clients', 'agents'].includes(activeTab)) {
     activeModule = 'pricing';
   } else if (['branches', 'settings', 'users'].includes(activeTab)) {
@@ -59,6 +61,8 @@ export default function App() {
     activeModule = 'prd';
   } else if (['managementReports_dashboard', 'managementReports_lancamentos', 'managementReports_cadastros'].includes(activeTab)) {
     activeModule = 'managementReports';
+  } else if (activeTab === 'expenses') {
+    activeModule = 'expenses';
   }
 
   const { showInfo } = useToast();
@@ -275,6 +279,17 @@ export default function App() {
             { id: 'managementReports_cadastros', label: 'Configurações', icon: Settings, permission: 'managementReports' },
           ]
         },
+      ];
+
+      return allItems.filter(item => {
+        if (currentUser.role === 'master' || currentUser.role === 'admin') return true;
+        return (currentUser.permissions as any)?.[item.permission];
+      });
+    }
+
+    if (activeModule === 'expenses') {
+      const allItems = [
+        { id: 'expenses', label: 'Gastos Cartão', icon: CreditCard, permission: 'expenses' },
       ];
 
       return allItems.filter(item => {
@@ -541,6 +556,7 @@ export default function App() {
                     navigate('/managementReports_dashboard');
                   }
                   if (moduleId === 'prd') navigate('/prd');
+                  if (moduleId === 'expenses') navigate('/expenses');
                 }}
               />
             )}
@@ -593,6 +609,7 @@ export default function App() {
             {activeModule === 'managementReports' && activeTab === 'managementReports_dashboard' && <ManagementReportsModule currentUser={currentUser} activeTab="dashboard" />}
             {activeModule === 'managementReports' && activeTab === 'managementReports_lancamentos' && <ManagementReportsModule currentUser={currentUser} activeTab="lancamentos" />}
             {activeModule === 'managementReports' && activeTab === 'managementReports_cadastros' && <ManagementReportsModule currentUser={currentUser} activeTab="cadastros" />}
+            {activeModule === 'expenses' && activeTab === 'expenses' && <ExpenseDashboard currentUser={currentUser} />}
           </div>
         </main>
       </div>
