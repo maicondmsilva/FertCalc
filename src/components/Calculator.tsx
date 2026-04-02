@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import solver from 'javascript-lp-solver';
-import { Plus, Trash2, Save, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle2, Calculator as CalculatorIcon, Building2, Database, Search, User, UserCheck, Tag, LayoutDashboard, Settings, X, Beaker, TrendingUp } from 'lucide-react';
+import { Plus, Trash2, Save, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle2, Calculator as CalculatorIcon, Building2, Database, Search, User, UserCheck, Tag, LayoutDashboard, Settings, X, Beaker } from 'lucide-react';
 import { RawMaterial, PricingFactors, PricingRecord, PricingSummary, Branch, PriceList, Client, Agent, User as AppUser, PricingHistoryEntry, TargetFormula, IncompatibilityRule, SavedFormula } from '../types';
 import { getClients, getAgents, getBranches, getPriceLists, getIncompatibilityRules, createPricingRecord, updatePricingRecord, createSavedFormula, getSavedFormulas, updateSavedFormula, createNotification, getUsers, getManagersOfUser, getCompatibilityCategories } from '../services/db';
 import { useToast } from './Toast';
@@ -1390,18 +1390,24 @@ export default function Calculator({
                     </div>
                   )}
 
-                  {/* Conferir Rentabilidade — only in Simplified mode */}
-                  {isSimplified && calc.summary && (currentUser.permissions as any)?.calculator_profitabilityCheck !== false && (
+                  {/* Conferir Rentabilidade */}
+                  {calc.summary && (
+                    currentUser.role === 'master' || currentUser.role === 'admin' || currentUser.role === 'manager' ||
+                    (currentUser.permissions as any)?.calculator_profitabilityCheck
+                  ) && (
                     <div className="pt-2 border-t border-stone-200">
                       <button
+                        type="button"
                         onClick={() => {
                           setProfitabilityTargetCalc(calc);
                           setProfitabilityTargetIndex(calcIdx);
                           setIsProfitabilityModalOpen(true);
                         }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 text-orange-700 border border-orange-200 font-bold rounded-lg hover:bg-orange-100 transition-colors text-xs"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold rounded-lg transition-all active:scale-95 shadow-sm"
+                        title="Conferir Rentabilidade"
                       >
-                        <TrendingUp className="w-3.5 h-3.5" /> Conferir Rentabilidade
+                        <span>📊</span>
+                        <span>Rentabilidade</span>
                       </button>
                     </div>
                   )}
