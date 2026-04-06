@@ -141,6 +141,7 @@ export interface User {
     macro?: boolean;
     micro?: boolean;
     expenses?: boolean;
+    creditCard?: import('./types/expense.types').ExpenseRole;
   };
 }
 

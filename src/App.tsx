@@ -168,7 +168,7 @@ export default function App() {
     };
   }, [currentUser, navigate]);
 
-  // Load expense badge counts when in expenses module
+  // Load expense badge counts when entering the expenses module
   useEffect(() => {
     if (activeModule !== 'expenses' || !currentUser) return;
     const load = async () => {
@@ -177,7 +177,7 @@ export default function App() {
       setCheckedExpenseCount(c);
     };
     load();
-  }, [activeModule, activeTab, currentUser]);
+  }, [activeModule, currentUser]);
 
   const handleInstallClick = () => {
     if (deferredPrompt) {

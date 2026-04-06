@@ -74,7 +74,7 @@ export default function CardManager({ currentUser }: CardManagerProps) {
       return;
     }
     if (form.lastFour && !/^\d{4}$/.test(form.lastFour)) {
-      setError('Os 4 últimos dígitos devem ser numéricos.');
+      setError('Os 4 últimos dígitos devem conter exatamente 4 números.');
       return;
     }
 

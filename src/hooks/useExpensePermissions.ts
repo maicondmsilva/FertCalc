@@ -18,7 +18,7 @@ export function useExpensePermissions(currentUser: User | null): ExpensePermissi
     return { canLaunch: true, canCheck: true, canApprove: true, canAdmin: true, role: 'admin' };
   }
 
-  const expenseRole = (currentUser.permissions as any)?.creditCard as ExpenseRole | undefined;
+  const expenseRole = currentUser.permissions?.creditCard;
 
   switch (expenseRole) {
     case 'admin':
