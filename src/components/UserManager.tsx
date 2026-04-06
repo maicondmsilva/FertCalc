@@ -36,7 +36,8 @@ export default function UserManager() {
       pricingBySeller: false,
       prd: true,
       managementReports: true,
-      calculator_profitabilityCheck: false
+      calculator_profitabilityCheck: false,
+      creditCard: 'none'
     }
   });
 
@@ -55,7 +56,8 @@ export default function UserManager() {
     { id: 'branches', name: 'Filiais' },
     { id: 'settings', name: 'Personalização' },
     { id: 'prd', name: 'Documentação PRD' },
-    { id: 'managementReports', name: 'Relatório Diário' }
+    { id: 'managementReports', name: 'Relatório Diário' },
+    { id: 'expenses', name: 'Gastos Cartão' }
   ];
 
   useEffect(() => {
@@ -96,15 +98,15 @@ export default function UserManager() {
       const allCrud = ['clients', 'agents', 'priceLists', 'branches', 'macro', 'micro'].reduce((acc, resource) => {
         return { ...acc, [`${resource}_create`]: true, [`${resource}_edit`]: true, [`${resource}_delete`]: true, [resource]: true };
       }, {});
-      return Object.keys(base).reduce((acc, key) => ({ ...acc, [key]: true }), { approvals_canApprove: true, calculator_profitabilityCheck: true, ...allCrud });
+      return Object.keys(base).reduce((acc, key) => ({ ...acc, [key]: true }), { approvals_canApprove: true, calculator_profitabilityCheck: true, creditCard: 'admin', ...allCrud });
     }
     if (role === 'manager') {
       const allCrud = ['clients', 'agents', 'priceLists', 'branches', 'macro', 'micro'].reduce((acc, resource) => {
         return { ...acc, [`${resource}_create`]: true, [`${resource}_edit`]: true, [`${resource}_delete`]: true, [resource]: true };
       }, {});
-      return { ...base, approvals: true, approvals_canApprove: true, reports: true, pricingReport: true, commissionReport: true, pricingBySeller: true, goals: true, calculator_profitabilityCheck: true, ...allCrud };
+      return { ...base, approvals: true, approvals_canApprove: true, reports: true, pricingReport: true, commissionReport: true, pricingBySeller: true, goals: true, calculator_profitabilityCheck: true, creditCard: 'approver', ...allCrud };
     }
-    return base;
+    return { ...base, creditCard: 'none' };
   };
 
   const handleRoleChange = (role: 'master' | 'user' | 'manager' | 'admin') => {
@@ -487,6 +489,38 @@ export default function UserManager() {
                 ))}
               </div>
             </div>
+
+            {/* Permissões — Módulo Cartão de Crédito */}
+            <div className="border border-purple-200 rounded-xl overflow-hidden">
+              <div className="bg-purple-700 text-white px-4 py-2 text-xs font-bold uppercase tracking-wider">
+                💳 Cartão de Crédito — Nível de Acesso
+              </div>
+              <div className="p-4">
+                <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-2">
+                  Papel no módulo de Gastos
+                </label>
+                <select
+                  value={(formData.permissions as any).creditCard || 'none'}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      permissions: { ...formData.permissions, creditCard: e.target.value },
+                    })
+                  }
+                  className="w-full sm:w-72 px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                >
+                  <option value="none">Sem acesso</option>
+                  <option value="viewer">Visualizador — só visualiza</option>
+                  <option value="launcher">Lançador — lança gastos</option>
+                  <option value="checker">Conferente — lança e confere</option>
+                  <option value="approver">Aprovador — lança, confere e aprova</option>
+                  <option value="admin">Administrador — acesso total ao módulo</option>
+                </select>
+                <p className="mt-2 text-xs text-stone-400">
+                  Este campo controla o acesso ao módulo <strong>Gastos Cartão</strong> independente do nível de acesso global.
+                </p>
+              </div>
+            </div>
           </div>
 
           <div className="flex justify-end gap-3">
@@ -566,6 +600,11 @@ export default function UserManager() {
                       {['clients', 'agents', 'priceLists', 'branches', 'macro', 'micro'].some(k => (user.permissions as any)?.[k]) && (
                         <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-[9px] font-medium border border-purple-200">
                           ⚙️ Cadastros Gen.
+                        </span>
+                      )}
+                      {(user.permissions as any)?.creditCard && (user.permissions as any).creditCard !== 'none' && (
+                        <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-[9px] font-medium border border-purple-200">
+                          💳 {(user.permissions as any).creditCard}
                         </span>
                       )}
                     </div>

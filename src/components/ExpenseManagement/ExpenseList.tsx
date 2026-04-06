@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { CreditCardExpense, ExpenseCategory, ExpenseStatus } from '../../types/expense.types';
 import { User } from '../../types';
 import { Search, Trash2, Edit3, Eye, CheckCircle, XCircle, ClipboardCheck } from 'lucide-react';
+import { useExpensePermissions } from '../../hooks/useExpensePermissions';
 
 interface ExpenseListProps {
   expenses: CreditCardExpense[];
@@ -48,7 +49,7 @@ export default function ExpenseList({
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectObservation, setRejectObservation] = useState('');
 
-  const isAdmin = currentUser.role === 'master' || currentUser.role === 'admin';
+  const { canLaunch, canCheck, canApprove, canAdmin } = useExpensePermissions(currentUser);
 
   const filtered = expenses.filter(e => {
     const matchSearch = e.description.toLowerCase().includes(search.toLowerCase()) ||
@@ -170,7 +171,7 @@ export default function ExpenseList({
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        {(expense.userId === currentUser.id || isAdmin) && expense.status === 'pendente' && (
+                        {((expense.userId === currentUser.id && canLaunch) || canAdmin) && expense.status === 'pendente' && (
                           <button
                             onClick={() => onEdit(expense)}
                             className="p-1.5 text-stone-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -179,7 +180,7 @@ export default function ExpenseList({
                             <Edit3 className="w-4 h-4" />
                           </button>
                         )}
-                        {isAdmin && expense.status === 'pendente' && (
+                        {canCheck && expense.status === 'pendente' && (
                           <button
                             onClick={() => onCheck(expense.id)}
                             className="p-1.5 text-stone-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -188,7 +189,7 @@ export default function ExpenseList({
                             <ClipboardCheck className="w-4 h-4" />
                           </button>
                         )}
-                        {isAdmin && (expense.status === 'pendente' || expense.status === 'conferido') && (
+                        {canApprove && (expense.status === 'pendente' || expense.status === 'conferido') && (
                           <button
                             onClick={() => onApprove(expense.id)}
                             className="p-1.5 text-stone-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
@@ -197,7 +198,7 @@ export default function ExpenseList({
                             <CheckCircle className="w-4 h-4" />
                           </button>
                         )}
-                        {isAdmin && (expense.status === 'pendente' || expense.status === 'conferido') && (
+                        {canApprove && (expense.status === 'pendente' || expense.status === 'conferido') && (
                           <button
                             onClick={() => setRejectingId(expense.id)}
                             className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -206,7 +207,7 @@ export default function ExpenseList({
                             <XCircle className="w-4 h-4" />
                           </button>
                         )}
-                        {(expense.userId === currentUser.id || isAdmin) && expense.status === 'pendente' && (
+                        {(expense.userId === currentUser.id || canAdmin) && expense.status === 'pendente' && (
                           <button
                             onClick={() => { if (window.confirm('Deseja excluir este gasto?')) onDelete(expense.id); }}
                             className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
