@@ -16,7 +16,8 @@ import {
   Search,
   Download,
   ShieldCheck,
-  Shield
+  Shield,
+  CreditCard
 } from 'lucide-react';
 import { User } from '../types';
 
@@ -33,6 +34,7 @@ export const menuItems = [
   { id: 'branches', label: 'Filiais', icon: Building2, permission: 'branches' },
   { id: 'users', label: 'Usuários', icon: ShieldCheck, permission: 'users' },
   { id: 'settings', label: 'Configurações', icon: Settings, permission: 'settings' },
+  { id: 'expenses', label: 'Gastos Cartão', icon: CreditCard, permission: 'expenses' },
 ];
 
 interface SidebarProps {

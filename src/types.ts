@@ -140,6 +140,7 @@ export interface User {
     micro_delete?: boolean;
     macro?: boolean;
     micro?: boolean;
+    expenses?: boolean;
   };
 }
 

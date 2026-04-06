@@ -1,10 +1,10 @@
 import React from 'react';
-import { LayoutDashboard, Settings, ShieldCheck, Calculator, Database, Target, Users, UserCheck, Building2, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, Settings, ShieldCheck, Calculator, Database, Target, Users, UserCheck, Building2, BarChart3, CreditCard } from 'lucide-react';
 import { User } from '../types';
 
 interface HomeProps {
   currentUser: User;
-  onSelectModule: (moduleId: 'pricing' | 'config' | 'prd' | 'managementReports') => void;
+  onSelectModule: (moduleId: 'pricing' | 'config' | 'prd' | 'managementReports' | 'expenses') => void;
 }
 
 export default function Home({ currentUser, onSelectModule }: HomeProps) {
@@ -48,6 +48,16 @@ export default function Home({ currentUser, onSelectModule }: HomeProps) {
       hoverColor: 'hover:bg-blue-700',
       textColor: 'text-blue-600',
       allowed: currentUser.role === 'master' || currentUser.role === 'admin' || currentUser.role === 'manager'
+    },
+    {
+      id: 'expenses',
+      label: 'GASTOS CARTÃO',
+      description: 'Controle de despesas do cartão de crédito corporativo com aprovações e relatórios.',
+      icon: CreditCard,
+      color: 'bg-purple-600',
+      hoverColor: 'hover:bg-purple-700',
+      textColor: 'text-purple-600',
+      allowed: currentUser.role === 'master' || currentUser.role === 'admin' || currentUser.role === 'manager' || !!(currentUser.permissions as any)?.expenses
     }
   ];
 
