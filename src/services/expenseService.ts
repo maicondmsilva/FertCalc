@@ -243,6 +243,27 @@ export async function deleteExpenseCategory(id: string): Promise<void> {
 }
 
 // ============================================================
+// COUNTS (for sidebar badges)
+// ============================================================
+export async function getPendingCount(): Promise<number> {
+  const { count, error } = await supabase
+    .from('credit_card_expenses')
+    .select('*', { count: 'exact', head: true })
+    .eq('status', 'pendente');
+  if (error) return 0;
+  return count || 0;
+}
+
+export async function getCheckedCount(): Promise<number> {
+  const { count, error } = await supabase
+    .from('credit_card_expenses')
+    .select('*', { count: 'exact', head: true })
+    .eq('status', 'conferido');
+  if (error) return 0;
+  return count || 0;
+}
+
+// ============================================================
 // BUDGET STATUS
 // ============================================================
 export async function getCategoryBudgetStatus(period: ExpensePeriod): Promise<CategoryBudgetStatus[]> {

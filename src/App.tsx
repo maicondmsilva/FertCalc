@@ -22,7 +22,7 @@ import Home from './components/Home';
 // import Dashboard from './components/Dashboard';
 import Dashboard from './components/Dashboard';
 import SavedFormulas from './components/SavedFormulas';
-import { LayoutDashboard, History as HistoryIcon, Database, Users, UserCheck, Building2, Settings, LogOut, Leaf, ShieldCheck, Menu, X, Target, Bell, Download, ChevronLeft, ChevronRight, Home as HomeIcon, BarChart3, ChevronDown, FileEdit, Tag, Package, AlertTriangle, Calculator as CalcIcon, Beaker, CreditCard } from 'lucide-react';
+import { LayoutDashboard, History as HistoryIcon, Database, Users, UserCheck, Building2, Settings, LogOut, Leaf, ShieldCheck, Menu, X, Target, Bell, Download, ChevronLeft, ChevronRight, Home as HomeIcon, BarChart3, ChevronDown, FileEdit, Tag, Package, AlertTriangle, Calculator as CalcIcon, Beaker, CreditCard, List, Plus, ClipboardCheck, CheckCircle2 } from 'lucide-react';
 import { PricingRecord, User, AppSettings, NavItem, SavedFormula } from './types';
 import { getAppSettings, markNotificationsAsRead } from './services/db';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
@@ -37,6 +37,12 @@ import ProductManager from './components/ProductManager';
 import IncompatibilityManager from './components/IncompatibilityManager';
 
 import ExpenseDashboard from './components/ExpenseManagement/ExpenseDashboard';
+import CheckExpenses from './components/ExpenseManagement/CheckExpenses';
+import ApproveExpenses from './components/ExpenseManagement/ApproveExpenses';
+import CardManager from './components/ExpenseManagement/CardManager';
+import ExpenseCategoryManager from './components/ExpenseManagement/ExpenseCategoryManager';
+
+import { getPendingCount, getCheckedCount } from './services/expenseService';
 
 import { useNotifications } from './hooks/useNotifications';
 import { NotificationBell } from './components/notifications/NotificationBell';
@@ -61,7 +67,7 @@ export default function App() {
     activeModule = 'prd';
   } else if (['managementReports_dashboard', 'managementReports_lancamentos', 'managementReports_cadastros'].includes(activeTab)) {
     activeModule = 'managementReports';
-  } else if (activeTab === 'expenses') {
+  } else if (activeTab === 'expenses' || activeTab === 'expenses_lancamentos' || activeTab === 'expenses_novo' || activeTab === 'expenses_relatorios' || activeTab === 'expenses_conferencia' || activeTab === 'expenses_aprovacao' || activeTab === 'expenses_categorias' || activeTab === 'expenses_cartoes') {
     activeModule = 'expenses';
   }
 
@@ -81,6 +87,11 @@ export default function App() {
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
   const [isReportsExpanded, setIsReportsExpanded] = useState(false);
   const [isMaterialsExpanded, setIsMaterialsExpanded] = useState(false);
+  const [isExpenseLancamentosExpanded, setIsExpenseLancamentosExpanded] = useState(true);
+  const [isExpenseWorkflowExpanded, setIsExpenseWorkflowExpanded] = useState(false);
+  const [isExpenseConfigExpanded, setIsExpenseConfigExpanded] = useState(false);
+  const [pendingExpenseCount, setPendingExpenseCount] = useState(0);
+  const [checkedExpenseCount, setCheckedExpenseCount] = useState(0);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
   useEffect(() => {
@@ -156,6 +167,17 @@ export default function App() {
       if (timeoutId) clearTimeout(timeoutId);
     };
   }, [currentUser, navigate]);
+
+  // Load expense badge counts when in expenses module
+  useEffect(() => {
+    if (activeModule !== 'expenses' || !currentUser) return;
+    const load = async () => {
+      const [p, c] = await Promise.all([getPendingCount(), getCheckedCount()]);
+      setPendingExpenseCount(p);
+      setCheckedExpenseCount(c);
+    };
+    load();
+  }, [activeModule, activeTab, currentUser]);
 
   const handleInstallClick = () => {
     if (deferredPrompt) {
@@ -289,7 +311,40 @@ export default function App() {
 
     if (activeModule === 'expenses') {
       const allItems = [
-        { id: 'expenses', label: 'Gastos Cartão', icon: CreditCard, permission: 'expenses' },
+        {
+          id: 'expenses_lancamentos_group',
+          label: 'Lançamentos',
+          icon: CreditCard,
+          permission: 'expenses',
+          type: 'parent',
+          children: [
+            { id: 'expenses_lancamentos', label: 'Gastos', icon: List, permission: 'expenses' },
+            { id: 'expenses_novo', label: 'Novo Gasto', icon: Plus, permission: 'expenses' },
+            { id: 'expenses_relatorios', label: 'Relatórios', icon: BarChart3, permission: 'expenses' },
+          ]
+        },
+        {
+          id: 'expenses_workflow_group',
+          label: 'Workflow',
+          icon: ClipboardCheck,
+          permission: 'expenses',
+          type: 'parent',
+          children: [
+            { id: 'expenses_conferencia', label: 'Conferência', icon: ClipboardCheck, permission: 'expenses', badge: pendingExpenseCount },
+            { id: 'expenses_aprovacao', label: 'Aprovação', icon: CheckCircle2, permission: 'expenses', badge: checkedExpenseCount },
+          ]
+        },
+        {
+          id: 'expenses_config_group',
+          label: 'Configurações',
+          icon: Settings,
+          permission: 'expenses',
+          type: 'parent',
+          children: [
+            { id: 'expenses_categorias', label: 'Categorias', icon: Tag, permission: 'expenses' },
+            { id: 'expenses_cartoes', label: 'Cartões', icon: CreditCard, permission: 'expenses' },
+          ]
+        },
       ];
 
       return allItems.filter(item => {
@@ -363,7 +418,7 @@ export default function App() {
           <div className="px-3 mb-2">
             {isSidebarExpanded && (
               <p className="text-[10px] font-black text-stone-400 uppercase tracking-[0.2em]">
-                {activeModule === 'pricing' ? 'Precificação' : 'Configuração'}
+                {activeModule === 'pricing' ? 'Precificação' : activeModule === 'expenses' ? 'Cartão Corporativo' : 'Configuração'}
               </p>
             )}
           </div>
@@ -371,30 +426,45 @@ export default function App() {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
 
+            const getGroupExpanded = (id: string) => {
+              if (id === 'materials_group') return isMaterialsExpanded;
+              if (id === 'reports') return isReportsExpanded;
+              if (id === 'managementReports_group') return isReportsExpanded;
+              if (id === 'expenses_lancamentos_group') return isExpenseLancamentosExpanded;
+              if (id === 'expenses_workflow_group') return isExpenseWorkflowExpanded;
+              if (id === 'expenses_config_group') return isExpenseConfigExpanded;
+              return false;
+            };
+
+            const toggleGroup = (id: string) => {
+              if (id === 'materials_group') setIsMaterialsExpanded(p => !p);
+              else if (id === 'reports' || id === 'managementReports_group') setIsReportsExpanded(p => !p);
+              else if (id === 'expenses_lancamentos_group') setIsExpenseLancamentosExpanded(p => !p);
+              else if (id === 'expenses_workflow_group') setIsExpenseWorkflowExpanded(p => !p);
+              else if (id === 'expenses_config_group') setIsExpenseConfigExpanded(p => !p);
+            };
+
+            const isExpanded = getGroupExpanded(item.id);
+            const isExpenseGroup = item.id.startsWith('expenses_');
+
             if (item.type === 'parent') {
               return (
                 <div key={item.id}>
                   <button
-                    onClick={() => {
-                      if (item.id === 'materials_group') {
-                        setIsMaterialsExpanded(!isMaterialsExpanded);
-                      } else {
-                        setIsReportsExpanded(!isReportsExpanded);
-                      }
-                    }}
-                    className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-colors ${(item.id === 'materials_group' ? isMaterialsExpanded : isReportsExpanded) ? 'bg-emerald-50 text-emerald-700 font-medium' : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900'}`}
+                    onClick={() => toggleGroup(item.id)}
+                    className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-colors ${isExpanded ? (isExpenseGroup ? 'bg-purple-50 text-purple-700 font-medium' : 'bg-emerald-50 text-emerald-700 font-medium') : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900'}`}
                     title={!isSidebarExpanded ? item.label : undefined}
                   >
-                    <Icon className={`w-5 h-5 flex-shrink-0 ${(item.id === 'materials_group' ? isMaterialsExpanded : isReportsExpanded) || isActive ? 'text-emerald-600' : 'text-stone-400'}`} />
+                    <Icon className={`w-5 h-5 flex-shrink-0 ${isExpanded || isActive ? (isExpenseGroup ? 'text-purple-600' : 'text-emerald-600') : 'text-stone-400'}`} />
                     {isSidebarExpanded && (
                       <span className="ml-3 truncate">{item.label}</span>
                     )}
                     {isSidebarExpanded && (
-                      <ChevronDown className={`w-4 h-4 ml-auto transition-transform ${(item.id === 'materials_group' ? isMaterialsExpanded : isReportsExpanded) ? 'rotate-180' : ''}`} />
+                      <ChevronDown className={`w-4 h-4 ml-auto transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                     )}
                   </button>
                   {
-                    (item.id === 'materials_group' ? isMaterialsExpanded : isReportsExpanded) && isSidebarExpanded && (
+                    isExpanded && isSidebarExpanded && (
                       <div className="ml-6 mt-1 space-y-1">
                         {item.children?.filter(child => {
                           if (currentUser.role === 'master' || currentUser.role === 'admin') return true;
@@ -414,12 +484,17 @@ export default function App() {
                                   navigate(`/${child.id}`);
                                 }
                               }}
-                              className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-colors ${isChildActive ? 'bg-emerald-50 text-emerald-700 font-medium' : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900'}`}
+                              className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-colors ${isChildActive ? (isExpenseGroup ? 'bg-purple-50 text-purple-700 font-medium' : 'bg-emerald-50 text-emerald-700 font-medium') : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900'}`}
                               title={!isSidebarExpanded ? child.label : undefined}
                             >
-                              <ChildIcon className={`w-5 h-5 flex-shrink-0 ${isChildActive ? 'text-emerald-600' : 'text-stone-400'}`} />
+                              <ChildIcon className={`w-5 h-5 flex-shrink-0 ${isChildActive ? (isExpenseGroup ? 'text-purple-600' : 'text-emerald-600') : 'text-stone-400'}`} />
                               {isSidebarExpanded && (
-                                <span className="ml-3 truncate">{child.label}</span>
+                                <span className="ml-3 truncate flex-1">{child.label}</span>
+                              )}
+                              {isSidebarExpanded && (child as any).badge > 0 && (
+                                <span className="ml-auto bg-amber-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                                  {(child as any).badge}
+                                </span>
                               )}
                             </Link>
                           );
@@ -556,7 +631,7 @@ export default function App() {
                     navigate('/managementReports_dashboard');
                   }
                   if (moduleId === 'prd') navigate('/prd');
-                  if (moduleId === 'expenses') navigate('/expenses');
+                  if (moduleId === 'expenses') navigate('/expenses_lancamentos');
                 }}
               />
             )}
@@ -609,7 +684,13 @@ export default function App() {
             {activeModule === 'managementReports' && activeTab === 'managementReports_dashboard' && <ManagementReportsModule currentUser={currentUser} activeTab="dashboard" />}
             {activeModule === 'managementReports' && activeTab === 'managementReports_lancamentos' && <ManagementReportsModule currentUser={currentUser} activeTab="lancamentos" />}
             {activeModule === 'managementReports' && activeTab === 'managementReports_cadastros' && <ManagementReportsModule currentUser={currentUser} activeTab="cadastros" />}
-            {activeModule === 'expenses' && activeTab === 'expenses' && <ExpenseDashboard currentUser={currentUser} />}
+            {activeModule === 'expenses' && (activeTab === 'expenses' || activeTab === 'expenses_lancamentos') && <ExpenseDashboard currentUser={currentUser} view="lancamentos" />}
+            {activeModule === 'expenses' && activeTab === 'expenses_novo' && <ExpenseDashboard currentUser={currentUser} view="novo" />}
+            {activeModule === 'expenses' && activeTab === 'expenses_relatorios' && <ExpenseDashboard currentUser={currentUser} view="relatorios" />}
+            {activeModule === 'expenses' && activeTab === 'expenses_conferencia' && <CheckExpenses currentUser={currentUser} />}
+            {activeModule === 'expenses' && activeTab === 'expenses_aprovacao' && <ApproveExpenses currentUser={currentUser} />}
+            {activeModule === 'expenses' && activeTab === 'expenses_categorias' && <ExpenseCategoryManager />}
+            {activeModule === 'expenses' && activeTab === 'expenses_cartoes' && <CardManager currentUser={currentUser} />}
           </div>
         </main>
       </div>

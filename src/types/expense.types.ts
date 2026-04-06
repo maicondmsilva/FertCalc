@@ -2,6 +2,19 @@ export type ExpenseStatus = 'pendente' | 'conferido' | 'aprovado' | 'rejeitado';
 
 export type AuditAction = 'criado' | 'conferido' | 'aprovado' | 'rejeitado' | 'editado' | 'excluido';
 
+export type ExpenseRole = 'none' | 'viewer' | 'launcher' | 'checker' | 'approver' | 'admin';
+
+export interface CreditCard {
+  id: string;
+  name: string;
+  lastFour?: string;
+  userId: string;
+  churchId: string;
+  active: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface ExpenseCategory {
   id: string;
   name: string;

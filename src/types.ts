@@ -455,6 +455,7 @@ export interface NavItem {
   icon: React.ForwardRefExoticComponent<any>;
   permission: string;
   type?: 'parent' | 'child';
+  badge?: number;
   children?: NavItem[];
 }
 
