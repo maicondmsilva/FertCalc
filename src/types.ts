@@ -141,6 +141,7 @@ export interface User {
     macro?: boolean;
     micro?: boolean;
     expenses?: boolean;
+    creditCard?: import('./types/expense.types').ExpenseRole;
   };
 }
 
@@ -455,6 +456,7 @@ export interface NavItem {
   icon: React.ForwardRefExoticComponent<any>;
   permission: string;
   type?: 'parent' | 'child';
+  badge?: number;
   children?: NavItem[];
 }
 
