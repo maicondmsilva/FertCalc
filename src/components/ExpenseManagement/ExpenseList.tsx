@@ -3,6 +3,8 @@ import { CreditCardExpense, ExpenseCategory, ExpenseStatus } from '../../types/e
 import { User } from '../../types';
 import { Search, Trash2, Edit3, Eye, CheckCircle, XCircle, ClipboardCheck } from 'lucide-react';
 import { useExpensePermissions } from '../../hooks/useExpensePermissions';
+import { useConfirm } from '../../hooks/useConfirm';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 
 interface ExpenseListProps {
   expenses: CreditCardExpense[];
@@ -50,9 +52,11 @@ export default function ExpenseList({
   const [rejectObservation, setRejectObservation] = useState('');
 
   const { canLaunch, canCheck, canApprove, canAdmin } = useExpensePermissions(currentUser);
+  const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
 
-  const filtered = expenses.filter(e => {
-    const matchSearch = e.description.toLowerCase().includes(search.toLowerCase()) ||
+  const filtered = expenses.filter((e) => {
+    const matchSearch =
+      e.description.toLowerCase().includes(search.toLowerCase()) ||
       e.userName.toLowerCase().includes(search.toLowerCase()) ||
       (e.cardName && e.cardName.toLowerCase().includes(search.toLowerCase()));
     const matchStatus = !statusFilter || e.status === statusFilter;
@@ -107,8 +111,10 @@ export default function ExpenseList({
           className="px-4 py-2.5 border border-stone-200 rounded-xl text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none"
         >
           <option value="">Todas Categorias</option>
-          {categories.map(c => (
-            <option key={c.id} value={c.id}>{c.name}</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
           ))}
         </select>
       </div>
@@ -125,14 +131,30 @@ export default function ExpenseList({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-stone-100 bg-stone-50">
-                  <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Data</th>
-                  <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Descrição</th>
-                  <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Categoria</th>
-                  <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Cartão</th>
-                  <th className="text-right py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Valor</th>
-                  <th className="text-center py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Parcela</th>
-                  <th className="text-center py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Status</th>
-                  <th className="text-center py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Ações</th>
+                  <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">
+                    Data
+                  </th>
+                  <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">
+                    Descrição
+                  </th>
+                  <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">
+                    Categoria
+                  </th>
+                  <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">
+                    Cartão
+                  </th>
+                  <th className="text-right py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">
+                    Valor
+                  </th>
+                  <th className="text-center py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">
+                    Parcela
+                  </th>
+                  <th className="text-center py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="text-center py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">
+                    Ações
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
@@ -150,7 +172,10 @@ export default function ExpenseList({
                     <td className="py-3 px-4 text-stone-600">{expense.categoryName || '—'}</td>
                     <td className="py-3 px-4 text-stone-600">{expense.cardName || '—'}</td>
                     <td className="py-3 px-4 text-right font-bold text-stone-800 whitespace-nowrap">
-                      {expense.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      {expense.amount.toLocaleString('pt-BR', {
+                        style: 'currency',
+                        currency: 'BRL',
+                      })}
                     </td>
                     <td className="py-3 px-4 text-center text-stone-600">
                       {expense.installments > 1
@@ -158,7 +183,9 @@ export default function ExpenseList({
                         : '—'}
                     </td>
                     <td className="py-3 px-4 text-center">
-                      <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-bold ${statusColors[expense.status]}`}>
+                      <span
+                        className={`inline-flex px-2.5 py-1 rounded-full text-xs font-bold ${statusColors[expense.status]}`}
+                      >
                         {statusLabels[expense.status]}
                       </span>
                     </td>
@@ -171,15 +198,16 @@ export default function ExpenseList({
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        {((expense.userId === currentUser.id && canLaunch) || canAdmin) && expense.status === 'pendente' && (
-                          <button
-                            onClick={() => onEdit(expense)}
-                            className="p-1.5 text-stone-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="Editar"
-                          >
-                            <Edit3 className="w-4 h-4" />
-                          </button>
-                        )}
+                        {((expense.userId === currentUser.id && canLaunch) || canAdmin) &&
+                          expense.status === 'pendente' && (
+                            <button
+                              onClick={() => onEdit(expense)}
+                              className="p-1.5 text-stone-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="Editar"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                          )}
                         {canCheck && expense.status === 'pendente' && (
                           <button
                             onClick={() => onCheck(expense.id)}
@@ -189,33 +217,43 @@ export default function ExpenseList({
                             <ClipboardCheck className="w-4 h-4" />
                           </button>
                         )}
-                        {canApprove && (expense.status === 'pendente' || expense.status === 'conferido') && (
-                          <button
-                            onClick={() => onApprove(expense.id)}
-                            className="p-1.5 text-stone-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
-                            title="Aprovar"
-                          >
-                            <CheckCircle className="w-4 h-4" />
-                          </button>
-                        )}
-                        {canApprove && (expense.status === 'pendente' || expense.status === 'conferido') && (
-                          <button
-                            onClick={() => setRejectingId(expense.id)}
-                            className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Rejeitar"
-                          >
-                            <XCircle className="w-4 h-4" />
-                          </button>
-                        )}
-                        {(expense.userId === currentUser.id || canAdmin) && expense.status === 'pendente' && (
-                          <button
-                            onClick={() => { if (window.confirm('Deseja excluir este gasto?')) onDelete(expense.id); }}
-                            className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Excluir"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
+                        {canApprove &&
+                          (expense.status === 'pendente' || expense.status === 'conferido') && (
+                            <button
+                              onClick={() => onApprove(expense.id)}
+                              className="p-1.5 text-stone-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                              title="Aprovar"
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                            </button>
+                          )}
+                        {canApprove &&
+                          (expense.status === 'pendente' || expense.status === 'conferido') && (
+                            <button
+                              onClick={() => setRejectingId(expense.id)}
+                              className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Rejeitar"
+                            >
+                              <XCircle className="w-4 h-4" />
+                            </button>
+                          )}
+                        {(expense.userId === currentUser.id || canAdmin) &&
+                          expense.status === 'pendente' && (
+                            <button
+                              onClick={async () => {
+                                const ok = await confirm({
+                                  title: 'Excluir Gasto',
+                                  message: 'Deseja excluir este gasto?',
+                                  variant: 'danger',
+                                });
+                                if (ok) onDelete(expense.id);
+                              }}
+                              className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Excluir"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                       </div>
                     </td>
                   </tr>
@@ -240,7 +278,10 @@ export default function ExpenseList({
             />
             <div className="flex justify-end gap-2 mt-4">
               <button
-                onClick={() => { setRejectingId(null); setRejectObservation(''); }}
+                onClick={() => {
+                  setRejectingId(null);
+                  setRejectObservation('');
+                }}
                 className="px-4 py-2 text-sm font-bold text-stone-500 hover:text-stone-700 rounded-lg"
               >
                 Cancelar
@@ -256,6 +297,7 @@ export default function ExpenseList({
           </div>
         </div>
       )}
+      <ConfirmDialog {...confirmState} onConfirm={handleConfirm} onCancel={handleCancel} />
     </div>
   );
 }

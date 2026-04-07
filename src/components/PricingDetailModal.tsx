@@ -6,8 +6,16 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { formatNPK } from '../utils/formatters';
-import { updatePricingRecord, getUsers, transferPricingRecord, acceptPricingTransfer, createNotification } from '../services/db';
+import {
+  updatePricingRecord,
+  getUsers,
+  transferPricingRecord,
+  acceptPricingTransfer,
+  createNotification,
+} from '../services/db';
 import { useToast } from './Toast';
+import { ConfirmDialog } from './ui/ConfirmDialog';
+import { useConfirm } from '../hooks/useConfirm';
 import { Send, UserCheck, CheckCircle2, CheckCircle, XCircle } from 'lucide-react';
 import { notifyTransferInitiated, notifyTransferAccepted } from '../services/notificationService';
 
@@ -25,12 +33,22 @@ interface PricingDetailModalProps {
 }
 
 export default function PricingDetailModal({
-  selectedPricing, currentUser, onClose, onEdit, onDelete,
-  onUpdateStatus, onUpdateApproval, onSaveObservation, onTransferSuccess,
-  appSettings = { companyName: 'FertCalc Pro', companyLogo: '' }
+  selectedPricing,
+  currentUser,
+  onClose,
+  onEdit,
+  onDelete,
+  onUpdateStatus,
+  onUpdateApproval,
+  onSaveObservation,
+  onTransferSuccess,
+  appSettings = { companyName: 'FertCalc Pro', companyLogo: '' },
 }: PricingDetailModalProps) {
   const { showSuccess, showError } = useToast();
-  const [commercialObservation, setCommercialObservation] = useState(selectedPricing.factors?.commercialObservation || '');
+  const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
+  const [commercialObservation, setCommercialObservation] = useState(
+    selectedPricing.factors?.commercialObservation || ''
+  );
   const [showAgentInPDF, setShowAgentInPDF] = useState(true);
   const [isTransferring, setIsTransferring] = useState(false);
   const [availableSellers, setAvailableSellers] = useState<User[]>([]);
@@ -50,7 +68,9 @@ export default function PricingDetailModal({
     try {
       const users = await getUsers();
       // Filter for sellers (role: user or similar, exclude current user)
-      setAvailableSellers(users.filter(u => u.id !== currentUser.id && (u.role === 'user' || u.role === 'manager')));
+      setAvailableSellers(
+        users.filter((u) => u.id !== currentUser.id && (u.role === 'user' || u.role === 'manager'))
+      );
     } catch {
       showError('Erro ao carregar lista de vendedores.');
     }
@@ -62,15 +82,22 @@ export default function PricingDetailModal({
       return;
     }
 
-    const seller = availableSellers.find(s => s.id === selectedSellerId);
+    const seller = availableSellers.find((s) => s.id === selectedSellerId);
     if (!seller) return;
 
-    if (!confirm(`Deseja realmente transferir esta precificação para ${seller.name}? Você ainda poderá vê-la até que ele aceite, mas após o aceite ela sairá da sua lista.`)) return;
+    const okTransfer = await confirm({
+      title: `Transferir para ${seller.name}?`,
+      message:
+        'Você ainda poderá ver a precificação até que seja aceita. Após o aceite ela sairá da sua lista.',
+      variant: 'warning',
+      confirmLabel: 'Transferir',
+    });
+    if (!okTransfer) return;
 
     setLoadingTransfer(true);
     try {
       await transferPricingRecord(selectedPricing.id, seller.id, seller.name, currentUser);
-      
+
       // ✅ Notificar novo vendedor
       await notifyTransferInitiated(selectedPricing, currentUser, seller.id, seller.name);
 
@@ -85,12 +112,18 @@ export default function PricingDetailModal({
   };
 
   const handleAcceptTransfer = async () => {
-    if (!confirm('Deseja aceitar esta precificação ? Ela será movida definitivamente para sua lista.')) return;
+    const okAccept = await confirm({
+      title: 'Aceitar precificação?',
+      message: 'Ela será movida definitivamente para sua lista.',
+      variant: 'info',
+      confirmLabel: 'Aceitar',
+    });
+    if (!okAccept) return;
 
     setLoadingTransfer(true);
     try {
       await acceptPricingTransfer(selectedPricing.id, currentUser);
-      
+
       // ✅ Notificar Vendedor Original
       if (selectedPricing.userId) {
         await notifyTransferAccepted(selectedPricing.id, currentUser.name, selectedPricing.userId);
@@ -108,16 +141,19 @@ export default function PricingDetailModal({
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'Fechada': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-      case 'Perdida': return 'bg-red-100 text-red-700 border-red-200';
-      default: return 'bg-amber-100 text-amber-700 border-amber-200';
+      case 'Fechada':
+        return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+      case 'Perdida':
+        return 'bg-red-100 text-red-700 border-red-200';
+      default:
+        return 'bg-amber-100 text-amber-700 border-amber-200';
     }
   };
 
   const saveCommercialObservation = async () => {
     try {
       await updatePricingRecord(selectedPricing.id, {
-        factors: { ...selectedPricing.factors, commercialObservation }
+        factors: { ...selectedPricing.factors, commercialObservation },
       } as any);
       showSuccess('Observação salva com sucesso!');
       if (onSaveObservation) onSaveObservation();
@@ -142,13 +178,13 @@ export default function PricingDetailModal({
         date: new Date().toISOString(),
         userId: currentUser.id,
         userName: currentUser.name,
-        action: `Precificação ${status}${status === 'Reprovada' ? `: ${rejectionReason}` : ''}`
+        action: `Precificação ${status}${status === 'Reprovada' ? `: ${rejectionReason}` : ''}`,
       };
 
       try {
         await updatePricingRecord(selectedPricing.id, {
           approvalStatus: status,
-          history: [...(selectedPricing.history || []), historyEntry]
+          history: [...(selectedPricing.history || []), historyEntry],
         } as any);
 
         await createNotification({
@@ -160,7 +196,9 @@ export default function PricingDetailModal({
           type: 'pricing_approval',
         });
 
-        showSuccess(`Precificação ${status === 'Aprovada' ? 'aprovada' : 'reprovada'} com sucesso!`);
+        showSuccess(
+          `Precificação ${status === 'Aprovada' ? 'aprovada' : 'reprovada'} com sucesso!`
+        );
         onUpdateApproval(selectedPricing.id, status);
         setIsRejecting(false);
         setRejectionReason('');
@@ -172,7 +210,9 @@ export default function PricingDetailModal({
 
   const exportToPDF = (pricing: PricingRecord) => {
     const doc = new jsPDF();
-    const cod = pricing.formattedCod || (pricing.cod ? String(pricing.cod).padStart(4, '0') : pricing.id.slice(-8));
+    const cod =
+      pricing.formattedCod ||
+      (pricing.cod ? String(pricing.cod).padStart(4, '0') : pricing.id.slice(-8));
     const freight = pricing.factors?.freight ?? 0;
     const freightLabel = freight > 0 ? 'CIF' : 'FOB';
     const dueDate = pricing.factors?.dueDate
@@ -192,8 +232,12 @@ export default function PricingDetailModal({
       startY: 25,
       head: [['DADOS GERAIS']],
       body: [
-        [`COD: ${cod}  |  Data: ${new Date(pricing.date).toLocaleString('pt-BR')}  |  Cliente: ${pricing.factors?.client?.name || 'N/A'}  |  Agente: ${pricing.factors?.agent?.name || 'N/A'}`],
-        [`Status: ${pricing.status}  |  Aprovação: ${pricing.approvalStatus || 'Pendente'}  |  Tipo de Frete: ${freightLabel}  |  Valor do Frete: ${freight > 0 ? `R$ ${freight.toFixed(2)}/ton` : '—'}  |  Vencimento: ${dueDate}`]
+        [
+          `COD: ${cod}  |  Data: ${new Date(pricing.date).toLocaleString('pt-BR')}  |  Cliente: ${pricing.factors?.client?.name || 'N/A'}  |  Agente: ${pricing.factors?.agent?.name || 'N/A'}`,
+        ],
+        [
+          `Status: ${pricing.status}  |  Aprovação: ${pricing.approvalStatus || 'Pendente'}  |  Tipo de Frete: ${freightLabel}  |  Valor do Frete: ${freight > 0 ? `R$ ${freight.toFixed(2)}/ton` : '—'}  |  Vencimento: ${dueDate}`,
+        ],
       ],
       styles: { fontSize: 8, cellPadding: 2 },
       headStyles: { fillColor: [26, 26, 46], fontSize: 8, fontStyle: 'bold' },
@@ -202,7 +246,8 @@ export default function PricingDetailModal({
     let currentY = (doc as any).lastAutoTable.finalY + 6;
 
     // Iterate over calculations
-    const calcs = pricing.calculations && pricing.calculations.length > 0 ? pricing.calculations : [pricing];
+    const calcs =
+      pricing.calculations && pricing.calculations.length > 0 ? pricing.calculations : [pricing];
 
     calcs.forEach((calc, idx) => {
       if (idx > 0 && currentY > 230) {
@@ -217,14 +262,14 @@ export default function PricingDetailModal({
 
       // Products - novo layout com Frete
       const productsData = [...(calc.macros || pricing.macros), ...(calc.micros || pricing.micros)]
-        .filter(p => p.quantity > 0)
-        .map(p => [
+        .filter((p) => p.quantity > 0)
+        .map((p) => [
           p.name,
           freightLabel,
           (p.quantity / 1000).toFixed(2),
           `R$ ${Number(p.price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
           freight > 0 ? `R$ ${freight.toFixed(0)}` : 'R$ 0',
-          `R$ ${((p.quantity / 1000) * Number(p.price) + (p.quantity / 1000) * freight).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+          `R$ ${((p.quantity / 1000) * Number(p.price) + (p.quantity / 1000) * freight).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
         ]);
 
       autoTable(doc, {
@@ -240,7 +285,7 @@ export default function PricingDetailModal({
           3: { cellWidth: 30, halign: 'right' as const },
           4: { cellWidth: 28, halign: 'right' as const },
           5: { cellWidth: 32, halign: 'right' as const },
-        }
+        },
       });
 
       currentY = (doc as any).lastAutoTable.finalY + 4;
@@ -251,8 +296,19 @@ export default function PricingDetailModal({
         head: [['Resumo', 'Valor']],
         body: [
           ['Custo Base', `R$ ${(calc.summary?.baseCost || pricing.summary.baseCost).toFixed(2)}`],
-          ['Preço Final/ton', `R$ ${(calc.summary?.finalPrice || pricing.summary.finalPrice).toFixed(2)}`],
-          ['N-P-K Real', formatNPK(calc.formula, calc.summary?.resultingN || 0, calc.summary?.resultingP || 0, calc.summary?.resultingK || 0)],
+          [
+            'Preço Final/ton',
+            `R$ ${(calc.summary?.finalPrice || pricing.summary.finalPrice).toFixed(2)}`,
+          ],
+          [
+            'N-P-K Real',
+            formatNPK(
+              calc.formula,
+              calc.summary?.resultingN || 0,
+              calc.summary?.resultingP || 0,
+              calc.summary?.resultingK || 0
+            ),
+          ],
         ],
         styles: { fontSize: 8, cellPadding: 2 },
         headStyles: { fillColor: [26, 26, 46], fontSize: 8, fontStyle: 'bold' },
@@ -264,7 +320,10 @@ export default function PricingDetailModal({
       const pa = (calc as any).profitabilityAnalysis;
       if (pa) {
         const isPosRent = pa.profitability >= 0;
-        if (currentY > 220) { doc.addPage(); currentY = 15; }
+        if (currentY > 220) {
+          doc.addPage();
+          currentY = 15;
+        }
 
         autoTable(doc, {
           startY: currentY,
@@ -273,20 +332,27 @@ export default function PricingDetailModal({
             ['Valor Unitário (Venda)', `R$ ${Number(pa.unitaryPrice).toFixed(2)}`],
             [`(-) Alíquota (${pa.taxRate}%)`, `R$ ${Number(pa.taxDeduction).toFixed(2)}`],
             ['(-) Frete', `R$ ${Number(pa.freightDeduction).toFixed(2)}`],
-            [`(-) Comissão (${pa.commissionRate}%)`, `R$ ${Number(pa.commissionDeduction).toFixed(2)}`],
+            [
+              `(-) Comissão (${pa.commissionRate}%)`,
+              `R$ ${Number(pa.commissionDeduction).toFixed(2)}`,
+            ],
             [`(-) Juros (${pa.interestRate}%)`, `R$ ${Number(pa.interestDeduction).toFixed(2)}`],
             ['= Receita Líquida', `R$ ${Number(pa.netRevenue).toFixed(2)}`],
             [`(-) Custo × Fator (${pa.factor})`, `R$ ${Number(pa.baseCostAfterFactor).toFixed(2)}`],
             [
               `RENTABILIDADE (${Number(pa.profitabilityPercent).toFixed(2)}%)`,
-              `${isPosRent ? '+' : ''}R$ ${Number(pa.profitability).toFixed(2)}`
+              `${isPosRent ? '+' : ''}R$ ${Number(pa.profitability).toFixed(2)}`,
             ],
-            ['Analisado por', `${pa.analyzedByName} em ${new Date(pa.analyzedAt).toLocaleString('pt-BR')}`],
+            [
+              'Analisado por',
+              `${pa.analyzedByName} em ${new Date(pa.analyzedAt).toLocaleString('pt-BR')}`,
+            ],
           ],
           styles: { fontSize: 8, cellPadding: 2 },
           headStyles: {
             fillColor: isPosRent ? [5, 150, 105] : [220, 38, 38],
-            fontSize: 8, fontStyle: 'bold'
+            fontSize: 8,
+            fontStyle: 'bold',
           },
           didParseCell: (data: any) => {
             if (data.row.index === 7) {
@@ -294,7 +360,7 @@ export default function PricingDetailModal({
               data.cell.styles.fillColor = isPosRent ? [209, 250, 229] : [254, 226, 226];
               data.cell.styles.textColor = isPosRent ? [5, 150, 105] : [220, 38, 38];
             }
-          }
+          },
         });
         currentY = (doc as any).lastAutoTable.finalY + 8;
       }
@@ -308,7 +374,12 @@ export default function PricingDetailModal({
         head: [['OBSERVAÇÃO COMERCIAL']],
         body: [[obs]],
         styles: { fontSize: 9, cellPadding: 4, halign: 'left' as const },
-        headStyles: { fillColor: [245, 158, 11], textColor: [0, 0, 0], fontSize: 9, fontStyle: 'bold' },
+        headStyles: {
+          fillColor: [245, 158, 11],
+          textColor: [0, 0, 0],
+          fontSize: 9,
+          fontStyle: 'bold',
+        },
         bodyStyles: { minCellHeight: 20 },
       });
     }
@@ -317,7 +388,8 @@ export default function PricingDetailModal({
   };
 
   const exportToExcel = (pricing: PricingRecord) => {
-    const calcs = pricing.calculations && pricing.calculations.length > 0 ? pricing.calculations : [pricing];
+    const calcs =
+      pricing.calculations && pricing.calculations.length > 0 ? pricing.calculations : [pricing];
 
     const wsData = [
       ['RELATÓRIO DE PRECIFICAÇÃO'],
@@ -342,8 +414,11 @@ export default function PricingDetailModal({
         ['Produto', 'Qtd (kg)', 'Preço (R$/ton)', 'Subtotal (R$)']
       );
 
-      const materials = [...(calc.macros || pricing.macros), ...(calc.micros || pricing.micros)].filter(p => p.quantity > 0);
-      materials.forEach(p => {
+      const materials = [
+        ...(calc.macros || pricing.macros),
+        ...(calc.micros || pricing.micros),
+      ].filter((p) => p.quantity > 0);
+      materials.forEach((p) => {
         wsData.push([p.name, p.quantity, p.price, (p.quantity / 1000) * p.price]);
       });
 
@@ -361,16 +436,24 @@ export default function PricingDetailModal({
     const ws = XLSX.utils.aoa_to_sheet(wsData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Precificação');
-    XLSX.writeFile(wb, `Precificacao_${pricing.factors?.client?.name || 'Sem_Nome'}_${pricing.formattedCod}.xlsx`);
+    XLSX.writeFile(
+      wb,
+      `Precificacao_${pricing.factors?.client?.name || 'Sem_Nome'}_${pricing.formattedCod}.xlsx`
+    );
   };
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <ConfirmDialog {...confirmState} onConfirm={handleConfirm} onCancel={handleCancel} />
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
         <div className="p-6 border-b border-stone-200 flex justify-between items-center bg-stone-50">
           <div>
             <h2 className="text-2xl font-bold text-stone-800">Detalhes da Precificação</h2>
-            <p className="text-sm text-stone-500">COD: <span className="font-bold text-emerald-600">{selectedPricing.formattedCod}</span> | Data: {new Date(selectedPricing.date).toLocaleString('pt-BR')}</p>
+            <p className="text-sm text-stone-500">
+              COD:{' '}
+              <span className="font-bold text-emerald-600">{selectedPricing.formattedCod}</span> |
+              Data: {new Date(selectedPricing.date).toLocaleString('pt-BR')}
+            </p>
           </div>
           <div className="flex items-center gap-2">
             {selectedPricing.status === 'Em Andamento' && onEdit && (
@@ -387,8 +470,14 @@ export default function PricingDetailModal({
             )}
             {onDelete && (
               <button
-                onClick={() => {
-                  if (confirm('Tem certeza que deseja excluir esta precificação?')) {
+                onClick={async () => {
+                  const okDel = await confirm({
+                    title: 'Excluir precificação?',
+                    message: 'Esta ação não pode ser desfeita.',
+                    variant: 'danger',
+                    confirmLabel: 'Excluir',
+                  });
+                  if (okDel) {
                     onDelete(selectedPricing.id);
                     onClose();
                   }
@@ -434,15 +523,19 @@ export default function PricingDetailModal({
           <div className="bg-amber-50 p-6 border-b border-amber-200 animate-in slide-in-from-top-4 duration-300">
             <div className="max-w-xl mx-auto flex flex-col md:flex-row items-end gap-4">
               <div className="flex-1 space-y-2">
-                <label className="block text-sm font-bold text-amber-800 uppercase tracking-wider">Transferir para Vendedor</label>
+                <label className="block text-sm font-bold text-amber-800 uppercase tracking-wider">
+                  Transferir para Vendedor
+                </label>
                 <select
                   value={selectedSellerId}
                   onChange={(e) => setSelectedSellerId(e.target.value)}
                   className="w-full px-4 py-2 bg-white border border-amber-300 rounded-lg outline-none focus:ring-2 focus:ring-amber-500 font-medium text-stone-700"
                 >
                   <option value="">Selecione um vendedor...</option>
-                  {availableSellers.map(s => (
-                    <option key={s.id} value={s.id}>{s.name} (@{s.nickname})</option>
+                  {availableSellers.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} (@{s.nickname})
+                    </option>
                   ))}
                 </select>
               </div>
@@ -467,14 +560,21 @@ export default function PricingDetailModal({
 
         <div className="flex-1 overflow-y-auto p-6 space-y-8">
           {/* Approval Section for Managers */}
-          {((currentUser.role === 'master' || currentUser.role === 'admin' || currentUser.role === 'manager') || (currentUser.permissions as any)?.approvals_canApprove) &&
+          {(currentUser.role === 'master' ||
+            currentUser.role === 'admin' ||
+            currentUser.role === 'manager' ||
+            (currentUser.permissions as any)?.approvals_canApprove) &&
             onUpdateApproval &&
             selectedPricing.approvalStatus === 'Pendente' && (
               <div className="bg-amber-50 p-4 rounded-xl border border-amber-200">
                 <div className="flex justify-between items-center mb-4">
                   <div>
-                    <span className="text-sm font-bold text-amber-800 uppercase block">Aprovação do Gerente</span>
-                    <p className="text-xs text-amber-600">Esta ação é definitiva e não poderá ser alterada após o clique.</p>
+                    <span className="text-sm font-bold text-amber-800 uppercase block">
+                      Aprovação do Gerente
+                    </span>
+                    <p className="text-xs text-amber-600">
+                      Esta ação é definitiva e não poderá ser alterada após o clique.
+                    </p>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -496,8 +596,13 @@ export default function PricingDetailModal({
                   ) : (
                     <div className="w-full space-y-3 animate-in fade-in slide-in-from-top-2">
                       <div className="flex justify-between items-center">
-                        <label className="text-xs font-bold text-red-600 uppercase tracking-widest">Motivo da Reprovação</label>
-                        <button onClick={() => setIsRejecting(false)} className="text-stone-400 hover:text-stone-600">
+                        <label className="text-xs font-bold text-red-600 uppercase tracking-widest">
+                          Motivo da Reprovação
+                        </label>
+                        <button
+                          onClick={() => setIsRejecting(false)}
+                          className="text-stone-400 hover:text-stone-600"
+                        >
                           <XCircle className="w-4 h-4" />
                         </button>
                       </div>
@@ -529,94 +634,141 @@ export default function PricingDetailModal({
             )}
 
           {selectedPricing.approvalStatus !== 'Pendente' && (
-            <div className={`p-4 rounded-xl border flex items-start justify-between gap-3 ${
-              selectedPricing.approvalStatus === 'Aprovada'
-                ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                : 'bg-red-50 border-red-200 text-red-800'
-            }`}>
+            <div
+              className={`p-4 rounded-xl border flex items-start justify-between gap-3 ${
+                selectedPricing.approvalStatus === 'Aprovada'
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                  : 'bg-red-50 border-red-200 text-red-800'
+              }`}
+            >
               <div className="flex items-start gap-2 flex-1">
                 <Info className="w-5 h-5 flex-shrink-0 mt-0.5" />
                 <div>
-                  <span className="text-sm font-bold uppercase block">Precificação {selectedPricing.approvalStatus}</span>
-                  {selectedPricing.approvalStatus === 'Reprovada' && (() => {
-                    const rejectionEntry = [...(selectedPricing.history || [])].reverse().find(h => h.action.startsWith('Precificação Reprovada'));
-                    const reason = rejectionEntry?.action.replace('Precificação Reprovada: ', '');
-                    return reason ? (
-                      <p className="text-xs mt-1 font-medium"><span className="font-bold">Motivo:</span> {reason}</p>
-                    ) : null;
-                  })()}
+                  <span className="text-sm font-bold uppercase block">
+                    Precificação {selectedPricing.approvalStatus}
+                  </span>
+                  {selectedPricing.approvalStatus === 'Reprovada' &&
+                    (() => {
+                      const rejectionEntry = [...(selectedPricing.history || [])]
+                        .reverse()
+                        .find((h) => h.action.startsWith('Precificação Reprovada'));
+                      const reason = rejectionEntry?.action.replace('Precificação Reprovada: ', '');
+                      return reason ? (
+                        <p className="text-xs mt-1 font-medium">
+                          <span className="font-bold">Motivo:</span> {reason}
+                        </p>
+                      ) : null;
+                    })()}
                 </div>
               </div>
               {selectedPricing.approvalStatus === 'Reprovada' && (
-                <span className="text-xs opacity-75 text-right">Você deve contatar o responsável.</span>
+                <span className="text-xs opacity-75 text-right">
+                  Você deve contatar o responsável.
+                </span>
               )}
             </div>
           )}
 
           {/* Status Change */}
-          {selectedPricing.status !== 'Excluída' && onUpdateStatus && ((currentUser.role === 'master' || currentUser.role === 'admin' || currentUser.role === 'manager') || (currentUser.permissions as any)?.history_changeStatus !== false) && (
-            <div className="bg-stone-100 p-4 rounded-xl border border-stone-200">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-bold text-stone-600 uppercase">Alterar Status</span>
-                {selectedPricing.approvalStatus !== 'Aprovada' && (
-                  <span className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
-                    Requer aprovação para fechar
-                  </span>
-                )}
+          {selectedPricing.status !== 'Excluída' &&
+            onUpdateStatus &&
+            (currentUser.role === 'master' ||
+              currentUser.role === 'admin' ||
+              currentUser.role === 'manager' ||
+              (currentUser.permissions as any)?.history_changeStatus !== false) && (
+              <div className="bg-stone-100 p-4 rounded-xl border border-stone-200">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-bold text-stone-600 uppercase">Alterar Status</span>
+                  {selectedPricing.approvalStatus !== 'Aprovada' && (
+                    <span className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                      Requer aprovação para fechar
+                    </span>
+                  )}
+                </div>
+                <select
+                  value={selectedPricing.status}
+                  onChange={(e) => onUpdateStatus(selectedPricing.id, e.target.value as any)}
+                  className={`w-full px-4 py-2 rounded-lg text-sm font-bold border-2 focus:ring-2 focus:ring-stone-500 outline-none ${getStatusColor(selectedPricing.status)}`}
+                >
+                  <option value="Em Andamento">Em Andamento</option>
+                  <option value="Fechada" disabled={selectedPricing.approvalStatus !== 'Aprovada'}>
+                    {selectedPricing.approvalStatus !== 'Aprovada'
+                      ? 'Fechada (requer aprovação)'
+                      : 'Fechada'}
+                  </option>
+                  <option value="Perdida">Perdida</option>
+                </select>
               </div>
-              <select
-                value={selectedPricing.status}
-                onChange={(e) => onUpdateStatus(selectedPricing.id, e.target.value as any)}
-                className={`w-full px-4 py-2 rounded-lg text-sm font-bold border-2 focus:ring-2 focus:ring-stone-500 outline-none ${getStatusColor(selectedPricing.status)}`}
-              >
-                <option value="Em Andamento">Em Andamento</option>
-                <option value="Fechada" disabled={selectedPricing.approvalStatus !== 'Aprovada'}>
-                  {selectedPricing.approvalStatus !== 'Aprovada' ? 'Fechada (requer aprovação)' : 'Fechada'}
-                </option>
-                <option value="Perdida">Perdida</option>
-              </select>
-            </div>
-          )}
+            )}
 
           {selectedPricing.status !== 'Em Andamento' && (
             <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg flex items-center gap-3 text-amber-800 text-sm">
               <Info className="w-5 h-5 flex-shrink-0" />
-              <p>Para editar esta precificação, altere o status para <strong>Em Andamento</strong>.</p>
+              <p>
+                Para editar esta precificação, altere o status para <strong>Em Andamento</strong>.
+              </p>
             </div>
           )}
           {/* Client & Agent Info */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100">
-              <h3 className="text-xs font-bold text-emerald-700 uppercase tracking-widest mb-3">Cliente</h3>
+              <h3 className="text-xs font-bold text-emerald-700 uppercase tracking-widest mb-3">
+                Cliente
+              </h3>
               <p className="text-lg font-bold text-stone-800 flex items-center gap-2">
-                <span className="text-emerald-600 font-mono text-sm">#{selectedPricing.factors?.client?.code || '---'}</span>
+                <span className="text-emerald-600 font-mono text-sm">
+                  #{selectedPricing.factors?.client?.code || '---'}
+                </span>
                 {selectedPricing.factors?.client?.name || 'Cliente não identificado'}
               </p>
               <div className="mt-2 space-y-1">
-                <p className="text-sm text-stone-600">Documento: {selectedPricing.factors?.client?.document || 'N/A'}</p>
-                <p className="text-sm text-stone-600">IE: {selectedPricing.factors?.client?.stateRegistration || '---'}</p>
-                <p className="text-sm text-stone-600 font-medium">Fazenda: {selectedPricing.factors?.client?.fazenda || '---'}</p>
+                <p className="text-sm text-stone-600">
+                  Documento: {selectedPricing.factors?.client?.document || 'N/A'}
+                </p>
+                <p className="text-sm text-stone-600">
+                  IE: {selectedPricing.factors?.client?.stateRegistration || '---'}
+                </p>
+                <p className="text-sm text-stone-600 font-medium">
+                  Fazenda: {selectedPricing.factors?.client?.fazenda || '---'}
+                </p>
               </div>
             </div>
             <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
-              <h3 className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-3">Agente</h3>
-              <p className="text-lg font-bold text-stone-800">{selectedPricing.factors?.agent?.name || 'Agente não identificado'}</p>
-              <p className="text-sm text-stone-600">Documento: {selectedPricing.factors?.agent?.document || 'N/A'}</p>
-              <p className="text-sm font-medium text-blue-600 mt-1">Comissão: {selectedPricing.factors?.commission || 0}% (R$ {(selectedPricing.summary?.commissionValue || 0).toFixed(2)})</p>
+              <h3 className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-3">
+                Agente
+              </h3>
+              <p className="text-lg font-bold text-stone-800">
+                {selectedPricing.factors?.agent?.name || 'Agente não identificado'}
+              </p>
+              <p className="text-sm text-stone-600">
+                Documento: {selectedPricing.factors?.agent?.document || 'N/A'}
+              </p>
+              <p className="text-sm font-medium text-blue-600 mt-1">
+                Comissão: {selectedPricing.factors?.commission || 0}% (R${' '}
+                {(selectedPricing.summary?.commissionValue || 0).toFixed(2)})
+              </p>
             </div>
           </div>
 
           {/* Calculations Sections */}
           <div className="space-y-12">
-            {(selectedPricing.calculations && selectedPricing.calculations.length > 0 ? selectedPricing.calculations : [selectedPricing]).map((calc, calcIdx) => (
-              <div key={calcIdx} className="space-y-6 p-6 bg-stone-50 rounded-2xl border border-stone-200">
+            {(selectedPricing.calculations && selectedPricing.calculations.length > 0
+              ? selectedPricing.calculations
+              : [selectedPricing]
+            ).map((calc, calcIdx) => (
+              <div
+                key={calcIdx}
+                className="space-y-6 p-6 bg-stone-50 rounded-2xl border border-stone-200"
+              >
                 <div className="flex justify-between items-center border-b border-stone-200 pb-4">
                   <h3 className="text-xl font-black text-emerald-700 uppercase tracking-tight">
                     Fórmula: {calc.formula || 'N/A'}
                   </h3>
                   <div className="text-right">
                     <p className="text-[10px] font-bold text-stone-400 uppercase">Preço Final</p>
-                    <p className="text-lg font-bold text-emerald-600 font-mono">R$ {calc.summary?.finalPrice.toFixed(2)} / ton</p>
+                    <p className="text-lg font-bold text-emerald-600 font-mono">
+                      R$ {calc.summary?.finalPrice.toFixed(2)} / ton
+                    </p>
                   </div>
                 </div>
 
@@ -636,21 +788,33 @@ export default function PricingDetailModal({
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-stone-100">
-                        {[...(calc.macros || []), ...(calc.micros || [])].filter(p => p.quantity > 0).map(p => (
-                          <tr key={p.id}>
-                            <td className="px-4 py-3 font-medium text-stone-800">{p.name}</td>
-                            <td className="px-4 py-3 text-right font-mono">{Number(p.quantity).toFixed(2)}</td>
-                            <td className="px-4 py-3 text-right font-mono">R$ {Number(p.price).toFixed(2)}</td>
-                            <td className="px-4 py-3 text-right font-mono">R$ {((Number(p.quantity) / 1000) * Number(p.price)).toFixed(2)}</td>
-                          </tr>
-                        ))}
+                        {[...(calc.macros || []), ...(calc.micros || [])]
+                          .filter((p) => p.quantity > 0)
+                          .map((p) => (
+                            <tr key={p.id}>
+                              <td className="px-4 py-3 font-medium text-stone-800">{p.name}</td>
+                              <td className="px-4 py-3 text-right font-mono">
+                                {Number(p.quantity).toFixed(2)}
+                              </td>
+                              <td className="px-4 py-3 text-right font-mono">
+                                R$ {Number(p.price).toFixed(2)}
+                              </td>
+                              <td className="px-4 py-3 text-right font-mono">
+                                R$ {((Number(p.quantity) / 1000) * Number(p.price)).toFixed(2)}
+                              </td>
+                            </tr>
+                          ))}
                       </tbody>
                       <tfoot className="bg-stone-50 font-bold">
                         <tr>
                           <td className="px-4 py-3">TOTAL DA BATIDA</td>
-                          <td className="px-4 py-3 text-right font-mono">{calc.summary?.totalWeight.toFixed(2)} kg</td>
+                          <td className="px-4 py-3 text-right font-mono">
+                            {calc.summary?.totalWeight.toFixed(2)} kg
+                          </td>
                           <td></td>
-                          <td className="px-4 py-3 text-right font-mono text-emerald-600">R$ {calc.summary?.baseCost.toFixed(2)}</td>
+                          <td className="px-4 py-3 text-right font-mono text-emerald-600">
+                            R$ {calc.summary?.baseCost.toFixed(2)}
+                          </td>
                         </tr>
                       </tfoot>
                     </table>
@@ -660,53 +824,86 @@ export default function PricingDetailModal({
                 {/* Financial Breakdown */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div className="bg-white p-4 rounded-xl border border-stone-200">
-                    <h4 className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-4">Detalhamento de Valores</h4>
+                    <h4 className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-4">
+                      Detalhamento de Valores
+                    </h4>
                     <div className="space-y-3">
                       <div className="flex justify-between text-sm">
                         <span className="text-stone-500">Valor Matéria Prima (Base)</span>
-                        <span className="font-mono font-medium">R$ {Number(calc.summary?.baseCost).toFixed(2)}</span>
+                        <span className="font-mono font-medium">
+                          R$ {Number(calc.summary?.baseCost).toFixed(2)}
+                        </span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-stone-500">Ajuste Fator ({calc.factors?.factor})</span>
-                        <span className="font-mono font-medium">R$ {(Number(calc.summary?.baseCost) * (calc.factors?.factor || 1)).toFixed(2)}</span>
+                        <span className="text-stone-500">
+                          Ajuste Fator ({calc.factors?.factor})
+                        </span>
+                        <span className="font-mono font-medium">
+                          R${' '}
+                          {(Number(calc.summary?.baseCost) * (calc.factors?.factor || 1)).toFixed(
+                            2
+                          )}
+                        </span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-stone-500">Margem Rentabilidade (R$/ton)</span>
-                        <span className="font-mono font-medium">+ R$ {Number(calc.factors?.margin || 0).toFixed(2)}</span>
+                        <span className="font-mono font-medium">
+                          + R$ {Number(calc.factors?.margin || 0).toFixed(2)}
+                        </span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-stone-500">Desconto (R$/ton)</span>
-                        <span className="font-mono font-medium text-red-500">- R$ {Number(calc.factors?.discount || 0).toFixed(2)}</span>
+                        <span className="font-mono font-medium text-red-500">
+                          - R$ {Number(calc.factors?.discount || 0).toFixed(2)}
+                        </span>
                       </div>
                       <div className="pt-2 border-t border-stone-100 flex justify-between font-bold text-stone-800">
                         <span>Preço Base de Venda</span>
-                        <span className="font-mono">R$ {Number(calc.summary?.basePrice).toFixed(2)}</span>
+                        <span className="font-mono">
+                          R$ {Number(calc.summary?.basePrice).toFixed(2)}
+                        </span>
                       </div>
                     </div>
                   </div>
 
                   <div className="bg-white p-4 rounded-xl border border-stone-200">
-                    <h4 className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-4">Acréscimos e Encargos</h4>
+                    <h4 className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-4">
+                      Acréscimos e Encargos
+                    </h4>
                     <div className="space-y-3">
                       <div className="flex justify-between text-sm">
                         <span className="text-stone-500">Frete (R$/ton)</span>
-                        <span className="font-mono font-medium">+ R$ {Number(calc.summary?.freightValue).toFixed(2)}</span>
+                        <span className="font-mono font-medium">
+                          + R$ {Number(calc.summary?.freightValue).toFixed(2)}
+                        </span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-stone-500">Juros de Vencimento</span>
-                        <span className="font-mono font-medium">+ R$ {Number(calc.summary?.interestValue).toFixed(2)}</span>
+                        <span className="font-mono font-medium">
+                          + R$ {Number(calc.summary?.interestValue).toFixed(2)}
+                        </span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-stone-500">Alíquota de Impostos ({calc.factors?.taxRate}%)</span>
-                        <span className="font-mono font-medium">+ R$ {Number(calc.summary?.taxValue).toFixed(2)}</span>
+                        <span className="text-stone-500">
+                          Alíquota de Impostos ({calc.factors?.taxRate}%)
+                        </span>
+                        <span className="font-mono font-medium">
+                          + R$ {Number(calc.summary?.taxValue).toFixed(2)}
+                        </span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-stone-500">Comissão do Agente ({calc.factors?.commission}%)</span>
-                        <span className="font-mono font-medium">+ R$ {Number(calc.summary?.commissionValue).toFixed(2)}</span>
+                        <span className="text-stone-500">
+                          Comissão do Agente ({calc.factors?.commission}%)
+                        </span>
+                        <span className="font-mono font-medium">
+                          + R$ {Number(calc.summary?.commissionValue).toFixed(2)}
+                        </span>
                       </div>
                       <div className="pt-2 border-t border-stone-100 flex justify-between text-xl font-black text-emerald-600">
                         <span>PREÇO FINAL</span>
-                        <span className="font-mono">R$ {Number(calc.summary?.finalPrice).toFixed(2)}</span>
+                        <span className="font-mono">
+                          R$ {Number(calc.summary?.finalPrice).toFixed(2)}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -714,97 +911,142 @@ export default function PricingDetailModal({
 
                 {/* Guarantees Summary */}
                 <div className="bg-stone-900 text-white p-6 rounded-2xl">
-                  <h4 className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-4">Garantias Finais</h4>
+                  <h4 className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-4">
+                    Garantias Finais
+                  </h4>
                   <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-center">
                     <div className="p-3 bg-stone-800 rounded-xl">
                       <p className="text-[10px] text-stone-500 font-bold mb-1">NITROGÊNIO (N)</p>
-                      <p className="text-xl font-mono font-bold">{Number(calc.summary?.resultingN).toFixed(2)}%</p>
+                      <p className="text-xl font-mono font-bold">
+                        {Number(calc.summary?.resultingN).toFixed(2)}%
+                      </p>
                     </div>
                     <div className="p-3 bg-stone-800 rounded-xl">
                       <p className="text-[10px] text-stone-500 font-bold mb-1">FÓSFORO (P)</p>
-                      <p className="text-xl font-mono font-bold">{Number(calc.summary?.resultingP).toFixed(2)}%</p>
+                      <p className="text-xl font-mono font-bold">
+                        {Number(calc.summary?.resultingP).toFixed(2)}%
+                      </p>
                     </div>
                     <div className="p-3 bg-stone-800 rounded-xl">
                       <p className="text-[10px] text-stone-500 font-bold mb-1">POTÁSSIO (K)</p>
-                      <p className="text-xl font-mono font-bold">{Number(calc.summary?.resultingK).toFixed(2)}%</p>
+                      <p className="text-xl font-mono font-bold">
+                        {Number(calc.summary?.resultingK).toFixed(2)}%
+                      </p>
                     </div>
                     <div className="p-3 bg-stone-800 rounded-xl">
                       <p className="text-[10px] text-stone-500 font-bold mb-1">ENXOFRE (S)</p>
-                      <p className="text-xl font-mono font-bold">{Number(calc.summary?.resultingS).toFixed(2)}%</p>
+                      <p className="text-xl font-mono font-bold">
+                        {Number(calc.summary?.resultingS).toFixed(2)}%
+                      </p>
                     </div>
                     <div className="p-3 bg-stone-800 rounded-xl">
                       <p className="text-[10px] text-stone-500 font-bold mb-1">CÁLCIO (Ca)</p>
-                      <p className="text-xl font-mono font-bold">{Number(calc.summary?.resultingCa).toFixed(2)}%</p>
+                      <p className="text-xl font-mono font-bold">
+                        {Number(calc.summary?.resultingCa).toFixed(2)}%
+                      </p>
                     </div>
                   </div>
-                  {calc.summary?.resultingMicros && Object.keys(calc.summary.resultingMicros).length > 0 && (
-                    <div className="mt-4 pt-4 border-t border-stone-800 flex flex-wrap gap-4 justify-center">
-                      {Object.entries(calc.summary.resultingMicros).map(([name, val]) => (
-                        <div key={name} className="flex items-center gap-2 px-3 py-1 bg-stone-800 rounded-full">
-                          <span className="text-[10px] font-bold text-stone-500">{name}:</span>
-                          <span className="text-sm font-mono font-bold">{(val as number).toFixed(3)}%</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  {calc.summary?.resultingMicros &&
+                    Object.keys(calc.summary.resultingMicros).length > 0 && (
+                      <div className="mt-4 pt-4 border-t border-stone-800 flex flex-wrap gap-4 justify-center">
+                        {Object.entries(calc.summary.resultingMicros).map(([name, val]) => (
+                          <div
+                            key={name}
+                            className="flex items-center gap-2 px-3 py-1 bg-stone-800 rounded-full"
+                          >
+                            <span className="text-[10px] font-bold text-stone-500">{name}:</span>
+                            <span className="text-sm font-mono font-bold">
+                              {(val as number).toFixed(3)}%
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                 </div>
 
                 {/* Análise de Rentabilidade (se existir) */}
-                {(calc as any).profitabilityAnalysis && (() => {
-                  const pa = (calc as any).profitabilityAnalysis;
-                  const isPaPositive = pa.profitability >= 0;
-                  return (
-                    <div className={`p-4 rounded-xl border ${isPaPositive ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
-                      <h4 className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: isPaPositive ? '#065f46' : '#991b1b' }}>
-                        📊 Análise de Rentabilidade
-                      </h4>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-stone-500">Valor Unitário (Venda)</span>
-                          <span className="font-mono">R$ {Number(pa.unitaryPrice).toFixed(2)}</span>
+                {(calc as any).profitabilityAnalysis &&
+                  (() => {
+                    const pa = (calc as any).profitabilityAnalysis;
+                    const isPaPositive = pa.profitability >= 0;
+                    return (
+                      <div
+                        className={`p-4 rounded-xl border ${isPaPositive ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}
+                      >
+                        <h4
+                          className="text-xs font-bold uppercase tracking-widest mb-3"
+                          style={{ color: isPaPositive ? '#065f46' : '#991b1b' }}
+                        >
+                          📊 Análise de Rentabilidade
+                        </h4>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-stone-500">Valor Unitário (Venda)</span>
+                            <span className="font-mono">
+                              R$ {Number(pa.unitaryPrice).toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-stone-500">Custo × Fator ({pa.factor})</span>
+                            <span className="font-mono">
+                              R$ {Number(pa.baseCostAfterFactor).toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-red-600">
+                            <span>(-) Frete</span>
+                            <span className="font-mono">
+                              - R$ {Number(pa.freightDeduction).toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-red-600">
+                            <span>(-) Comissão ({pa.commissionRate}%)</span>
+                            <span className="font-mono">
+                              - R$ {Number(pa.commissionDeduction).toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-red-600">
+                            <span>(-) Juros ({pa.interestRate}%)</span>
+                            <span className="font-mono">
+                              - R$ {Number(pa.interestDeduction).toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-red-600">
+                            <span>(-) Alíquota ({pa.taxRate}%)</span>
+                            <span className="font-mono">
+                              - R$ {Number(pa.taxDeduction).toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between font-bold border-t border-stone-200 pt-2">
+                            <span>= Receita Líquida</span>
+                            <span className="font-mono">R$ {Number(pa.netRevenue).toFixed(2)}</span>
+                          </div>
+                          <div
+                            className={`flex justify-between text-lg font-black pt-1 ${isPaPositive ? 'text-emerald-700' : 'text-red-700'}`}
+                          >
+                            <span>
+                              RENTABILIDADE ({Number(pa.profitabilityPercent).toFixed(2)}%)
+                            </span>
+                            <span className="font-mono">
+                              {isPaPositive ? '+' : ''}R$ {Number(pa.profitability).toFixed(2)}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-stone-400 mt-2">
+                            Analisado por {pa.analyzedByName} em{' '}
+                            {new Date(pa.analyzedAt).toLocaleString('pt-BR')}
+                          </p>
                         </div>
-                        <div className="flex justify-between">
-                          <span className="text-stone-500">Custo × Fator ({pa.factor})</span>
-                          <span className="font-mono">R$ {Number(pa.baseCostAfterFactor).toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between text-red-600">
-                          <span>(-) Frete</span>
-                          <span className="font-mono">- R$ {Number(pa.freightDeduction).toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between text-red-600">
-                          <span>(-) Comissão ({pa.commissionRate}%)</span>
-                          <span className="font-mono">- R$ {Number(pa.commissionDeduction).toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between text-red-600">
-                          <span>(-) Juros ({pa.interestRate}%)</span>
-                          <span className="font-mono">- R$ {Number(pa.interestDeduction).toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between text-red-600">
-                          <span>(-) Alíquota ({pa.taxRate}%)</span>
-                          <span className="font-mono">- R$ {Number(pa.taxDeduction).toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between font-bold border-t border-stone-200 pt-2">
-                          <span>= Receita Líquida</span>
-                          <span className="font-mono">R$ {Number(pa.netRevenue).toFixed(2)}</span>
-                        </div>
-                        <div className={`flex justify-between text-lg font-black pt-1 ${isPaPositive ? 'text-emerald-700' : 'text-red-700'}`}>
-                          <span>RENTABILIDADE ({Number(pa.profitabilityPercent).toFixed(2)}%)</span>
-                          <span className="font-mono">{isPaPositive ? '+' : ''}R$ {Number(pa.profitability).toFixed(2)}</span>
-                        </div>
-                        <p className="text-[10px] text-stone-400 mt-2">
-                          Analisado por {pa.analyzedByName} em {new Date(pa.analyzedAt).toLocaleString('pt-BR')}
-                        </p>
                       </div>
-                    </div>
-                  );
-                })()}
+                    );
+                  })()}
               </div>
             ))}
           </div>
 
           {/* Commercial Observation */}
           <div className="bg-stone-50 p-6 rounded-2xl border border-stone-200">
-            <h3 className="text-xs font-bold text-stone-500 uppercase tracking-widest mb-4">Observação Comercial</h3>
+            <h3 className="text-xs font-bold text-stone-500 uppercase tracking-widest mb-4">
+              Observação Comercial
+            </h3>
             <textarea
               value={commercialObservation}
               onChange={(e) => setCommercialObservation(e.target.value)}
@@ -822,10 +1064,15 @@ export default function PricingDetailModal({
           {/* History Section */}
           {selectedPricing.history && selectedPricing.history.length > 0 && (
             <div className="bg-stone-50 p-6 rounded-2xl border border-stone-200">
-              <h3 className="text-xs font-bold text-stone-500 uppercase tracking-widest mb-4">Histórico de Alterações</h3>
+              <h3 className="text-xs font-bold text-stone-500 uppercase tracking-widest mb-4">
+                Histórico de Alterações
+              </h3>
               <div className="space-y-4">
                 {selectedPricing.history.map((entry, idx) => (
-                  <div key={idx} className="flex gap-4 text-sm border-l-2 border-stone-200 pl-4 py-1">
+                  <div
+                    key={idx}
+                    className="flex gap-4 text-sm border-l-2 border-stone-200 pl-4 py-1"
+                  >
                     <div className="flex-1">
                       <p className="text-stone-800 font-medium">{entry.action}</p>
                       <p className="text-[10px] text-stone-500">
@@ -841,7 +1088,10 @@ export default function PricingDetailModal({
 
         <div className="p-6 border-t border-stone-200 bg-stone-50 flex justify-between items-center">
           <div className="flex gap-2">
-            {((currentUser.role === 'master' || currentUser.role === 'admin' || currentUser.role === 'manager') || (currentUser.permissions as any)?.calculator_generatePDF !== false) && (
+            {(currentUser.role === 'master' ||
+              currentUser.role === 'admin' ||
+              currentUser.role === 'manager' ||
+              (currentUser.permissions as any)?.calculator_generatePDF !== false) && (
               <div className="flex flex-col gap-2">
                 <label className="flex items-center gap-2 cursor-pointer mb-2">
                   <input
@@ -850,7 +1100,9 @@ export default function PricingDetailModal({
                     onChange={(e) => setShowAgentInPDF(e.target.checked)}
                     className="rounded text-emerald-600 focus:ring-emerald-500"
                   />
-                  <span className="text-xs font-bold text-stone-600 uppercase">Exibir Representante no PDF</span>
+                  <span className="text-xs font-bold text-stone-600 uppercase">
+                    Exibir Representante no PDF
+                  </span>
                 </label>
                 <div className="flex gap-2">
                   <button
@@ -875,11 +1127,14 @@ export default function PricingDetailModal({
               </div>
             )}
           </div>
-          <button onClick={onClose} className="px-6 py-2 bg-stone-800 text-white font-bold rounded-lg hover:bg-stone-700 transition-colors">
+          <button
+            onClick={onClose}
+            className="px-6 py-2 bg-stone-800 text-white font-bold rounded-lg hover:bg-stone-700 transition-colors"
+          >
             Fechar Detalhes
           </button>
         </div>
-      </div >
-    </div >
+      </div>
+    </div>
   );
 }

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Lock, Mail, Leaf } from 'lucide-react';
 import { User } from '../types';
-import { getUserByEmail, requestPasswordReset } from '../services/db';
+import { signIn, resetPassword } from '../services/authService';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -21,29 +21,15 @@ export default function Login({ onLogin }: LoginProps) {
     setLoading(true);
     setError('');
 
-    try {
-      // Tenta buscar por e-mail ou por nickname
-      const user = await getUserByEmail(emailOrNickname);
+    const { user, error: authError } = await signIn(emailOrNickname.trim(), password);
 
-      if (user) {
-         if (!user.ativo && user.role !== 'master') {
-          setError('Esta conta está desativada. Entre em contato com o administrador.');
-          return;
-        }
-
-        if (user.password === password) {
-          onLogin(user);
-        } else {
-          setError('Senha incorreta. Verifique e tente novamente.');
-        }
-      } else {
-        setError('Usuário não encontrado. Verifique seu e-mail/usuário.');
-      }
-    } catch (err) {
-      setError('Erro ao conectar ao servidor. Tente novamente.');
-    } finally {
-      setLoading(false);
+    if (authError) {
+      setError(authError);
+    } else if (user) {
+      onLogin(user);
     }
+
+    setLoading(false);
   };
 
   const handleEmailReset = async (e: React.FormEvent) => {
@@ -52,18 +38,15 @@ export default function Login({ onLogin }: LoginProps) {
     setError('');
     setResetMessage('');
 
-    try {
-      const { success, message } = await requestPasswordReset(resetEmail);
-      if (success) {
-        setResetMessage(message);
-      } else {
-        setError(message);
-      }
-    } catch (err) {
-      setError('Erro ao processar solicitação. Tente novamente.');
-    } finally {
-      setLoading(false);
+    const { success, message } = await resetPassword(resetEmail.trim());
+
+    if (success) {
+      setResetMessage(message);
+    } else {
+      setError(message);
     }
+
+    setLoading(false);
   };
 
   return (
@@ -71,7 +54,7 @@ export default function Login({ onLogin }: LoginProps) {
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 border border-stone-200 transition-all duration-300">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-emerald-100 rounded-full mb-4">
-            <Leaf className="w-8 h-8 text-emerald-600" />
+            <Leaf className="w-8 h-8 text-emerald-600" aria-hidden="true" />
           </div>
           <h1 className="text-3xl font-black text-stone-800 tracking-tight">
             FertCalc <span className="text-emerald-600">Pro</span>
@@ -82,36 +65,59 @@ export default function Login({ onLogin }: LoginProps) {
         </div>
 
         {view === 'login' ? (
-          <form onSubmit={handleLogin} className="space-y-6">
+          <form onSubmit={handleLogin} className="space-y-6" noValidate>
             {error && (
-              <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100 animate-pulse">
+              <div
+                role="alert"
+                className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100"
+              >
                 {error}
               </div>
             )}
             <div>
-              <label className="block text-sm font-medium text-stone-700 mb-1">E-mail ou Usuário (Nickname)</label>
+              <label
+                htmlFor="login-email"
+                className="block text-sm font-medium text-stone-700 mb-1"
+              >
+                E-mail ou Usuário (Nickname)
+              </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-stone-400 w-4 h-4" />
+                <Mail
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-stone-400 w-4 h-4"
+                  aria-hidden="true"
+                />
                 <input
+                  id="login-email"
                   type="text"
                   value={emailOrNickname}
                   onChange={(e) => setEmailOrNickname(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
                   placeholder="seu@email.com ou joao.silva"
+                  autoComplete="username"
                   required
                 />
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-stone-700 mb-1">Senha</label>
+              <label
+                htmlFor="login-password"
+                className="block text-sm font-medium text-stone-700 mb-1"
+              >
+                Senha
+              </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-stone-400 w-4 h-4" />
+                <Lock
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-stone-400 w-4 h-4"
+                  aria-hidden="true"
+                />
                 <input
+                  id="login-password"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
                   placeholder="••••••••"
+                  autoComplete="current-password"
                   required
                 />
               </div>
@@ -132,33 +138,50 @@ export default function Login({ onLogin }: LoginProps) {
             <button
               type="submit"
               disabled={loading}
+              aria-busy={loading}
               className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-bold py-3 rounded-lg transition-all shadow-lg shadow-emerald-200 active:scale-[0.98]"
             >
               {loading ? 'Verificando...' : 'Acessar Sistema'}
             </button>
           </form>
         ) : (
-          <form onSubmit={handleEmailReset} className="space-y-6">
+          <form onSubmit={handleEmailReset} className="space-y-6" noValidate>
             {error && (
-              <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100">
+              <div
+                role="alert"
+                className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100"
+              >
                 {error}
               </div>
             )}
             {resetMessage && (
-              <div className="p-3 bg-emerald-50 text-emerald-600 text-sm rounded-lg border border-emerald-100">
+              <div
+                role="status"
+                className="p-3 bg-emerald-50 text-emerald-600 text-sm rounded-lg border border-emerald-100"
+              >
                 {resetMessage}
               </div>
             )}
             <div>
-              <label className="block text-sm font-medium text-stone-700 mb-1">E-mail de Cadastro</label>
+              <label
+                htmlFor="reset-email"
+                className="block text-sm font-medium text-stone-700 mb-1"
+              >
+                E-mail de Cadastro
+              </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-stone-400 w-4 h-4" />
+                <Mail
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-stone-400 w-4 h-4"
+                  aria-hidden="true"
+                />
                 <input
+                  id="reset-email"
                   type="email"
                   value={resetEmail}
                   onChange={(e) => setResetEmail(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
                   placeholder="seu@email.com"
+                  autoComplete="email"
                   required
                 />
               </div>
@@ -170,6 +193,7 @@ export default function Login({ onLogin }: LoginProps) {
               <button
                 type="submit"
                 disabled={loading || !!resetMessage}
+                aria-busy={loading}
                 className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-bold py-3 rounded-lg transition-all shadow-lg shadow-emerald-200"
               >
                 {loading ? 'Processando...' : 'Enviar Link de Recuperação'}

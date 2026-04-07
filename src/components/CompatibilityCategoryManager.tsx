@@ -1,11 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Edit3, Save, X, List, GripVertical } from 'lucide-react';
 import { CompatibilityCategory } from '../types';
-import { getCompatibilityCategories, createCompatibilityCategory, updateCompatibilityCategory, deleteCompatibilityCategory } from '../services/db';
+import {
+  getCompatibilityCategories,
+  createCompatibilityCategory,
+  updateCompatibilityCategory,
+  deleteCompatibilityCategory,
+} from '../services/db';
 import { useToast } from './Toast';
+import { ConfirmDialog } from './ui/ConfirmDialog';
+import { useConfirm } from '../hooks/useConfirm';
 
 export default function CompatibilityCategoryManager() {
   const { showSuccess, showError } = useToast();
+  const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
   const [categories, setCategories] = useState<CompatibilityCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -33,11 +41,11 @@ export default function CompatibilityCategoryManager() {
     if (!newCategoryName.trim()) return;
     setSaving(true);
     try {
-      const maxOrder = categories.length > 0 ? Math.max(...categories.map(c => c.ordem)) : 0;
+      const maxOrder = categories.length > 0 ? Math.max(...categories.map((c) => c.ordem)) : 0;
       await createCompatibilityCategory({
         nome: newCategoryName.trim(),
         ordem: maxOrder + 1,
-        ativo: true
+        ativo: true,
       });
       setNewCategoryName('');
       loadCategories();
@@ -65,7 +73,13 @@ export default function CompatibilityCategoryManager() {
   };
 
   const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Tem certeza que deseja remover a categoria "${name}"?`)) return;
+    const ok = await confirm({
+      title: 'Remover categoria?',
+      message: `Tem certeza que deseja remover a categoria "${name}"?`,
+      variant: 'danger',
+      confirmLabel: 'Remover',
+    });
+    if (!ok) return;
     try {
       await deleteCompatibilityCategory(id);
       loadCategories();
@@ -77,6 +91,7 @@ export default function CompatibilityCategoryManager() {
 
   return (
     <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
+      <ConfirmDialog {...confirmState} onConfirm={handleConfirm} onCancel={handleCancel} />
       <h2 className="text-xl font-bold text-stone-800 mb-6 flex items-center gap-2">
         <List className="w-5 h-5 text-blue-600" />
         Grupos de Produtos
@@ -105,12 +120,17 @@ export default function CompatibilityCategoryManager() {
         {loading ? (
           <div className="text-center py-8 text-stone-400">Carregando categorias...</div>
         ) : categories.length === 0 ? (
-          <div className="text-center py-8 text-stone-400 italic">Nenhuma categoria cadastrada.</div>
+          <div className="text-center py-8 text-stone-400 italic">
+            Nenhuma categoria cadastrada.
+          </div>
         ) : (
           categories.map((cat) => (
-            <div key={cat.id} className="flex items-center gap-3 p-3 bg-stone-50 rounded-lg border border-stone-200 group">
+            <div
+              key={cat.id}
+              className="flex items-center gap-3 p-3 bg-stone-50 rounded-lg border border-stone-200 group"
+            >
               <GripVertical className="w-4 h-4 text-stone-300 cursor-grab" />
-              
+
               {editingId === cat.id ? (
                 <div className="flex-1 flex gap-2">
                   <input
@@ -121,10 +141,16 @@ export default function CompatibilityCategoryManager() {
                     className="flex-1 px-2 py-1 border border-blue-300 rounded focus:ring-2 focus:ring-blue-500 text-sm"
                     onKeyDown={(e) => e.key === 'Enter' && handleUpdate(cat.id)}
                   />
-                  <button onClick={() => handleUpdate(cat.id)} className="p-1 text-emerald-600 hover:bg-emerald-50 rounded transition-colors">
+                  <button
+                    onClick={() => handleUpdate(cat.id)}
+                    className="p-1 text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
+                  >
                     <Save className="w-4 h-4" />
                   </button>
-                  <button onClick={() => setEditingId(null)} className="p-1 text-stone-400 hover:bg-stone-100 rounded transition-colors">
+                  <button
+                    onClick={() => setEditingId(null)}
+                    className="p-1 text-stone-400 hover:bg-stone-100 rounded transition-colors"
+                  >
                     <X className="w-4 h-4" />
                   </button>
                 </div>

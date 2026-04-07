@@ -3,16 +3,21 @@ import { Plus, Trash2, Save, Tag, Edit2 } from 'lucide-react';
 import { Brand } from '../types';
 import { getBrands, createBrand, updateBrand, deleteBrand } from '../services/db';
 import { useToast } from './Toast';
+import { ConfirmDialog } from './ui/ConfirmDialog';
+import { useConfirm } from '../hooks/useConfirm';
 
 export default function BrandManager() {
   const { showSuccess, showError } = useToast();
+  const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
   const [brands, setBrands] = useState<Brand[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState('');
   const [editingBrand, setEditingBrand] = useState<Brand | null>(null);
 
-  useEffect(() => { loadBrands(); }, []);
+  useEffect(() => {
+    loadBrands();
+  }, []);
 
   const loadBrands = async () => {
     setLoading(true);
@@ -23,7 +28,7 @@ export default function BrandManager() {
 
   const getNextCode = (brandList: Brand[]): string => {
     if (brandList.length === 0) return '1';
-    const nums = brandList.map(b => parseInt(b.code, 10)).filter(n => !isNaN(n));
+    const nums = brandList.map((b) => parseInt(b.code, 10)).filter((n) => !isNaN(n));
     return String(nums.length > 0 ? Math.max(...nums) + 1 : 1);
   };
 
@@ -63,7 +68,13 @@ export default function BrandManager() {
   };
 
   const removeBrand = async (id: string) => {
-    if (!confirm('Tem certeza que deseja excluir esta marca? Ela pode estar vinculada a produtos.')) return;
+    const ok = await confirm({
+      title: 'Excluir marca?',
+      message: 'Esta marca pode estar vinculada a produtos. A ação não pode ser desfeita.',
+      variant: 'danger',
+      confirmLabel: 'Excluir',
+    });
+    if (!ok) return;
     try {
       await deleteBrand(id);
       showSuccess('Marca excluída com sucesso!');
@@ -75,6 +86,7 @@ export default function BrandManager() {
 
   return (
     <div className="space-y-6">
+      <ConfirmDialog {...confirmState} onConfirm={handleConfirm} onCancel={handleCancel} />
       <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
         <h2 className="text-xl font-bold text-stone-800 mb-6 flex items-center">
           <Tag className="w-5 h-5 mr-2 text-indigo-600" />
@@ -124,30 +136,35 @@ export default function BrandManager() {
             </thead>
             <tbody className="divide-y divide-stone-100">
               {loading && (
-                <tr><td colSpan={3} className="px-4 py-8 text-center text-stone-400">Carregando...</td></tr>
-              )}
-              {!loading && brands.map(brand => (
-                <tr key={brand.id} className="hover:bg-stone-50 transition-colors">
-                  <td className="px-4 py-3 font-mono text-indigo-600 font-bold">{brand.code}</td>
-                  <td className="px-4 py-3 text-stone-800 font-medium">{brand.name}</td>
-                  <td className="px-4 py-3 text-right space-x-2">
-                    <button
-                      onClick={() => startEdit(brand)}
-                      className="p-1.5 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                      title="Editar"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => removeBrand(brand.id)}
-                      className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                      title="Excluir"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                <tr>
+                  <td colSpan={3} className="px-4 py-8 text-center text-stone-400">
+                    Carregando...
                   </td>
                 </tr>
-              ))}
+              )}
+              {!loading &&
+                brands.map((brand) => (
+                  <tr key={brand.id} className="hover:bg-stone-50 transition-colors">
+                    <td className="px-4 py-3 font-mono text-indigo-600 font-bold">{brand.code}</td>
+                    <td className="px-4 py-3 text-stone-800 font-medium">{brand.name}</td>
+                    <td className="px-4 py-3 text-right space-x-2">
+                      <button
+                        onClick={() => startEdit(brand)}
+                        className="p-1.5 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                        title="Editar"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => removeBrand(brand.id)}
+                        className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                        title="Excluir"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
               {!loading && brands.length === 0 && (
                 <tr>
                   <td colSpan={3} className="px-4 py-8 text-center text-stone-400 italic">

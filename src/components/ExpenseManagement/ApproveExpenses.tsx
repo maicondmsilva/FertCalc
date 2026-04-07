@@ -1,7 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { CreditCardExpense } from '../../types/expense.types';
 import { User } from '../../types';
-import { getExpenses, approveExpense, rejectExpense, getExpenseAudit } from '../../services/expenseService';
+import {
+  getExpenses,
+  approveExpense,
+  rejectExpense,
+  getExpenseAudit,
+} from '../../services/expenseService';
 import { Eye, CheckCircle, XCircle, Search, X } from 'lucide-react';
 
 interface ApproveExpensesProps {
@@ -26,7 +31,7 @@ export default function ApproveExpenses({ currentUser }: ApproveExpensesProps) {
     setLoading(true);
     try {
       const all = await getExpenses();
-      setExpenses(all.filter(e => e.status === 'conferido'));
+      setExpenses(all.filter((e) => e.status === 'conferido'));
     } catch (err) {
       console.error('Erro ao carregar dados:', err);
     } finally {
@@ -42,9 +47,13 @@ export default function ApproveExpenses({ currentUser }: ApproveExpensesProps) {
     setProcessing(id);
     try {
       await approveExpense(id, currentUser.id, currentUser.name);
-      setExpenses(prev => prev.filter(e => e.id !== id));
+      setExpenses((prev) => prev.filter((e) => e.id !== id));
       setApproveId(null);
-      setSelectedIds(prev => { const next = new Set(prev); next.delete(id); return next; });
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     } catch (err) {
       console.error('Erro ao aprovar:', err);
     } finally {
@@ -57,10 +66,14 @@ export default function ApproveExpenses({ currentUser }: ApproveExpensesProps) {
     setProcessing(id);
     try {
       await rejectExpense(id, currentUser.id, currentUser.name, note.trim());
-      setExpenses(prev => prev.filter(e => e.id !== id));
+      setExpenses((prev) => prev.filter((e) => e.id !== id));
       setRejectId(null);
       setRejectionNote('');
-      setSelectedIds(prev => { const next = new Set(prev); next.delete(id); return next; });
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     } catch (err) {
       console.error('Erro ao rejeitar:', err);
     } finally {
@@ -69,7 +82,7 @@ export default function ApproveExpenses({ currentUser }: ApproveExpensesProps) {
   };
 
   const handleBatchApprove = async () => {
-    const ids = Array.from(selectedIds);
+    const ids = Array.from(selectedIds) as string[];
     for (const id of ids) {
       await handleApprove(id);
     }
@@ -79,7 +92,7 @@ export default function ApproveExpenses({ currentUser }: ApproveExpensesProps) {
 
   const handleBatchReject = async () => {
     if (!batchNote.trim()) return;
-    const ids = Array.from(selectedIds);
+    const ids = Array.from(selectedIds) as string[];
     for (const id of ids) {
       await handleReject(id, batchNote);
     }
@@ -99,7 +112,7 @@ export default function ApproveExpenses({ currentUser }: ApproveExpensesProps) {
   };
 
   const toggleSelect = (id: string) => {
-    setSelectedIds(prev => {
+    setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -111,11 +124,11 @@ export default function ApproveExpenses({ currentUser }: ApproveExpensesProps) {
     if (selectedIds.size === filtered.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(filtered.map(e => e.id)));
+      setSelectedIds(new Set(filtered.map((e) => e.id)));
     }
   };
 
-  const filtered = expenses.filter(e => {
+  const filtered = expenses.filter((e) => {
     const q = search.toLowerCase();
     return (
       e.description.toLowerCase().includes(q) ||
@@ -128,8 +141,7 @@ export default function ApproveExpenses({ currentUser }: ApproveExpensesProps) {
   const formatCurrency = (v: number) =>
     v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  const formatDate = (d: string) =>
-    new Date(d + 'T00:00:00').toLocaleDateString('pt-BR');
+  const formatDate = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('pt-BR');
 
   if (loading) {
     return (
@@ -206,18 +218,35 @@ export default function ApproveExpenses({ currentUser }: ApproveExpensesProps) {
                       className="w-4 h-4 text-purple-600 rounded"
                     />
                   </th>
-                  <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Data</th>
-                  <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Usuário</th>
-                  <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Cartão</th>
-                  <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Categoria</th>
-                  <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Descrição</th>
-                  <th className="text-right py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Valor</th>
-                  <th className="text-center py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Ações</th>
+                  <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">
+                    Data
+                  </th>
+                  <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">
+                    Usuário
+                  </th>
+                  <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">
+                    Cartão
+                  </th>
+                  <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">
+                    Categoria
+                  </th>
+                  <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">
+                    Descrição
+                  </th>
+                  <th className="text-right py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">
+                    Valor
+                  </th>
+                  <th className="text-center py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">
+                    Ações
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
                 {filtered.map((expense) => (
-                  <tr key={expense.id} className={`hover:bg-stone-50 transition-colors ${selectedIds.has(expense.id) ? 'bg-purple-50' : ''}`}>
+                  <tr
+                    key={expense.id}
+                    className={`hover:bg-stone-50 transition-colors ${selectedIds.has(expense.id) ? 'bg-purple-50' : ''}`}
+                  >
                     <td className="py-3 px-4">
                       <input
                         type="checkbox"
@@ -226,7 +255,9 @@ export default function ApproveExpenses({ currentUser }: ApproveExpensesProps) {
                         className="w-4 h-4 text-purple-600 rounded"
                       />
                     </td>
-                    <td className="py-3 px-4 text-stone-600 whitespace-nowrap">{formatDate(expense.date)}</td>
+                    <td className="py-3 px-4 text-stone-600 whitespace-nowrap">
+                      {formatDate(expense.date)}
+                    </td>
                     <td className="py-3 px-4 text-stone-700 font-medium">{expense.userName}</td>
                     <td className="py-3 px-4 text-stone-600">{expense.cardName || '—'}</td>
                     <td className="py-3 px-4 text-stone-600">{expense.categoryName || '—'}</td>
@@ -252,7 +283,10 @@ export default function ApproveExpenses({ currentUser }: ApproveExpensesProps) {
                           <CheckCircle className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => { setRejectId(expense.id); setRejectionNote(''); }}
+                          onClick={() => {
+                            setRejectId(expense.id);
+                            setRejectionNote('');
+                          }}
                           disabled={processing === expense.id}
                           className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
                           title="Rejeitar"
@@ -275,10 +309,14 @@ export default function ApproveExpenses({ currentUser }: ApproveExpensesProps) {
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
             <h3 className="text-lg font-bold text-stone-800 mb-3">Confirmar Aprovação</h3>
             <p className="text-stone-600 text-sm mb-6">
-              Confirma a aprovação deste lançamento? O status será alterado para <span className="font-bold text-emerald-700">Aprovado</span>.
+              Confirma a aprovação deste lançamento? O status será alterado para{' '}
+              <span className="font-bold text-emerald-700">Aprovado</span>.
             </p>
             <div className="flex justify-end gap-3">
-              <button onClick={() => setApproveId(null)} className="px-4 py-2 text-sm font-bold text-stone-500 hover:text-stone-700 rounded-xl hover:bg-stone-100">
+              <button
+                onClick={() => setApproveId(null)}
+                className="px-4 py-2 text-sm font-bold text-stone-500 hover:text-stone-700 rounded-xl hover:bg-stone-100"
+              >
                 Cancelar
               </button>
               <button
@@ -298,7 +336,9 @@ export default function ApproveExpenses({ currentUser }: ApproveExpensesProps) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
             <h3 className="text-lg font-bold text-stone-800 mb-3">Rejeitar Lançamento</h3>
-            <p className="text-stone-500 text-sm mb-4">Informe o motivo da rejeição (obrigatório):</p>
+            <p className="text-stone-500 text-sm mb-4">
+              Informe o motivo da rejeição (obrigatório):
+            </p>
             <textarea
               value={rejectionNote}
               onChange={(e) => setRejectionNote(e.target.value)}
@@ -307,7 +347,13 @@ export default function ApproveExpenses({ currentUser }: ApproveExpensesProps) {
               className="w-full border border-stone-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none"
             />
             <div className="flex justify-end gap-3 mt-4">
-              <button onClick={() => { setRejectId(null); setRejectionNote(''); }} className="px-4 py-2 text-sm font-bold text-stone-500 hover:text-stone-700 rounded-xl hover:bg-stone-100">
+              <button
+                onClick={() => {
+                  setRejectId(null);
+                  setRejectionNote('');
+                }}
+                className="px-4 py-2 text-sm font-bold text-stone-500 hover:text-stone-700 rounded-xl hover:bg-stone-100"
+              >
                 Cancelar
               </button>
               <button
@@ -344,7 +390,13 @@ export default function ApproveExpenses({ currentUser }: ApproveExpensesProps) {
               />
             )}
             <div className="flex justify-end gap-3">
-              <button onClick={() => { setBatchAction(null); setBatchNote(''); }} className="px-4 py-2 text-sm font-bold text-stone-500 hover:text-stone-700 rounded-xl hover:bg-stone-100">
+              <button
+                onClick={() => {
+                  setBatchAction(null);
+                  setBatchNote('');
+                }}
+                className="px-4 py-2 text-sm font-bold text-stone-500 hover:text-stone-700 rounded-xl hover:bg-stone-100"
+              >
                 Cancelar
               </button>
               <button
@@ -365,7 +417,13 @@ export default function ApproveExpenses({ currentUser }: ApproveExpensesProps) {
           <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-stone-800">Detalhes do Lançamento</h3>
-              <button onClick={() => { setDetailExpense(null); setAuditLog([]); }} className="p-1.5 text-stone-400 hover:text-stone-700 rounded-lg">
+              <button
+                onClick={() => {
+                  setDetailExpense(null);
+                  setAuditLog([]);
+                }}
+                className="p-1.5 text-stone-400 hover:text-stone-700 rounded-lg"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -397,29 +455,50 @@ export default function ApproveExpenses({ currentUser }: ApproveExpensesProps) {
             </dl>
             {auditLog.length > 0 && (
               <div className="mt-5">
-                <h4 className="text-xs font-bold text-stone-500 uppercase tracking-wider mb-2">Histórico</h4>
+                <h4 className="text-xs font-bold text-stone-500 uppercase tracking-wider mb-2">
+                  Histórico
+                </h4>
                 <div className="space-y-2">
-                  {auditLog.map(entry => (
-                    <div key={entry.id} className="text-xs text-stone-600 bg-stone-50 rounded-lg px-3 py-2">
+                  {auditLog.map((entry) => (
+                    <div
+                      key={entry.id}
+                      className="text-xs text-stone-600 bg-stone-50 rounded-lg px-3 py-2"
+                    >
                       <span className="font-bold">{entry.userName}</span> — {entry.action}
-                      {entry.observation && <span className="text-stone-400"> ({entry.observation})</span>}
+                      {entry.observation && (
+                        <span className="text-stone-400"> ({entry.observation})</span>
+                      )}
                     </div>
                   ))}
                 </div>
               </div>
             )}
             <div className="flex justify-end gap-3 mt-6">
-              <button onClick={() => { setDetailExpense(null); setAuditLog([]); }} className="px-4 py-2 text-sm font-bold text-stone-500 hover:text-stone-700 rounded-xl hover:bg-stone-100">
+              <button
+                onClick={() => {
+                  setDetailExpense(null);
+                  setAuditLog([]);
+                }}
+                className="px-4 py-2 text-sm font-bold text-stone-500 hover:text-stone-700 rounded-xl hover:bg-stone-100"
+              >
                 Fechar
               </button>
               <button
-                onClick={() => { setDetailExpense(null); setAuditLog([]); setApproveId(detailExpense.id); }}
+                onClick={() => {
+                  setDetailExpense(null);
+                  setAuditLog([]);
+                  setApproveId(detailExpense.id);
+                }}
                 className="px-4 py-2 text-sm font-bold bg-emerald-600 text-white rounded-xl hover:bg-emerald-700"
               >
                 Aprovar
               </button>
               <button
-                onClick={() => { setDetailExpense(null); setAuditLog([]); setRejectId(detailExpense.id); }}
+                onClick={() => {
+                  setDetailExpense(null);
+                  setAuditLog([]);
+                  setRejectId(detailExpense.id);
+                }}
                 className="px-4 py-2 text-sm font-bold bg-red-600 text-white rounded-xl hover:bg-red-700"
               >
                 Rejeitar

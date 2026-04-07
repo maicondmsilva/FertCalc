@@ -1,4 +1,5 @@
 import { useCallback, useRef } from 'react';
+import { logger } from '../utils/logger';
 
 export function useNotificationSound() {
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -43,7 +44,7 @@ export function useNotificationSound() {
       osc.start(ctx.currentTime);
       osc.stop(ctx.currentTime + 0.3);
     } catch (e) {
-      console.warn("Could not play notification sound", e);
+      logger.warn('Could not play notification sound', e);
     }
   }, []);
 

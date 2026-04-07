@@ -1,20 +1,25 @@
 import { useState } from 'react';
-import { Solver } from 'javascript-lp-solver';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const solver = require('javascript-lp-solver') as {
+  Solve: (model: Record<string, unknown>) => Record<string, unknown>;
+};
+
+type FormulaResult = Record<string, unknown>;
 
 const useCalculatorFormulas = () => {
-    const [calculations, setCalculations] = useState([]);
+  const [calculations, setCalculations] = useState<FormulaResult[]>([]);
 
-    const calculateFormula = (formulaParams) => {
-        // Example: Using LP solver to calculate results based on params
-        const results = Solver.Solve(formulaParams);
-        setCalculations((prev) => [...prev, results]);
-        return results;
-    };
+  const calculateFormula = (formulaParams: Record<string, unknown>): FormulaResult => {
+    // Using LP solver to calculate optimal formula composition
+    const results = solver.Solve(formulaParams);
+    setCalculations((prev) => [...prev, results]);
+    return results;
+  };
 
-    return {
-        calculations,
-        calculateFormula,
-    };
+  return {
+    calculations,
+    calculateFormula,
+  };
 };
 
 export default useCalculatorFormulas;

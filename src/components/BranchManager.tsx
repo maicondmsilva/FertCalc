@@ -3,12 +3,24 @@ import { Plus, Trash2, Save, Building2, Edit2, X, ToggleLeft, ToggleRight } from
 import { Branch, User } from '../types';
 import { getBranches, createBranch, updateBranch, deleteBranch } from '../services/db';
 import { useToast } from './Toast';
+import { ConfirmDialog } from './ui/ConfirmDialog';
+import { useConfirm } from '../hooks/useConfirm';
 
 export default function BranchManager({ currentUser }: { currentUser: User }) {
-  const canCreate = currentUser.role === 'master' || currentUser.role === 'admin' || (currentUser.permissions as any)?.branches_create;
-  const canEdit = currentUser.role === 'master' || currentUser.role === 'admin' || (currentUser.permissions as any)?.branches_edit;
-  const canDelete = currentUser.role === 'master' || currentUser.role === 'admin' || (currentUser.permissions as any)?.branches_delete;
+  const canCreate =
+    currentUser.role === 'master' ||
+    currentUser.role === 'admin' ||
+    (currentUser.permissions as any)?.branches_create;
+  const canEdit =
+    currentUser.role === 'master' ||
+    currentUser.role === 'admin' ||
+    (currentUser.permissions as any)?.branches_edit;
+  const canDelete =
+    currentUser.role === 'master' ||
+    currentUser.role === 'admin' ||
+    (currentUser.permissions as any)?.branches_delete;
   const { showSuccess, showError } = useToast();
+  const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
   const [branchName, setBranchName] = useState('');
@@ -59,14 +71,20 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
   };
 
   const handleDeleteBranch = async (id: string) => {
-    if (confirm('Tem certeza que deseja excluir esta filial? Isso pode afetar listas de preços e relatórios vinculados.')) {
-      try {
-        await deleteBranch(id);
-        showSuccess('Filial excluída com sucesso!');
-        await loadBranches();
-      } catch {
-        showError('Erro ao excluir filial.');
-      }
+    const ok = await confirm({
+      title: 'Excluir filial?',
+      message:
+        'Isso pode afetar listas de preços e relatórios vinculados. Esta ação não pode ser desfeita.',
+      variant: 'danger',
+      confirmLabel: 'Excluir',
+    });
+    if (!ok) return;
+    try {
+      await deleteBranch(id);
+      showSuccess('Filial excluída com sucesso!');
+      await loadBranches();
+    } catch {
+      showError('Erro ao excluir filial.');
     }
   };
 
@@ -82,15 +100,20 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
 
   return (
     <div className="space-y-6">
+      <ConfirmDialog {...confirmState} onConfirm={handleConfirm} onCancel={handleCancel} />
       {(canCreate && !editingBranch) || (canEdit && editingBranch) ? (
         <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
           <h2 className="text-xl font-bold text-stone-800 mb-6 flex items-center">
             <Building2 className="w-5 h-5 mr-2 text-emerald-600" />
-            {editingBranch ? `Editar Filial — ${editingBranch.id_numeric}` : 'Cadastrar Nova Filial'}
+            {editingBranch
+              ? `Editar Filial — ${editingBranch.id_numeric}`
+              : 'Cadastrar Nova Filial'}
           </h2>
           <form onSubmit={saveBranch} className="flex gap-4 items-end">
             <div className="flex-1">
-              <label className="block text-sm font-medium text-stone-600 mb-1">Nome da Filial</label>
+              <label className="block text-sm font-medium text-stone-600 mb-1">
+                Nome da Filial
+              </label>
               <input
                 type="text"
                 value={branchName}
@@ -142,8 +165,11 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100">
-              {branches.map(branch => (
-                <tr key={branch.id} className={`hover:bg-stone-50 transition-colors ${!branch.ativo ? 'opacity-60' : ''}`}>
+              {branches.map((branch) => (
+                <tr
+                  key={branch.id}
+                  className={`hover:bg-stone-50 transition-colors ${!branch.ativo ? 'opacity-60' : ''}`}
+                >
                   <td className="px-5 py-3">
                     <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-100 text-emerald-700 font-bold text-sm">
                       {branch.id_numeric}
@@ -163,11 +189,23 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
                         color: branch.ativo ? 'rgb(6 95 70)' : 'rgb(107 114 128)',
                         border: `1px solid ${branch.ativo ? 'rgb(167 243 208)' : 'rgb(229 231 235)'}`,
                       }}
-                      title={canEdit ? (branch.ativo ? 'Clique para desativar' : 'Clique para ativar') : ''}
+                      title={
+                        canEdit
+                          ? branch.ativo
+                            ? 'Clique para desativar'
+                            : 'Clique para ativar'
+                          : ''
+                      }
                     >
-                      {branch.ativo
-                        ? <><ToggleRight className="w-3 h-3" /> Ativa</>
-                        : <><ToggleLeft className="w-3 h-3" /> Inativa</>}
+                      {branch.ativo ? (
+                        <>
+                          <ToggleRight className="w-3 h-3" /> Ativa
+                        </>
+                      ) : (
+                        <>
+                          <ToggleLeft className="w-3 h-3" /> Inativa
+                        </>
+                      )}
                     </button>
                   </td>
                   <td className="px-5 py-3 text-right">

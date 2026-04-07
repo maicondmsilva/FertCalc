@@ -1,3 +1,5 @@
+import { logger } from './logger';
+
 export const formatDocument = (value: string) => {
   const cleanValue = value.replace(/\D/g, '');
   if (cleanValue.length <= 11) {
@@ -31,9 +33,7 @@ export const formatPhone = (value: string) => {
 
 export const formatCEP = (value: string) => {
   const cleanValue = value.replace(/\D/g, '');
-  return cleanValue
-    .replace(/(\d{5})(\d{1,3})/, '$1-$2')
-    .replace(/(-\d{3})\d+?$/, '$1');
+  return cleanValue.replace(/(\d{5})(\d{1,3})/, '$1-$2').replace(/(-\d{3})\d+?$/, '$1');
 };
 
 export const lookupCEP = async (cep: string) => {
@@ -44,12 +44,15 @@ export const lookupCEP = async (cep: string) => {
   const providers = [
     {
       url: `https://viacep.com.br/ws/${cleanCEP}/json/`,
-      parse: (data: any) => data.erro ? null : {
-        street: data.logradouro,
-        neighborhood: data.bairro,
-        city: data.localidade,
-        state: data.uf
-      }
+      parse: (data: any) =>
+        data.erro
+          ? null
+          : {
+              street: data.logradouro,
+              neighborhood: data.bairro,
+              city: data.localidade,
+              state: data.uf,
+            },
     },
     {
       url: `https://cep.awesomeapi.com.br/json/${cleanCEP}`,
@@ -57,9 +60,9 @@ export const lookupCEP = async (cep: string) => {
         street: data.address,
         neighborhood: data.district,
         city: data.city,
-        state: data.state
-      })
-    }
+        state: data.state,
+      }),
+    },
   ];
 
   for (const provider of providers) {
@@ -70,14 +73,19 @@ export const lookupCEP = async (cep: string) => {
       const result = provider.parse(data);
       if (result) return result;
     } catch (error) {
-      console.warn(`CEP lookup failed for ${provider.url}:`, error);
+      logger.warn(`CEP lookup failed for ${provider.url}:`, error);
     }
   }
 
   return null;
 };
 
-export const formatNPK = (targetFormula: string, resultingN: number, resultingP: number, resultingK: number) => {
+export const formatNPK = (
+  targetFormula: string,
+  resultingN: number,
+  resultingP: number,
+  resultingK: number
+) => {
   const parts = targetFormula.split(/[- ]/);
   const tN = parts[0] || '0';
   const tP = parts[1] || '0';

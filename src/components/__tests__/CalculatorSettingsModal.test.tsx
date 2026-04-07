@@ -1,19 +1,20 @@
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render } from '@testing-library/react';
+import { screen, fireEvent } from '@testing-library/dom';
 import { CalculatorSettingsModal } from '../CalculatorSettingsModal';
 
 describe('CalculatorSettingsModal', () => {
   const mockGlobalMacros: any[] = [
     { id: '1', name: 'Ureia', n: 45, p: 0, k: 0, selected: false },
-    { id: '2', name: 'MAP', n: 11, p: 52, k: 0, selected: true }
+    { id: '2', name: 'MAP', n: 11, p: 52, k: 0, selected: true },
   ];
 
   const mockFormula: any = {
     id: 'f1',
     formula: '04-14-08',
     macros: [],
-    micros: []
+    micros: [],
   };
 
   it('renders nothing when isOpen is false', () => {
@@ -41,7 +42,7 @@ describe('CalculatorSettingsModal', () => {
         onConfirm={vi.fn()}
       />
     );
-    expect(screen.getByText('Configurações de Produtos')).toBeDefined();
+    expect(screen.getByText('Produtos da Fórmula')).toBeDefined();
     expect(screen.getByText('Ureia')).toBeDefined();
     expect(screen.getByText('MAP')).toBeDefined();
   });
@@ -68,7 +69,7 @@ describe('CalculatorSettingsModal', () => {
 
     expect(handleConfirm).toHaveBeenCalledTimes(1);
     const updatedFormula = handleConfirm.mock.calls[0][0];
-    
+
     // Check if Ureia was marked as selected
     const ureiaInFormula = updatedFormula.macros.find((m: any) => m.name === 'Ureia');
     expect(ureiaInFormula.selected).toBe(true);

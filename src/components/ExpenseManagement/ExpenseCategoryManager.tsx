@@ -1,13 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { ExpenseCategory } from '../../types/expense.types';
-import { getExpenseCategories, createExpenseCategory, updateExpenseCategory, deleteExpenseCategory } from '../../services/expenseService';
+import {
+  getExpenseCategories,
+  createExpenseCategory,
+  updateExpenseCategory,
+  deleteExpenseCategory,
+} from '../../services/expenseService';
 import { Plus, Edit3, Trash2, Save, X } from 'lucide-react';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { useConfirm } from '../../hooks/useConfirm';
 
+// ExpenseCategoryManager — gerencia categorias de despesas
 interface ExpenseCategoryManagerProps {
   onCategoriesChanged?: () => void;
 }
 
-export default function ExpenseCategoryManager({ onCategoriesChanged }: ExpenseCategoryManagerProps) {
+export default function ExpenseCategoryManager({
+  onCategoriesChanged,
+}: ExpenseCategoryManagerProps) {
+  const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -84,7 +95,13 @@ export default function ExpenseCategoryManager({ onCategoriesChanged }: ExpenseC
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Deseja excluir esta categoria? Gastos vinculados não serão excluídos.')) return;
+    const ok = await confirm({
+      title: 'Excluir categoria?',
+      message: 'Gastos vinculados a esta categoria não serão excluídos.',
+      variant: 'danger',
+      confirmLabel: 'Excluir',
+    });
+    if (!ok) return;
     try {
       await deleteExpenseCategory(id);
       await loadCategories();
@@ -104,12 +121,16 @@ export default function ExpenseCategoryManager({ onCategoriesChanged }: ExpenseC
 
   return (
     <div className="space-y-4">
+      <ConfirmDialog {...confirmState} onConfirm={handleConfirm} onCancel={handleCancel} />
       {/* Header + Add button */}
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-bold text-stone-800">Categorias de Gastos</h3>
         {!showForm && (
           <button
-            onClick={() => { resetForm(); setShowForm(true); }}
+            onClick={() => {
+              resetForm();
+              setShowForm(true);
+            }}
             className="flex items-center gap-2 px-4 py-2 text-sm font-bold bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-colors"
           >
             <Plus className="w-4 h-4" />
@@ -126,7 +147,9 @@ export default function ExpenseCategoryManager({ onCategoriesChanged }: ExpenseC
           </h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-1.5">Nome *</label>
+              <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-1.5">
+                Nome *
+              </label>
               <input
                 type="text"
                 value={name}
@@ -136,7 +159,9 @@ export default function ExpenseCategoryManager({ onCategoriesChanged }: ExpenseC
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-1.5">Limite Orçamentário (R$)</label>
+              <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-1.5">
+                Limite Orçamentário (R$)
+              </label>
               <input
                 type="number"
                 step="0.01"
@@ -148,7 +173,9 @@ export default function ExpenseCategoryManager({ onCategoriesChanged }: ExpenseC
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-1.5">Cor</label>
+              <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-1.5">
+                Cor
+              </label>
               <div className="flex items-center gap-3">
                 <input
                   type="color"
@@ -161,7 +188,9 @@ export default function ExpenseCategoryManager({ onCategoriesChanged }: ExpenseC
             </div>
             {editingId && (
               <div className="flex items-center gap-2">
-                <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider">Ativa</label>
+                <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider">
+                  Ativa
+                </label>
                 <input
                   type="checkbox"
                   checked={active}
@@ -202,27 +231,45 @@ export default function ExpenseCategoryManager({ onCategoriesChanged }: ExpenseC
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-stone-100 bg-stone-50">
-                <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Cor</th>
-                <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Nome</th>
-                <th className="text-right py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Limite</th>
-                <th className="text-center py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Status</th>
-                <th className="text-center py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Ações</th>
+                <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">
+                  Cor
+                </th>
+                <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">
+                  Nome
+                </th>
+                <th className="text-right py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">
+                  Limite
+                </th>
+                <th className="text-center py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="text-center py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">
+                  Ações
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100">
-              {categories.map(cat => (
+              {categories.map((cat) => (
                 <tr key={cat.id} className="hover:bg-stone-50 transition-colors">
                   <td className="py-3 px-4">
-                    <div className="w-5 h-5 rounded-full" style={{ backgroundColor: cat.color || '#8b5cf6' }} />
+                    <div
+                      className="w-5 h-5 rounded-full"
+                      style={{ backgroundColor: cat.color || '#8b5cf6' }}
+                    />
                   </td>
                   <td className="py-3 px-4 font-medium text-stone-800">{cat.name}</td>
                   <td className="py-3 px-4 text-right text-stone-600">
                     {cat.budgetLimit != null
-                      ? cat.budgetLimit.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                      ? cat.budgetLimit.toLocaleString('pt-BR', {
+                          style: 'currency',
+                          currency: 'BRL',
+                        })
                       : '—'}
                   </td>
                   <td className="py-3 px-4 text-center">
-                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-bold ${cat.active ? 'bg-emerald-100 text-emerald-700' : 'bg-stone-100 text-stone-500'}`}>
+                    <span
+                      className={`inline-flex px-2 py-0.5 rounded-full text-xs font-bold ${cat.active ? 'bg-emerald-100 text-emerald-700' : 'bg-stone-100 text-stone-500'}`}
+                    >
                       {cat.active ? 'Ativa' : 'Inativa'}
                     </span>
                   </td>

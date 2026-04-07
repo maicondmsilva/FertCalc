@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Calculator from './components/Calculator';
 import History from './components/History';
 import PriceListManager from './components/PriceListManager';
@@ -22,9 +22,43 @@ import Home from './components/Home';
 // import Dashboard from './components/Dashboard';
 import Dashboard from './components/Dashboard';
 import SavedFormulas from './components/SavedFormulas';
-import { LayoutDashboard, History as HistoryIcon, Database, Users, UserCheck, Building2, Settings, LogOut, Leaf, ShieldCheck, Menu, X, Target, Bell, Download, ChevronLeft, ChevronRight, Home as HomeIcon, BarChart3, ChevronDown, FileEdit, Tag, Package, AlertTriangle, Calculator as CalcIcon, Beaker, CreditCard, List, Plus, ClipboardCheck, CheckCircle2 } from 'lucide-react';
+import {
+  LayoutDashboard,
+  History as HistoryIcon,
+  Database,
+  Users,
+  UserCheck,
+  Building2,
+  Settings,
+  LogOut,
+  Leaf,
+  ShieldCheck,
+  Menu,
+  X,
+  Target,
+  Bell,
+  Download,
+  ChevronLeft,
+  ChevronRight,
+  Home as HomeIcon,
+  BarChart3,
+  ChevronDown,
+  FileEdit,
+  Tag,
+  Package,
+  AlertTriangle,
+  Calculator as CalcIcon,
+  Beaker,
+  CreditCard,
+  List,
+  Plus,
+  ClipboardCheck,
+  CheckCircle2,
+} from 'lucide-react';
 import { PricingRecord, User, AppSettings, NavItem, SavedFormula } from './types';
 import { getAppSettings, markNotificationsAsRead } from './services/db';
+import { signOut, restoreSession } from './services/authService';
+import { logger } from './utils/logger';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useToast } from './components/Toast';
 
@@ -46,6 +80,8 @@ import { getPendingCount, getCheckedCount } from './services/expenseService';
 
 import { useNotifications } from './hooks/useNotifications';
 import { NotificationBell } from './components/notifications/NotificationBell';
+import { useInactivityTimer } from './hooks/useInactivityTimer';
+import { usePWAInstall } from './hooks/usePWAInstall';
 import { NotificationPanel } from './components/notifications/NotificationPanel';
 import { NotificationCard } from './components/notifications/NotificationCard';
 import { AnimatePresence } from 'framer-motion';
@@ -53,35 +89,84 @@ import { AnimatePresence } from 'framer-motion';
 export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
-  const searchParams = new URLSearchParams(location.search);
-  const isStandalone = searchParams.get('standalone') === 'true';
+  const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const isStandalone = useMemo(() => searchParams.get('standalone') === 'true', [searchParams]);
   const pathParts = location.pathname.split('/').filter(Boolean);
   const activeTab = pathParts[0] || '';
 
   let activeModule: 'pricing' | 'config' | 'prd' | 'managementReports' | 'expenses' | null = null;
-  if (['dashboard', 'calculator', 'simplified_calculator', 'saved_formulas', 'history', 'goals', 'approvals', 'reports', 'pricingReport', 'commissionReport', 'pricingBySeller', 'pricelists', 'materials_macro', 'materials_micro', 'materials_brand', 'products', 'incompatibilities', 'clients', 'agents'].includes(activeTab)) {
+  if (
+    [
+      'dashboard',
+      'calculator',
+      'simplified_calculator',
+      'saved_formulas',
+      'history',
+      'goals',
+      'approvals',
+      'reports',
+      'pricingReport',
+      'commissionReport',
+      'pricingBySeller',
+      'pricelists',
+      'materials_macro',
+      'materials_micro',
+      'materials_brand',
+      'products',
+      'incompatibilities',
+      'clients',
+      'agents',
+    ].includes(activeTab)
+  ) {
     activeModule = 'pricing';
   } else if (['branches', 'settings', 'users'].includes(activeTab)) {
     activeModule = 'config';
   } else if (activeTab === 'prd') {
     activeModule = 'prd';
-  } else if (['managementReports_dashboard', 'managementReports_lancamentos', 'managementReports_cadastros'].includes(activeTab)) {
+  } else if (
+    [
+      'managementReports_dashboard',
+      'managementReports_lancamentos',
+      'managementReports_cadastros',
+    ].includes(activeTab)
+  ) {
     activeModule = 'managementReports';
-  } else if (activeTab === 'expenses' || activeTab === 'expenses_lancamentos' || activeTab === 'expenses_novo' || activeTab === 'expenses_relatorios' || activeTab === 'expenses_conferencia' || activeTab === 'expenses_aprovacao' || activeTab === 'expenses_categorias' || activeTab === 'expenses_cartoes') {
+  } else if (
+    activeTab === 'expenses' ||
+    activeTab === 'expenses_lancamentos' ||
+    activeTab === 'expenses_novo' ||
+    activeTab === 'expenses_relatorios' ||
+    activeTab === 'expenses_conferencia' ||
+    activeTab === 'expenses_aprovacao' ||
+    activeTab === 'expenses_categorias' ||
+    activeTab === 'expenses_cartoes'
+  ) {
     activeModule = 'expenses';
   }
 
   const { showInfo } = useToast();
   const [editingPricing, setEditingPricing] = useState<PricingRecord | null>(null);
-  const [initialFormulaContext, setInitialFormulaContext] = useState<{ formula: SavedFormula | null; branchId: string; priceListId: string }>({ formula: null, branchId: '', priceListId: '' });
+  const [initialFormulaContext, setInitialFormulaContext] = useState<{
+    formula: SavedFormula | null;
+    branchId: string;
+    priceListId: string;
+  }>({ formula: null, branchId: '', priceListId: '' });
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  
+
   // Custom Hook replaces local state and intervals
-  const { notifications, unreadCount, activeToasts, removeToast, markAsRead, markAllRead, clearAll } = useNotifications(currentUser?.id || '');
+  const {
+    notifications,
+    unreadCount,
+    activeToasts,
+    removeToast,
+    markAsRead,
+    markAllRead,
+    clearAll,
+  } = useNotifications(currentUser?.id || '');
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [appSettings, setAppSettings] = useState<AppSettings>({
     companyName: 'FertCalc Pro',
-    companyLogo: ''
+    companyLogo: '',
   });
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
@@ -92,64 +177,45 @@ export default function App() {
   const [isExpenseConfigExpanded, setIsExpenseConfigExpanded] = useState(false);
   const [pendingExpenseCount, setPendingExpenseCount] = useState(0);
   const [checkedExpenseCount, setCheckedExpenseCount] = useState(0);
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('current_user');
-    if (savedUser) {
-      setCurrentUser(JSON.parse(savedUser));
-    }
+    // Restaura sessão via Supabase Auth (seguro — não usa localStorage manual)
+    restoreSession().then((user) => {
+      if (user) setCurrentUser(user);
+    });
 
-    getAppSettings().then(savedSettings => {
+    getAppSettings().then((savedSettings) => {
       if (savedSettings?.companyName) {
         setAppSettings(savedSettings);
       }
     });
-
-    const handleBeforeInstallPrompt = (e: any) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-    };
-
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    };
   }, []);
 
-  // Inactivity Timeout (10 minutes)
+  // ── PWA install prompt (extraído para usePWAInstall) ─────────────────────
+  const { canInstall, handleInstall } = usePWAInstall();
+
+  // ── Logout (definido antes de useInactivityTimer para evitar referência circular) ──
+  const handleLogout = React.useCallback(() => {
+    setCurrentUser(null);
+    signOut();
+    navigate('/');
+  }, [navigate]);
+
+  // ── Inatividade → logout automático (extraído para useInactivityTimer) ───
+  useInactivityTimer(!!currentUser, handleLogout);
+
+  // Sincronizar logout entre abas + fechar menus ao clicar fora
   useEffect(() => {
     if (!currentUser) return;
 
-    let timeoutId: number;
-
-    const resetTimer = () => {
-      if (timeoutId) clearTimeout(timeoutId);
-      // Logout after 10 minutes of inactivity
-      timeoutId = window.setTimeout(() => {
-        console.log('Session timed out due to inactivity');
-        handleLogout();
-        alert('Sua sessão expirou por inatividade. Por favor, entre novamente.');
-      }, 10 * 60 * 1000);
-    };
-
-    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
-    events.forEach(event => window.addEventListener(event, resetTimer));
-
-    // Initialize timer
-    resetTimer();
-
-    // Sincronizar logout entre abas
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'current_user' && !e.newValue) {
+      if (e.key && e.key.includes('supabase') && !e.newValue) {
         setCurrentUser(null);
         navigate('/');
       }
     };
     window.addEventListener('storage', handleStorageChange);
 
-    // Fechar menus ao clicar fora
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       if (!target.closest('aside') && !target.closest('.notification-trigger')) {
@@ -161,10 +227,8 @@ export default function App() {
     window.document.addEventListener('mousedown', handleClickOutside);
 
     return () => {
-      events.forEach(event => window.removeEventListener(event, resetTimer));
       window.removeEventListener('storage', handleStorageChange);
       window.document.removeEventListener('mousedown', handleClickOutside);
-      if (timeoutId) clearTimeout(timeoutId);
     };
   }, [currentUser, navigate]);
 
@@ -179,38 +243,30 @@ export default function App() {
     load();
   }, [activeModule, currentUser]);
 
-  const handleInstallClick = () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      deferredPrompt.userChoice.then((choiceResult: any) => {
-        if (choiceResult.outcome === 'accepted') {
-          console.log('User accepted the install prompt');
-        }
-        setDeferredPrompt(null);
-      });
-    }
-  };
+  // handleInstall e canInstall agora vêm do hook usePWAInstall (acima)
 
-  const handleLogin = (user: User) => {
-    setCurrentUser(user);
-    navigate('/');
-    localStorage.setItem('current_user', JSON.stringify(user));
-  };
+  const handleLogin = React.useCallback(
+    (user: User) => {
+      setCurrentUser(user);
+      navigate('/');
+      // Sessão gerenciada pelo Supabase Auth — não persiste dados sensíveis no localStorage
+    },
+    [navigate]
+  );
 
-  const handleLogout = () => {
-    setCurrentUser(null);
-    navigate('/');
-    localStorage.removeItem('current_user');
-  };
+  // handleLogout definido acima (junto ao useInactivityTimer)
 
-  const handleEditPricing = (pricing: PricingRecord) => {
-    setEditingPricing(pricing);
-    navigate('/calculator');
-  };
+  const handleEditPricing = React.useCallback(
+    (pricing: PricingRecord) => {
+      setEditingPricing(pricing);
+      navigate('/calculator');
+    },
+    [navigate]
+  );
 
-  const handleClearEditing = () => {
+  const handleClearEditing = React.useCallback(() => {
     setEditingPricing(null);
-  };
+  }, []);
 
   if (!currentUser) {
     return <Login onLogin={handleLogin} />;
@@ -223,7 +279,12 @@ export default function App() {
       const allItems = [
         { id: 'dashboard', label: 'Dashboard', icon: BarChart3, permission: 'dashboard' },
         { id: 'calculator', label: 'Calculadora', icon: CalcIcon, permission: 'calculator' },
-        { id: 'simplified_calculator', label: 'Calculadora Simplificada', icon: CalcIcon, permission: 'calculator' },
+        {
+          id: 'simplified_calculator',
+          label: 'Calculadora Simplificada',
+          icon: CalcIcon,
+          permission: 'calculator',
+        },
         { id: 'saved_formulas', label: 'Batidas Salvas', icon: Beaker, permission: 'calculator' },
         {
           id: 'materials_group',
@@ -234,8 +295,13 @@ export default function App() {
           children: [
             { id: 'products', label: 'Produtos', icon: Package, permission: 'priceLists' },
             { id: 'materials_brand', label: 'Marcas', icon: Tag, permission: 'priceLists' },
-            { id: 'incompatibilities', label: 'Incompatibilidades', icon: AlertTriangle, permission: 'priceLists' },
-          ]
+            {
+              id: 'incompatibilities',
+              label: 'Incompatibilidades',
+              icon: AlertTriangle,
+              permission: 'priceLists',
+            },
+          ],
         },
         { id: 'pricelists', label: 'Lista de Preço', icon: Database, permission: 'priceLists' },
         { id: 'history', label: 'Situação', icon: HistoryIcon, permission: 'history' },
@@ -248,16 +314,31 @@ export default function App() {
           permission: 'reports',
           type: 'parent',
           children: [
-            { id: 'pricingReport', label: 'Relatório de Precificação', icon: BarChart3, permission: 'reports' },
-            { id: 'commissionReport', label: 'Relatório de Comissão', icon: BarChart3, permission: 'reports' },
-            { id: 'pricingBySeller', label: 'Precificação por Vendedor', icon: BarChart3, permission: 'pricingBySeller' },
-          ]
+            {
+              id: 'pricingReport',
+              label: 'Relatório de Precificação',
+              icon: BarChart3,
+              permission: 'reports',
+            },
+            {
+              id: 'commissionReport',
+              label: 'Relatório de Comissão',
+              icon: BarChart3,
+              permission: 'reports',
+            },
+            {
+              id: 'pricingBySeller',
+              label: 'Precificação por Vendedor',
+              icon: BarChart3,
+              permission: 'pricingBySeller',
+            },
+          ],
         },
         { id: 'clients', label: 'Clientes', icon: Users, permission: 'clients' },
         { id: 'agents', label: 'Agentes', icon: UserCheck, permission: 'agents' },
       ];
 
-      return allItems.filter(item => {
+      return allItems.filter((item) => {
         if (currentUser.role === 'master' || currentUser.role === 'admin') return true;
         return (currentUser.permissions as any)?.[item.permission];
       });
@@ -270,7 +351,7 @@ export default function App() {
         { id: 'settings', label: 'Personalização', icon: Settings, permission: 'settings' },
       ];
 
-      return allItems.filter(item => {
+      return allItems.filter((item) => {
         if (currentUser.role === 'master' || currentUser.role === 'admin') return true;
         return (currentUser.permissions as any)?.[item.permission];
       });
@@ -281,7 +362,7 @@ export default function App() {
         { id: 'prd', label: 'Documentação PRD', icon: BarChart3, permission: 'prd' }, // Using BarChart3 as a placeholder icon
       ];
 
-      return allItems.filter(item => {
+      return allItems.filter((item) => {
         if (currentUser.role === 'master' || currentUser.role === 'admin') return true;
         return (currentUser.permissions as any)?.[item.permission];
       });
@@ -296,14 +377,29 @@ export default function App() {
           permission: 'managementReports',
           type: 'parent',
           children: [
-            { id: 'managementReports_dashboard', label: 'Capa / Relatório', icon: LayoutDashboard, permission: 'managementReports' },
-            { id: 'managementReports_lancamentos', label: 'Lançamentos', icon: FileEdit, permission: 'managementReports' },
-            { id: 'managementReports_cadastros', label: 'Configurações', icon: Settings, permission: 'managementReports' },
-          ]
+            {
+              id: 'managementReports_dashboard',
+              label: 'Capa / Relatório',
+              icon: LayoutDashboard,
+              permission: 'managementReports',
+            },
+            {
+              id: 'managementReports_lancamentos',
+              label: 'Lançamentos',
+              icon: FileEdit,
+              permission: 'managementReports',
+            },
+            {
+              id: 'managementReports_cadastros',
+              label: 'Configurações',
+              icon: Settings,
+              permission: 'managementReports',
+            },
+          ],
         },
       ];
 
-      return allItems.filter(item => {
+      return allItems.filter((item) => {
         if (currentUser.role === 'master' || currentUser.role === 'admin') return true;
         return (currentUser.permissions as any)?.[item.permission];
       });
@@ -320,8 +416,13 @@ export default function App() {
           children: [
             { id: 'expenses_lancamentos', label: 'Gastos', icon: List, permission: 'expenses' },
             { id: 'expenses_novo', label: 'Novo Gasto', icon: Plus, permission: 'expenses' },
-            { id: 'expenses_relatorios', label: 'Relatórios', icon: BarChart3, permission: 'expenses' },
-          ]
+            {
+              id: 'expenses_relatorios',
+              label: 'Relatórios',
+              icon: BarChart3,
+              permission: 'expenses',
+            },
+          ],
         },
         {
           id: 'expenses_workflow_group',
@@ -330,9 +431,21 @@ export default function App() {
           permission: 'expenses',
           type: 'parent',
           children: [
-            { id: 'expenses_conferencia', label: 'Conferência', icon: ClipboardCheck, permission: 'expenses', badge: pendingExpenseCount },
-            { id: 'expenses_aprovacao', label: 'Aprovação', icon: CheckCircle2, permission: 'expenses', badge: checkedExpenseCount },
-          ]
+            {
+              id: 'expenses_conferencia',
+              label: 'Conferência',
+              icon: ClipboardCheck,
+              permission: 'expenses',
+              badge: pendingExpenseCount,
+            },
+            {
+              id: 'expenses_aprovacao',
+              label: 'Aprovação',
+              icon: CheckCircle2,
+              permission: 'expenses',
+              badge: checkedExpenseCount,
+            },
+          ],
         },
         {
           id: 'expenses_config_group',
@@ -343,11 +456,11 @@ export default function App() {
           children: [
             { id: 'expenses_categorias', label: 'Categorias', icon: Tag, permission: 'expenses' },
             { id: 'expenses_cartoes', label: 'Cartões', icon: CreditCard, permission: 'expenses' },
-          ]
+          ],
         },
       ];
 
-      return allItems.filter(item => {
+      return allItems.filter((item) => {
         if (currentUser.role === 'master' || currentUser.role === 'admin') return true;
         return (currentUser.permissions as any)?.[item.permission];
       });
@@ -394,8 +507,9 @@ export default function App() {
           <button
             className="md:hidden text-stone-400 hover:text-stone-600"
             onClick={() => setIsMobileMenuOpen(false)}
+            aria-label="Fechar menu"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
@@ -404,7 +518,7 @@ export default function App() {
           <Link
             to="/"
             className={`w-full flex items-center px-3 py-2 rounded-lg text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition-colors`}
-            title={!isSidebarExpanded ? "Voltar ao Início" : undefined}
+            title={!isSidebarExpanded ? 'Voltar ao Início' : undefined}
           >
             <HomeIcon className="w-5 h-5 flex-shrink-0 text-stone-400" />
             {isSidebarExpanded && (
@@ -418,7 +532,11 @@ export default function App() {
           <div className="px-3 mb-2">
             {isSidebarExpanded && (
               <p className="text-[10px] font-black text-stone-400 uppercase tracking-[0.2em]">
-                {activeModule === 'pricing' ? 'Precificação' : activeModule === 'expenses' ? 'Cartão Corporativo' : 'Configuração'}
+                {activeModule === 'pricing'
+                  ? 'Precificação'
+                  : activeModule === 'expenses'
+                    ? 'Cartão Corporativo'
+                    : 'Configuração'}
               </p>
             )}
           </div>
@@ -437,11 +555,13 @@ export default function App() {
             };
 
             const toggleGroup = (id: string) => {
-              if (id === 'materials_group') setIsMaterialsExpanded(p => !p);
-              else if (id === 'reports' || id === 'managementReports_group') setIsReportsExpanded(p => !p);
-              else if (id === 'expenses_lancamentos_group') setIsExpenseLancamentosExpanded(p => !p);
-              else if (id === 'expenses_workflow_group') setIsExpenseWorkflowExpanded(p => !p);
-              else if (id === 'expenses_config_group') setIsExpenseConfigExpanded(p => !p);
+              if (id === 'materials_group') setIsMaterialsExpanded((p) => !p);
+              else if (id === 'reports' || id === 'managementReports_group')
+                setIsReportsExpanded((p) => !p);
+              else if (id === 'expenses_lancamentos_group')
+                setIsExpenseLancamentosExpanded((p) => !p);
+              else if (id === 'expenses_workflow_group') setIsExpenseWorkflowExpanded((p) => !p);
+              else if (id === 'expenses_config_group') setIsExpenseConfigExpanded((p) => !p);
             };
 
             const isExpanded = getGroupExpanded(item.id);
@@ -455,21 +575,25 @@ export default function App() {
                     className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-colors ${isExpanded ? (isExpenseGroup ? 'bg-purple-50 text-purple-700 font-medium' : 'bg-emerald-50 text-emerald-700 font-medium') : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900'}`}
                     title={!isSidebarExpanded ? item.label : undefined}
                   >
-                    <Icon className={`w-5 h-5 flex-shrink-0 ${isExpanded || isActive ? (isExpenseGroup ? 'text-purple-600' : 'text-emerald-600') : 'text-stone-400'}`} />
+                    <Icon
+                      className={`w-5 h-5 flex-shrink-0 ${isExpanded || isActive ? (isExpenseGroup ? 'text-purple-600' : 'text-emerald-600') : 'text-stone-400'}`}
+                    />
+                    {isSidebarExpanded && <span className="ml-3 truncate">{item.label}</span>}
                     {isSidebarExpanded && (
-                      <span className="ml-3 truncate">{item.label}</span>
-                    )}
-                    {isSidebarExpanded && (
-                      <ChevronDown className={`w-4 h-4 ml-auto transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                      <ChevronDown
+                        className={`w-4 h-4 ml-auto transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                      />
                     )}
                   </button>
-                  {
-                    isExpanded && isSidebarExpanded && (
-                      <div className="ml-6 mt-1 space-y-1">
-                        {item.children?.filter(child => {
-                          if (currentUser.role === 'master' || currentUser.role === 'admin') return true;
+                  {isExpanded && isSidebarExpanded && (
+                    <div className="ml-6 mt-1 space-y-1">
+                      {item.children
+                        ?.filter((child) => {
+                          if (currentUser.role === 'master' || currentUser.role === 'admin')
+                            return true;
                           return (currentUser.permissions as any)?.[child.permission];
-                        }).map(child => {
+                        })
+                        .map((child) => {
                           const ChildIcon = child.icon;
                           const isChildActive = activeTab === child.id;
                           return (
@@ -479,7 +603,11 @@ export default function App() {
                               onClick={(e) => {
                                 if (!e.ctrlKey && !e.metaKey) {
                                   e.preventDefault();
-                                  setInitialFormulaContext({ formula: null, branchId: '', priceListId: '' });
+                                  setInitialFormulaContext({
+                                    formula: null,
+                                    branchId: '',
+                                    priceListId: '',
+                                  });
                                   setIsMobileMenuOpen(false);
                                   navigate(`/${child.id}`);
                                 }
@@ -487,7 +615,9 @@ export default function App() {
                               className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-colors ${isChildActive ? (isExpenseGroup ? 'bg-purple-50 text-purple-700 font-medium' : 'bg-emerald-50 text-emerald-700 font-medium') : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900'}`}
                               title={!isSidebarExpanded ? child.label : undefined}
                             >
-                              <ChildIcon className={`w-5 h-5 flex-shrink-0 ${isChildActive ? (isExpenseGroup ? 'text-purple-600' : 'text-emerald-600') : 'text-stone-400'}`} />
+                              <ChildIcon
+                                className={`w-5 h-5 flex-shrink-0 ${isChildActive ? (isExpenseGroup ? 'text-purple-600' : 'text-emerald-600') : 'text-stone-400'}`}
+                              />
                               {isSidebarExpanded && (
                                 <span className="ml-3 truncate flex-1">{child.label}</span>
                               )}
@@ -499,9 +629,8 @@ export default function App() {
                             </Link>
                           );
                         })}
-                      </div>
-                    )
-                  }
+                    </div>
+                  )}
                 </div>
               );
             } else {
@@ -519,16 +648,17 @@ export default function App() {
                       navigate(`/${item.id}`);
                     }
                   }}
-                  className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-colors ${isActive
-                    ? 'bg-emerald-50 text-emerald-700 font-medium'
-                    : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900'
-                    }`}
+                  className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-colors ${
+                    isActive
+                      ? 'bg-emerald-50 text-emerald-700 font-medium'
+                      : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900'
+                  }`}
                   title={!isSidebarExpanded ? item.label : undefined}
                 >
-                  <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-emerald-600' : 'text-stone-400'}`} />
-                  {isSidebarExpanded && (
-                    <span className="ml-3 truncate">{item.label}</span>
-                  )}
+                  <Icon
+                    className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-emerald-600' : 'text-stone-400'}`}
+                  />
+                  {isSidebarExpanded && <span className="ml-3 truncate">{item.label}</span>}
                 </Link>
               );
             }
@@ -537,7 +667,9 @@ export default function App() {
 
         {/* User Area */}
         <div className="p-4 border-t border-stone-200">
-          <div className={`flex items-center ${isSidebarExpanded ? 'justify-between' : 'justify-center flex-col gap-4'}`}>
+          <div
+            className={`flex items-center ${isSidebarExpanded ? 'justify-between' : 'justify-center flex-col gap-4'}`}
+          >
             {isSidebarExpanded && (
               <div className="overflow-hidden">
                 <p className="text-sm font-bold text-stone-800 truncate">{currentUser.name}</p>
@@ -548,8 +680,9 @@ export default function App() {
               onClick={handleLogout}
               className="p-2 text-stone-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
               title="Sair"
+              aria-label="Sair da conta"
             >
-              <LogOut className="w-5 h-5" />
+              <LogOut className="w-5 h-5" aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -560,60 +693,68 @@ export default function App() {
         {/* Header */}
         {!isStandalone && (
           <header className="h-16 bg-white border-b border-stone-200 flex items-center justify-between px-4 sm:px-6">
-          <div className="flex items-center">
-            {/* Mobile Menu Toggle */}
-            <button
-              className="md:hidden mr-4 text-stone-500 hover:text-stone-700"
-              onClick={() => setIsMobileMenuOpen(true)}
-            >
-              <Menu className="w-6 h-6" />
-            </button>
-
-            {/* Desktop Sidebar Toggle */}
-            <button
-              className="hidden md:flex items-center justify-center w-8 h-8 rounded-lg text-stone-400 hover:text-stone-600 hover:bg-stone-100 transition-colors"
-              onClick={() => setIsSidebarExpanded(!isSidebarExpanded)}
-            >
-              {isSidebarExpanded ? <ChevronLeft className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
-            </button>
-          </div>
-
-          <div className="flex items-center gap-4">
-            {deferredPrompt && (
+            <div className="flex items-center">
+              {/* Mobile Menu Toggle */}
               <button
-                onClick={handleInstallClick}
-                className="hidden sm:flex items-center px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-full hover:bg-emerald-700 transition-colors shadow-sm"
+                className="md:hidden mr-4 text-stone-500 hover:text-stone-700"
+                onClick={() => setIsMobileMenuOpen(true)}
+                aria-label="Abrir menu de navegação"
               >
-                <Download className="w-3 h-3 mr-1" />
-                Instalar App
+                <Menu className="w-6 h-6" aria-hidden="true" />
               </button>
-            )}
-            
+
+              {/* Desktop Sidebar Toggle */}
+              <button
+                className="hidden md:flex items-center justify-center w-8 h-8 rounded-lg text-stone-400 hover:text-stone-600 hover:bg-stone-100 transition-colors"
+                onClick={() => setIsSidebarExpanded(!isSidebarExpanded)}
+                aria-label={isSidebarExpanded ? 'Recolher menu lateral' : 'Expandir menu lateral'}
+              >
+                {isSidebarExpanded ? (
+                  <ChevronLeft className="w-5 h-5" aria-hidden="true" />
+                ) : (
+                  <ChevronRight className="w-5 h-5" aria-hidden="true" />
+                )}
+              </button>
+            </div>
+
+            <div className="flex items-center gap-4">
+              {canInstall && (
+                <button
+                  onClick={handleInstall}
+                  className="hidden sm:flex items-center px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-full hover:bg-emerald-700 transition-colors shadow-sm"
+                >
+                  <Download className="w-3 h-3 mr-1" />
+                  Instalar App
+                </button>
+              )}
+
               <div className="relative notification-trigger">
-                <NotificationBell 
-                  unreadCount={unreadCount} 
+                <NotificationBell
+                  unreadCount={unreadCount}
                   onBellClick={() => {
                     const nextState = !isNotificationsOpen;
                     setIsNotificationsOpen(nextState);
                     if (nextState) {
                       markAllRead();
                     }
-                  }} 
+                  }}
                 />
 
-                <NotificationPanel 
-                  isOpen={isNotificationsOpen} 
+                <NotificationPanel
+                  isOpen={isNotificationsOpen}
                   onClose={() => setIsNotificationsOpen(false)}
                   notifications={notifications}
                   unreadCount={unreadCount}
                   onMarkAsRead={(id) => markAsRead(id)}
                   onClearAll={clearAll}
-                  onSettings={() => { setIsNotificationsOpen(false); navigate('/settings'); }}
+                  onSettings={() => {
+                    setIsNotificationsOpen(false);
+                    navigate('/settings');
+                  }}
                 />
               </div>
-            
-          </div>
-        </header>
+            </div>
+          </header>
         )}
 
         {/* Main Content Scrollable Area */}
@@ -635,7 +776,9 @@ export default function App() {
                 }}
               />
             )}
-            {activeModule === 'pricing' && activeTab === 'dashboard' && <Dashboard currentUser={currentUser} />}
+            {activeModule === 'pricing' && activeTab === 'dashboard' && (
+              <Dashboard currentUser={currentUser} />
+            )}
             {(activeTab === 'calculator' || activeTab === 'simplified_calculator') && (
               <Calculator
                 currentUser={currentUser}
@@ -664,33 +807,83 @@ export default function App() {
                 }}
               />
             )}
-            {activeModule === 'pricing' && activeTab === 'history' && <History onEdit={handleEditPricing} currentUser={currentUser} />}
-            {activeModule === 'pricing' && activeTab === 'goals' && <Goals currentUser={currentUser} />}
-            {activeModule === 'pricing' && activeTab === 'approvals' && <Approvals currentUser={currentUser} />}
-            {activeModule === 'pricing' && activeTab === 'reports' && <Reports currentUser={currentUser} />}
-            {activeModule === 'pricing' && activeTab === 'pricingReport' && <PricingReport currentUser={currentUser} />}
-            {activeModule === 'pricing' && activeTab === 'commissionReport' && <CommissionReport currentUser={currentUser} />}
-            {activeModule === 'pricing' && activeTab === 'pricingBySeller' && <PricingBySeller currentUser={currentUser} />}
-            {activeModule === 'pricing' && activeTab === 'pricelists' && <PriceListManager currentUser={currentUser} />}
+            {activeModule === 'pricing' && activeTab === 'history' && (
+              <History onEdit={handleEditPricing} currentUser={currentUser} />
+            )}
+            {activeModule === 'pricing' && activeTab === 'goals' && (
+              <Goals currentUser={currentUser} />
+            )}
+            {activeModule === 'pricing' && activeTab === 'approvals' && (
+              <Approvals currentUser={currentUser} />
+            )}
+            {activeModule === 'pricing' && activeTab === 'reports' && (
+              <Reports currentUser={currentUser} />
+            )}
+            {activeModule === 'pricing' && activeTab === 'pricingReport' && (
+              <PricingReport currentUser={currentUser} />
+            )}
+            {activeModule === 'pricing' && activeTab === 'commissionReport' && (
+              <CommissionReport currentUser={currentUser} />
+            )}
+            {activeModule === 'pricing' && activeTab === 'pricingBySeller' && (
+              <PricingBySeller currentUser={currentUser} />
+            )}
+            {activeModule === 'pricing' && activeTab === 'pricelists' && (
+              <PriceListManager currentUser={currentUser} />
+            )}
             {activeModule === 'pricing' && activeTab === 'materials_brand' && <BrandManager />}
             {activeModule === 'pricing' && activeTab === 'products' && <ProductManager />}
-            {activeModule === 'pricing' && activeTab === 'incompatibilities' && <IncompatibilityManager />}
-            {activeModule === 'pricing' && activeTab === 'clients' && <ClientManager currentUser={currentUser} />}
-            {activeModule === 'pricing' && activeTab === 'agents' && <AgentManager currentUser={currentUser} />}
-            {activeModule === 'config' && activeTab === 'branches' && <BranchManager currentUser={currentUser} />}
+            {activeModule === 'pricing' && activeTab === 'incompatibilities' && (
+              <IncompatibilityManager />
+            )}
+            {activeModule === 'pricing' && activeTab === 'clients' && (
+              <ClientManager currentUser={currentUser} />
+            )}
+            {activeModule === 'pricing' && activeTab === 'agents' && (
+              <AgentManager currentUser={currentUser} />
+            )}
+            {activeModule === 'config' && activeTab === 'branches' && (
+              <BranchManager currentUser={currentUser} />
+            )}
             {activeModule === 'config' && activeTab === 'settings' && <SettingsManager />}
             {activeModule === 'config' && activeTab === 'users' && <UserManager />}
-            {activeModule === 'prd' && activeTab === 'prd' && <PrdModule currentUser={currentUser} />}
-            {activeModule === 'managementReports' && activeTab === 'managementReports_dashboard' && <ManagementReportsModule currentUser={currentUser} activeTab="dashboard" />}
-            {activeModule === 'managementReports' && activeTab === 'managementReports_lancamentos' && <ManagementReportsModule currentUser={currentUser} activeTab="lancamentos" />}
-            {activeModule === 'managementReports' && activeTab === 'managementReports_cadastros' && <ManagementReportsModule currentUser={currentUser} activeTab="cadastros" />}
-            {activeModule === 'expenses' && (activeTab === 'expenses' || activeTab === 'expenses_lancamentos') && <ExpenseDashboard currentUser={currentUser} view="lancamentos" />}
-            {activeModule === 'expenses' && activeTab === 'expenses_novo' && <ExpenseDashboard currentUser={currentUser} view="novo" />}
-            {activeModule === 'expenses' && activeTab === 'expenses_relatorios' && <ExpenseDashboard currentUser={currentUser} view="relatorios" />}
-            {activeModule === 'expenses' && activeTab === 'expenses_conferencia' && <CheckExpenses currentUser={currentUser} />}
-            {activeModule === 'expenses' && activeTab === 'expenses_aprovacao' && <ApproveExpenses currentUser={currentUser} />}
-            {activeModule === 'expenses' && activeTab === 'expenses_categorias' && <ExpenseCategoryManager />}
-            {activeModule === 'expenses' && activeTab === 'expenses_cartoes' && <CardManager currentUser={currentUser} />}
+            {activeModule === 'prd' && activeTab === 'prd' && (
+              <PrdModule currentUser={currentUser} />
+            )}
+            {activeModule === 'managementReports' &&
+              activeTab === 'managementReports_dashboard' && (
+                <ManagementReportsModule currentUser={currentUser} activeTab="dashboard" />
+              )}
+            {activeModule === 'managementReports' &&
+              activeTab === 'managementReports_lancamentos' && (
+                <ManagementReportsModule currentUser={currentUser} activeTab="lancamentos" />
+              )}
+            {activeModule === 'managementReports' &&
+              activeTab === 'managementReports_cadastros' && (
+                <ManagementReportsModule currentUser={currentUser} activeTab="cadastros" />
+              )}
+            {activeModule === 'expenses' &&
+              (activeTab === 'expenses' || activeTab === 'expenses_lancamentos') && (
+                <ExpenseDashboard currentUser={currentUser} view="lancamentos" />
+              )}
+            {activeModule === 'expenses' && activeTab === 'expenses_novo' && (
+              <ExpenseDashboard currentUser={currentUser} view="novo" />
+            )}
+            {activeModule === 'expenses' && activeTab === 'expenses_relatorios' && (
+              <ExpenseDashboard currentUser={currentUser} view="relatorios" />
+            )}
+            {activeModule === 'expenses' && activeTab === 'expenses_conferencia' && (
+              <CheckExpenses currentUser={currentUser} />
+            )}
+            {activeModule === 'expenses' && activeTab === 'expenses_aprovacao' && (
+              <ApproveExpenses currentUser={currentUser} />
+            )}
+            {activeModule === 'expenses' && activeTab === 'expenses_categorias' && (
+              <ExpenseCategoryManager />
+            )}
+            {activeModule === 'expenses' && activeTab === 'expenses_cartoes' && (
+              <CardManager currentUser={currentUser} />
+            )}
           </div>
         </main>
       </div>
@@ -698,18 +891,13 @@ export default function App() {
       {/* Floating Notifications (Toasts) */}
       <div className="fixed bottom-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none">
         <AnimatePresence>
-          {activeToasts.map(toast => (
+          {activeToasts.map((toast) => (
             <div key={toast.id} className="pointer-events-auto">
-              <NotificationCard 
-                notification={toast}
-                onClose={removeToast}
-                autoClose={true}
-              />
+              <NotificationCard notification={toast} onClose={removeToast} autoClose={true} />
             </div>
           ))}
         </AnimatePresence>
       </div>
-    </div >
+    </div>
   );
 }
-
