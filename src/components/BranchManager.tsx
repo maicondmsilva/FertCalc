@@ -5,6 +5,15 @@ import { getBranches, createBranch, updateBranch, deleteBranch } from '../servic
 import { useToast } from './Toast';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { useConfirm } from '../hooks/useConfirm';
+import { useFormValidation, validationRules, ValidationSchema } from '../hooks/useFormValidation';
+import { ValidatedInput } from './ui/ValidatedInput';
+
+const branchValidationSchema: ValidationSchema = {
+  name: {
+    required: true,
+    rules: [validationRules.minLength(2)],
+  },
+};
 
 export default function BranchManager({ currentUser }: { currentUser: User }) {
   const canCreate =
@@ -21,6 +30,8 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
     (currentUser.permissions as any)?.branches_delete;
   const { showSuccess, showError } = useToast();
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
+  const { errors, touched, hasError, validateAll, handleBlur, handleChange, clearAllErrors } =
+    useFormValidation(branchValidationSchema);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
   const [branchName, setBranchName] = useState('');
@@ -39,7 +50,13 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
 
   const saveBranch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!branchName.trim()) return;
+
+    const isValid = validateAll({ name: branchName });
+    if (!isValid) {
+      showError('Por favor, corrija os erros no formulário.');
+      return;
+    }
+
     setLoading(true);
     try {
       if (editingBranch) {
@@ -52,6 +69,7 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
       await loadBranches();
       setBranchName('');
       setEditingBranch(null);
+      clearAllErrors();
     } catch (err) {
       showError('Erro ao salvar filial. Tente novamente.');
     } finally {
@@ -96,6 +114,7 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
   const cancelEdit = () => {
     setEditingBranch(null);
     setBranchName('');
+    clearAllErrors();
   };
 
   return (
@@ -111,14 +130,17 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
           </h2>
           <form onSubmit={saveBranch} className="flex gap-4 items-end">
             <div className="flex-1">
-              <label className="block text-sm font-medium text-stone-600 mb-1">
-                Nome da Filial
-              </label>
-              <input
+              <ValidatedInput
+                label="Nome da Filial"
                 type="text"
                 value={branchName}
-                onChange={(e) => setBranchName(e.target.value)}
-                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                error={errors.name}
+                touched={touched.name}
+                onChange={(value) => {
+                  setBranchName(value);
+                  handleChange('name', value);
+                }}
+                onBlur={() => handleBlur('name', branchName)}
                 placeholder="Ex: Filial Mato Grosso..."
                 required
               />

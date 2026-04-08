@@ -25,6 +25,8 @@ import {
 import { useToast } from './Toast';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { useConfirm } from '../hooks/useConfirm';
+import { useFormValidation, validationRules, ValidationSchema } from '../hooks/useFormValidation';
+import { ValidatedInput } from './ui/ValidatedInput';
 
 const initialFormData = {
   code: '',
@@ -37,9 +39,52 @@ const initialFormData = {
   address: { cep: '', street: '', number: '', neighborhood: '', city: '', state: '' },
 };
 
+const clientValidationSchema: ValidationSchema = {
+  name: {
+    required: true,
+    rules: [validationRules.minLength(3)],
+  },
+  document: {
+    required: true,
+    rules: [
+      {
+        validate: (v: string) => {
+          const clean = v.replace(/\D/g, '');
+          return clean.length === 11 || clean.length === 14;
+        },
+        message: 'CPF deve ter 11 dígitos ou CNPJ 14 dígitos',
+      },
+    ],
+  },
+  stateRegistration: {
+    required: true,
+    rules: [validationRules.minLength(1)],
+  },
+  email: {
+    required: false,
+    rules: [
+      {
+        validate: (v: string) => !v || validationRules.email().validate(v),
+        message: 'Email inválido',
+      },
+    ],
+  },
+  phone: {
+    required: false,
+    rules: [
+      {
+        validate: (v: string) => !v || v.replace(/\D/g, '').length >= 10,
+        message: 'Telefone deve ter pelo menos 10 dígitos',
+      },
+    ],
+  },
+};
+
 export default function ClientManager({ currentUser }: { currentUser: User }) {
   const { showSuccess, showError } = useToast();
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
+  const { errors, touched, hasError, validateAll, handleBlur, handleChange, clearAllErrors } =
+    useFormValidation(clientValidationSchema);
 
   const canCreate =
     currentUser.role === 'master' ||
@@ -84,10 +129,14 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
 
   const saveClient = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name || !formData.document || !formData.stateRegistration) {
-      showError('Nome, CPF/CNPJ e IE são obrigatórios.');
+
+    // Validate all fields
+    const isValid = validateAll(formData);
+    if (!isValid) {
+      showError('Por favor, corrija os erros no formulário.');
       return;
     }
+
     setLoading(true);
     try {
       if (editingClient) {
@@ -101,6 +150,7 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
       await loadClients();
       setFormData(initialFormData);
       setEditingClient(null);
+      clearAllErrors();
     } catch {
       showError('Erro ao salvar cliente. Tente novamente.');
     } finally {
@@ -160,42 +210,54 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
           <form onSubmit={saveClient} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-stone-600 mb-1">
-                  Nome / Razão Social *
-                </label>
-                <input
+                <ValidatedInput
+                  label="Nome / Razão Social"
                   type="text"
                   value={formData.name || ''}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                  error={errors.name}
+                  touched={touched.name}
+                  onChange={(value) => {
+                    setFormData({ ...formData, name: value });
+                    handleChange('name', value);
+                  }}
+                  onBlur={() => handleBlur('name', formData.name)}
                   placeholder="Nome completo do cliente..."
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-stone-600 mb-1">
-                  CPF / CNPJ *
-                </label>
-                <input
+                <ValidatedInput
+                  label="CPF / CNPJ"
                   type="text"
                   value={formData.document || ''}
-                  onChange={(e) =>
-                    setFormData({ ...formData, document: formatDocument(e.target.value) })
-                  }
-                  className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                  error={errors.document}
+                  touched={touched.document}
+                  onChange={(value) => {
+                    const formatted = formatDocument(value);
+                    setFormData({ ...formData, document: formatted });
+                    handleChange('document', formatted);
+                  }}
+                  onBlur={() => handleBlur('document', formData.document)}
                   placeholder="000.000.000-00"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-stone-600 mb-1 flex items-center gap-1">
-                  <Hash className="w-3 h-3" /> Inscrição Estadual (IE) *
-                </label>
-                <input
+                <ValidatedInput
+                  label={
+                    <span className="flex items-center gap-1">
+                      <Hash className="w-3 h-3" /> Inscrição Estadual (IE)
+                    </span>
+                  }
                   type="text"
                   value={formData.stateRegistration || ''}
-                  onChange={(e) => setFormData({ ...formData, stateRegistration: e.target.value })}
-                  className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                  error={errors.stateRegistration}
+                  touched={touched.stateRegistration}
+                  onChange={(value) => {
+                    setFormData({ ...formData, stateRegistration: value });
+                    handleChange('stateRegistration', value);
+                  }}
+                  onBlur={() => handleBlur('stateRegistration', formData.stateRegistration)}
                   placeholder="IE do cliente..."
                   required
                 />
@@ -211,26 +273,41 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-stone-600 mb-1 flex items-center gap-1">
-                  <Mail className="w-3 h-3" /> E-mail
-                </label>
-                <input
+                <ValidatedInput
+                  label={
+                    <span className="flex items-center gap-1">
+                      <Mail className="w-3 h-3" /> E-mail
+                    </span>
+                  }
                   type="email"
                   value={formData.email || ''}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                  error={errors.email}
+                  touched={touched.email}
+                  onChange={(value) => {
+                    setFormData({ ...formData, email: value });
+                    handleChange('email', value);
+                  }}
+                  onBlur={() => handleBlur('email', formData.email)}
                   placeholder="email@exemplo.com"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-stone-600 mb-1 flex items-center gap-1">
-                  <Phone className="w-3 h-3" /> Telefone / Celular
-                </label>
-                <input
+                <ValidatedInput
+                  label={
+                    <span className="flex items-center gap-1">
+                      <Phone className="w-3 h-3" /> Telefone / Celular
+                    </span>
+                  }
                   type="text"
                   value={formData.phone || ''}
-                  onChange={(e) => setFormData({ ...formData, phone: formatPhone(e.target.value) })}
-                  className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                  error={errors.phone}
+                  touched={touched.phone}
+                  onChange={(value) => {
+                    const formatted = formatPhone(value);
+                    setFormData({ ...formData, phone: formatted });
+                    handleChange('phone', formatted);
+                  }}
+                  onBlur={() => handleBlur('phone', formData.phone)}
                   placeholder="(00) 00000-0000"
                 />
               </div>
