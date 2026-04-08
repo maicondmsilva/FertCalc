@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { CreditCard } from '../../types/expense.types';
 import { User } from '../../types';
 import { getCards, createCard, updateCard, toggleCardActive } from '../../services/cardService';
@@ -52,9 +52,14 @@ export default function CardManager({ currentUser }: CardManagerProps) {
     loadCards();
   }, [loadCards]);
 
+  const userMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const u of users) map.set(u.id, u.name);
+    return map;
+  }, [users]);
+
   const getUserName = (userId: string) => {
-    const user = users.find(u => u.id === userId);
-    return user ? user.name : userId ? userId.substring(0, 8) + '...' : '—';
+    return userMap.get(userId) ?? (userId ? userId.substring(0, 8) + '...' : '—');
   };
 
   const resetForm = () => {
