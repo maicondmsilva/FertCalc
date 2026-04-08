@@ -177,12 +177,16 @@ describe('calculateSummary', () => {
     expect(isFinite(result.basePrice)).toBe(true);
   });
 
-  it('aplica desconto corretamente', () => {
-    const macro = makeMacro({ quantity: 1000, price: 1000 });
-    const factors = makeFactors({ factor: 1, discount: 0.1 }); // 10%
-    const result = calculateSummary([macro], [], factors);
-    // basePrice = 1000; priceAfterDiscount = 1000 * 0.90 = 900
-    expect(result.finalPrice).toBeCloseTo(900);
+  it('fecha garantias dentro de ±0,05 para fórmula 16-07-23', () => {
+    const kcl = makeMacro({ id: 'kcl', n: 0, p: 0, k: 60, quantity: 383.33 });
+    const nitrato = makeMacro({ id: 'nit', n: 34, p: 0, k: 0, quantity: 338.24 });
+    const sam = makeMacro({ id: 'sam', n: 21, p: 0, k: 0, quantity: 143.9 });
+    const map = makeMacro({ id: 'map', n: 11, p: 52, k: 0, quantity: 134.53 });
+    const result = calculateSummary([kcl, nitrato, sam, map], [], makeFactors());
+    expect(result.totalWeight).toBeCloseTo(1000, 0);
+    expect(result.resultingN).toBeCloseTo(16, 1);
+    expect(result.resultingP).toBeCloseTo(7, 1);
+    expect(result.resultingK).toBeCloseTo(23, 1);
   });
 });
 

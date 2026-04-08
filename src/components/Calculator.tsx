@@ -530,16 +530,16 @@ export default function Calculator({
         optimize: 'cost',
         opType: 'min',
         constraints: {
-          n_eq: { min: reqN, max: reqN + 9 },
-          p_eq: { min: reqP, max: reqP + 9 },
-          k_eq: { min: reqK, max: reqK + 9 },
+          n_eq: { min: reqN, max: reqN + 0.01 },
+          p_eq: { min: reqP, max: reqP + 0.01 },
+          k_eq: { min: reqK, max: reqK + 0.01 },
 
           // CA/S targets from the formula's own state fields
           ...((calc.targetS || 0) > 0
-            ? { s_eq: { min: calc.targetS! * 10, max: calc.targetS! * 10 + 9 } }
+            ? { s_eq: { min: calc.targetS! * 10, max: calc.targetS! * 10 + 0.01 } }
             : {}),
           ...((calc.targetCa || 0) > 0
-            ? { ca_eq: { min: calc.targetCa! * 10, max: calc.targetCa! * 10 + 9 } }
+            ? { ca_eq: { min: calc.targetCa! * 10, max: calc.targetCa! * 10 + 0.01 } }
             : {}),
           weight: { equal: 1000 },
         },
@@ -1862,6 +1862,43 @@ export default function Calculator({
                             <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded text-xs font-bold">
                               R$ {calc.summary.finalPrice.toFixed(2)}/t
                             </span>
+                            {(() => {
+                              const fmatch = calc.formula.match(
+                                /(\d+(?:[.,]\d+)?)[^\d]+(\d+(?:[.,]\d+)?)[^\d]+(\d+(?:[.,]\d+)?)/
+                              );
+                              if (!fmatch || !calc.summary) return null;
+                              const tN = parseFloat(fmatch[1].replace(',', '.'));
+                              const tP = parseFloat(fmatch[2].replace(',', '.'));
+                              const tK = parseFloat(fmatch[3].replace(',', '.'));
+                              const TOL = 0.05;
+                              const deviations: string[] = [];
+                              if (Math.abs(calc.summary.resultingN - tN) > TOL)
+                                deviations.push(
+                                  `N: ${calc.summary.resultingN.toFixed(2)} (alvo ${tN})`
+                                );
+                              if (Math.abs(calc.summary.resultingP - tP) > TOL)
+                                deviations.push(
+                                  `P: ${calc.summary.resultingP.toFixed(2)} (alvo ${tP})`
+                                );
+                              if (Math.abs(calc.summary.resultingK - tK) > TOL)
+                                deviations.push(
+                                  `K: ${calc.summary.resultingK.toFixed(2)} (alvo ${tK})`
+                                );
+                              if (deviations.length === 0)
+                                return (
+                                  <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded text-xs font-bold flex items-center gap-1">
+                                    ✓ Garantias OK
+                                  </span>
+                                );
+                              return (
+                                <span
+                                  className="px-2 py-1 bg-red-50 text-red-700 rounded text-xs font-bold flex items-center gap-1"
+                                  title={deviations.join(' | ')}
+                                >
+                                  ⚠ Desvio: {deviations.join(' | ')}
+                                </span>
+                              );
+                            })()}
                           </div>
                         </div>
                       )}
@@ -1888,7 +1925,7 @@ export default function Calculator({
                                       {m.name}
                                     </span>
                                     <span className="text-emerald-600 font-black shrink-0">
-                                      {m.quantity.toFixed(1)} kg
+                                      {m.quantity.toFixed(2)} kg
                                     </span>
                                   </div>
                                   <div className="flex justify-between">
@@ -2113,7 +2150,7 @@ export default function Calculator({
                           <div key={m.id} className="flex justify-between text-[9px]">
                             <span className="text-stone-400 truncate pr-1">{m.name}</span>
                             <span className="text-emerald-500 font-mono">
-                              {m.quantity.toFixed(0)}
+                              {m.quantity.toFixed(2)}
                             </span>
                           </div>
                         ))}
