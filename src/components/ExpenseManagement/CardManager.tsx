@@ -17,6 +17,8 @@ interface CardForm {
   active: boolean;
 }
 
+const DROPDOWN_BLUR_DELAY = 150; // ms — allows click events on dropdown items to fire before the dropdown closes
+
 const emptyForm: CardForm = {
   name: '',
   lastFour: '',
@@ -94,7 +96,8 @@ export default function CardManager({ currentUser }: CardManagerProps) {
 
   const handleUserSearchChange = (value: string) => {
     setUserSearch(value);
-    setForm(f => ({ ...f, userId: '', userName: '' }));
+    // Only clear the selected user if the new value differs from the currently selected user's name
+    setForm(f => f.userName && value === f.userName ? f : { ...f, userId: '', userName: '' });
     if (value.trim().length < 2) {
       setUserResults([]);
       setShowUserDropdown(false);
@@ -102,7 +105,7 @@ export default function CardManager({ currentUser }: CardManagerProps) {
     }
     const q = value.toLowerCase();
     const filtered = users.filter(u =>
-      u.name.toLowerCase().includes(q) || (u.nickname?.toLowerCase().includes(q) ?? false)
+      u.name.toLowerCase().includes(q) || u.nickname?.toLowerCase().includes(q)
     );
     setUserResults(filtered.slice(0, 8));
     setShowUserDropdown(true);
@@ -250,7 +253,7 @@ export default function CardManager({ currentUser }: CardManagerProps) {
                 onFocus={() => {
                   if (userResults.length > 0) setShowUserDropdown(true);
                 }}
-                onBlur={() => setTimeout(() => setShowUserDropdown(false), 150)}
+                onBlur={() => setTimeout(() => setShowUserDropdown(false), DROPDOWN_BLUR_DELAY)}
                 placeholder="Digite o nome do usuário..."
                 autoComplete="off"
                 className="w-full border border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none"
