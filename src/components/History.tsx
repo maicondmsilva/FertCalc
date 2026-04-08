@@ -1,12 +1,36 @@
 import React, { useState, useEffect } from 'react';
 import { PricingRecord, User as AppUser, AppSettings } from '../types';
-import { Search, FileText, Calendar, User, Tag, ChevronRight, Trash2, Edit3, Info, Truck, AlertTriangle, XCircle } from 'lucide-react';
+import {
+  Search,
+  FileText,
+  Calendar,
+  User,
+  Tag,
+  ChevronRight,
+  Trash2,
+  Edit3,
+  Info,
+  Truck,
+  AlertTriangle,
+  XCircle,
+} from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import PricingDetailModal from './PricingDetailModal';
 import { generatePricingPDF } from '../utils/pdfGenerator';
-import { getPricingRecords, deletePricingRecord, updatePricingRecord, createPricingRecord, getAppSettings, createNotification, getUsers, getManagersOfUser } from '../services/db';
+import {
+  getPricingRecords,
+  deletePricingRecord,
+  updatePricingRecord,
+  createPricingRecord,
+  getAppSettings,
+  createNotification,
+  getUsers,
+  getManagersOfUser,
+} from '../services/db';
 import { useToast } from './Toast';
+import { ConfirmDialog } from './ui/ConfirmDialog';
+import { useConfirm } from '../hooks/useConfirm';
 import { getPricingTotalTons, getPricingTotalSaleValue } from '../utils/pricingMetrics';
 import { notifyPricingDeleted } from '../services/notificationService';
 
@@ -17,8 +41,12 @@ interface HistoryProps {
 
 export default function History({ onEdit, currentUser }: HistoryProps) {
   const { showSuccess, showError } = useToast();
+  const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
   const [pricings, setPricings] = useState<PricingRecord[]>([]);
-  const [appSettings, setAppSettings] = useState<AppSettings>({ companyName: 'FertCalc Pro', companyLogo: '' });
+  const [appSettings, setAppSettings] = useState<AppSettings>({
+    companyName: 'FertCalc Pro',
+    companyLogo: '',
+  });
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -33,9 +61,20 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
       setPricings(data);
     } else if (currentUser.role === 'manager') {
       const managedIds = currentUser.managedUserIds || [];
-      setPricings(data.filter((p: PricingRecord) => p.userId === currentUser.id || p.transferToUserId === currentUser.id || managedIds.includes(p.userId)));
+      setPricings(
+        data.filter(
+          (p: PricingRecord) =>
+            p.userId === currentUser.id ||
+            p.transferToUserId === currentUser.id ||
+            managedIds.includes(p.userId)
+        )
+      );
     } else {
-      setPricings(data.filter((p: PricingRecord) => p.userId === currentUser.id || p.transferToUserId === currentUser.id));
+      setPricings(
+        data.filter(
+          (p: PricingRecord) => p.userId === currentUser.id || p.transferToUserId === currentUser.id
+        )
+      );
     }
     if (savedSettings?.companyName) setAppSettings(savedSettings);
     setLoading(false);
@@ -53,10 +92,11 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
   const [showDeleted, setShowDeleted] = useState(false);
   const [activeTab, setActiveTab] = useState<'active' | 'deleted'>('active');
 
-  const filteredPricings = pricings.filter(p => {
+  const filteredPricings = pricings.filter((p) => {
     const clientName = p.factors?.client?.name || '';
     const agentName = p.factors?.agent?.name || '';
-    const matchesName = clientName.toLowerCase().includes(filter.toLowerCase()) ||
+    const matchesName =
+      clientName.toLowerCase().includes(filter.toLowerCase()) ||
       agentName.toLowerCase().includes(filter.toLowerCase());
     const matchesStatus = statusFilter ? p.status === statusFilter : true;
 
@@ -73,14 +113,22 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
 
   const stats = {
     total: pricings.length,
-    inProgress: pricings.filter(p => p.status === 'Em Andamento').length,
-    closed: pricings.filter(p => p.status === 'Fechada').length,
-    lost: pricings.filter(p => p.status === 'Perdida').length,
-    deleted: pricings.filter(p => p.status === 'Excluída').length,
-    totalValue: pricings.filter(p => p.status === 'Fechada').reduce((sum, p) => sum + getPricingTotalSaleValue(p), 0),
-    totalValueInProgress: pricings.filter(p => p.status === 'Em Andamento').reduce((sum, p) => sum + getPricingTotalSaleValue(p), 0),
-    totalTonsClosed: pricings.filter(p => p.status === 'Fechada').reduce((sum, p) => sum + getPricingTotalTons(p), 0),
-    totalTonsInProgress: pricings.filter(p => p.status === 'Em Andamento').reduce((sum, p) => sum + getPricingTotalTons(p), 0)
+    inProgress: pricings.filter((p) => p.status === 'Em Andamento').length,
+    closed: pricings.filter((p) => p.status === 'Fechada').length,
+    lost: pricings.filter((p) => p.status === 'Perdida').length,
+    deleted: pricings.filter((p) => p.status === 'Excluída').length,
+    totalValue: pricings
+      .filter((p) => p.status === 'Fechada')
+      .reduce((sum, p) => sum + getPricingTotalSaleValue(p), 0),
+    totalValueInProgress: pricings
+      .filter((p) => p.status === 'Em Andamento')
+      .reduce((sum, p) => sum + getPricingTotalSaleValue(p), 0),
+    totalTonsClosed: pricings
+      .filter((p) => p.status === 'Fechada')
+      .reduce((sum, p) => sum + getPricingTotalTons(p), 0),
+    totalTonsInProgress: pricings
+      .filter((p) => p.status === 'Em Andamento')
+      .reduce((sum, p) => sum + getPricingTotalTons(p), 0),
   };
 
   const exportConsolidatedReport = () => {
@@ -99,12 +147,12 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
     doc.text(`Usuário: ${currentUser.name} (${currentUser.nickname})`, 10, 45);
     doc.line(10, 48, pageWidth - 10, 48);
 
-    const tableBody = filteredPricings.map(p => [
+    const tableBody = filteredPricings.map((p) => [
       new Date(p.date).toLocaleDateString('pt-BR'),
       p.factors?.client?.name || 'N/A',
       p.status,
       p.factors?.targetFormula || '---',
-      `R$ ${p.summary?.finalPrice?.toFixed(2) || '0.00'}`
+      `R$ ${p.summary?.finalPrice?.toFixed(2) || '0.00'}`,
     ]);
 
     autoTable(doc, {
@@ -112,21 +160,27 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
       head: [['Data', 'Cliente', 'Status', 'Ref', 'Preço Final']],
       body: tableBody,
       theme: 'striped',
-      headStyles: { fillColor: [41, 37, 36] }
+      headStyles: { fillColor: [41, 37, 36] },
     });
 
-    const totalValue = filteredPricings.filter(p => p.status === 'Fechada').reduce((sum, p) => sum + (p.summary?.finalPrice || 0), 0);
+    const totalValue = filteredPricings
+      .filter((p) => p.status === 'Fechada')
+      .reduce((sum, p) => sum + (p.summary?.finalPrice || 0), 0);
     const finalY = (doc as any).lastAutoTable.finalY + 10;
 
     doc.setFontSize(12);
     doc.setFont(undefined, 'bold');
-    doc.text(`Total em Vendas Fechadas: R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} `, 10, finalY);
+    doc.text(
+      `Total em Vendas Fechadas: R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} `,
+      10,
+      finalY
+    );
 
     doc.save(`Relatorio_Consolidado_${new Date().getTime()}.pdf`);
   };
 
   const handleDelete = async (id: string) => {
-    const pricing = pricings.find(p => p.id === id);
+    const pricing = pricings.find((p) => p.id === id);
     if (!pricing) return;
 
     if (pricing.approvalStatus === 'Aprovada') {
@@ -135,14 +189,20 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
       return;
     }
 
-    if (confirm('Deseja realmente excluir esta precificação?')) {
+    const okDel = await confirm({
+      title: 'Excluir precificação?',
+      message: 'Esta ação não pode ser desfeita.',
+      variant: 'danger',
+      confirmLabel: 'Excluir',
+    });
+    if (okDel) {
       try {
         await deletePricingRecord(id);
-        
+
         // ✅ Notificar Exclusão
         await notifyPricingDeleted(pricing, currentUser);
 
-        setPricings(pricings.filter(p => p.id !== id));
+        setPricings(pricings.filter((p) => p.id !== id));
         showSuccess('Precificação excluída com sucesso!');
       } catch (err) {
         showError('Erro ao excluir precificação.');
@@ -151,7 +211,13 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
   };
 
   const handleDuplicate = async (pricing: PricingRecord) => {
-    if (confirm('Deseja gerar uma cópia (nova precificação) baseada nesta?')) {
+    const okDup = await confirm({
+      title: 'Duplicar precificação?',
+      message: 'Será gerada uma nova precificação baseada nesta.',
+      variant: 'info',
+      confirmLabel: 'Duplicar',
+    });
+    if (okDup) {
       try {
         const newPricing: Partial<PricingRecord> = {
           ...pricing,
@@ -159,17 +225,19 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
           date: new Date().toISOString(),
           status: 'Em Andamento',
           approvalStatus: 'Pendente',
-          history: [{
-            date: new Date().toISOString(),
-            userId: currentUser.id,
-            userName: currentUser.name,
-            action: `Precificação duplicada a partir de ${pricing.formattedCod}`
-          }],
+          history: [
+            {
+              date: new Date().toISOString(),
+              userId: currentUser.id,
+              userName: currentUser.name,
+              action: `Precificação duplicada a partir de ${pricing.formattedCod}`,
+            },
+          ],
           // Generate a temporary COD, it will be updated by the server or trigger if applicable
-          cod: 0, 
+          cod: 0,
           formattedCod: 'NOVA COPIA',
           transferToUserId: undefined,
-          deletionRequest: undefined
+          deletionRequest: undefined,
         };
 
         const created = await createPricingRecord(newPricing as PricingRecord);
@@ -191,7 +259,7 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
         date: new Date().toISOString(),
         userId: currentUser.id,
         userName: currentUser.name,
-        action: `Solicitada exclusão: ${deletionReason}`
+        action: `Solicitada exclusão: ${deletionReason}`,
       };
 
       await updatePricingRecord(pricingToDelete.id, {
@@ -200,46 +268,59 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
           requestedBy: currentUser.id,
           userName: currentUser.name,
           date: new Date().toISOString(),
-          status: 'Pendente'
+          status: 'Pendente',
         },
-        history: [...(pricingToDelete.history || []), historyEntry]
+        history: [...(pricingToDelete.history || []), historyEntry],
       } as any);
 
       // Notificar todos os gerentes e administradores
       const allUsers = await getUsers();
       const managers = await getManagersOfUser(currentUser.id);
       const approvers = await getUsers();
-      const masterAdmins = approvers.filter(u => u.role === 'master' || u.role === 'admin' || (u.permissions as any)?.approvals_canApprove === true);
-      
-      const notifyIds = new Set([...managers.map(m => m.id), ...masterAdmins.map(a => a.id)]);
+      const masterAdmins = approvers.filter(
+        (u) =>
+          u.role === 'master' ||
+          u.role === 'admin' ||
+          (u.permissions as any)?.approvals_canApprove === true
+      );
 
-      await Promise.all(Array.from(notifyIds).map(targetId => 
-        createNotification({
-          userId: targetId,
-          title: 'Solicitação de Exclusão',
-          message: `${currentUser.name} solicitou a exclusão de uma precificação aprovada: ${pricingToDelete.formattedCod}.`,
-          date: new Date().toISOString(),
-          read: false,
-          type: 'pricing_deletion_request',
-          dataId: pricingToDelete.id
-        })
-      ));
+      const notifyIds = new Set([...managers.map((m) => m.id), ...masterAdmins.map((a) => a.id)]);
+
+      await Promise.all(
+        Array.from(notifyIds).map((targetId) =>
+          createNotification({
+            userId: targetId,
+            title: 'Solicitação de Exclusão',
+            message: `${currentUser.name} solicitou a exclusão de uma precificação aprovada: ${pricingToDelete.formattedCod}.`,
+            date: new Date().toISOString(),
+            read: false,
+            type: 'pricing_deletion_request',
+            dataId: pricingToDelete.id,
+          })
+        )
+      );
 
       showSuccess('Solicitação de exclusão enviada para aprovação!');
       setIsDeleting(false);
       setDeletionReason('');
       setPricingToDelete(null);
       // Refresh local state to show pending deletion if needed
-      setPricings(pricings.map(p => p.id === pricingToDelete.id ? {
-        ...p,
-        deletionRequest: {
-          reason: deletionReason,
-          requestedBy: currentUser.id,
-          userName: currentUser.name,
-          date: new Date().toISOString(),
-          status: 'Pendente'
-        }
-      } as any : p));
+      setPricings(
+        pricings.map((p) =>
+          p.id === pricingToDelete.id
+            ? ({
+                ...p,
+                deletionRequest: {
+                  reason: deletionReason,
+                  requestedBy: currentUser.id,
+                  userName: currentUser.name,
+                  date: new Date().toISOString(),
+                  status: 'Pendente',
+                },
+              } as any)
+            : p
+        )
+      );
     } catch (err: any) {
       console.error('Erro ao enviar exclusão:', err);
       showError('Erro ao enviar solicitação de exclusão: ' + (err.message || 'Erro desconhecido.'));
@@ -249,18 +330,26 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
   };
 
   const updateStatus = async (id: string, newStatus: PricingRecord['status']) => {
-    const record = pricings.find(p => p.id === id);
+    const record = pricings.find((p) => p.id === id);
     // Bloquear mudança para 'Fechada' sem aprovação
     if (newStatus === 'Fechada' && record?.approvalStatus !== 'Aprovada') {
       showError('A precificação precisa ser aprovada antes de ser marcada como Fechada.');
       return;
     }
-    const historyEntry = { date: new Date().toISOString(), userId: currentUser.id, userName: currentUser.name, action: `Status alterado para: ${newStatus} ` };
+    const historyEntry = {
+      date: new Date().toISOString(),
+      userId: currentUser.id,
+      userName: currentUser.name,
+      action: `Status alterado para: ${newStatus} `,
+    };
     try {
-      await updatePricingRecord(id, { status: newStatus, history: [...(record?.history || []), historyEntry] });
+      await updatePricingRecord(id, {
+        status: newStatus,
+        history: [...(record?.history || []), historyEntry],
+      });
       await loadData();
       if (selectedPricing?.id === id) {
-        const updated = pricings.find(p => p.id === id);
+        const updated = pricings.find((p) => p.id === id);
         if (updated) setSelectedPricing({ ...updated, status: newStatus });
       }
     } catch {
@@ -269,14 +358,28 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
   };
 
   const updateApprovalStatus = async (id: string, newStatus: PricingRecord['approvalStatus']) => {
-    if (!confirm(`Deseja realmente ${newStatus?.toLowerCase()} esta precificação ? `)) return;
-    const historyEntry = { date: new Date().toISOString(), userId: currentUser.id, userName: currentUser.name, action: `Aprovação alterada para: ${newStatus} ` };
+    const okStatus = await confirm({
+      title: `${newStatus} precificação?`,
+      message: `Deseja realmente ${newStatus?.toLowerCase()} esta precificação?`,
+      variant: 'warning',
+      confirmLabel: newStatus ?? 'Confirmar',
+    });
+    if (!okStatus) return;
+    const historyEntry = {
+      date: new Date().toISOString(),
+      userId: currentUser.id,
+      userName: currentUser.name,
+      action: `Aprovação alterada para: ${newStatus} `,
+    };
     try {
-      const record = pricings.find(p => p.id === id);
-      await updatePricingRecord(id, { approvalStatus: newStatus, history: [...(record?.history || []), historyEntry] });
+      const record = pricings.find((p) => p.id === id);
+      await updatePricingRecord(id, {
+        approvalStatus: newStatus,
+        history: [...(record?.history || []), historyEntry],
+      });
       await loadData();
       if (selectedPricing?.id === id) {
-        const updated = pricings.find(p => p.id === id);
+        const updated = pricings.find((p) => p.id === id);
         if (updated) setSelectedPricing({ ...updated, approvalStatus: newStatus });
       }
     } catch {
@@ -284,18 +387,24 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
     }
   };
 
-  const refreshPricings = () => { loadData(); };
+  const refreshPricings = () => {
+    loadData();
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'Fechada': return 'bg-emerald-100 text-emerald-800';
-      case 'Perdida': return 'bg-red-100 text-red-800';
-      default: return 'bg-blue-100 text-blue-800';
+      case 'Fechada':
+        return 'bg-emerald-100 text-emerald-800';
+      case 'Perdida':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-blue-100 text-blue-800';
     }
   };
 
   return (
     <div className="space-y-6">
+      <ConfirmDialog {...confirmState} onConfirm={handleConfirm} onCancel={handleCancel} />
       {/* Stats Dashboard */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <div className="bg-white p-4 rounded-xl shadow-sm border border-stone-200">
@@ -303,24 +412,40 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
           <p className="text-2xl font-black text-stone-800">{stats.total}</p>
         </div>
         <div className="bg-white p-4 rounded-xl shadow-sm border border-stone-200">
-          <p className="text-xs font-bold text-blue-500 uppercase tracking-wider mb-1">Em Aberto (Tons)</p>
-          <p className="text-2xl font-black text-blue-600">{stats.totalTonsInProgress.toLocaleString('pt-BR', { minimumFractionDigits: 1 })} t</p>
+          <p className="text-xs font-bold text-blue-500 uppercase tracking-wider mb-1">
+            Em Aberto (Tons)
+          </p>
+          <p className="text-2xl font-black text-blue-600">
+            {stats.totalTonsInProgress.toLocaleString('pt-BR', { minimumFractionDigits: 1 })} t
+          </p>
         </div>
         <div className="bg-white p-4 rounded-xl shadow-sm border border-stone-200">
-          <p className="text-xs font-bold text-emerald-500 uppercase tracking-wider mb-1">Fechadas (Tons)</p>
-          <p className="text-2xl font-black text-emerald-600">{stats.totalTonsClosed.toLocaleString('pt-BR', { minimumFractionDigits: 1 })} t</p>
+          <p className="text-xs font-bold text-emerald-500 uppercase tracking-wider mb-1">
+            Fechadas (Tons)
+          </p>
+          <p className="text-2xl font-black text-emerald-600">
+            {stats.totalTonsClosed.toLocaleString('pt-BR', { minimumFractionDigits: 1 })} t
+          </p>
         </div>
         <div className="bg-white p-4 rounded-xl shadow-sm border border-stone-200">
           <p className="text-xs font-bold text-red-500 uppercase tracking-wider mb-1">Perdidas</p>
           <p className="text-2xl font-black text-red-600">{stats.lost}</p>
         </div>
         <div className="bg-white p-4 rounded-xl shadow-sm border border-stone-200">
-          <p className="text-xs font-bold text-blue-500 uppercase tracking-wider mb-1">Valor Em Aberto</p>
-          <p className="text-xl font-black text-blue-600">R$ {stats.totalValueInProgress.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+          <p className="text-xs font-bold text-blue-500 uppercase tracking-wider mb-1">
+            Valor Em Aberto
+          </p>
+          <p className="text-xl font-black text-blue-600">
+            R$ {stats.totalValueInProgress.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          </p>
         </div>
         <div className="bg-white p-4 rounded-xl shadow-sm border border-stone-200 col-span-2 md:col-span-1">
-          <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider mb-1">Faturamento (Fechada)</p>
-          <p className="text-xl font-black text-emerald-700">R$ {stats.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+          <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider mb-1">
+            Faturamento (Fechada)
+          </p>
+          <p className="text-xl font-black text-emerald-700">
+            R$ {stats.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          </p>
         </div>
       </div>
 
@@ -332,7 +457,9 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
               <button
                 onClick={() => setActiveTab('active')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  activeTab === 'active' ? 'bg-emerald-600 text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                  activeTab === 'active'
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
                 }`}
               >
                 Ativas
@@ -340,7 +467,9 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
               <button
                 onClick={() => setActiveTab('deleted')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  activeTab === 'deleted' ? 'bg-red-600 text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                  activeTab === 'deleted'
+                    ? 'bg-red-600 text-white'
+                    : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
                 }`}
               >
                 Excluídas ({stats.deleted})
@@ -399,16 +528,27 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredPricings
-          .filter(p => activeTab === 'deleted' ? p.status === 'Excluída' : p.status !== 'Excluída')
-          .map(p => (
-            <div key={p.id} id={`pricing-card-${p.id}`} className={`bg-white rounded-xl shadow-sm border ${
-                p.status === 'Excluída' ? 'border-red-100 opacity-75' : 
-                p.approvalStatus === 'Reprovada' ? 'border-red-500 bg-red-50/20' : 
-                'border-stone-200 hover:shadow-md'
-              } transition-shadow cursor-pointer relative`} onClick={() => setSelectedPricing(p)}>
+          .filter((p) =>
+            activeTab === 'deleted' ? p.status === 'Excluída' : p.status !== 'Excluída'
+          )
+          .map((p) => (
+            <div
+              key={p.id}
+              id={`pricing-card-${p.id}`}
+              className={`bg-white rounded-xl shadow-sm border ${
+                p.status === 'Excluída'
+                  ? 'border-red-100 opacity-75'
+                  : p.approvalStatus === 'Reprovada'
+                    ? 'border-red-500 bg-red-50/20'
+                    : 'border-stone-200 hover:shadow-md'
+              } transition-shadow cursor-pointer relative`}
+              onClick={() => setSelectedPricing(p)}
+            >
               {p.transferToUserId && (
                 <div className="absolute top-0 right-0 bg-amber-500 text-white text-[10px] font-black px-3 py-1 uppercase tracking-tighter rounded-bl-lg shadow-sm z-10 animate-pulse">
-                  {p.transferToUserId === currentUser.id ? 'PENDENTE ACEITE' : 'TRANSFERÊNCIA ENVIADA'}
+                  {p.transferToUserId === currentUser.id
+                    ? 'PENDENTE ACEITE'
+                    : 'TRANSFERÊNCIA ENVIADA'}
                 </div>
               )}
               {p.deletionRequest?.status === 'Pendente' && (
@@ -426,15 +566,23 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                   <div className="flex-1">
                     <h3 className="font-bold text-lg text-stone-800 flex items-center flex-wrap gap-1">
                       <User className="w-4 h-4 text-stone-400" />
-                      <span className="text-emerald-600 font-mono text-sm mr-1">#{p.factors?.client?.code || '---'}</span>
+                      <span className="text-emerald-600 font-mono text-sm mr-1">
+                        #{p.factors?.client?.code || '---'}
+                      </span>
                       {p.factors?.client?.name || 'Cliente não identificado'}
                     </h3>
                     <div className="mt-1 space-y-0.5">
-                      <p className="text-[10px] font-bold text-stone-400 uppercase">IE: {p.factors?.client?.stateRegistration || '---'}</p>
-                      <p className="text-[10px] font-bold text-emerald-600 uppercase">Precificação: {p.formattedCod}</p>
+                      <p className="text-[10px] font-bold text-stone-400 uppercase">
+                        IE: {p.factors?.client?.stateRegistration || '---'}
+                      </p>
+                      <p className="text-[10px] font-bold text-emerald-600 uppercase">
+                        Precificação: {p.formattedCod}
+                      </p>
                     </div>
                   </div>
-                  <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(p.status)}`}>
+                  <span
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(p.status)}`}
+                  >
                     {p.status}
                   </span>
                 </div>
@@ -445,30 +593,54 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                   </div>
                   <div className="flex items-center">
                     <Calendar className="w-4 h-4 mr-2 text-emerald-500" />
-                    Vencimento: <span className="ml-1 font-medium">{p.factors?.dueDate ? new Date(p.factors.dueDate).toLocaleDateString('pt-BR') : '---'}</span>
+                    Vencimento:{' '}
+                    <span className="ml-1 font-medium">
+                      {p.factors?.dueDate
+                        ? new Date(p.factors.dueDate).toLocaleDateString('pt-BR')
+                        : '---'}
+                    </span>
                   </div>
                   <div className="flex items-center">
                     <Truck className="w-4 h-4 mr-2 text-stone-400" />
-                    Frete: <span className="ml-1 font-medium">{(p.factors?.freight || 0) > 0 ? `CIF (R$ ${p.factors?.freight?.toFixed(2)})` : 'FOB'}</span>
+                    Frete:{' '}
+                    <span className="ml-1 font-medium">
+                      {(p.factors?.freight || 0) > 0
+                        ? `CIF (R$ ${p.factors?.freight?.toFixed(2)})`
+                        : 'FOB'}
+                    </span>
                   </div>
                   <div className="flex items-center">
                     <Tag className="w-4 h-4 mr-2 text-stone-400" />
-                    Aprovação: <span className={`ml-1 font-bold ${p.approvalStatus === 'Aprovada' ? 'text-emerald-600' :
-                      p.approvalStatus === 'Reprovada' ? 'text-red-600' :
-                        'text-amber-600'
-                      }`}>{p.approvalStatus || 'Pendente'}</span>
+                    Aprovação:{' '}
+                    <span
+                      className={`ml-1 font-bold ${
+                        p.approvalStatus === 'Aprovada'
+                          ? 'text-emerald-600'
+                          : p.approvalStatus === 'Reprovada'
+                            ? 'text-red-600'
+                            : 'text-amber-600'
+                      }`}
+                    >
+                      {p.approvalStatus || 'Pendente'}
+                    </span>
                   </div>
                   <div className="flex items-center">
                     <Tag className="w-4 h-4 mr-2 text-stone-400" />
-                    Fórmulas: <span className="ml-1 font-bold text-emerald-600">
+                    Fórmulas:{' '}
+                    <span className="ml-1 font-bold text-emerald-600">
                       {p.calculations?.length || 0} precificadas
                     </span>
                   </div>
                   <div className="mt-2 space-y-1">
                     {p.calculations?.map((calc, idx) => (
-                      <div key={idx} className="flex justify-between items-center bg-stone-50 px-2 py-1 rounded text-[10px] border border-stone-100">
+                      <div
+                        key={idx}
+                        className="flex justify-between items-center bg-stone-50 px-2 py-1 rounded text-[10px] border border-stone-100"
+                      >
                         <span className="font-bold text-stone-600">{calc.formula}</span>
-                        <span className="text-emerald-600 font-mono">R$ {calc.summary?.finalPrice.toFixed(2)}</span>
+                        <span className="text-emerald-600 font-mono">
+                          R$ {calc.summary?.finalPrice.toFixed(2)}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -484,32 +656,47 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                         <XCircle className="w-3 h-3" /> Motivo da Reprovação:
                       </p>
                       <p className="text-sm text-red-900 font-medium">"{p.rejectionObservation}"</p>
-                      <p className="text-[9px] text-red-500 mt-2 italic font-bold">Clique em editar para corrigir e reenviar.</p>
+                      <p className="text-[9px] text-red-500 mt-2 italic font-bold">
+                        Clique em editar para corrigir e reenviar.
+                      </p>
                     </div>
                   )}
                 </div>
               </div>
               <div className="bg-stone-50 p-5 flex justify-between items-center">
                 <div>
-                  <p className="text-xs text-stone-500 font-medium uppercase tracking-wider mb-1">Venda Total ({getPricingTotalTons(p).toFixed(1)} tons)</p>
-                  <p className="text-xl font-bold text-emerald-600">
-                    R$ {getPricingTotalSaleValue(p).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  <p className="text-xs text-stone-500 font-medium uppercase tracking-wider mb-1">
+                    Venda Total ({getPricingTotalTons(p).toFixed(1)} tons)
                   </p>
-                  <p className="text-[10px] text-stone-400">Tonnage: {getPricingTotalTons(p).toFixed(1)} t | R$ {getPricingTotalTons(p) > 0 ? (getPricingTotalSaleValue(p) / getPricingTotalTons(p)).toFixed(2) : '0.00'} / ton</p>
+                  <p className="text-xl font-bold text-emerald-600">
+                    R${' '}
+                    {getPricingTotalSaleValue(p).toLocaleString('pt-BR', {
+                      minimumFractionDigits: 2,
+                    })}
+                  </p>
+                  <p className="text-[10px] text-stone-400">
+                    Tonnage: {getPricingTotalTons(p).toFixed(1)} t | R${' '}
+                    {getPricingTotalTons(p) > 0
+                      ? (getPricingTotalSaleValue(p) / getPricingTotalTons(p)).toFixed(2)
+                      : '0.00'}{' '}
+                    / ton
+                  </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  {p.status !== 'Excluída' && (p.status === 'Em Andamento' && (currentUser.permissions as any)?.history_editPricing !== false && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (onEdit) onEdit(p);
-                      }}
-                      className="p-2.5 hover:bg-blue-100 text-blue-600 rounded-full transition-all active:scale-95 bg-blue-50/50"
-                      title="Editar"
-                    >
-                      <Edit3 className="w-5 h-5" />
-                    </button>
-                  ))}
+                  {p.status !== 'Excluída' &&
+                    p.status === 'Em Andamento' &&
+                    (currentUser.permissions as any)?.history_editPricing !== false && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (onEdit) onEdit(p);
+                        }}
+                        className="p-2.5 hover:bg-blue-100 text-blue-600 rounded-full transition-all active:scale-95 bg-blue-50/50"
+                        title="Editar"
+                      >
+                        <Edit3 className="w-5 h-5" />
+                      </button>
+                    )}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -520,18 +707,21 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                   >
                     <FileText className="w-5 h-5" />
                   </button>
-                  {(p.status !== 'Excluída' && (currentUser.role === 'master' || currentUser.role === 'admin' || (currentUser.permissions as any)?.history_changeStatus !== false)) && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(p.id);
-                      }}
-                      className="p-2.5 hover:bg-red-100 text-red-600 rounded-full transition-all active:scale-95 bg-red-50/50"
-                      title={p.approvalStatus === 'Aprovada' ? "Solicitar Exclusão" : "Excluir"}
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
-                  )}
+                  {p.status !== 'Excluída' &&
+                    (currentUser.role === 'master' ||
+                      currentUser.role === 'admin' ||
+                      (currentUser.permissions as any)?.history_changeStatus !== false) && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(p.id);
+                        }}
+                        className="p-2.5 hover:bg-red-100 text-red-600 rounded-full transition-all active:scale-95 bg-red-50/50"
+                        title={p.approvalStatus === 'Aprovada' ? 'Solicitar Exclusão' : 'Excluir'}
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    )}
                   <ChevronRight className="w-6 h-6 text-stone-300 ml-1" />
                 </div>
               </div>
@@ -541,8 +731,12 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
         {filteredPricings.length === 0 && (
           <div className="col-span-full bg-white p-12 text-center rounded-xl border border-stone-200 border-dashed">
             <FileText className="w-12 h-12 text-stone-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-stone-900 mb-1">Nenhuma precificação encontrada</h3>
-            <p className="text-stone-500">Ajuste os filtros ou crie uma nova precificação na calculadora.</p>
+            <h3 className="text-lg font-medium text-stone-900 mb-1">
+              Nenhuma precificação encontrada
+            </h3>
+            <p className="text-stone-500">
+              Ajuste os filtros ou crie uma nova precificação na calculadora.
+            </p>
           </div>
         )}
       </div>
@@ -558,7 +752,7 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
           onUpdateStatus={updateStatus}
           onUpdateApproval={async (id, status) => {
             await updateApprovalStatus(id, status);
-            setPricings(pricings.map(p => p.id === id ? { ...p, approvalStatus: status } : p));
+            setPricings(pricings.map((p) => (p.id === id ? { ...p, approvalStatus: status } : p)));
           }}
           onSaveObservation={loadData}
           onTransferSuccess={loadData}
@@ -575,15 +769,21 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                 <AlertTriangle className="w-5 h-5 text-red-500" />
                 Solicitar Exclusão
               </h3>
-              <button onClick={() => setIsDeleting(false)} className="text-stone-400 hover:text-stone-600">
+              <button
+                onClick={() => setIsDeleting(false)}
+                className="text-stone-400 hover:text-stone-600"
+              >
                 <XCircle className="w-5 h-5" />
               </button>
             </div>
             <div className="p-6">
               <p className="text-sm text-stone-600 mb-4 font-medium italic">
-                A precificação "{pricingToDelete?.formattedCod}" já está aprovada. Para excluí-la, você deve fornecer uma justificativa que será enviada para aprovação gerencial.
+                A precificação "{pricingToDelete?.formattedCod}" já está aprovada. Para excluí-la,
+                você deve fornecer uma justificativa que será enviada para aprovação gerencial.
               </p>
-              <label className="text-[10px] font-bold text-stone-400 uppercase tracking-widest block mb-2">Justificativa da Exclusão</label>
+              <label className="text-[10px] font-bold text-stone-400 uppercase tracking-widest block mb-2">
+                Justificativa da Exclusão
+              </label>
               <textarea
                 value={deletionReason}
                 onChange={(e) => setDeletionReason(e.target.value)}

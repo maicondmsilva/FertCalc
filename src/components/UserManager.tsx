@@ -3,9 +3,12 @@ import { Users, Plus, Trash2, Save, User as UserIcon, Edit2, X } from 'lucide-re
 import { User } from '../types';
 import { getUsers, createUser, updateUser, deleteUser } from '../services/db';
 import { useToast } from './Toast';
+import { useConfirm } from '../hooks/useConfirm';
+import { ConfirmDialog } from './ui/ConfirmDialog';
 
 export default function UserManager() {
   const { showSuccess, showError } = useToast();
+  const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -37,8 +40,8 @@ export default function UserManager() {
       prd: true,
       managementReports: true,
       calculator_profitabilityCheck: false,
-      creditCard: 'none'
-    }
+      creditCard: 'none',
+    },
   });
 
   const modules = [
@@ -57,7 +60,7 @@ export default function UserManager() {
     { id: 'settings', name: 'Personalização' },
     { id: 'prd', name: 'Documentação PRD' },
     { id: 'managementReports', name: 'Relatório Diário' },
-    { id: 'expenses', name: 'Gastos Cartão' }
+    { id: 'expenses', name: 'Gastos Cartão' },
   ];
 
   useEffect(() => {
@@ -91,20 +94,55 @@ export default function UserManager() {
       pricingBySeller: false,
       prd: false,
       managementReports: false,
-      calculator_profitabilityCheck: false
+      calculator_profitabilityCheck: false,
     };
 
     if (role === 'master' || role === 'admin') {
-      const allCrud = ['clients', 'agents', 'priceLists', 'branches', 'macro', 'micro'].reduce((acc, resource) => {
-        return { ...acc, [`${resource}_create`]: true, [`${resource}_edit`]: true, [`${resource}_delete`]: true, [resource]: true };
-      }, {});
-      return Object.keys(base).reduce((acc, key) => ({ ...acc, [key]: true }), { approvals_canApprove: true, calculator_profitabilityCheck: true, creditCard: 'admin', ...allCrud });
+      const allCrud = ['clients', 'agents', 'priceLists', 'branches', 'macro', 'micro'].reduce(
+        (acc, resource) => {
+          return {
+            ...acc,
+            [`${resource}_create`]: true,
+            [`${resource}_edit`]: true,
+            [`${resource}_delete`]: true,
+            [resource]: true,
+          };
+        },
+        {}
+      );
+      return Object.keys(base).reduce((acc, key) => ({ ...acc, [key]: true }), {
+        approvals_canApprove: true,
+        calculator_profitabilityCheck: true,
+        creditCard: 'admin',
+        ...allCrud,
+      });
     }
     if (role === 'manager') {
-      const allCrud = ['clients', 'agents', 'priceLists', 'branches', 'macro', 'micro'].reduce((acc, resource) => {
-        return { ...acc, [`${resource}_create`]: true, [`${resource}_edit`]: true, [`${resource}_delete`]: true, [resource]: true };
-      }, {});
-      return { ...base, approvals: true, approvals_canApprove: true, reports: true, pricingReport: true, commissionReport: true, pricingBySeller: true, goals: true, calculator_profitabilityCheck: true, creditCard: 'approver', ...allCrud };
+      const allCrud = ['clients', 'agents', 'priceLists', 'branches', 'macro', 'micro'].reduce(
+        (acc, resource) => {
+          return {
+            ...acc,
+            [`${resource}_create`]: true,
+            [`${resource}_edit`]: true,
+            [`${resource}_delete`]: true,
+            [resource]: true,
+          };
+        },
+        {}
+      );
+      return {
+        ...base,
+        approvals: true,
+        approvals_canApprove: true,
+        reports: true,
+        pricingReport: true,
+        commissionReport: true,
+        pricingBySeller: true,
+        goals: true,
+        calculator_profitabilityCheck: true,
+        creditCard: 'approver',
+        ...allCrud,
+      };
     }
     return { ...base, creditCard: 'none' };
   };
@@ -113,7 +151,7 @@ export default function UserManager() {
     setFormData({
       ...formData,
       role,
-      permissions: getDefaultPermissions(role) as any
+      permissions: getDefaultPermissions(role) as any,
     });
   };
 
@@ -172,13 +210,15 @@ export default function UserManager() {
         ativo: true,
         role: 'user',
         managedUserIds: [],
-        permissions: getDefaultPermissions('user') as any
+        permissions: getDefaultPermissions('user') as any,
       });
     } catch (err: any) {
       console.error('Erro ao salvar usuário:', err);
       const msg: string = err?.message || err?.details || '';
       if (msg.includes('app_users_email_key') || msg.includes('duplicate key')) {
-        showError('Este e-mail já está cadastrado. Use um e-mail diferente ou edite o usuário existente.');
+        showError(
+          'Este e-mail já está cadastrado. Use um e-mail diferente ou edite o usuário existente.'
+        );
       } else {
         showError(`Erro ao salvar usuário: ${msg || 'Erro desconhecido'}`);
       }
@@ -198,7 +238,7 @@ export default function UserManager() {
       ativo: user.ativo,
       role: user.role as any,
       managedUserIds: user.managedUserIds || [],
-      permissions: (user.permissions || getDefaultPermissions(user.role)) as any
+      permissions: (user.permissions || getDefaultPermissions(user.role)) as any,
     });
   };
 
@@ -213,19 +253,23 @@ export default function UserManager() {
       ativo: true,
       role: 'user',
       managedUserIds: [],
-      permissions: getDefaultPermissions('user') as any
+      permissions: getDefaultPermissions('user') as any,
     });
   };
 
   const handleDeleteUser = async (id: string) => {
-    if (confirm('Tem certeza que deseja excluir este usuário? Esta ação não pode ser desfeita.')) {
-      try {
-        await deleteUser(id);
-        showSuccess('Usuário excluído com sucesso!');
-        await loadUsers();
-      } catch {
-        showError('Erro ao excluir usuário.');
-      }
+    const ok = await confirm({
+      title: 'Excluir Usuário',
+      message: 'Tem certeza que deseja excluir este usuário? Esta ação não pode ser desfeita.',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await deleteUser(id);
+      showSuccess('Usuário excluído com sucesso!');
+      await loadUsers();
+    } catch {
+      showError('Erro ao excluir usuário.');
     }
   };
 
@@ -238,10 +282,7 @@ export default function UserManager() {
             {editingId ? 'Editar Usuário' : 'Novo Usuário'}
           </h2>
           {editingId && (
-            <button
-              onClick={cancelEdit}
-              className="text-stone-400 hover:text-stone-600 p-1"
-            >
+            <button onClick={cancelEdit} className="text-stone-400 hover:text-stone-600 p-1">
               <X className="w-5 h-5" />
             </button>
           )}
@@ -270,7 +311,9 @@ export default function UserManager() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-stone-600 mb-1">Usuário (Nickname)</label>
+              <label className="block text-sm font-medium text-stone-600 mb-1">
+                Usuário (Nickname)
+              </label>
               <input
                 type="text"
                 value={formData.nickname}
@@ -292,7 +335,9 @@ export default function UserManager() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-stone-600 mb-1">Nível de Acesso</label>
+              <label className="block text-sm font-medium text-stone-600 mb-1">
+                Nível de Acesso
+              </label>
               <select
                 value={formData.role}
                 onChange={(e) => handleRoleChange(e.target.value as any)}
@@ -319,26 +364,37 @@ export default function UserManager() {
 
           {formData.role === 'manager' && (
             <div className="space-y-4 pt-4 border-t border-stone-200">
-              <label className="block text-sm font-bold text-stone-600">Vendedores Gerenciados</label>
+              <label className="block text-sm font-bold text-stone-600">
+                Vendedores Gerenciados
+              </label>
               <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                {users.filter(u => u.role === 'user' && u.id !== editingId).map(u => (
-                  <label key={u.id} className="flex items-center space-x-2 p-2 rounded-lg border border-stone-200 hover:bg-stone-50 cursor-pointer transition-colors bg-white">
-                    <input
-                      type="checkbox"
-                      checked={formData.managedUserIds.includes(u.id)}
-                      onChange={(e) => {
-                        const newSelection = e.target.checked
-                          ? [...formData.managedUserIds, u.id]
-                          : formData.managedUserIds.filter(id => id !== u.id);
-                        setFormData({ ...formData, managedUserIds: newSelection });
-                      }}
-                      className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
-                    />
-                    <span className="text-sm font-medium text-stone-700 truncate" title={u.name}>{u.name}</span>
-                  </label>
-                ))}
-                {users.filter(u => u.role === 'user' && u.id !== editingId).length === 0 && (
-                  <span className="text-sm text-stone-500 italic col-span-full">Nenhum vendedor disponível</span>
+                {users
+                  .filter((u) => u.role === 'user' && u.id !== editingId)
+                  .map((u) => (
+                    <label
+                      key={u.id}
+                      className="flex items-center space-x-2 p-2 rounded-lg border border-stone-200 hover:bg-stone-50 cursor-pointer transition-colors bg-white"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={formData.managedUserIds.includes(u.id)}
+                        onChange={(e) => {
+                          const newSelection = e.target.checked
+                            ? [...formData.managedUserIds, u.id]
+                            : formData.managedUserIds.filter((id) => id !== u.id);
+                          setFormData({ ...formData, managedUserIds: newSelection });
+                        }}
+                        className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                      />
+                      <span className="text-sm font-medium text-stone-700 truncate" title={u.name}>
+                        {u.name}
+                      </span>
+                    </label>
+                  ))}
+                {users.filter((u) => u.role === 'user' && u.id !== editingId).length === 0 && (
+                  <span className="text-sm text-stone-500 italic col-span-full">
+                    Nenhum vendedor disponível
+                  </span>
                 )}
               </div>
             </div>
@@ -346,11 +402,15 @@ export default function UserManager() {
 
           {/* PERMISSÕES AGRUPADAS */}
           <div className="space-y-4">
-            <label className="block text-sm font-bold text-stone-400 uppercase tracking-wider">Permissões de Acesso</label>
+            <label className="block text-sm font-bold text-stone-400 uppercase tracking-wider">
+              Permissões de Acesso
+            </label>
 
             {/* Módulos principais */}
             <div className="border border-stone-200 rounded-xl overflow-hidden">
-              <div className="bg-stone-800 text-white px-4 py-2 text-xs font-bold uppercase tracking-wider">📋 Módulos — Acesso às Páginas</div>
+              <div className="bg-stone-800 text-white px-4 py-2 text-xs font-bold uppercase tracking-wider">
+                📋 Módulos — Acesso às Páginas
+              </div>
               <div className="p-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
                 {[
                   { id: 'dashboard', name: 'Dashboard' },
@@ -368,12 +428,25 @@ export default function UserManager() {
                   { id: 'settings', name: 'Personalização' },
                   { id: 'prd', name: 'Documentação PRD' },
                   { id: 'managementReports', name: 'Rel. Gerenciais' },
-                ].map(m => (
-                  <button key={m.id} type="button"
-                    onClick={() => setFormData({ ...formData, permissions: { ...formData.permissions, [m.id]: !(formData.permissions as any)[m.id] } })}
-                    className={`flex items-center justify-between px-2.5 py-2 rounded-lg border transition-all text-xs font-bold ${(formData.permissions as any)[m.id] ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : 'bg-stone-50 border-stone-200 text-stone-400'}`}>
+                ].map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() =>
+                      setFormData({
+                        ...formData,
+                        permissions: {
+                          ...formData.permissions,
+                          [m.id]: !(formData.permissions as any)[m.id],
+                        },
+                      })
+                    }
+                    className={`flex items-center justify-between px-2.5 py-2 rounded-lg border transition-all text-xs font-bold ${(formData.permissions as any)[m.id] ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : 'bg-stone-50 border-stone-200 text-stone-400'}`}
+                  >
                     {m.name}
-                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ml-1 ${(formData.permissions as any)[m.id] ? 'bg-emerald-500' : 'bg-stone-300'}`} />
+                    <div
+                      className={`w-2 h-2 rounded-full flex-shrink-0 ml-1 ${(formData.permissions as any)[m.id] ? 'bg-emerald-500' : 'bg-stone-300'}`}
+                    />
                   </button>
                 ))}
               </div>
@@ -381,7 +454,9 @@ export default function UserManager() {
 
             {/* Sub-permissões Calculadora */}
             <div className="border border-blue-200 rounded-xl overflow-hidden">
-              <div className="bg-blue-700 text-white px-4 py-2 text-xs font-bold uppercase tracking-wider">🧮 Calculadora — Ações Permitidas</div>
+              <div className="bg-blue-700 text-white px-4 py-2 text-xs font-bold uppercase tracking-wider">
+                🧮 Calculadora — Ações Permitidas
+              </div>
               <div className="p-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
                 {[
                   { id: 'calculator_savePricing', name: 'Salvar Precificação' },
@@ -389,12 +464,25 @@ export default function UserManager() {
                   { id: 'calculator_saveFormula', name: 'Salvar Batida/Fórmula' },
                   { id: 'calculator_fertigranP', name: 'Acessar Comparador Fertigran P' },
                   { id: 'calculator_profitabilityCheck', name: 'Conferir Rentabilidade' },
-                ].map(m => (
-                  <button key={m.id} type="button"
-                    onClick={() => setFormData({ ...formData, permissions: { ...formData.permissions, [m.id]: !(formData.permissions as any)[m.id] } })}
-                    className={`flex items-center justify-between px-3 py-2 rounded-lg border transition-all text-xs font-bold ${(formData.permissions as any)[m.id] ? 'bg-blue-50 border-blue-300 text-blue-700' : 'bg-stone-50 border-stone-200 text-stone-400'}`}>
+                ].map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() =>
+                      setFormData({
+                        ...formData,
+                        permissions: {
+                          ...formData.permissions,
+                          [m.id]: !(formData.permissions as any)[m.id],
+                        },
+                      })
+                    }
+                    className={`flex items-center justify-between px-3 py-2 rounded-lg border transition-all text-xs font-bold ${(formData.permissions as any)[m.id] ? 'bg-blue-50 border-blue-300 text-blue-700' : 'bg-stone-50 border-stone-200 text-stone-400'}`}
+                  >
                     {m.name}
-                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ml-1 ${(formData.permissions as any)[m.id] ? 'bg-blue-500' : 'bg-stone-300'}`} />
+                    <div
+                      className={`w-2 h-2 rounded-full flex-shrink-0 ml-1 ${(formData.permissions as any)[m.id] ? 'bg-blue-500' : 'bg-stone-300'}`}
+                    />
                   </button>
                 ))}
               </div>
@@ -402,17 +490,32 @@ export default function UserManager() {
 
             {/* Sub-permissões Histórico */}
             <div className="border border-orange-200 rounded-xl overflow-hidden">
-              <div className="bg-orange-600 text-white px-4 py-2 text-xs font-bold uppercase tracking-wider">📂 Histórico — Ações Permitidas</div>
+              <div className="bg-orange-600 text-white px-4 py-2 text-xs font-bold uppercase tracking-wider">
+                📂 Histórico — Ações Permitidas
+              </div>
               <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {[
                   { id: 'history_changeStatus', name: 'Alterar Status (Fechar/Perder)' },
                   { id: 'history_editPricing', name: 'Editar Precificação Existente' },
-                ].map(m => (
-                  <button key={m.id} type="button"
-                    onClick={() => setFormData({ ...formData, permissions: { ...formData.permissions, [m.id]: !(formData.permissions as any)[m.id] } })}
-                    className={`flex items-center justify-between px-3 py-2 rounded-lg border transition-all text-xs font-bold ${(formData.permissions as any)[m.id] ? 'bg-orange-50 border-orange-300 text-orange-700' : 'bg-stone-50 border-stone-200 text-stone-400'}`}>
+                ].map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() =>
+                      setFormData({
+                        ...formData,
+                        permissions: {
+                          ...formData.permissions,
+                          [m.id]: !(formData.permissions as any)[m.id],
+                        },
+                      })
+                    }
+                    className={`flex items-center justify-between px-3 py-2 rounded-lg border transition-all text-xs font-bold ${(formData.permissions as any)[m.id] ? 'bg-orange-50 border-orange-300 text-orange-700' : 'bg-stone-50 border-stone-200 text-stone-400'}`}
+                  >
                     {m.name}
-                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ml-1 ${(formData.permissions as any)[m.id] ? 'bg-orange-500' : 'bg-stone-300'}`} />
+                    <div
+                      className={`w-2 h-2 rounded-full flex-shrink-0 ml-1 ${(formData.permissions as any)[m.id] ? 'bg-orange-500' : 'bg-stone-300'}`}
+                    />
                   </button>
                 ))}
               </div>
@@ -423,7 +526,7 @@ export default function UserManager() {
               <div className="bg-purple-700 text-white px-4 py-2 text-xs font-bold uppercase tracking-wider flex items-center justify-between">
                 <span>🗄️ Cadastros — Permissões Especializadas</span>
               </div>
-              
+
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead className="bg-purple-50 text-purple-800 text-[10px] uppercase font-bold border-b border-purple-100">
@@ -443,10 +546,10 @@ export default function UserManager() {
                       { id: 'branches', name: 'Filiais' },
                       { id: 'macro', name: 'Matérias-Primas (Macro)' },
                       { id: 'micro', name: 'Matérias-Primas (Micro)' },
-                    ].map(module => (
+                    ].map((module) => (
                       <tr key={module.id} className="hover:bg-stone-50 transition-colors">
                         <td className="px-4 py-3 font-medium text-stone-700">{module.name}</td>
-                        {['', '_create', '_edit', '_delete'].map(action => {
+                        {['', '_create', '_edit', '_delete'].map((action) => {
                           const paramKey = action === '' ? module.id : `${module.id}${action}`;
                           // Note for backwards-compatibility: some modules are pure toggles if they are primitive, but we map them as bools
                           const val = (formData.permissions as any)[paramKey] === true;
@@ -454,7 +557,12 @@ export default function UserManager() {
                             <td key={paramKey} className="px-4 py-3 text-center">
                               <button
                                 type="button"
-                                onClick={() => setFormData({ ...formData, permissions: { ...formData.permissions, [paramKey]: !val } })}
+                                onClick={() =>
+                                  setFormData({
+                                    ...formData,
+                                    permissions: { ...formData.permissions, [paramKey]: !val },
+                                  })
+                                }
                                 className={`w-6 h-6 rounded flex items-center justify-center mx-auto transition-colors border ${val ? 'bg-purple-500 border-purple-600 text-white' : 'bg-stone-100 border-stone-200 text-transparent hover:bg-stone-200'}`}
                               >
                                 {val && <div className="w-2 h-2 rounded-full bg-white" />}
@@ -471,22 +579,37 @@ export default function UserManager() {
 
             {/* Sub-permissões Aprovacões */}
             <div className="border border-teal-200 rounded-xl overflow-hidden">
-              <div className="bg-teal-700 text-white px-4 py-2 text-xs font-bold uppercase tracking-wider">✅ Aprovações — Ações Permitidas</div>
+              <div className="bg-teal-700 text-white px-4 py-2 text-xs font-bold uppercase tracking-wider">
+                ✅ Aprovações — Ações Permitidas
+              </div>
               <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {[
-                  { id: 'approvals_canApprove', name: 'Aprovar / Reprovar Precificações' },
-                ].map(m => (
-                  <button key={m.id} type="button"
-                    onClick={() => setFormData({ ...formData, permissions: { ...formData.permissions, [m.id]: !(formData.permissions as any)[m.id] } })}
-                    className={`flex items-center justify-between px-3 py-2 rounded-lg border transition-all text-xs font-bold ${
-                      (formData.permissions as any)[m.id]
-                        ? 'bg-teal-50 border-teal-300 text-teal-700'
-                        : 'bg-stone-50 border-stone-200 text-stone-400'
-                    }`}>
-                    {m.name}
-                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ml-1 ${(formData.permissions as any)[m.id] ? 'bg-teal-500' : 'bg-stone-300'}`} />
-                  </button>
-                ))}
+                {[{ id: 'approvals_canApprove', name: 'Aprovar / Reprovar Precificações' }].map(
+                  (m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() =>
+                        setFormData({
+                          ...formData,
+                          permissions: {
+                            ...formData.permissions,
+                            [m.id]: !(formData.permissions as any)[m.id],
+                          },
+                        })
+                      }
+                      className={`flex items-center justify-between px-3 py-2 rounded-lg border transition-all text-xs font-bold ${
+                        (formData.permissions as any)[m.id]
+                          ? 'bg-teal-50 border-teal-300 text-teal-700'
+                          : 'bg-stone-50 border-stone-200 text-stone-400'
+                      }`}
+                    >
+                      {m.name}
+                      <div
+                        className={`w-2 h-2 rounded-full flex-shrink-0 ml-1 ${(formData.permissions as any)[m.id] ? 'bg-teal-500' : 'bg-stone-300'}`}
+                      />
+                    </button>
+                  )
+                )}
               </div>
             </div>
 
@@ -517,7 +640,8 @@ export default function UserManager() {
                   <option value="admin">Administrador — acesso total ao módulo</option>
                 </select>
                 <p className="mt-2 text-xs text-stone-400">
-                  Este campo controla o acesso ao módulo <strong>Gastos Cartão</strong> independente do nível de acesso global.
+                  Este campo controla o acesso ao módulo <strong>Gastos Cartão</strong> independente
+                  do nível de acesso global.
                 </p>
               </div>
             </div>
@@ -561,11 +685,17 @@ export default function UserManager() {
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100">
-              {users.map(user => (
-                <tr key={user.id} className={`hover:bg-stone-50 transition-colors ${!user.ativo ? 'opacity-60 grayscale' : ''}`}>
+              {users.map((user) => (
+                <tr
+                  key={user.id}
+                  className={`hover:bg-stone-50 transition-colors ${!user.ativo ? 'opacity-60 grayscale' : ''}`}
+                >
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className={`w-2 h-2 rounded-full ${user.ativo ? 'bg-emerald-500' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]'}`} title={user.ativo ? 'Ativa' : 'Desativada'} />
+                      <div
+                        className={`w-2 h-2 rounded-full ${user.ativo ? 'bg-emerald-500' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]'}`}
+                        title={user.ativo ? 'Ativa' : 'Desativada'}
+                      />
                       <div>
                         <p className="font-bold text-stone-800">{user.name}</p>
                         <p className="text-xs text-stone-500">{user.email}</p>
@@ -574,39 +704,66 @@ export default function UserManager() {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
-                       <span className="bg-stone-100 px-2 py-1 rounded border border-stone-200 font-mono text-xs text-stone-600" title="ID Interno">#{user.idNumeric}</span>
-                       <span className="bg-emerald-50 px-2 py-1 rounded border border-emerald-100 text-xs text-emerald-700 font-medium" title="Nickname de Login">@{user.nickname}</span>
+                      <span
+                        className="bg-stone-100 px-2 py-1 rounded border border-stone-200 font-mono text-xs text-stone-600"
+                        title="ID Interno"
+                      >
+                        #{user.idNumeric}
+                      </span>
+                      <span
+                        className="bg-emerald-50 px-2 py-1 rounded border border-emerald-100 text-xs text-emerald-700 font-medium"
+                        title="Nickname de Login"
+                      >
+                        @{user.nickname}
+                      </span>
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${user.role === 'master' ? 'bg-purple-100 text-purple-700' :
-                      user.role === 'admin' ? 'bg-red-100 text-red-700' :
-                        user.role === 'manager' ? 'bg-orange-100 text-orange-700' :
-                          'bg-blue-100 text-blue-700'
-                      }`}>
-                      {user.role === 'user' ? 'vendedor' :
-                        user.role === 'manager' ? 'gerente' :
-                          user.role === 'admin' ? 'administrador' :
-                            user.role}
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                        user.role === 'master'
+                          ? 'bg-purple-100 text-purple-700'
+                          : user.role === 'admin'
+                            ? 'bg-red-100 text-red-700'
+                            : user.role === 'manager'
+                              ? 'bg-orange-100 text-orange-700'
+                              : 'bg-blue-100 text-blue-700'
+                      }`}
+                    >
+                      {user.role === 'user'
+                        ? 'vendedor'
+                        : user.role === 'manager'
+                          ? 'gerente'
+                          : user.role === 'admin'
+                            ? 'administrador'
+                            : user.role}
                     </span>
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex flex-wrap gap-1 max-w-xs">
-                      {modules.filter(m => (user.permissions as any)?.[m.id]).map(m => (
-                        <span key={m.id} className="px-1.5 py-0.5 bg-stone-100 text-stone-600 rounded text-[9px] font-medium border border-stone-200">
-                           {m.name}
-                        </span>
-                      ))}
-                      {['clients', 'agents', 'priceLists', 'branches', 'macro', 'micro'].some(k => (user.permissions as any)?.[k]) && (
+                      {modules
+                        .filter((m) => (user.permissions as any)?.[m.id])
+                        .map((m) => (
+                          <span
+                            key={m.id}
+                            className="px-1.5 py-0.5 bg-stone-100 text-stone-600 rounded text-[9px] font-medium border border-stone-200"
+                          >
+                            {m.name}
+                          </span>
+                        ))}
+                      {['clients', 'agents', 'priceLists', 'branches', 'macro', 'micro'].some(
+                        (k) => (user.permissions as any)?.[k]
+                      ) && (
                         <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-[9px] font-medium border border-purple-200">
                           ⚙️ Cadastros Gen.
                         </span>
                       )}
-                      {(user.permissions as any)?.creditCard && (user.permissions as any).creditCard !== 'none' && (
-                        <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-[9px] font-medium border border-purple-200">
-                          💳 {(user.permissions as any).creditCard}
-                        </span>
-                      )}
+                      {(user.permissions as any)?.creditCard &&
+                        (user.permissions as any).creditCard !== 'none' && (
+                          <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-[9px] font-medium border border-purple-200">
+                            💳 {(user.permissions as any).creditCard}
+                          </span>
+                        )}
                     </div>
                   </td>
                   <td className="px-6 py-4 text-right">
@@ -631,18 +788,23 @@ export default function UserManager() {
               ))}
               {users.length === 0 && !loading && (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-stone-400 italic">Nenhum usuário cadastrado</td>
+                  <td colSpan={5} className="px-6 py-12 text-center text-stone-400 italic">
+                    Nenhum usuário cadastrado
+                  </td>
                 </tr>
               )}
               {loading && (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-stone-400">Carregando...</td>
+                  <td colSpan={5} className="px-6 py-12 text-center text-stone-400">
+                    Carregando...
+                  </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
+      <ConfirmDialog {...confirmState} onConfirm={handleConfirm} onCancel={handleCancel} />
     </div>
   );
 }
