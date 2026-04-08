@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { CreditCard } from '../../types/expense.types';
 import { User } from '../../types';
 import { getCards, createCard, updateCard, toggleCardActive } from '../../services/cardService';
+import { getUsers } from '../../services/db';
 import { Plus, Edit3, Save, X, CreditCard as CreditCardIcon } from 'lucide-react';
 
 interface CardManagerProps {
@@ -24,6 +25,7 @@ const emptyForm: CardForm = {
 
 export default function CardManager({ currentUser }: CardManagerProps) {
   const [cards, setCards] = useState<CreditCard[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -36,8 +38,9 @@ export default function CardManager({ currentUser }: CardManagerProps) {
   const loadCards = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await getCards();
-      setCards(data);
+      const [cardsData, usersData] = await Promise.all([getCards(), getUsers()]);
+      setCards(cardsData);
+      setUsers(usersData);
     } catch (err) {
       console.error('Erro ao carregar cartões:', err);
     } finally {
@@ -48,6 +51,16 @@ export default function CardManager({ currentUser }: CardManagerProps) {
   useEffect(() => {
     loadCards();
   }, [loadCards]);
+
+  const userMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const u of users) map.set(u.id, u.name);
+    return map;
+  }, [users]);
+
+  const getUserName = (userId: string) => {
+    return userMap.get(userId) ?? (userId ? userId.substring(0, 8) + '...' : '—');
+  };
 
   const resetForm = () => {
     setForm(emptyForm);
@@ -194,15 +207,18 @@ export default function CardManager({ currentUser }: CardManagerProps) {
             </div>
             <div>
               <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-1.5">
-                ID do Usuário Responsável
+                Usuário Responsável
               </label>
-              <input
-                type="text"
+              <select
                 value={form.userId}
                 onChange={(e) => setForm(f => ({ ...f, userId: e.target.value }))}
-                placeholder="UUID do usuário"
                 className="w-full border border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none"
-              />
+              >
+                <option value="">Selecione um usuário...</option>
+                {users.filter(u => u.ativo).map(u => (
+                  <option key={u.id} value={u.id}>{u.name}</option>
+                ))}
+              </select>
               <p className="text-xs text-stone-400 mt-1">Deixe em branco para associar ao seu usuário.</p>
             </div>
             {editingId && (
@@ -251,7 +267,7 @@ export default function CardManager({ currentUser }: CardManagerProps) {
               <tr className="border-b border-stone-100 bg-stone-50">
                 <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Nome</th>
                 <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Dígitos</th>
-                <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Usuário (ID)</th>
+                <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Usuário</th>
                 <th className="text-center py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Status</th>
                 <th className="text-center py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Ações</th>
               </tr>
@@ -263,8 +279,8 @@ export default function CardManager({ currentUser }: CardManagerProps) {
                   <td className="py-3 px-4 text-stone-600">
                     {card.lastFour ? `**** ${card.lastFour}` : '—'}
                   </td>
-                  <td className="py-3 px-4 text-stone-500 font-mono text-xs">
-                    {card.userId ? card.userId.substring(0, 8) + '...' : '—'}
+                  <td className="py-3 px-4 text-stone-600">
+                    {getUserName(card.userId)}
                   </td>
                   <td className="py-3 px-4 text-center">
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-bold ${card.active ? 'bg-emerald-100 text-emerald-700' : 'bg-stone-100 text-stone-500'}`}>
