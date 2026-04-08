@@ -11,7 +11,7 @@ export interface ValidatedInputProps extends Omit<
   React.InputHTMLAttributes<HTMLInputElement>,
   'onChange' | 'onBlur'
 > {
-  label?: string;
+  label?: React.ReactNode;
   error?: string;
   touched?: boolean;
   showError?: boolean;
