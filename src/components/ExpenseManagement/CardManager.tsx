@@ -13,6 +13,7 @@ interface CardForm {
   name: string;
   lastFour: string;
   userId: string;
+  userName: string;
   active: boolean;
 }
 
@@ -20,6 +21,7 @@ const emptyForm: CardForm = {
   name: '',
   lastFour: '',
   userId: '',
+  userName: '',
   active: true,
 };
 
@@ -32,6 +34,9 @@ export default function CardManager({ currentUser }: CardManagerProps) {
   const [form, setForm] = useState<CardForm>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [userSearch, setUserSearch] = useState('');
+  const [userResults, setUserResults] = useState<User[]>([]);
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
 
   const isAdmin = currentUser.role === 'master' || currentUser.role === 'admin';
 
@@ -67,18 +72,47 @@ export default function CardManager({ currentUser }: CardManagerProps) {
     setEditingId(null);
     setShowForm(false);
     setError(null);
+    setUserSearch('');
+    setUserResults([]);
+    setShowUserDropdown(false);
   };
 
   const startEdit = (card: CreditCard) => {
     setEditingId(card.id);
+    const foundUser = users.find(u => u.id === card.userId);
     setForm({
       name: card.name,
       lastFour: card.lastFour || '',
       userId: card.userId,
+      userName: foundUser?.name || '',
       active: card.active,
     });
+    setUserSearch(foundUser?.name || card.userId || '');
     setShowForm(true);
     setError(null);
+  };
+
+  const handleUserSearchChange = (value: string) => {
+    setUserSearch(value);
+    setForm(f => ({ ...f, userId: '', userName: '' }));
+    if (value.trim().length < 2) {
+      setUserResults([]);
+      setShowUserDropdown(false);
+      return;
+    }
+    const q = value.toLowerCase();
+    const filtered = users.filter(u =>
+      u.name.toLowerCase().includes(q) || (u.nickname?.toLowerCase().includes(q) ?? false)
+    );
+    setUserResults(filtered.slice(0, 8));
+    setShowUserDropdown(true);
+  };
+
+  const handleSelectUser = (user: User) => {
+    setForm(f => ({ ...f, userId: user.id, userName: user.name }));
+    setUserSearch(user.name);
+    setShowUserDropdown(false);
+    setUserResults([]);
   };
 
   const handleSave = async () => {
@@ -205,20 +239,50 @@ export default function CardManager({ currentUser }: CardManagerProps) {
                 className="w-full border border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none"
               />
             </div>
-            <div>
+            <div className="relative">
               <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-1.5">
                 Usuário Responsável
               </label>
-              <select
-                value={form.userId}
-                onChange={(e) => setForm(f => ({ ...f, userId: e.target.value }))}
+              <input
+                type="text"
+                value={userSearch}
+                onChange={(e) => handleUserSearchChange(e.target.value)}
+                onFocus={() => {
+                  if (userResults.length > 0) setShowUserDropdown(true);
+                }}
+                onBlur={() => setTimeout(() => setShowUserDropdown(false), 150)}
+                placeholder="Digite o nome do usuário..."
+                autoComplete="off"
                 className="w-full border border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none"
-              >
-                <option value="">Selecione um usuário...</option>
-                {users.filter(u => u.ativo).map(u => (
-                  <option key={u.id} value={u.id}>{u.name}</option>
-                ))}
-              </select>
+              />
+              {form.userId && (
+                <p className="text-xs text-emerald-600 mt-1 font-medium">
+                  ✓ {form.userName}
+                </p>
+              )}
+              {showUserDropdown && userResults.length > 0 && (
+                <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-stone-200 rounded-xl shadow-lg overflow-hidden">
+                  {userResults.map(u => (
+                    <button
+                      key={u.id}
+                      type="button"
+                      onMouseDown={() => handleSelectUser(u)}
+                      className="w-full text-left px-4 py-2.5 text-sm hover:bg-purple-50 flex items-center gap-3 border-b border-stone-100 last:border-0"
+                    >
+                      <div className="w-7 h-7 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center text-xs font-bold shrink-0">
+                        {u.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="font-medium text-stone-800">{u.name}</p>
+                        {u.nickname && <p className="text-xs text-stone-400">@{u.nickname}</p>}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {userSearch.length >= 2 && userResults.length === 0 && !form.userId && (
+                <p className="text-xs text-stone-400 mt-1">Nenhum usuário encontrado.</p>
+              )}
               <p className="text-xs text-stone-400 mt-1">Deixe em branco para associar ao seu usuário.</p>
             </div>
             {editingId && (

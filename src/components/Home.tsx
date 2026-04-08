@@ -20,6 +20,16 @@ export default function Home({ currentUser, onSelectModule }: HomeProps) {
       allowed: true
     },
     {
+      id: 'expenses',
+      label: 'GASTOS CARTÃO',
+      description: 'Controle de despesas do cartão de crédito corporativo com aprovações e relatórios.',
+      icon: CreditCard,
+      color: 'bg-purple-600',
+      hoverColor: 'hover:bg-purple-700',
+      textColor: 'text-purple-600',
+      allowed: currentUser.role === 'master' || currentUser.role === 'admin' || currentUser.role === 'manager' || !!(currentUser.permissions as any)?.expenses
+    },
+    {
       id: 'managementReports',
       label: 'RELATÓRIO DIÁRIO',
       description: 'Acompanhe o desempenho consolidado das unidades de negócio.',
@@ -48,16 +58,6 @@ export default function Home({ currentUser, onSelectModule }: HomeProps) {
       hoverColor: 'hover:bg-blue-700',
       textColor: 'text-blue-600',
       allowed: currentUser.role === 'master' || currentUser.role === 'admin' || currentUser.role === 'manager'
-    },
-    {
-      id: 'expenses',
-      label: 'GASTOS CARTÃO',
-      description: 'Controle de despesas do cartão de crédito corporativo com aprovações e relatórios.',
-      icon: CreditCard,
-      color: 'bg-purple-600',
-      hoverColor: 'hover:bg-purple-700',
-      textColor: 'text-purple-600',
-      allowed: currentUser.role === 'master' || currentUser.role === 'admin' || currentUser.role === 'manager' || !!(currentUser.permissions as any)?.expenses
     }
   ];
 
