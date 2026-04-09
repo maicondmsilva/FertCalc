@@ -506,10 +506,13 @@ export interface PedidoVenda {
   precificacao_id: string;
   numero_pedido?: string;
   barra_pedido?: string;
-  data_pedido?: string;
+  data_pedido?: string; // Vencimento
   quantidade_real?: number;
+  embalagem?: string; // Sacaria
   valor_unitario_negociado?: number;
   valor_total_negociado?: number;
+  tipo_frete?: string; // CIF ou FOB
+  valor_frete?: number; // valor do frete quando CIF
   status: 'pendente' | 'em_carregamento' | 'concluido' | 'cancelado';
   pdf_url?: string;
   dados_extraidos?: Record<string, any>;

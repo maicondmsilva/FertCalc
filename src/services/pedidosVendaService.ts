@@ -9,10 +9,13 @@ function mapPedido(d: any): PedidoVenda {
     barra_pedido: d.barra_pedido,
     data_pedido: d.data_pedido,
     quantidade_real: d.quantidade_real != null ? Number(d.quantidade_real) : undefined,
+    embalagem: d.embalagem,
     valor_unitario_negociado:
       d.valor_unitario_negociado != null ? Number(d.valor_unitario_negociado) : undefined,
     valor_total_negociado:
       d.valor_total_negociado != null ? Number(d.valor_total_negociado) : undefined,
+    tipo_frete: d.tipo_frete,
+    valor_frete: d.valor_frete != null ? Number(d.valor_frete) : undefined,
     status: d.status ?? 'pendente',
     pdf_url: d.pdf_url,
     dados_extraidos: d.dados_extraidos,
@@ -54,8 +57,11 @@ export async function createPedidoVenda(
       barra_pedido: pedido.barra_pedido,
       data_pedido: pedido.data_pedido,
       quantidade_real: pedido.quantidade_real,
+      embalagem: pedido.embalagem,
       valor_unitario_negociado: pedido.valor_unitario_negociado,
       valor_total_negociado: pedido.valor_total_negociado,
+      tipo_frete: pedido.tipo_frete,
+      valor_frete: pedido.valor_frete,
       status: pedido.status ?? 'pendente',
       pdf_url: pedido.pdf_url,
       dados_extraidos: pedido.dados_extraidos,
@@ -67,10 +73,7 @@ export async function createPedidoVenda(
   return mapPedido(data);
 }
 
-export async function updatePedidoVenda(
-  id: string,
-  updates: Partial<PedidoVenda>
-): Promise<void> {
+export async function updatePedidoVenda(id: string, updates: Partial<PedidoVenda>): Promise<void> {
   const { error } = await supabase
     .from('pedidos_venda')
     .update({
@@ -78,8 +81,11 @@ export async function updatePedidoVenda(
       barra_pedido: updates.barra_pedido,
       data_pedido: updates.data_pedido,
       quantidade_real: updates.quantidade_real,
+      embalagem: updates.embalagem,
       valor_unitario_negociado: updates.valor_unitario_negociado,
       valor_total_negociado: updates.valor_total_negociado,
+      tipo_frete: updates.tipo_frete,
+      valor_frete: updates.valor_frete,
       status: updates.status,
       pdf_url: updates.pdf_url,
       dados_extraidos: updates.dados_extraidos,
@@ -100,9 +106,7 @@ export async function searchPedidosVenda(query: string): Promise<PedidoVenda[]> 
   const { data, error } = await supabase
     .from('pedidos_venda')
     .select('*')
-    .or(
-      `numero_pedido.ilike.%${query}%,barra_pedido.ilike.%${query}%`
-    )
+    .or(`numero_pedido.ilike.%${query}%,barra_pedido.ilike.%${query}%`)
     .order('criado_em', { ascending: false })
     .limit(20);
   if (error || !data) return [];

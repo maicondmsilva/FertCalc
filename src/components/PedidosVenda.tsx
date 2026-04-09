@@ -1,14 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { User, PedidoVenda } from '../types';
-import {
-  ClipboardList,
-  RefreshCw,
-  Search,
-  Eye,
-  X,
-  FileText,
-  Tag,
-} from 'lucide-react';
+import { ClipboardList, RefreshCw, Search, Eye, X, FileText, Tag } from 'lucide-react';
 import { getPedidosVenda, updatePedidoVenda } from '../services/pedidosVendaService';
 import { getPricingRecords } from '../services/db';
 import { useToast } from './Toast';
@@ -79,16 +71,15 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
           : undefined;
 
         const formulaName =
-          pricing?.calculations?.[0]?.formula ||
-          pricing?.factors?.targetFormula ||
-          undefined;
+          pricing?.calculations?.[0]?.formula || pricing?.factors?.targetFormula || undefined;
 
         return {
           ...p,
           clientName: client?.name,
           clientDeliveryAddress: deliveryStr,
           produto: formulaName,
-          tipoFrete: pricing?.factors?.freight != null ? (pricing.factors as any).tipoFrete : undefined,
+          tipoFrete:
+            pricing?.factors?.freight != null ? (pricing.factors as any).tipoFrete : undefined,
           vendedor: pricing?.userName,
           precificacaoCod: pricing?.formattedCod || (pricing?.cod ? `#${pricing.cod}` : undefined),
         };
@@ -194,9 +185,7 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
       {/* Table */}
       <div className="bg-white rounded-xl border border-stone-200 shadow-sm">
         <div className="p-4 border-b border-stone-100">
-          <h3 className="font-bold text-stone-800 text-sm">
-            Pedidos de Venda ({filtered.length})
-          </h3>
+          <h3 className="font-bold text-stone-800 text-sm">Pedidos de Venda ({filtered.length})</h3>
         </div>
         {loading ? (
           <div className="flex justify-center py-12">
@@ -219,9 +208,11 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                   <th className="px-4 py-3">Cliente</th>
                   <th className="px-4 py-3">Produto</th>
                   <th className="px-4 py-3">Qtd. Real</th>
+                  <th className="px-4 py-3">Embalagem</th>
+                  <th className="px-4 py-3">Frete</th>
                   <th className="px-4 py-3">Valor Unit.</th>
                   <th className="px-4 py-3">Valor Total</th>
-                  <th className="px-4 py-3">Data Pedido</th>
+                  <th className="px-4 py-3">Vencimento</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Precificação</th>
                   <th className="px-4 py-3 text-right">Ações</th>
@@ -236,17 +227,33 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                         <span className="ml-1 text-stone-400">/ {p.barra_pedido}</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 font-medium text-stone-800">
-                      {p.clientName || '—'}
-                    </td>
+                    <td className="px-4 py-3 font-medium text-stone-800">{p.clientName || '—'}</td>
                     <td className="px-4 py-3 text-stone-600 text-xs max-w-[140px] truncate">
                       {p.produto || '—'}
                     </td>
                     <td className="px-4 py-3 text-stone-700 font-mono text-xs">
-                      {p.quantidade_real != null ? `${p.quantidade_real.toLocaleString('pt-BR')} ton` : '—'}
+                      {p.quantidade_real != null
+                        ? `${p.quantidade_real.toLocaleString('pt-BR')} ton`
+                        : '—'}
                     </td>
-                    <td className="px-4 py-3 text-stone-700 text-xs">{fmtBRL(p.valor_unitario_negociado)}</td>
-                    <td className="px-4 py-3 text-stone-700 font-bold text-xs">{fmtBRL(p.valor_total_negociado)}</td>
+                    <td className="px-4 py-3 text-stone-600 text-xs">{p.embalagem || '—'}</td>
+                    <td className="px-4 py-3 text-xs">
+                      {p.tipo_frete ? (
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${p.tipo_frete === 'CIF' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}
+                        >
+                          {p.tipo_frete}
+                        </span>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-stone-700 text-xs">
+                      {fmtBRL(p.valor_unitario_negociado)}
+                    </td>
+                    <td className="px-4 py-3 text-stone-700 font-bold text-xs">
+                      {fmtBRL(p.valor_total_negociado)}
+                    </td>
                     <td className="px-4 py-3 text-stone-600 text-xs">{fmtDate(p.data_pedido)}</td>
                     <td className="px-4 py-3">
                       <span
@@ -316,7 +323,7 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                   <p className="text-stone-800 font-medium">{viewingPedido.clientName || '—'}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-stone-400 uppercase mb-1">Data do Pedido</p>
+                  <p className="text-xs font-bold text-stone-400 uppercase mb-1">Vencimento</p>
                   <p className="text-stone-800">{fmtDate(viewingPedido.data_pedido)}</p>
                 </div>
                 <div>
@@ -336,8 +343,28 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                   </p>
                 </div>
                 <div>
+                  <p className="text-xs font-bold text-stone-400 uppercase mb-1">Embalagem</p>
+                  <p className="text-stone-800">{viewingPedido.embalagem || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-stone-400 uppercase mb-1">Tipo de Frete</p>
+                  <p className="text-stone-800">
+                    {viewingPedido.tipo_frete ? (
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${viewingPedido.tipo_frete === 'CIF' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}
+                      >
+                        {viewingPedido.tipo_frete}
+                      </span>
+                    ) : (
+                      '—'
+                    )}
+                  </p>
+                </div>
+                <div>
                   <p className="text-xs font-bold text-stone-400 uppercase mb-1">Valor Unitário</p>
-                  <p className="text-stone-800 font-bold">{fmtBRL(viewingPedido.valor_unitario_negociado)}</p>
+                  <p className="text-stone-800 font-bold">
+                    {fmtBRL(viewingPedido.valor_unitario_negociado)}
+                  </p>
                 </div>
                 <div className="col-span-2">
                   <p className="text-xs font-bold text-stone-400 uppercase mb-1">Valor Total</p>
@@ -345,9 +372,19 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                     {fmtBRL(viewingPedido.valor_total_negociado)}
                   </p>
                 </div>
+                {viewingPedido.tipo_frete === 'CIF' && viewingPedido.valor_frete != null && (
+                  <div>
+                    <p className="text-xs font-bold text-stone-400 uppercase mb-1">
+                      Valor do Frete (R$/ton)
+                    </p>
+                    <p className="text-stone-800 font-bold">{fmtBRL(viewingPedido.valor_frete)}</p>
+                  </div>
+                )}
                 {viewingPedido.clientDeliveryAddress && (
                   <div className="col-span-2">
-                    <p className="text-xs font-bold text-stone-400 uppercase mb-1">Endereço de Entrega</p>
+                    <p className="text-xs font-bold text-stone-400 uppercase mb-1">
+                      Endereço de Entrega
+                    </p>
                     <p className="text-stone-800">{viewingPedido.clientDeliveryAddress}</p>
                   </div>
                 )}
