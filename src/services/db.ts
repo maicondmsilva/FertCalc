@@ -244,6 +244,8 @@ function clientToDb(client: Partial<Client>) {
   if (client.stateRegistration !== undefined) d.state_registration = client.stateRegistration;
   if (client.fazenda !== undefined) d.fazenda = client.fazenda;
   if (client.address !== undefined) d.address = client.address;
+  if (client.deliveryAddress !== undefined) d.delivery_address = client.deliveryAddress;
+  if (client.deliverySameAsAddress !== undefined) d.delivery_same_as_address = client.deliverySameAsAddress;
   return d;
 }
 
@@ -258,6 +260,8 @@ function mapClient(data: any): Client {
     stateRegistration: data.state_registration,
     fazenda: data.fazenda,
     address: data.address,
+    deliveryAddress: data.delivery_address,
+    deliverySameAsAddress: data.delivery_same_as_address,
   };
 }
 

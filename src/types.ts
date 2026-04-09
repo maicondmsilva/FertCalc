@@ -255,6 +255,9 @@ export interface Client {
   stateRegistration?: string;
   fazenda?: string;
   address?: Address;
+  // Endereço de Entrega
+  deliveryAddress?: Address;
+  deliverySameAsAddress?: boolean;
 }
 
 export interface Agent {
@@ -496,6 +499,25 @@ export interface FertigranPFormula {
   ativo: boolean;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface PedidoVenda {
+  id: string;
+  precificacao_id: string;
+  numero_pedido?: string;
+  barra_pedido?: string;
+  data_pedido?: string;
+  quantidade_real?: number;
+  valor_unitario_negociado?: number;
+  valor_total_negociado?: number;
+  status: 'pendente' | 'em_carregamento' | 'concluido' | 'cancelado';
+  pdf_url?: string;
+  dados_extraidos?: Record<string, any>;
+  importado_por?: string;
+  criado_em?: string;
+  atualizado_em?: string;
+  // Joined fields
+  precificacao?: PricingRecord;
 }
 
 export interface ComparisonHistory {

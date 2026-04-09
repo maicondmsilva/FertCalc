@@ -80,6 +80,7 @@ import CardManager from './components/ExpenseManagement/CardManager';
 import ExpenseCategoryManager from './components/ExpenseManagement/ExpenseCategoryManager';
 
 import CarregamentoModule from './components/Carregamento';
+import PedidosVenda from './components/PedidosVenda';
 
 import { getPendingCount, getCheckedCount } from './services/expenseService';
 
@@ -128,6 +129,7 @@ export default function App() {
       'incompatibilities',
       'clients',
       'agents',
+      'pedidos_venda',
     ].includes(activeTab)
   ) {
     activeModule = 'pricing';
@@ -326,7 +328,8 @@ export default function App() {
           ],
         },
         { id: 'pricelists', label: 'Lista de Preço', icon: Database, permission: 'priceLists' },
-        { id: 'history', label: 'Situação', icon: HistoryIcon, permission: 'history' },
+        { id: 'history', label: 'Precificações', icon: HistoryIcon, permission: 'history' },
+        { id: 'pedidos_venda', label: 'Pedidos de Venda', icon: ClipboardList, permission: 'history' },
         { id: 'approvals', label: 'Aprovações', icon: ShieldCheck, permission: 'approvals' },
         { id: 'goals', label: 'Metas', icon: Target, permission: 'goals' },
         {
@@ -892,6 +895,9 @@ export default function App() {
             )}
             {activeModule === 'pricing' && activeTab === 'history' && (
               <History onEdit={handleEditPricing} currentUser={currentUser} />
+            )}
+            {activeModule === 'pricing' && activeTab === 'pedidos_venda' && (
+              <PedidosVenda currentUser={currentUser} />
             )}
             {activeModule === 'pricing' && activeTab === 'goals' && (
               <Goals currentUser={currentUser} />

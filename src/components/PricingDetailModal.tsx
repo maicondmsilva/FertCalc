@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { PricingRecord, User, AppSettings } from '../types';
-import { X, Edit3, Trash2, Info, FileDown, Download, FileSpreadsheet, Tag } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { PricingRecord, User, AppSettings, PedidoVenda } from '../types';
+import { X, Edit3, Trash2, Info, FileDown, Download, FileSpreadsheet, Tag, Upload, FileText, CheckCircle as CheckCircleIcon } from 'lucide-react';
 import { generatePricingPDF } from '../utils/pdfGenerator';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -13,6 +13,11 @@ import {
   acceptPricingTransfer,
   createNotification,
 } from '../services/db';
+import {
+  getPedidoVendaByPrecificacao,
+  createPedidoVenda,
+  updatePedidoVenda,
+} from '../services/pedidosVendaService';
 import { useToast } from './Toast';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { useConfirm } from '../hooks/useConfirm';
@@ -58,11 +63,142 @@ export default function PricingDetailModal({
   const [isAcceptingTransfer, setIsAcceptingTransfer] = useState(false);
   const [loadingTransfer, setLoadingTransfer] = useState(false);
 
+  // Pedido de Venda state
+  const [pedidoVenda, setPedidoVenda] = useState<PedidoVenda | null>(null);
+  const [showPdfImportModal, setShowPdfImportModal] = useState(false);
+  const [pdfParsing, setPdfParsing] = useState(false);
+  const [extractedData, setExtractedData] = useState<{
+    numero_pedido: string;
+    barra_pedido: string;
+    data_pedido: string;
+    quantidade_real: string;
+    valor_unitario_negociado: string;
+    valor_total_negociado: string;
+  } | null>(null);
+  const [savingPedido, setSavingPedido] = useState(false);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
+
   React.useEffect(() => {
     if (isTransferring) {
       loadSellers();
     }
   }, [isTransferring]);
+
+  // Load existing pedido de venda
+  useEffect(() => {
+    getPedidoVendaByPrecificacao(selectedPricing.id).then(setPedidoVenda);
+  }, [selectedPricing.id]);
+
+  // PDF parsing helper
+  const parsePdfText = (text: string) => {
+    const result = {
+      numero_pedido: '',
+      barra_pedido: '',
+      data_pedido: '',
+      quantidade_real: '',
+      valor_unitario_negociado: '',
+      valor_total_negociado: '',
+    };
+
+    // Número do pedido: "Pedido: 1234", "Nº 1234", "No. 1234"
+    const pedidoMatch = text.match(/(?:pedido[:\s#nº°.]*|n[º°o]\.?\s*)(\d{4,})/i);
+    if (pedidoMatch) result.numero_pedido = pedidoMatch[1];
+
+    // Barra: "1234/1", "1234/01"
+    const barraMatch = text.match(/(\d{4,}\/\d{1,3})/);
+    if (barraMatch) result.barra_pedido = barraMatch[1];
+
+    // Data: dd/mm/yyyy
+    const dateMatch = text.match(/(\d{2}\/\d{2}\/\d{4})/);
+    if (dateMatch) {
+      const [d, m, y] = dateMatch[1].split('/');
+      result.data_pedido = `${y}-${m}-${d}`;
+    }
+
+    // Quantidade em ton ou kg
+    const qtdMatch = text.match(/(\d[\d.,]+)\s*(?:ton|t\b|toneladas?)/i);
+    if (qtdMatch) result.quantidade_real = qtdMatch[1].replace(/\./g, '').replace(',', '.');
+
+    // Valor unitário: R$ X,XX/ton ou Valor Unit
+    const unitMatch = text.match(/(?:valor\s+unit[aá]rio[^R]*|R\$\s*)([\d.,]+)/i);
+    if (unitMatch) result.valor_unitario_negociado = unitMatch[1].replace(/\./g, '').replace(',', '.');
+
+    // Valor total: "Total: R$ X.XXX,XX" or "Valor Total"
+    const totalMatch = text.match(/(?:valor\s+total|total\s+geral)[^R]*R?\$?\s*([\d.,]+)/i);
+    if (totalMatch) result.valor_total_negociado = totalMatch[1].replace(/\./g, '').replace(',', '.');
+
+    return result;
+  };
+
+  const handlePdfFile = async (file: File) => {
+    if (!file || file.type !== 'application/pdf') {
+      showError('Selecione um arquivo PDF válido.');
+      return;
+    }
+    setPdfParsing(true);
+    try {
+      // Dynamically import pdfjs-dist to avoid SSR issues
+      const pdfjsLib = await import('pdfjs-dist');
+      // Use local worker to avoid CORS issues
+      pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+        'pdfjs-dist/build/pdf.worker.min.mjs',
+        import.meta.url
+      ).toString();
+
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      let fullText = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        fullText += content.items.map((item: any) => item.str).join(' ') + '\n';
+      }
+      const parsed = parsePdfText(fullText);
+      setExtractedData(parsed);
+      setShowPdfImportModal(true);
+    } catch (err) {
+      console.error('Erro ao ler PDF:', err);
+      showError('Erro ao processar o PDF. Verifique se o arquivo é válido.');
+    } finally {
+      setPdfParsing(false);
+    }
+  };
+
+  const handleSavePedido = async () => {
+    if (!extractedData) return;
+    setSavingPedido(true);
+    try {
+      const pedidoData = {
+        precificacao_id: selectedPricing.id,
+        numero_pedido: extractedData.numero_pedido || undefined,
+        barra_pedido: extractedData.barra_pedido || undefined,
+        data_pedido: extractedData.data_pedido || undefined,
+        quantidade_real: extractedData.quantidade_real ? parseFloat(extractedData.quantidade_real) : undefined,
+        valor_unitario_negociado: extractedData.valor_unitario_negociado ? parseFloat(extractedData.valor_unitario_negociado) : undefined,
+        valor_total_negociado: extractedData.valor_total_negociado ? parseFloat(extractedData.valor_total_negociado) : undefined,
+        status: 'pendente' as const,
+        importado_por: currentUser.id,
+        dados_extraidos: extractedData as any,
+      };
+
+      if (pedidoVenda) {
+        await updatePedidoVenda(pedidoVenda.id, pedidoData);
+      } else {
+        const novo = await createPedidoVenda(pedidoData);
+        setPedidoVenda(novo);
+      }
+      showSuccess('Pedido de Venda vinculado com sucesso!');
+      setShowPdfImportModal(false);
+      setExtractedData(null);
+      // Reload pedido
+      const updated = await getPedidoVendaByPrecificacao(selectedPricing.id);
+      setPedidoVenda(updated);
+    } catch (err) {
+      showError('Erro ao salvar pedido de venda.');
+    } finally {
+      setSavingPedido(false);
+    }
+  };
 
   const loadSellers = async () => {
     try {
@@ -445,6 +581,81 @@ export default function PricingDetailModal({
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <ConfirmDialog {...confirmState} onConfirm={handleConfirm} onCancel={handleCancel} />
+
+      {/* PDF Import Confirmation Modal */}
+      {showPdfImportModal && extractedData && (
+        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+            <div className="flex items-center justify-between p-6 border-b border-stone-100">
+              <h3 className="text-lg font-bold text-stone-800 flex items-center gap-2">
+                <FileText className="w-5 h-5 text-emerald-600" /> Dados Extraídos do PDF
+              </h3>
+              <button
+                onClick={() => { setShowPdfImportModal(false); setExtractedData(null); }}
+                className="p-1 hover:bg-stone-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-stone-400" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-stone-500">Revise os dados extraídos e corrija se necessário:</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Nº Pedido</label>
+                  <input type="text" value={extractedData.numero_pedido}
+                    onChange={(e) => setExtractedData({ ...extractedData, numero_pedido: e.target.value })}
+                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Barra do Pedido</label>
+                  <input type="text" value={extractedData.barra_pedido}
+                    onChange={(e) => setExtractedData({ ...extractedData, barra_pedido: e.target.value })}
+                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Data do Pedido</label>
+                  <input type="date" value={extractedData.data_pedido}
+                    onChange={(e) => setExtractedData({ ...extractedData, data_pedido: e.target.value })}
+                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Qtd. Real (ton)</label>
+                  <input type="number" step="0.001" value={extractedData.quantidade_real}
+                    onChange={(e) => setExtractedData({ ...extractedData, quantidade_real: e.target.value })}
+                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Valor Unit. (R$)</label>
+                  <input type="number" step="0.0001" value={extractedData.valor_unitario_negociado}
+                    onChange={(e) => setExtractedData({ ...extractedData, valor_unitario_negociado: e.target.value })}
+                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Valor Total (R$)</label>
+                  <input type="number" step="0.01" value={extractedData.valor_total_negociado}
+                    onChange={(e) => setExtractedData({ ...extractedData, valor_total_negociado: e.target.value })}
+                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none" />
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 p-6 border-t border-stone-100">
+              <button
+                onClick={() => { setShowPdfImportModal(false); setExtractedData(null); }}
+                className="px-5 py-2 border border-stone-300 rounded-lg text-sm font-bold text-stone-600 hover:bg-stone-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSavePedido}
+                disabled={savingPedido}
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white rounded-lg text-sm font-bold transition-colors"
+              >
+                {savingPedido ? 'Salvando...' : 'Confirmar e Vincular'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
         <div className="p-6 border-b border-stone-200 flex justify-between items-center bg-stone-50">
           <div>
@@ -456,6 +667,37 @@ export default function PricingDetailModal({
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {/* Pedido de Venda badge in header */}
+            {pedidoVenda && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 border border-emerald-300 rounded-lg text-emerald-800 text-xs font-bold">
+                <CheckCircleIcon className="w-3.5 h-3.5" />
+                Pedido: {pedidoVenda.numero_pedido || '—'}
+                {pedidoVenda.barra_pedido && ` / ${pedidoVenda.barra_pedido}`}
+              </div>
+            )}
+            <input
+              ref={pdfInputRef}
+              type="file"
+              accept=".pdf"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handlePdfFile(file);
+                e.target.value = '';
+              }}
+            />
+            <button
+              onClick={() => pdfInputRef.current?.click()}
+              disabled={pdfParsing}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition-all active:scale-95 disabled:bg-emerald-400 text-sm"
+              title="Importar PDF do Pedido de Venda"
+            >
+              {pdfParsing ? (
+                <><span className="animate-spin">⏳</span> Processando...</>
+              ) : (
+                <><Upload className="w-4 h-4" /> {pedidoVenda ? 'Atualizar Pedido' : 'Importar Pedido'}</>
+              )}
+            </button>
             {selectedPricing.status === 'Em Andamento' && onEdit && (
               <button
                 onClick={() => {
@@ -1041,6 +1283,50 @@ export default function PricingDetailModal({
               </div>
             ))}
           </div>
+
+          {/* Pedido de Venda Section */}
+          {pedidoVenda && (
+            <div className="bg-emerald-50 p-6 rounded-2xl border border-emerald-200">
+              <h3 className="text-xs font-bold text-emerald-700 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <FileText className="w-4 h-4" />
+                Pedido de Venda Vinculado
+              </h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                <div>
+                  <p className="text-xs font-bold text-emerald-600 uppercase mb-0.5">Nº Pedido</p>
+                  <p className="font-mono font-black text-emerald-900 text-lg">{pedidoVenda.numero_pedido || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-emerald-600 uppercase mb-0.5">Barra</p>
+                  <p className="font-mono font-black text-emerald-900 text-lg">{pedidoVenda.barra_pedido || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-emerald-600 uppercase mb-0.5">Data do Pedido</p>
+                  <p className="text-stone-800">{pedidoVenda.data_pedido ? new Date(pedidoVenda.data_pedido + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-emerald-600 uppercase mb-0.5">Qtd. Real (ton)</p>
+                  <p className="font-bold text-stone-800">{pedidoVenda.quantidade_real?.toLocaleString('pt-BR') ?? '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-emerald-600 uppercase mb-0.5">Valor Unit. Negociado</p>
+                  <p className="font-bold text-stone-800">
+                    {pedidoVenda.valor_unitario_negociado != null
+                      ? pedidoVenda.valor_unitario_negociado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                      : '—'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-emerald-600 uppercase mb-0.5">Valor Total</p>
+                  <p className="font-black text-emerald-800 text-lg">
+                    {pedidoVenda.valor_total_negociado != null
+                      ? pedidoVenda.valor_total_negociado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                      : '—'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Commercial Observation */}
           <div className="bg-stone-50 p-6 rounded-2xl border border-stone-200">
