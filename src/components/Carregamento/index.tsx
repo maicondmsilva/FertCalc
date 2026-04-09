@@ -17,6 +17,7 @@ import {
   MapPin,
   FileText,
   Eye,
+  Search,
 } from 'lucide-react';
 import {
   Carregamento,
@@ -43,6 +44,9 @@ import {
   getCarregamentosCalendario,
   getAlertasCarregamento,
 } from '../../services/carregamentoService';
+import { getPricingRecords } from '../../services/db';
+import { getPedidosVenda } from '../../services/pedidosVendaService';
+import { useToast } from '../Toast';
 
 // ─── Sub-view type ─────────────────────────────────────────────────────────────
 type CarregamentoView =
@@ -127,8 +131,58 @@ function ModalNovoCarregamento({
     data_prevista_carregamento: '',
     transportadora_id: '',
     observacoes: '',
+    pedido_venda_id: '',
+    precificacao_id: '',
+    cliente_nome: '',
   });
   const [saving, setSaving] = useState(false);
+  const [pedidoSearch, setPedidoSearch] = useState('');
+  const [allPedidos, setAllPedidos] = useState<any[]>([]);
+  const [pedidoResults, setPedidoResults] = useState<any[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadData = async () => {
+      try {
+        const [pedidos, pricings] = await Promise.all([getPedidosVenda(), getPricingRecords()]);
+        if (cancelled) return;
+        const pricingsMap = new Map(pricings.map((pr: any) => [pr.id, pr]));
+        const enriched = pedidos.map((p: any) => {
+          const pricing = pricingsMap.get(p.precificacao_id);
+          return { ...p, pricing, clientName: pricing?.factors?.client?.name };
+        });
+        setAllPedidos(enriched);
+      } catch { /* silent */ }
+    };
+    loadData();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    const lq = pedidoSearch.trim().toLowerCase();
+    if (lq.length < 2) { setPedidoResults([]); return; }
+    const filtered = allPedidos.filter((p: any) =>
+      p.numero_pedido?.toLowerCase().includes(lq) ||
+      p.barra_pedido?.toLowerCase().includes(lq) ||
+      p.pricing?.formattedCod?.toLowerCase().includes(lq) ||
+      p.clientName?.toLowerCase().includes(lq)
+    );
+    setPedidoResults(filtered.slice(0, 10));
+  }, [pedidoSearch, allPedidos]);
+
+  const selectPedido = (p: any) => {
+    const pricing = p.pricing;
+    setForm((prev) => ({
+      ...prev,
+      pedido_venda_id: p.id,
+      precificacao_id: p.precificacao_id,
+      quantidade_total: p.quantidade_real ? String(p.quantidade_real) : prev.quantidade_total,
+      tipo_frete: (pricing?.factors?.freight != null && pricing.factors.freight > 0) ? 'CIF' : 'FOB',
+      cliente_nome: p.clientName || '',
+    }));
+    setPedidoSearch(p.numero_pedido || p.clientName || '');
+    setPedidoResults([]);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -149,6 +203,46 @@ function ModalNovoCarregamento({
           </button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {/* Pedido de Venda / Precificação search */}
+          <div>
+            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+              Pedido de Venda / Precificação
+            </label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+              <input
+                type="text"
+                value={pedidoSearch}
+                onChange={(e) => { setPedidoSearch(e.target.value); }}
+                placeholder="Buscar por cliente, nº pedido ou nº precificação..."
+                className="w-full pl-9 pr-4 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+              />
+            </div>
+            {pedidoResults.length > 0 && (
+              <div className="absolute z-10 mt-1 bg-white border border-stone-200 rounded-xl shadow-lg max-h-56 overflow-y-auto w-full max-w-lg">
+                {pedidoResults.map((p: any) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => selectPedido(p)}
+                    className="w-full text-left px-4 py-3 hover:bg-amber-50 transition-colors text-sm border-b border-stone-100 last:border-0"
+                  >
+                    <p className="font-bold text-stone-800">
+                      {p.numero_pedido ? `Pedido: ${p.numero_pedido}` : '—'}
+                      {p.barra_pedido ? ` / ${p.barra_pedido}` : ''}
+                    </p>
+                    <p className="text-stone-500 text-xs">{p.clientName || '—'} · {p.pricing?.formattedCod || '—'}</p>
+                  </button>
+                ))}
+              </div>
+            )}
+            {form.cliente_nome && (
+              <p className="text-xs text-emerald-600 font-medium mt-1">
+                ✓ Vinculado: {form.cliente_nome}
+              </p>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
@@ -1404,6 +1498,7 @@ export default function CarregamentoModule({
   currentUser,
   view = 'visao_geral',
 }: CarregamentoModuleProps) {
+  const { showSuccess, showError } = useToast();
   const [carregamentos, setCarregamentos] = useState<Carregamento[]>([]);
   const [filiais, setFiliais] = useState<Filial[]>([]);
   const [transportadoras, setTransportadoras] = useState<Transportadora[]>([]);
@@ -1494,21 +1589,26 @@ export default function CarregamentoModule({
 
   // ── Solicitar cotação ─────────────────────────────────────────────────────
   const handleSolicitarCotacao = async (carregamentoId: string, form: any) => {
-    await createCotacao({
-      carregamento_id: carregamentoId,
-      transportadora_id: form.transportadora_id || undefined,
-      valor_cotado: form.valor_cotado ? parseFloat(form.valor_cotado) : undefined,
-      prazo_dias: form.prazo_dias ? parseInt(form.prazo_dias) : undefined,
-      validade_cotacao: form.validade_cotacao || undefined,
-      observacoes: form.observacoes || undefined,
-      status: 'pendente',
-      solicitado_por: currentUser.id,
-    });
-    await updateStatusCarregamento(carregamentoId, 'cotacao_solicitada', {
-      data_solicitacao_cotacao: new Date().toISOString(),
-    });
-    setModalCotacao(null);
-    await load();
+    try {
+      await createCotacao({
+        carregamento_id: carregamentoId,
+        transportadora_id: form.transportadora_id || undefined,
+        valor_cotado: form.valor_cotado ? parseFloat(form.valor_cotado) : undefined,
+        prazo_dias: form.prazo_dias ? parseInt(form.prazo_dias) : undefined,
+        validade_cotacao: form.validade_cotacao || undefined,
+        observacoes: form.observacoes || undefined,
+        status: 'pendente',
+        solicitado_por: currentUser.id,
+      });
+      await updateStatusCarregamento(carregamentoId, 'cotacao_solicitada', {
+        data_solicitacao_cotacao: new Date().toISOString(),
+      });
+      showSuccess('Cotação solicitada com sucesso!');
+      setModalCotacao(null);
+      await load();
+    } catch {
+      showError('Erro ao solicitar cotação.');
+    }
   };
 
   // ── Liberar ───────────────────────────────────────────────────────────────
