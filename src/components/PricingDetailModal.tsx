@@ -1,6 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { PricingRecord, User, AppSettings, PedidoVenda } from '../types';
-import { X, Edit3, Trash2, Info, FileDown, Download, FileSpreadsheet, Tag, Upload, FileText, CheckCircle as CheckCircleIcon } from 'lucide-react';
+import {
+  X,
+  Edit3,
+  Trash2,
+  Info,
+  FileDown,
+  Download,
+  FileSpreadsheet,
+  Tag,
+  Upload,
+  FileText,
+  CheckCircle as CheckCircleIcon,
+} from 'lucide-react';
 import { generatePricingPDF } from '../utils/pdfGenerator';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -72,8 +84,11 @@ export default function PricingDetailModal({
     barra_pedido: string;
     data_pedido: string;
     quantidade_real: string;
+    embalagem: string;
     valor_unitario_negociado: string;
     valor_total_negociado: string;
+    tipo_frete: string;
+    valor_frete: string;
   } | null>(null);
   const [savingPedido, setSavingPedido] = useState(false);
   const pdfInputRef = useRef<HTMLInputElement>(null);
@@ -96,36 +111,88 @@ export default function PricingDetailModal({
       barra_pedido: '',
       data_pedido: '',
       quantidade_real: '',
+      embalagem: '',
       valor_unitario_negociado: '',
       valor_total_negociado: '',
+      tipo_frete: '',
+      valor_frete: '',
     };
 
-    // Número do pedido: "Pedido: 1234", "Nº 1234", "No. 1234"
-    const pedidoMatch = text.match(/(?:pedido[:\s#nº°.]*|n[º°o]\.?\s*)(\d{4,})/i);
-    if (pedidoMatch) result.numero_pedido = pedidoMatch[1];
+    // Normalizar texto: remover espaços duplos, manter quebras de linha
+    const normalized = text.replace(/[ \t]+/g, ' ').trim();
 
-    // Barra: "1234/1", "1234/01"
-    const barraMatch = text.match(/(\d{4,}\/\d{1,3})/);
-    if (barraMatch) result.barra_pedido = barraMatch[1];
+    // ── Nº do Pedido ──
+    // Padrão: "Pedido de Fornecimento 623137/1" — pegar número antes da barra
+    const pedidoComBarraMatch = normalized.match(/\b(\d{5,8})\/(\d{1,3})\b/);
+    if (pedidoComBarraMatch) {
+      result.numero_pedido = pedidoComBarraMatch[1];
+      result.barra_pedido = pedidoComBarraMatch[2];
+    } else {
+      const pedidoMatch = normalized.match(/(?:pedido[^0-9]*|n[º°o]\.?\s*)(\d{5,8})/i);
+      if (pedidoMatch) result.numero_pedido = pedidoMatch[1];
 
-    // Data: dd/mm/yyyy
-    const dateMatch = text.match(/(\d{2}\/\d{2}\/\d{4})/);
-    if (dateMatch) {
-      const [d, m, y] = dateMatch[1].split('/');
-      result.data_pedido = `${y}-${m}-${d}`;
+      const barraMatch = normalized.match(/\/(\d{1,3})\b/);
+      if (barraMatch) result.barra_pedido = barraMatch[1];
     }
 
-    // Quantidade em ton ou kg
-    const qtdMatch = text.match(/(\d[\d.,]+)\s*(?:ton|t\b|toneladas?)/i);
-    if (qtdMatch) result.quantidade_real = qtdMatch[1].replace(/\./g, '').replace(',', '.');
+    // ── Vencimento ──
+    const vencMatch = normalized.match(/vencimento[:\s]+(\d{2}\/\d{2}\/\d{4})/i);
+    if (vencMatch) {
+      const [d, m, y] = vencMatch[1].split('/');
+      result.data_pedido = `${y}-${m}-${d}`;
+    } else {
+      const dateMatch = normalized.match(/(\d{2}\/\d{2}\/\d{4})/);
+      if (dateMatch) {
+        const [d, m, y] = dateMatch[1].split('/');
+        result.data_pedido = `${y}-${m}-${d}`;
+      }
+    }
 
-    // Valor unitário: R$ X,XX/ton ou Valor Unit
-    const unitMatch = text.match(/(?:valor\s+unit[aá]rio[^R]*|R\$\s*)([\d.,]+)/i);
-    if (unitMatch) result.valor_unitario_negociado = unitMatch[1].replace(/\./g, '').replace(',', '.');
+    // ── Quantidade ──
+    const qtdMatch = normalized.match(/quantidade[:\s]+([\d.,]+)/i);
+    if (qtdMatch) {
+      result.quantidade_real = qtdMatch[1].replace(/\./g, '').replace(',', '.');
+    } else {
+      const qtdTonMatch = normalized.match(/([\d.,]+)\s*(?:ton|t\b|toneladas?)/i);
+      if (qtdTonMatch) result.quantidade_real = qtdTonMatch[1].replace(/\./g, '').replace(',', '.');
+    }
 
-    // Valor total: "Total: R$ X.XXX,XX" or "Valor Total"
-    const totalMatch = text.match(/(?:valor\s+total|total\s+geral)[^R]*R?\$?\s*([\d.,]+)/i);
-    if (totalMatch) result.valor_total_negociado = totalMatch[1].replace(/\./g, '').replace(',', '.');
+    // ── Sacaria (Embalagem) ──
+    const sacariaMatch = normalized.match(
+      /sacaria[:\s]+([A-Za-zÀ-ÿ0-9\s.,-]+?)(?=\s{2,}|\n|$|[A-Z]{2,}:)/i
+    );
+    if (sacariaMatch) {
+      result.embalagem = sacariaMatch[1].trim();
+    }
+
+    // ── Transporte (Tipo de Frete) ──
+    const transporteMatch = normalized.match(/transporte[:\s]+(CIF|FOB)/i);
+    if (transporteMatch) {
+      result.tipo_frete = transporteMatch[1].toUpperCase();
+    } else {
+      const freteMatch = normalized.match(/\b(CIF|FOB)\b/i);
+      if (freteMatch) result.tipo_frete = freteMatch[1].toUpperCase();
+    }
+
+    // ── UNITÁRIO (Valor Unitário) ──
+    const unitarioMatch = normalized.match(/unit[aá]rio[:\s]*R?\$?\s*([\d.,]+)/i);
+    if (unitarioMatch) {
+      result.valor_unitario_negociado = unitarioMatch[1].replace(/\./g, '').replace(',', '.');
+    }
+
+    // ── TOTAL (Valor Total) ──
+    const totalMatch = normalized.match(/\bTOTAL\b[:\s]*R?\$?\s*([\d.,]+)/i);
+    if (totalMatch) {
+      result.valor_total_negociado = totalMatch[1].replace(/\./g, '').replace(',', '.');
+    }
+
+    // ── Valor do Frete (quando CIF) ──
+    if (result.tipo_frete === 'CIF') {
+      const freteValorMatch = normalized.match(/(?:valor\s+)?frete[:\s/ton]*R?\$?\s*([\d.,]+)/i);
+      if (freteValorMatch) {
+        result.valor_frete = freteValorMatch[1].replace(/\./g, '').replace(',', '.');
+      }
+    }
 
     return result;
   };
@@ -173,9 +240,18 @@ export default function PricingDetailModal({
         numero_pedido: extractedData.numero_pedido || undefined,
         barra_pedido: extractedData.barra_pedido || undefined,
         data_pedido: extractedData.data_pedido || undefined,
-        quantidade_real: extractedData.quantidade_real ? parseFloat(extractedData.quantidade_real) : undefined,
-        valor_unitario_negociado: extractedData.valor_unitario_negociado ? parseFloat(extractedData.valor_unitario_negociado) : undefined,
-        valor_total_negociado: extractedData.valor_total_negociado ? parseFloat(extractedData.valor_total_negociado) : undefined,
+        quantidade_real: extractedData.quantidade_real
+          ? parseFloat(extractedData.quantidade_real)
+          : undefined,
+        embalagem: extractedData.embalagem || undefined,
+        valor_unitario_negociado: extractedData.valor_unitario_negociado
+          ? parseFloat(extractedData.valor_unitario_negociado)
+          : undefined,
+        valor_total_negociado: extractedData.valor_total_negociado
+          ? parseFloat(extractedData.valor_total_negociado)
+          : undefined,
+        tipo_frete: extractedData.tipo_frete || undefined,
+        valor_frete: extractedData.valor_frete ? parseFloat(extractedData.valor_frete) : undefined,
         status: 'pendente' as const,
         importado_por: currentUser.id,
         dados_extraidos: extractedData as any,
@@ -591,56 +667,157 @@ export default function PricingDetailModal({
                 <FileText className="w-5 h-5 text-emerald-600" /> Dados Extraídos do PDF
               </h3>
               <button
-                onClick={() => { setShowPdfImportModal(false); setExtractedData(null); }}
+                onClick={() => {
+                  setShowPdfImportModal(false);
+                  setExtractedData(null);
+                }}
                 className="p-1 hover:bg-stone-100 rounded-lg transition-colors"
               >
                 <X className="w-5 h-5 text-stone-400" />
               </button>
             </div>
             <div className="p-6 space-y-4">
-              <p className="text-sm text-stone-500">Revise os dados extraídos e corrija se necessário:</p>
+              <p className="text-sm text-stone-500">
+                Revise os dados extraídos e corrija se necessário:
+              </p>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Nº Pedido</label>
-                  <input type="text" value={extractedData.numero_pedido}
-                    onChange={(e) => setExtractedData({ ...extractedData, numero_pedido: e.target.value })}
-                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none" />
+                  <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                    Nº Pedido
+                  </label>
+                  <input
+                    type="text"
+                    value={extractedData.numero_pedido}
+                    onChange={(e) =>
+                      setExtractedData({ ...extractedData, numero_pedido: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                  />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Barra do Pedido</label>
-                  <input type="text" value={extractedData.barra_pedido}
-                    onChange={(e) => setExtractedData({ ...extractedData, barra_pedido: e.target.value })}
-                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none" />
+                  <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                    Barra do Pedido
+                  </label>
+                  <input
+                    type="text"
+                    value={extractedData.barra_pedido}
+                    onChange={(e) =>
+                      setExtractedData({ ...extractedData, barra_pedido: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                  />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Data do Pedido</label>
-                  <input type="date" value={extractedData.data_pedido}
-                    onChange={(e) => setExtractedData({ ...extractedData, data_pedido: e.target.value })}
-                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none" />
+                  <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                    Vencimento
+                  </label>
+                  <input
+                    type="date"
+                    value={extractedData.data_pedido}
+                    onChange={(e) =>
+                      setExtractedData({ ...extractedData, data_pedido: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                  />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Qtd. Real (ton)</label>
-                  <input type="number" step="0.001" value={extractedData.quantidade_real}
-                    onChange={(e) => setExtractedData({ ...extractedData, quantidade_real: e.target.value })}
-                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none" />
+                  <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                    Qtd. Real (ton)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.001"
+                    value={extractedData.quantidade_real}
+                    onChange={(e) =>
+                      setExtractedData({ ...extractedData, quantidade_real: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                  />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Valor Unit. (R$)</label>
-                  <input type="number" step="0.0001" value={extractedData.valor_unitario_negociado}
-                    onChange={(e) => setExtractedData({ ...extractedData, valor_unitario_negociado: e.target.value })}
-                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none" />
+                  <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                    Embalagem
+                  </label>
+                  <input
+                    type="text"
+                    value={extractedData.embalagem}
+                    onChange={(e) =>
+                      setExtractedData({ ...extractedData, embalagem: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                  />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Valor Total (R$)</label>
-                  <input type="number" step="0.01" value={extractedData.valor_total_negociado}
-                    onChange={(e) => setExtractedData({ ...extractedData, valor_total_negociado: e.target.value })}
-                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none" />
+                  <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                    Valor Unit. (R$)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.0001"
+                    value={extractedData.valor_unitario_negociado}
+                    onChange={(e) =>
+                      setExtractedData({
+                        ...extractedData,
+                        valor_unitario_negociado: e.target.value,
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                  />
                 </div>
+                <div>
+                  <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                    Valor Total (R$)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={extractedData.valor_total_negociado}
+                    onChange={(e) =>
+                      setExtractedData({ ...extractedData, valor_total_negociado: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                    Tipo de Frete
+                  </label>
+                  <select
+                    value={extractedData.tipo_frete}
+                    onChange={(e) =>
+                      setExtractedData({ ...extractedData, tipo_frete: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                  >
+                    <option value="">Selecionar...</option>
+                    <option value="CIF">CIF</option>
+                    <option value="FOB">FOB</option>
+                  </select>
+                </div>
+                {extractedData.tipo_frete === 'CIF' && (
+                  <div className="col-span-2">
+                    <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                      Valor do Frete (R$/ton)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={extractedData.valor_frete}
+                      onChange={(e) =>
+                        setExtractedData({ ...extractedData, valor_frete: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                    />
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex justify-end gap-3 p-6 border-t border-stone-100">
               <button
-                onClick={() => { setShowPdfImportModal(false); setExtractedData(null); }}
+                onClick={() => {
+                  setShowPdfImportModal(false);
+                  setExtractedData(null);
+                }}
                 className="px-5 py-2 border border-stone-300 rounded-lg text-sm font-bold text-stone-600 hover:bg-stone-50 transition-colors"
               >
                 Cancelar
@@ -693,9 +870,14 @@ export default function PricingDetailModal({
               title="Importar PDF do Pedido de Venda"
             >
               {pdfParsing ? (
-                <><span className="animate-spin">⏳</span> Processando...</>
+                <>
+                  <span className="animate-spin">⏳</span> Processando...
+                </>
               ) : (
-                <><Upload className="w-4 h-4" /> {pedidoVenda ? 'Atualizar Pedido' : 'Importar Pedido'}</>
+                <>
+                  <Upload className="w-4 h-4" />{' '}
+                  {pedidoVenda ? 'Atualizar Pedido' : 'Importar Pedido'}
+                </>
               )}
             </button>
             {selectedPricing.status === 'Em Andamento' && onEdit && (
@@ -1294,25 +1476,62 @@ export default function PricingDetailModal({
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
                 <div>
                   <p className="text-xs font-bold text-emerald-600 uppercase mb-0.5">Nº Pedido</p>
-                  <p className="font-mono font-black text-emerald-900 text-lg">{pedidoVenda.numero_pedido || '—'}</p>
+                  <p className="font-mono font-black text-emerald-900 text-lg">
+                    {pedidoVenda.numero_pedido || '—'}
+                  </p>
                 </div>
                 <div>
                   <p className="text-xs font-bold text-emerald-600 uppercase mb-0.5">Barra</p>
-                  <p className="font-mono font-black text-emerald-900 text-lg">{pedidoVenda.barra_pedido || '—'}</p>
+                  <p className="font-mono font-black text-emerald-900 text-lg">
+                    {pedidoVenda.barra_pedido || '—'}
+                  </p>
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-emerald-600 uppercase mb-0.5">Data do Pedido</p>
-                  <p className="text-stone-800">{pedidoVenda.data_pedido ? new Date(pedidoVenda.data_pedido + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</p>
+                  <p className="text-xs font-bold text-emerald-600 uppercase mb-0.5">Vencimento</p>
+                  <p className="text-stone-800">
+                    {pedidoVenda.data_pedido
+                      ? new Date(pedidoVenda.data_pedido + 'T00:00:00').toLocaleDateString('pt-BR')
+                      : '—'}
+                  </p>
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-emerald-600 uppercase mb-0.5">Qtd. Real (ton)</p>
-                  <p className="font-bold text-stone-800">{pedidoVenda.quantidade_real?.toLocaleString('pt-BR') ?? '—'}</p>
+                  <p className="text-xs font-bold text-emerald-600 uppercase mb-0.5">
+                    Qtd. Real (ton)
+                  </p>
+                  <p className="font-bold text-stone-800">
+                    {pedidoVenda.quantidade_real?.toLocaleString('pt-BR') ?? '—'}
+                  </p>
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-emerald-600 uppercase mb-0.5">Valor Unit. Negociado</p>
+                  <p className="text-xs font-bold text-emerald-600 uppercase mb-0.5">Embalagem</p>
+                  <p className="text-stone-800">{pedidoVenda.embalagem || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-emerald-600 uppercase mb-0.5">
+                    Tipo de Frete
+                  </p>
+                  <p className="text-stone-800">
+                    {pedidoVenda.tipo_frete ? (
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${pedidoVenda.tipo_frete === 'CIF' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}
+                      >
+                        {pedidoVenda.tipo_frete}
+                      </span>
+                    ) : (
+                      '—'
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-emerald-600 uppercase mb-0.5">
+                    Valor Unit. Negociado
+                  </p>
                   <p className="font-bold text-stone-800">
                     {pedidoVenda.valor_unitario_negociado != null
-                      ? pedidoVenda.valor_unitario_negociado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                      ? pedidoVenda.valor_unitario_negociado.toLocaleString('pt-BR', {
+                          style: 'currency',
+                          currency: 'BRL',
+                        })
                       : '—'}
                   </p>
                 </div>
@@ -1320,10 +1539,26 @@ export default function PricingDetailModal({
                   <p className="text-xs font-bold text-emerald-600 uppercase mb-0.5">Valor Total</p>
                   <p className="font-black text-emerald-800 text-lg">
                     {pedidoVenda.valor_total_negociado != null
-                      ? pedidoVenda.valor_total_negociado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                      ? pedidoVenda.valor_total_negociado.toLocaleString('pt-BR', {
+                          style: 'currency',
+                          currency: 'BRL',
+                        })
                       : '—'}
                   </p>
                 </div>
+                {pedidoVenda.tipo_frete === 'CIF' && pedidoVenda.valor_frete != null && (
+                  <div>
+                    <p className="text-xs font-bold text-emerald-600 uppercase mb-0.5">
+                      Valor do Frete (R$/ton)
+                    </p>
+                    <p className="font-bold text-stone-800">
+                      {pedidoVenda.valor_frete.toLocaleString('pt-BR', {
+                        style: 'currency',
+                        currency: 'BRL',
+                      })}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           )}
