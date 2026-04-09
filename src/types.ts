@@ -18,7 +18,7 @@ export interface UnifiedProduct {
   type: NutrientType;
   minQuantity: number;
   categories: string[];
-  
+
   // Specific fields mapped from macro/micro/finished
   n?: number;
   p?: number;
@@ -142,6 +142,17 @@ export interface User {
     micro?: boolean;
     expenses?: boolean;
     creditCard?: import('./types/expense.types').ExpenseRole;
+    // Módulo Carregamento
+    carregamento?: boolean;
+    carregamento_solicitar_cotacao?: boolean;
+    carregamento_liberar?: boolean;
+    carregamento_logistica?: boolean;
+    carregamento_informar_transportador?: boolean;
+    carregamento_relatorios?: boolean;
+    carregamento_admin?: boolean;
+    carregamento_all_filiais?: boolean;
+    carregamento_cancelar?: boolean;
+    carregamento_configurar_filiais?: boolean;
   };
 }
 
@@ -208,7 +219,15 @@ export interface DiasUteisMes {
   total_dias_uteis: number;
 }
 
-export const DEFAULT_CATEGORIAS: string[] = ['Faturamento', 'Carregamento', 'Rentabilidade', 'Cancelamentos', 'Entrada de Pedidos', 'Carteira de Pedidos', 'Produção'];
+export const DEFAULT_CATEGORIAS: string[] = [
+  'Faturamento',
+  'Carregamento',
+  'Rentabilidade',
+  'Cancelamentos',
+  'Entrada de Pedidos',
+  'Carteira de Pedidos',
+  'Produção',
+];
 
 export interface AppSettings {
   companyName: string;
@@ -446,7 +465,12 @@ export interface Notification {
   message: string;
   date: string;
   read: boolean;
-  type: 'goal_change' | 'pricing_approval' | 'goal_approval' | 'pricing_transfer' | 'pricing_deletion_request';
+  type:
+    | 'goal_change'
+    | 'pricing_approval'
+    | 'goal_approval'
+    | 'pricing_transfer'
+    | 'pricing_deletion_request';
   dataId?: string;
 }
 

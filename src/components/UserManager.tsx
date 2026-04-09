@@ -61,6 +61,7 @@ export default function UserManager() {
     { id: 'prd', name: 'Documentação PRD' },
     { id: 'managementReports', name: 'Relatório Diário' },
     { id: 'expenses', name: 'Gastos Cartão' },
+    { id: 'carregamento', name: 'Carregamento' },
   ];
 
   useEffect(() => {
@@ -644,6 +645,60 @@ export default function UserManager() {
                   do nível de acesso global.
                 </p>
               </div>
+            </div>
+
+            {/* Permissões — Módulo Carregamento */}
+            <div className="border border-amber-200 rounded-xl overflow-hidden">
+              <div className="bg-amber-600 text-white px-4 py-2 text-xs font-bold uppercase tracking-wider">
+                🚚 Carregamento — Permissões do Módulo
+              </div>
+              <div className="p-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                {[
+                  { id: 'carregamento', name: 'Visualizar Carregamentos' },
+                  { id: 'carregamento_solicitar_cotacao', name: 'Solicitar Cotação de Frete' },
+                  { id: 'carregamento_liberar', name: 'Liberar Carregamento' },
+                  { id: 'carregamento_logistica', name: 'Painel de Logística' },
+                  {
+                    id: 'carregamento_informar_transportador',
+                    name: 'Informar Transportador (CIF)',
+                  },
+                  { id: 'carregamento_relatorios', name: 'Acessar Relatórios' },
+                  { id: 'carregamento_cancelar', name: 'Cancelar Carregamentos' },
+                  { id: 'carregamento_all_filiais', name: 'Ver Todas as Filiais' },
+                  { id: 'carregamento_configurar_filiais', name: 'Gerenciar Filiais' },
+                  { id: 'carregamento_admin', name: 'Administrador do Módulo' },
+                ].map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() =>
+                      setFormData({
+                        ...formData,
+                        permissions: {
+                          ...formData.permissions,
+                          [m.id]: !(formData.permissions as any)[m.id],
+                        },
+                      })
+                    }
+                    className={`flex items-center justify-between px-3 py-2 rounded-lg border transition-all text-xs font-bold ${
+                      (formData.permissions as any)[m.id]
+                        ? 'bg-amber-50 border-amber-300 text-amber-700'
+                        : 'bg-stone-50 border-stone-200 text-stone-400'
+                    }`}
+                  >
+                    {m.name}
+                    <div
+                      className={`w-2 h-2 rounded-full flex-shrink-0 ml-1 ${
+                        (formData.permissions as any)[m.id] ? 'bg-amber-500' : 'bg-stone-300'
+                      }`}
+                    />
+                  </button>
+                ))}
+              </div>
+              <p className="px-3 pb-3 text-xs text-stone-400">
+                A permissão <strong>"Visualizar Carregamentos"</strong> é necessária para acessar o
+                módulo.
+              </p>
             </div>
           </div>
 
