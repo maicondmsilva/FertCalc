@@ -768,7 +768,7 @@ function SolicitacaoCotacao({
   loading: boolean;
   onAction: (c: Carregamento, action: string) => void;
 }) {
-  const elegíveis = carregamentos.filter((c) => c.status === 'aguardando_cotacao');
+  const elegiveis = carregamentos.filter((c) => c.status === 'aguardando_cotacao');
   const emAndamento = carregamentos.filter((c) =>
     ['cotacao_solicitada', 'cotacao_recebida'].includes(c.status)
   );
@@ -778,7 +778,7 @@ function SolicitacaoCotacao({
       <div className="bg-white rounded-xl border border-stone-200 shadow-sm">
         <div className="p-4 border-b border-stone-100">
           <h3 className="font-bold text-stone-800 text-sm">
-            Aguardando Cotação ({elegíveis.length})
+            Aguardando Cotação ({elegiveis.length})
           </h3>
           <p className="text-xs text-stone-500 mt-0.5">
             Clique em "Solicitar Cotação" para iniciar o processo
@@ -790,7 +790,7 @@ function SolicitacaoCotacao({
           </div>
         ) : (
           <TabelaCarregamentos
-            carregamentos={elegíveis}
+            carregamentos={elegiveis}
             onAction={onAction}
             showActions={['cotacao']}
           />
@@ -1414,6 +1414,7 @@ export default function CarregamentoModule({
     valor_frete_mes: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Modals
   const [showModalNovo, setShowModalNovo] = useState(false);
@@ -1428,17 +1429,24 @@ export default function CarregamentoModule({
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [cgs, fls, trs, kpiData] = await Promise.all([
-      getCarregamentos(),
-      getFiliais(),
-      getTransportadoras(),
-      getKPICarregamento(),
-    ]);
-    setCarregamentos(cgs);
-    setFiliais(fls);
-    setTransportadoras(trs);
-    setKpi(kpiData);
-    setLoading(false);
+    setLoadError(null);
+    try {
+      const [cgs, fls, trs, kpiData] = await Promise.all([
+        getCarregamentos(),
+        getFiliais(),
+        getTransportadoras(),
+        getKPICarregamento(),
+      ]);
+      setCarregamentos(cgs);
+      setFiliais(fls);
+      setTransportadoras(trs);
+      setKpi(kpiData);
+    } catch (err) {
+      console.error('Erro ao carregar dados de carregamento:', err);
+      setLoadError('Erro ao carregar dados. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -1579,6 +1587,11 @@ export default function CarregamentoModule({
       </div>
 
       {/* Views */}
+      {loadError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 text-sm">
+          {loadError}
+        </div>
+      )}
       {view === 'visao_geral' && (
         <VisaoGeral
           carregamentos={carregamentos}

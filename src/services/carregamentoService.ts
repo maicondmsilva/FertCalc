@@ -355,10 +355,9 @@ export async function addHistorico(
 // ─────────────────────────────────────────────────────────────
 
 export async function getKPICarregamento(filialId?: string): Promise<KPICarregamento> {
-  const today = new Date().toISOString().slice(0, 10);
-  const firstDayOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-    .toISOString()
-    .slice(0, 10);
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+  const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
 
   let base = supabase.from('carregamentos').select('status, data_real_carregamento, valor_frete');
   if (filialId) {
