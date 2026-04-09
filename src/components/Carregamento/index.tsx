@@ -1,0 +1,1706 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { User } from '../../types';
+import {
+  Truck,
+  Package,
+  Calendar,
+  BarChart3,
+  ClipboardList,
+  CheckCircle,
+  AlertTriangle,
+  RefreshCw,
+  Plus,
+  X,
+  ChevronDown,
+  ChevronRight,
+  Clock,
+  MapPin,
+  FileText,
+  Eye,
+} from 'lucide-react';
+import {
+  Carregamento,
+  Filial,
+  Transportadora,
+  CotacaoFrete,
+  KPICarregamento,
+  StatusCarregamento,
+  FiltrosRelatorioCarregamento,
+} from '../../types/carregamento';
+import {
+  getCarregamentos,
+  createCarregamento,
+  updateCarregamento,
+  updateStatusCarregamento,
+  gerarNumeroCarregamento,
+  getFiliais,
+  getTransportadoras,
+  getCotacoesCarregamento,
+  createCotacao,
+  updateCotacao,
+  getKPICarregamento,
+  getCarregamentosRelatorio,
+  getCarregamentosCalendario,
+  getAlertasCarregamento,
+} from '../../services/carregamentoService';
+
+// ─── Sub-view type ─────────────────────────────────────────────────────────────
+type CarregamentoView =
+  | 'visao_geral'
+  | 'solicitacao'
+  | 'liberacao'
+  | 'logistica'
+  | 'calendario'
+  | 'relatorios';
+
+interface CarregamentoModuleProps {
+  currentUser: User;
+  view?: CarregamentoView;
+}
+
+// ─── Status labels & colors ─────────────────────────────────────────────────────
+const STATUS_LABEL: Record<StatusCarregamento, string> = {
+  aguardando_cotacao: 'Aguardando Cotação',
+  cotacao_solicitada: 'Cotação Solicitada',
+  cotacao_recebida: 'Cotação Recebida',
+  aguardando_liberacao: 'Aguardando Liberação',
+  liberado_parcial: 'Liberado Parcial',
+  liberado_total: 'Liberado Total',
+  em_carregamento: 'Em Carregamento',
+  carregado: 'Carregado',
+  cancelado: 'Cancelado',
+};
+
+const STATUS_COLOR: Record<StatusCarregamento, string> = {
+  aguardando_cotacao: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+  cotacao_solicitada: 'bg-blue-100 text-blue-800 border-blue-200',
+  cotacao_recebida: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+  aguardando_liberacao: 'bg-orange-100 text-orange-800 border-orange-200',
+  liberado_parcial: 'bg-teal-100 text-teal-800 border-teal-200',
+  liberado_total: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+  em_carregamento: 'bg-purple-100 text-purple-800 border-purple-200',
+  carregado: 'bg-green-100 text-green-800 border-green-200',
+  cancelado: 'bg-red-100 text-red-800 border-red-200',
+};
+
+// ─── Helper: format currency ──────────────────────────────────────────────────
+function fmtBRL(v: number) {
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function fmtDate(s?: string) {
+  if (!s) return '—';
+  return new Date(s + 'T00:00:00').toLocaleDateString('pt-BR');
+}
+
+// ─── Badge component ───────────────────────────────────────────────────────────
+function StatusBadge({ status }: { status: StatusCarregamento }) {
+  return (
+    <span
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${STATUS_COLOR[status]}`}
+    >
+      {STATUS_LABEL[status]}
+    </span>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  MODAL: Novo Carregamento
+// ─────────────────────────────────────────────────────────────────────────────
+interface ModalNovoCarregamentoProps {
+  filiais: Filial[];
+  transportadoras: Transportadora[];
+  onSave: (data: any) => Promise<void>;
+  onClose: () => void;
+}
+
+function ModalNovoCarregamento({
+  filiais,
+  transportadoras,
+  onSave,
+  onClose,
+}: ModalNovoCarregamentoProps) {
+  const [form, setForm] = useState({
+    tipo_frete: 'FOB' as 'CIF' | 'FOB',
+    quantidade_total: '',
+    filial_id: '',
+    data_prevista_carregamento: '',
+    transportadora_id: '',
+    observacoes: '',
+  });
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    await onSave(form);
+    setSaving(false);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+        <div className="flex items-center justify-between p-6 border-b border-stone-100">
+          <h3 className="text-lg font-bold text-stone-800 flex items-center gap-2">
+            <Plus className="w-5 h-5 text-amber-600" /> Novo Carregamento
+          </h3>
+          <button onClick={onClose} className="p-1 hover:bg-stone-100 rounded-lg transition-colors">
+            <X className="w-5 h-5 text-stone-400" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                Tipo de Frete *
+              </label>
+              <select
+                value={form.tipo_frete}
+                onChange={(e) => setForm({ ...form, tipo_frete: e.target.value as any })}
+                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
+                required
+              >
+                <option value="FOB">FOB</option>
+                <option value="CIF">CIF</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                Quantidade Total (ton) *
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.001"
+                value={form.quantidade_total}
+                onChange={(e) => setForm({ ...form, quantidade_total: e.target.value })}
+                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Filial</label>
+            <select
+              value={form.filial_id}
+              onChange={(e) => setForm({ ...form, filial_id: e.target.value })}
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
+            >
+              <option value="">— Selecione —</option>
+              {filiais.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.nome} ({f.codigo})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+              Data Prevista de Carregamento
+            </label>
+            <input
+              type="date"
+              value={form.data_prevista_carregamento}
+              onChange={(e) => setForm({ ...form, data_prevista_carregamento: e.target.value })}
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
+            />
+          </div>
+
+          {form.tipo_frete === 'CIF' && (
+            <div>
+              <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                Transportadora (CIF)
+              </label>
+              <select
+                value={form.transportadora_id}
+                onChange={(e) => setForm({ ...form, transportadora_id: e.target.value })}
+                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
+              >
+                <option value="">— Selecione —</option>
+                {transportadoras.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.nome}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+              Observações
+            </label>
+            <textarea
+              value={form.observacoes}
+              onChange={(e) => setForm({ ...form, observacoes: e.target.value })}
+              rows={3}
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm resize-none"
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-5 py-2 border border-stone-300 rounded-lg text-sm font-bold text-stone-600 hover:bg-stone-50 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="px-5 py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white rounded-lg text-sm font-bold transition-colors"
+            >
+              {saving ? 'Salvando...' : 'Criar Carregamento'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  MODAL: Solicitar Cotação
+// ─────────────────────────────────────────────────────────────────────────────
+interface ModalCotacaoProps {
+  carregamento: Carregamento;
+  transportadoras: Transportadora[];
+  onSave: (carregamentoId: string, data: any) => Promise<void>;
+  onClose: () => void;
+}
+
+function ModalCotacao({ carregamento, transportadoras, onSave, onClose }: ModalCotacaoProps) {
+  const [form, setForm] = useState({
+    transportadora_id: '',
+    valor_cotado: '',
+    prazo_dias: '',
+    validade_cotacao: '',
+    observacoes: '',
+  });
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    await onSave(carregamento.id, form);
+    setSaving(false);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+        <div className="flex items-center justify-between p-6 border-b border-stone-100">
+          <h3 className="text-lg font-bold text-stone-800 flex items-center gap-2">
+            <FileText className="w-5 h-5 text-blue-600" /> Solicitar Cotação de Frete
+          </h3>
+          <button onClick={onClose} className="p-1 hover:bg-stone-100 rounded-lg transition-colors">
+            <X className="w-5 h-5 text-stone-400" />
+          </button>
+        </div>
+        <div className="px-6 py-3 bg-stone-50 border-b border-stone-100 text-sm text-stone-600">
+          <span className="font-bold">{carregamento.numero_carregamento}</span> &mdash;{' '}
+          {carregamento.tipo_frete} &mdash; {carregamento.quantidade_total} ton
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+              Transportadora *
+            </label>
+            <select
+              value={form.transportadora_id}
+              onChange={(e) => setForm({ ...form, transportadora_id: e.target.value })}
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+              required
+            >
+              <option value="">— Selecione —</option>
+              {transportadoras.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.nome}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                Valor Cotado (R$)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.valor_cotado}
+                onChange={(e) => setForm({ ...form, valor_cotado: e.target.value })}
+                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                Prazo (dias)
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={form.prazo_dias}
+                onChange={(e) => setForm({ ...form, prazo_dias: e.target.value })}
+                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+              Validade da Cotação
+            </label>
+            <input
+              type="date"
+              value={form.validade_cotacao}
+              onChange={(e) => setForm({ ...form, validade_cotacao: e.target.value })}
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+              Observações
+            </label>
+            <textarea
+              value={form.observacoes}
+              onChange={(e) => setForm({ ...form, observacoes: e.target.value })}
+              rows={2}
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm resize-none"
+            />
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-5 py-2 border border-stone-300 rounded-lg text-sm font-bold text-stone-600 hover:bg-stone-50 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg text-sm font-bold transition-colors"
+            >
+              {saving ? 'Salvando...' : 'Solicitar Cotação'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  MODAL: Liberação Parcial
+// ─────────────────────────────────────────────────────────────────────────────
+interface ModalLiberacaoProps {
+  carregamento: Carregamento;
+  onSave: (carregamentoId: string, tipo: 'total' | 'parcial', quantidade?: number) => Promise<void>;
+  onClose: () => void;
+}
+
+function ModalLiberacao({ carregamento, onSave, onClose }: ModalLiberacaoProps) {
+  const [tipo, setTipo] = useState<'total' | 'parcial'>('total');
+  const [quantidade, setQuantidade] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    await onSave(carregamento.id, tipo, tipo === 'parcial' ? parseFloat(quantidade) : undefined);
+    setSaving(false);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="flex items-center justify-between p-6 border-b border-stone-100">
+          <h3 className="text-lg font-bold text-stone-800 flex items-center gap-2">
+            <CheckCircle className="w-5 h-5 text-emerald-600" /> Liberar Carregamento
+          </h3>
+          <button onClick={onClose} className="p-1 hover:bg-stone-100 rounded-lg transition-colors">
+            <X className="w-5 h-5 text-stone-400" />
+          </button>
+        </div>
+        <div className="px-6 py-3 bg-stone-50 border-b border-stone-100">
+          <p className="text-sm font-bold text-stone-700">{carregamento.numero_carregamento}</p>
+          <p className="text-xs text-stone-500">
+            Total: {carregamento.quantidade_total} ton | Liberado:{' '}
+            {carregamento.quantidade_liberada} ton
+          </p>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div className="space-y-2">
+            <label className="block text-xs font-bold text-stone-500 uppercase mb-2">
+              Tipo de Liberação
+            </label>
+            <label className="flex items-center gap-3 p-3 border border-stone-200 rounded-lg cursor-pointer hover:bg-stone-50">
+              <input
+                type="radio"
+                value="total"
+                checked={tipo === 'total'}
+                onChange={() => setTipo('total')}
+                className="text-emerald-600"
+              />
+              <div>
+                <p className="text-sm font-bold text-stone-800">Liberação Total</p>
+                <p className="text-xs text-stone-500">
+                  Libera {carregamento.quantidade_total} ton completas
+                </p>
+              </div>
+            </label>
+            <label className="flex items-center gap-3 p-3 border border-stone-200 rounded-lg cursor-pointer hover:bg-stone-50">
+              <input
+                type="radio"
+                value="parcial"
+                checked={tipo === 'parcial'}
+                onChange={() => setTipo('parcial')}
+                className="text-emerald-600"
+              />
+              <div>
+                <p className="text-sm font-bold text-stone-800">Liberação Parcial</p>
+                <p className="text-xs text-stone-500">Informe a quantidade a liberar</p>
+              </div>
+            </label>
+          </div>
+
+          {tipo === 'parcial' && (
+            <div>
+              <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                Quantidade a Liberar (ton) *
+              </label>
+              <input
+                type="number"
+                min="0.001"
+                max={carregamento.quantidade_total - carregamento.quantidade_liberada}
+                step="0.001"
+                value={quantidade}
+                onChange={(e) => setQuantidade(e.target.value)}
+                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
+                required={tipo === 'parcial'}
+              />
+              <p className="text-xs text-stone-400 mt-1">
+                Máximo disponível:{' '}
+                {(carregamento.quantidade_total - carregamento.quantidade_liberada).toFixed(3)} ton
+              </p>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-5 py-2 border border-stone-300 rounded-lg text-sm font-bold text-stone-600 hover:bg-stone-50 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white rounded-lg text-sm font-bold transition-colors"
+            >
+              {saving ? 'Liberando...' : 'Confirmar Liberação'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  TABLE: Carregamentos
+// ─────────────────────────────────────────────────────────────────────────────
+interface TabelaCarregamentosProps {
+  carregamentos: Carregamento[];
+  onAction?: (c: Carregamento, action: string) => void;
+  showActions?: string[];
+}
+
+function TabelaCarregamentos({
+  carregamentos,
+  onAction,
+  showActions = [],
+}: TabelaCarregamentosProps) {
+  if (carregamentos.length === 0) {
+    return (
+      <div className="text-center py-12 text-stone-400">
+        <Package className="w-12 h-12 mx-auto mb-3 opacity-30" />
+        <p className="text-sm">Nenhum carregamento encontrado</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm text-left">
+        <thead className="bg-stone-50 text-stone-500 uppercase text-[10px] font-bold border-b border-stone-200">
+          <tr>
+            <th className="px-4 py-3">Número</th>
+            <th className="px-4 py-3">Tipo</th>
+            <th className="px-4 py-3">Status</th>
+            <th className="px-4 py-3">Filial</th>
+            <th className="px-4 py-3">Qtd (ton)</th>
+            <th className="px-4 py-3">Dt. Prevista</th>
+            <th className="px-4 py-3">Transportadora</th>
+            {showActions.length > 0 && <th className="px-4 py-3 text-right">Ações</th>}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-stone-100">
+          {carregamentos.map((c) => (
+            <tr key={c.id} className="hover:bg-stone-50 transition-colors">
+              <td className="px-4 py-3 font-mono font-bold text-stone-700 text-xs">
+                {c.numero_carregamento}
+              </td>
+              <td className="px-4 py-3">
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${
+                    c.tipo_frete === 'CIF'
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'bg-amber-100 text-amber-700'
+                  }`}
+                >
+                  {c.tipo_frete}
+                </span>
+              </td>
+              <td className="px-4 py-3">
+                <StatusBadge status={c.status} />
+              </td>
+              <td className="px-4 py-3 text-stone-600 text-xs">{c.filial?.nome ?? '—'}</td>
+              <td className="px-4 py-3 text-stone-700 font-mono">
+                <div className="text-xs">
+                  <span className="font-bold">{c.quantidade_total.toFixed(3)}</span>
+                  {c.quantidade_liberada > 0 && (
+                    <span className="text-emerald-600 ml-1">
+                      / {c.quantidade_liberada.toFixed(3)} lib.
+                    </span>
+                  )}
+                </div>
+              </td>
+              <td className="px-4 py-3 text-stone-600 text-xs">
+                {fmtDate(c.data_prevista_carregamento)}
+              </td>
+              <td className="px-4 py-3 text-stone-600 text-xs">{c.transportadora?.nome ?? '—'}</td>
+              {showActions.length > 0 && (
+                <td className="px-4 py-3 text-right">
+                  <div className="flex justify-end gap-1">
+                    {showActions.includes('cotacao') &&
+                      ['aguardando_cotacao'].includes(c.status) && (
+                        <button
+                          onClick={() => onAction?.(c, 'cotacao')}
+                          className="px-2.5 py-1 text-xs font-bold bg-blue-50 text-blue-700 rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors"
+                        >
+                          Solicitar Cotação
+                        </button>
+                      )}
+                    {showActions.includes('liberar') &&
+                      ['cotacao_recebida', 'aguardando_liberacao'].includes(c.status) && (
+                        <button
+                          onClick={() => onAction?.(c, 'liberar')}
+                          className="px-2.5 py-1 text-xs font-bold bg-emerald-50 text-emerald-700 rounded-lg border border-emerald-200 hover:bg-emerald-100 transition-colors"
+                        >
+                          Liberar
+                        </button>
+                      )}
+                    {showActions.includes('transportador') &&
+                      c.tipo_frete === 'CIF' &&
+                      ['liberado_total', 'liberado_parcial', 'aguardando_liberacao'].includes(
+                        c.status
+                      ) && (
+                        <button
+                          onClick={() => onAction?.(c, 'transportador')}
+                          className="px-2.5 py-1 text-xs font-bold bg-purple-50 text-purple-700 rounded-lg border border-purple-200 hover:bg-purple-100 transition-colors"
+                        >
+                          Inf. Transportador
+                        </button>
+                      )}
+                    {showActions.includes('confirmar') &&
+                      ['liberado_total', 'liberado_parcial', 'em_carregamento'].includes(
+                        c.status
+                      ) && (
+                        <button
+                          onClick={() => onAction?.(c, 'confirmar')}
+                          className="px-2.5 py-1 text-xs font-bold bg-green-50 text-green-700 rounded-lg border border-green-200 hover:bg-green-100 transition-colors"
+                        >
+                          Confirmar Carg.
+                        </button>
+                      )}
+                  </div>
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  VIEW: Visão Geral
+// ─────────────────────────────────────────────────────────────────────────────
+function VisaoGeral({
+  carregamentos,
+  kpi,
+  loading,
+  onAction,
+}: {
+  carregamentos: Carregamento[];
+  kpi: KPICarregamento;
+  loading: boolean;
+  onAction: (c: Carregamento, action: string) => void;
+}) {
+  const pendentes = carregamentos.filter((c) =>
+    [
+      'aguardando_cotacao',
+      'cotacao_solicitada',
+      'cotacao_recebida',
+      'aguardando_liberacao',
+    ].includes(c.status)
+  );
+
+  return (
+    <div className="space-y-6">
+      {/* KPIs */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          {
+            label: 'Aguardando Cotação',
+            value: kpi.aguardando_cotacao,
+            icon: Clock,
+            color: 'bg-yellow-50 border-yellow-200 text-yellow-700',
+            iconColor: 'text-yellow-500',
+          },
+          {
+            label: 'Em Carregamento',
+            value: kpi.em_carregamento,
+            icon: Truck,
+            color: 'bg-purple-50 border-purple-200 text-purple-700',
+            iconColor: 'text-purple-500',
+          },
+          {
+            label: 'Carregados Hoje',
+            value: kpi.carregados_hoje,
+            icon: CheckCircle,
+            color: 'bg-emerald-50 border-emerald-200 text-emerald-700',
+            iconColor: 'text-emerald-500',
+          },
+          {
+            label: 'Valor Frete (Mês)',
+            value: fmtBRL(kpi.valor_frete_mes),
+            icon: BarChart3,
+            color: 'bg-blue-50 border-blue-200 text-blue-700',
+            iconColor: 'text-blue-500',
+          },
+        ].map((kpiItem) => {
+          const Icon = kpiItem.icon;
+          return (
+            <div
+              key={kpiItem.label}
+              className={`p-5 rounded-xl border ${kpiItem.color} flex items-center gap-4`}
+            >
+              <Icon className={`w-8 h-8 flex-shrink-0 ${kpiItem.iconColor}`} />
+              <div>
+                <p className="text-2xl font-black">{kpiItem.value}</p>
+                <p className="text-xs font-semibold opacity-70 mt-0.5">{kpiItem.label}</p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Pending list */}
+      <div className="bg-white rounded-xl border border-stone-200 shadow-sm">
+        <div className="p-4 border-b border-stone-100 flex items-center justify-between">
+          <h3 className="font-bold text-stone-800 text-sm flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-500" />
+            Pendências ({pendentes.length})
+          </h3>
+        </div>
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <RefreshCw className="w-6 h-6 animate-spin text-stone-300" />
+          </div>
+        ) : (
+          <TabelaCarregamentos
+            carregamentos={pendentes}
+            onAction={onAction}
+            showActions={['cotacao', 'liberar']}
+          />
+        )}
+      </div>
+
+      {/* All carregamentos */}
+      <div className="bg-white rounded-xl border border-stone-200 shadow-sm">
+        <div className="p-4 border-b border-stone-100">
+          <h3 className="font-bold text-stone-800 text-sm flex items-center gap-2">
+            <Package className="w-4 h-4 text-stone-400" />
+            Todos os Carregamentos ({carregamentos.length})
+          </h3>
+        </div>
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <RefreshCw className="w-6 h-6 animate-spin text-stone-300" />
+          </div>
+        ) : (
+          <TabelaCarregamentos carregamentos={carregamentos} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  VIEW: Solicitação de Cotação
+// ─────────────────────────────────────────────────────────────────────────────
+function SolicitacaoCotacao({
+  carregamentos,
+  transportadoras,
+  loading,
+  onAction,
+}: {
+  carregamentos: Carregamento[];
+  transportadoras: Transportadora[];
+  loading: boolean;
+  onAction: (c: Carregamento, action: string) => void;
+}) {
+  const elegiveis = carregamentos.filter((c) => c.status === 'aguardando_cotacao');
+  const emAndamento = carregamentos.filter((c) =>
+    ['cotacao_solicitada', 'cotacao_recebida'].includes(c.status)
+  );
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white rounded-xl border border-stone-200 shadow-sm">
+        <div className="p-4 border-b border-stone-100">
+          <h3 className="font-bold text-stone-800 text-sm">
+            Aguardando Cotação ({elegiveis.length})
+          </h3>
+          <p className="text-xs text-stone-500 mt-0.5">
+            Clique em "Solicitar Cotação" para iniciar o processo
+          </p>
+        </div>
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <RefreshCw className="w-6 h-6 animate-spin text-stone-300" />
+          </div>
+        ) : (
+          <TabelaCarregamentos
+            carregamentos={elegiveis}
+            onAction={onAction}
+            showActions={['cotacao']}
+          />
+        )}
+      </div>
+
+      <div className="bg-white rounded-xl border border-stone-200 shadow-sm">
+        <div className="p-4 border-b border-stone-100">
+          <h3 className="font-bold text-stone-800 text-sm">
+            Cotações em Andamento ({emAndamento.length})
+          </h3>
+        </div>
+        <TabelaCarregamentos carregamentos={emAndamento} />
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  VIEW: Liberação de Carregamento
+// ─────────────────────────────────────────────────────────────────────────────
+function LiberacaoCarregamento({
+  carregamentos,
+  loading,
+  onAction,
+}: {
+  carregamentos: Carregamento[];
+  loading: boolean;
+  onAction: (c: Carregamento, action: string) => void;
+}) {
+  const prontos = carregamentos.filter((c) =>
+    ['cotacao_recebida', 'aguardando_liberacao'].includes(c.status)
+  );
+  const liberados = carregamentos.filter((c) =>
+    ['liberado_parcial', 'liberado_total'].includes(c.status)
+  );
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white rounded-xl border border-stone-200 shadow-sm">
+        <div className="p-4 border-b border-stone-100">
+          <h3 className="font-bold text-stone-800 text-sm">
+            Prontos para Liberação ({prontos.length})
+          </h3>
+          <p className="text-xs text-stone-500 mt-0.5">
+            Pedidos com cotação aprovada aguardando liberação
+          </p>
+        </div>
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <RefreshCw className="w-6 h-6 animate-spin text-stone-300" />
+          </div>
+        ) : (
+          <TabelaCarregamentos
+            carregamentos={prontos}
+            onAction={onAction}
+            showActions={['liberar']}
+          />
+        )}
+      </div>
+
+      <div className="bg-white rounded-xl border border-stone-200 shadow-sm">
+        <div className="p-4 border-b border-stone-100">
+          <h3 className="font-bold text-stone-800 text-sm">Liberados ({liberados.length})</h3>
+        </div>
+        <TabelaCarregamentos carregamentos={liberados} />
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  VIEW: Painel de Logística
+// ─────────────────────────────────────────────────────────────────────────────
+function PainelLogistica({
+  carregamentos,
+  loading,
+  onAction,
+}: {
+  carregamentos: Carregamento[];
+  loading: boolean;
+  onAction: (c: Carregamento, action: string) => void;
+}) {
+  const cif = carregamentos.filter(
+    (c) => c.tipo_frete === 'CIF' && c.status !== 'cancelado' && c.status !== 'carregado'
+  );
+  const fob = carregamentos.filter(
+    (c) => c.tipo_frete === 'FOB' && c.status !== 'cancelado' && c.status !== 'carregado'
+  );
+
+  const today = new Date().toISOString().slice(0, 10);
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+
+  const isUrgent = (c: Carregamento) =>
+    c.data_prevista_carregamento === today || c.data_prevista_carregamento === tomorrow;
+
+  return (
+    <div className="space-y-6">
+      {/* CIF Section */}
+      <div className="bg-white rounded-xl border border-stone-200 shadow-sm">
+        <div className="p-4 border-b border-stone-100 bg-blue-50/50">
+          <h3 className="font-bold text-blue-800 text-sm flex items-center gap-2">
+            <Truck className="w-4 h-4" />
+            Pedidos CIF — Informar Transportador ({cif.length})
+          </h3>
+          <p className="text-xs text-blue-600 mt-0.5">
+            A logística deve informar o transportador para pedidos CIF
+          </p>
+        </div>
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <RefreshCw className="w-6 h-6 animate-spin text-stone-300" />
+          </div>
+        ) : cif.length === 0 ? (
+          <div className="text-center py-8 text-stone-400">
+            <p className="text-sm">Nenhum pedido CIF pendente</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-stone-100">
+            {cif.map((c) => (
+              <div
+                key={c.id}
+                className={`p-4 flex items-center justify-between ${isUrgent(c) ? 'bg-red-50' : ''}`}
+              >
+                <div className="flex items-center gap-3">
+                  {isUrgent(c) && <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />}
+                  <div>
+                    <p className="font-bold text-stone-800 text-sm">{c.numero_carregamento}</p>
+                    <p className="text-xs text-stone-500">
+                      {c.quantidade_total} ton &mdash; Data prevista:{' '}
+                      {fmtDate(c.data_prevista_carregamento)}
+                    </p>
+                    {c.transportadora && (
+                      <p className="text-xs text-blue-600 font-medium">
+                        Transportadora: {c.transportadora.nome}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <StatusBadge status={c.status} />
+                  <button
+                    onClick={() => onAction(c, 'transportador')}
+                    className="px-3 py-1.5 text-xs font-bold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    {c.transportadora ? 'Atualizar' : 'Informar'}
+                  </button>
+                  <button
+                    onClick={() => onAction(c, 'confirmar')}
+                    className="px-3 py-1.5 text-xs font-bold bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  >
+                    Confirmar
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* FOB Section */}
+      <div className="bg-white rounded-xl border border-stone-200 shadow-sm">
+        <div className="p-4 border-b border-stone-100 bg-amber-50/50">
+          <h3 className="font-bold text-amber-800 text-sm flex items-center gap-2">
+            <Package className="w-4 h-4" />
+            Pedidos FOB — Liberar na Data Prevista ({fob.length})
+          </h3>
+        </div>
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <RefreshCw className="w-6 h-6 animate-spin text-stone-300" />
+          </div>
+        ) : fob.length === 0 ? (
+          <div className="text-center py-8 text-stone-400">
+            <p className="text-sm">Nenhum pedido FOB pendente</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-stone-100">
+            {fob.map((c) => (
+              <div
+                key={c.id}
+                className={`p-4 flex items-center justify-between ${isUrgent(c) ? 'bg-orange-50' : ''}`}
+              >
+                <div className="flex items-center gap-3">
+                  {isUrgent(c) && (
+                    <AlertTriangle className="w-4 h-4 text-orange-500 flex-shrink-0" />
+                  )}
+                  <div>
+                    <p className="font-bold text-stone-800 text-sm">{c.numero_carregamento}</p>
+                    <p className="text-xs text-stone-500">
+                      {c.quantidade_total} ton &mdash; Data prevista:{' '}
+                      <span className={isUrgent(c) ? 'font-bold text-orange-600' : ''}>
+                        {fmtDate(c.data_prevista_carregamento)}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <StatusBadge status={c.status} />
+                  <button
+                    onClick={() => onAction(c, 'confirmar')}
+                    className="px-3 py-1.5 text-xs font-bold bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
+                  >
+                    Confirmar Carg.
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  VIEW: Calendário
+// ─────────────────────────────────────────────────────────────────────────────
+function CalendarioCarregamentos({ currentUser }: { currentUser: User }) {
+  const now = new Date();
+  const [mes, setMes] = useState(now.getMonth() + 1);
+  const [ano, setAno] = useState(now.getFullYear());
+  const [eventos, setEventos] = useState<Carregamento[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [selected, setSelected] = useState<Carregamento | null>(null);
+
+  const monthNames = [
+    'Janeiro',
+    'Fevereiro',
+    'Março',
+    'Abril',
+    'Maio',
+    'Junho',
+    'Julho',
+    'Agosto',
+    'Setembro',
+    'Outubro',
+    'Novembro',
+    'Dezembro',
+  ];
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const data = await getCarregamentosCalendario(mes, ano);
+    setEventos(data);
+    setLoading(false);
+  }, [mes, ano]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const navigate = (dir: number) => {
+    setMes((m) => {
+      let nm = m + dir;
+      if (nm > 12) {
+        setAno((y) => y + 1);
+        return 1;
+      }
+      if (nm < 1) {
+        setAno((y) => y - 1);
+        return 12;
+      }
+      return nm;
+    });
+  };
+
+  // Build calendar grid
+  const firstDay = new Date(ano, mes - 1, 1).getDay();
+  const daysInMonth = new Date(ano, mes, 0).getDate();
+  const cells: (number | null)[] = [];
+  for (let i = 0; i < firstDay; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+
+  const eventsForDay = (day: number) => {
+    const dateStr = `${ano}-${String(mes).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    return eventos.filter((e) => e.data_prevista_carregamento === dateStr);
+  };
+
+  const today = new Date();
+  const isToday = (day: number) =>
+    day === today.getDate() && mes === today.getMonth() + 1 && ano === today.getFullYear();
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between bg-white rounded-xl border border-stone-200 p-4">
+        <button
+          onClick={() => navigate(-1)}
+          className="p-2 hover:bg-stone-100 rounded-lg transition-colors text-stone-500"
+        >
+          ‹
+        </button>
+        <h3 className="text-lg font-bold text-stone-800">
+          {monthNames[mes - 1]} {ano}
+        </h3>
+        <button
+          onClick={() => navigate(1)}
+          className="p-2 hover:bg-stone-100 rounded-lg transition-colors text-stone-500"
+        >
+          ›
+        </button>
+      </div>
+
+      {/* Legend */}
+      <div className="flex flex-wrap gap-3 text-xs font-semibold">
+        {[
+          { label: 'Aguardando', color: 'bg-yellow-400' },
+          { label: 'Liberado', color: 'bg-emerald-400' },
+          { label: 'Em Carregamento', color: 'bg-purple-400' },
+          { label: 'Carregado', color: 'bg-green-500' },
+        ].map((l) => (
+          <span key={l.label} className="flex items-center gap-1.5 text-stone-600">
+            <span className={`w-3 h-3 rounded-full ${l.color}`} />
+            {l.label}
+          </span>
+        ))}
+      </div>
+
+      {/* Grid */}
+      {loading ? (
+        <div className="flex justify-center py-12">
+          <RefreshCw className="w-6 h-6 animate-spin text-stone-300" />
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden">
+          <div className="grid grid-cols-7 border-b border-stone-200">
+            {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((d) => (
+              <div key={d} className="text-center text-xs font-bold text-stone-400 py-2 uppercase">
+                {d}
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7">
+            {cells.map((day, i) => {
+              if (!day) {
+                return (
+                  <div
+                    key={`empty-${i}`}
+                    className="min-h-[80px] border-b border-r border-stone-100 bg-stone-50/50"
+                  />
+                );
+              }
+              const dayEvents = eventsForDay(day);
+              return (
+                <div
+                  key={day}
+                  className={`min-h-[80px] p-1.5 border-b border-r border-stone-100 ${isToday(day) ? 'bg-emerald-50' : 'hover:bg-stone-50'} cursor-default`}
+                >
+                  <p
+                    className={`text-xs font-bold mb-1 w-6 h-6 flex items-center justify-center rounded-full ${
+                      isToday(day) ? 'bg-emerald-600 text-white' : 'text-stone-600'
+                    }`}
+                  >
+                    {day}
+                  </p>
+                  <div className="space-y-0.5">
+                    {dayEvents.slice(0, 3).map((e) => {
+                      const dotColor =
+                        e.status === 'carregado'
+                          ? 'bg-green-500'
+                          : ['liberado_total', 'liberado_parcial'].includes(e.status)
+                            ? 'bg-emerald-400'
+                            : e.status === 'em_carregamento'
+                              ? 'bg-purple-400'
+                              : 'bg-yellow-400';
+                      return (
+                        <button
+                          key={e.id}
+                          onClick={() => setSelected(e)}
+                          className={`w-full text-left text-[9px] font-bold ${dotColor} text-white rounded px-1 py-0.5 truncate`}
+                          title={`${e.numero_carregamento} — ${STATUS_LABEL[e.status]}`}
+                        >
+                          {e.numero_carregamento}
+                        </button>
+                      );
+                    })}
+                    {dayEvents.length > 3 && (
+                      <p className="text-[9px] text-stone-400">+{dayEvents.length - 3} mais</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Detail panel */}
+      {selected && (
+        <div className="bg-white rounded-xl border border-stone-200 shadow-sm p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="font-bold text-stone-800">{selected.numero_carregamento}</h4>
+            <button onClick={() => setSelected(null)} className="p-1 hover:bg-stone-100 rounded">
+              <X className="w-4 h-4 text-stone-400" />
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <p className="text-xs text-stone-400 uppercase font-bold mb-0.5">Status</p>
+              <StatusBadge status={selected.status} />
+            </div>
+            <div>
+              <p className="text-xs text-stone-400 uppercase font-bold mb-0.5">Tipo</p>
+              <span className="font-bold">{selected.tipo_frete}</span>
+            </div>
+            <div>
+              <p className="text-xs text-stone-400 uppercase font-bold mb-0.5">Quantidade</p>
+              <span>{selected.quantidade_total} ton</span>
+            </div>
+            <div>
+              <p className="text-xs text-stone-400 uppercase font-bold mb-0.5">Filial</p>
+              <span>{selected.filial?.nome ?? '—'}</span>
+            </div>
+            <div>
+              <p className="text-xs text-stone-400 uppercase font-bold mb-0.5">Data Prevista</p>
+              <span>{fmtDate(selected.data_prevista_carregamento)}</span>
+            </div>
+            <div>
+              <p className="text-xs text-stone-400 uppercase font-bold mb-0.5">Transportadora</p>
+              <span>{selected.transportadora?.nome ?? '—'}</span>
+            </div>
+            {selected.observacoes && (
+              <div className="col-span-2">
+                <p className="text-xs text-stone-400 uppercase font-bold mb-0.5">Observações</p>
+                <p className="text-stone-600">{selected.observacoes}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  VIEW: Relatórios
+// ─────────────────────────────────────────────────────────────────────────────
+function RelatoriosCarregamento({
+  filiais,
+  transportadoras,
+}: {
+  filiais: Filial[];
+  transportadoras: Transportadora[];
+}) {
+  const [filtros, setFiltros] = useState<FiltrosRelatorioCarregamento>({});
+  const [dados, setDados] = useState<Carregamento[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [searched, setSearched] = useState(false);
+
+  const buscar = async () => {
+    setLoading(true);
+    const result = await getCarregamentosRelatorio(filtros);
+    setDados(result);
+    setSearched(true);
+    setLoading(false);
+  };
+
+  const totalTon = dados.reduce((a, c) => a + c.quantidade_carregada, 0);
+  const totalFrete = dados.reduce((a, c) => a + (c.valor_frete ?? 0), 0);
+
+  return (
+    <div className="space-y-6">
+      {/* Filters */}
+      <div className="bg-white rounded-xl border border-stone-200 shadow-sm p-5">
+        <h3 className="font-bold text-stone-800 text-sm mb-4 flex items-center gap-2">
+          <BarChart3 className="w-4 h-4 text-stone-400" />
+          Filtros
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div>
+            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Filial</label>
+            <select
+              value={filtros.filial_id ?? ''}
+              onChange={(e) => setFiltros({ ...filtros, filial_id: e.target.value || undefined })}
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+            >
+              <option value="">Todas</option>
+              {filiais.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.nome}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+              Tipo de Frete
+            </label>
+            <select
+              value={filtros.tipo_frete ?? ''}
+              onChange={(e) => setFiltros({ ...filtros, tipo_frete: e.target.value as any })}
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+            >
+              <option value="">Todos</option>
+              <option value="CIF">CIF</option>
+              <option value="FOB">FOB</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Status</label>
+            <select
+              value={filtros.status ?? ''}
+              onChange={(e) => setFiltros({ ...filtros, status: e.target.value as any })}
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+            >
+              <option value="">Todos</option>
+              {(Object.keys(STATUS_LABEL) as StatusCarregamento[]).map((s) => (
+                <option key={s} value={s}>
+                  {STATUS_LABEL[s]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+              Transportadora
+            </label>
+            <select
+              value={filtros.transportadora_id ?? ''}
+              onChange={(e) =>
+                setFiltros({ ...filtros, transportadora_id: e.target.value || undefined })
+              }
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+            >
+              <option value="">Todas</option>
+              {transportadoras.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.nome}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+              Data Início
+            </label>
+            <input
+              type="date"
+              value={filtros.data_inicio ?? ''}
+              onChange={(e) => setFiltros({ ...filtros, data_inicio: e.target.value || undefined })}
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+              Data Fim
+            </label>
+            <input
+              type="date"
+              value={filtros.data_fim ?? ''}
+              onChange={(e) => setFiltros({ ...filtros, data_fim: e.target.value || undefined })}
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+            />
+          </div>
+        </div>
+        <div className="mt-4 flex justify-end">
+          <button
+            onClick={buscar}
+            disabled={loading}
+            className="px-6 py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white rounded-lg text-sm font-bold transition-colors flex items-center gap-2"
+          >
+            {loading ? (
+              <RefreshCw className="w-4 h-4 animate-spin" />
+            ) : (
+              <BarChart3 className="w-4 h-4" />
+            )}
+            Buscar
+          </button>
+        </div>
+      </div>
+
+      {/* Summary cards */}
+      {searched && (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-white rounded-xl border border-stone-200 p-5">
+              <p className="text-xs font-bold text-stone-400 uppercase mb-1">Total de Registros</p>
+              <p className="text-3xl font-black text-stone-800">{dados.length}</p>
+            </div>
+            <div className="bg-white rounded-xl border border-stone-200 p-5">
+              <p className="text-xs font-bold text-stone-400 uppercase mb-1">
+                Volume Carregado (ton)
+              </p>
+              <p className="text-3xl font-black text-stone-800">{totalTon.toFixed(3)}</p>
+            </div>
+            <div className="bg-white rounded-xl border border-stone-200 p-5">
+              <p className="text-xs font-bold text-stone-400 uppercase mb-1">
+                Custo Total de Frete
+              </p>
+              <p className="text-3xl font-black text-stone-800">{fmtBRL(totalFrete)}</p>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl border border-stone-200 shadow-sm">
+            <div className="p-4 border-b border-stone-100">
+              <h3 className="font-bold text-stone-800 text-sm">Resultados ({dados.length})</h3>
+            </div>
+            <TabelaCarregamentos carregamentos={dados} />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  MAIN MODULE
+// ─────────────────────────────────────────────────────────────────────────────
+export default function CarregamentoModule({
+  currentUser,
+  view = 'visao_geral',
+}: CarregamentoModuleProps) {
+  const [carregamentos, setCarregamentos] = useState<Carregamento[]>([]);
+  const [filiais, setFiliais] = useState<Filial[]>([]);
+  const [transportadoras, setTransportadoras] = useState<Transportadora[]>([]);
+  const [kpi, setKpi] = useState<KPICarregamento>({
+    aguardando_cotacao: 0,
+    em_carregamento: 0,
+    carregados_hoje: 0,
+    valor_frete_mes: 0,
+  });
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  // Modals
+  const [showModalNovo, setShowModalNovo] = useState(false);
+  const [modalCotacao, setModalCotacao] = useState<Carregamento | null>(null);
+  const [modalLiberacao, setModalLiberacao] = useState<Carregamento | null>(null);
+  const [modalTransportador, setModalTransportador] = useState<Carregamento | null>(null);
+
+  const canCreate =
+    currentUser.role === 'master' ||
+    currentUser.role === 'admin' ||
+    (currentUser.permissions as any)?.carregamento_solicitar_cotacao;
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const [cgs, fls, trs, kpiData] = await Promise.all([
+        getCarregamentos(),
+        getFiliais(),
+        getTransportadoras(),
+        getKPICarregamento(),
+      ]);
+      setCarregamentos(cgs);
+      setFiliais(fls);
+      setTransportadoras(trs);
+      setKpi(kpiData);
+    } catch (err) {
+      console.error('Erro ao carregar dados de carregamento:', err);
+      setLoadError('Erro ao carregar dados. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // ── Action handler ────────────────────────────────────────────────────────
+  const handleAction = useCallback(
+    async (c: Carregamento, action: string) => {
+      if (action === 'cotacao') {
+        setModalCotacao(c);
+      } else if (action === 'liberar') {
+        setModalLiberacao(c);
+      } else if (action === 'transportador') {
+        setModalTransportador(c);
+      } else if (action === 'confirmar') {
+        await updateStatusCarregamento(c.id, 'carregado', {
+          data_real_carregamento: new Date().toISOString().slice(0, 10),
+        });
+        await load();
+      }
+    },
+    [load]
+  );
+
+  // ── Create carregamento ───────────────────────────────────────────────────
+  const handleCreateCarregamento = async (form: any) => {
+    const numero = await gerarNumeroCarregamento();
+    await createCarregamento({
+      numero_carregamento: numero,
+      tipo_frete: form.tipo_frete,
+      quantidade_total: parseFloat(form.quantidade_total),
+      quantidade_liberada: 0,
+      quantidade_carregada: 0,
+      filial_id: form.filial_id || undefined,
+      data_prevista_carregamento: form.data_prevista_carregamento || undefined,
+      transportadora_id: form.transportadora_id || undefined,
+      observacoes: form.observacoes || undefined,
+      status: 'aguardando_cotacao',
+      criado_por: currentUser.id,
+    });
+    setShowModalNovo(false);
+    await load();
+  };
+
+  // ── Solicitar cotação ─────────────────────────────────────────────────────
+  const handleSolicitarCotacao = async (carregamentoId: string, form: any) => {
+    await createCotacao({
+      carregamento_id: carregamentoId,
+      transportadora_id: form.transportadora_id || undefined,
+      valor_cotado: form.valor_cotado ? parseFloat(form.valor_cotado) : undefined,
+      prazo_dias: form.prazo_dias ? parseInt(form.prazo_dias) : undefined,
+      validade_cotacao: form.validade_cotacao || undefined,
+      observacoes: form.observacoes || undefined,
+      status: 'pendente',
+      solicitado_por: currentUser.id,
+    });
+    await updateStatusCarregamento(carregamentoId, 'cotacao_solicitada', {
+      data_solicitacao_cotacao: new Date().toISOString(),
+    });
+    setModalCotacao(null);
+    await load();
+  };
+
+  // ── Liberar ───────────────────────────────────────────────────────────────
+  const handleLiberacao = async (
+    carregamentoId: string,
+    tipo: 'total' | 'parcial',
+    quantidade?: number
+  ) => {
+    const c = carregamentos.find((x) => x.id === carregamentoId);
+    if (!c) return;
+    const qtdLiberada =
+      tipo === 'total' ? c.quantidade_total : c.quantidade_liberada + (quantidade ?? 0);
+    const novoStatus: StatusCarregamento = tipo === 'total' ? 'liberado_total' : 'liberado_parcial';
+    await updateStatusCarregamento(carregamentoId, novoStatus, {
+      tipo_liberacao: tipo,
+      quantidade_liberada: qtdLiberada,
+      data_liberacao: new Date().toISOString(),
+      liberado_por: currentUser.id,
+    });
+    setModalLiberacao(null);
+    await load();
+  };
+
+  // ── Informar transportador ────────────────────────────────────────────────
+  const handleInformarTransportador = async (transportadoraId: string) => {
+    if (!modalTransportador) return;
+    await updateCarregamento(modalTransportador.id, {
+      transportadora_id: transportadoraId,
+      status: 'em_carregamento',
+    });
+    setModalTransportador(null);
+    await load();
+  };
+
+  // ── Page title map ────────────────────────────────────────────────────────
+  const titles: Record<CarregamentoView, string> = {
+    visao_geral: 'Visão Geral',
+    solicitacao: 'Solicitação de Cotação',
+    liberacao: 'Liberação de Carregamento',
+    logistica: 'Painel de Logística',
+    calendario: 'Calendário de Carregamentos',
+    relatorios: 'Relatórios',
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-black text-stone-800 flex items-center gap-2">
+            <Truck className="w-7 h-7 text-amber-600" />
+            Carregamento — {titles[view]}
+          </h1>
+          <p className="text-stone-500 text-sm mt-1">
+            Gestão completa do fluxo de cotação e carregamento
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={load}
+            className="p-2 text-stone-400 hover:text-stone-600 hover:bg-stone-100 rounded-lg transition-colors"
+            title="Atualizar"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+          {canCreate && view === 'visao_geral' && (
+            <button
+              onClick={() => setShowModalNovo(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-bold transition-colors shadow-sm"
+            >
+              <Plus className="w-4 h-4" />
+              Novo Carregamento
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Views */}
+      {loadError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 text-sm">
+          {loadError}
+        </div>
+      )}
+      {view === 'visao_geral' && (
+        <VisaoGeral
+          carregamentos={carregamentos}
+          kpi={kpi}
+          loading={loading}
+          onAction={handleAction}
+        />
+      )}
+      {view === 'solicitacao' && (
+        <SolicitacaoCotacao
+          carregamentos={carregamentos}
+          transportadoras={transportadoras}
+          loading={loading}
+          onAction={handleAction}
+        />
+      )}
+      {view === 'liberacao' && (
+        <LiberacaoCarregamento
+          carregamentos={carregamentos}
+          loading={loading}
+          onAction={handleAction}
+        />
+      )}
+      {view === 'logistica' && (
+        <PainelLogistica carregamentos={carregamentos} loading={loading} onAction={handleAction} />
+      )}
+      {view === 'calendario' && <CalendarioCarregamentos currentUser={currentUser} />}
+      {view === 'relatorios' && (
+        <RelatoriosCarregamento filiais={filiais} transportadoras={transportadoras} />
+      )}
+
+      {/* Modals */}
+      {showModalNovo && (
+        <ModalNovoCarregamento
+          filiais={filiais}
+          transportadoras={transportadoras}
+          onSave={handleCreateCarregamento}
+          onClose={() => setShowModalNovo(false)}
+        />
+      )}
+      {modalCotacao && (
+        <ModalCotacao
+          carregamento={modalCotacao}
+          transportadoras={transportadoras}
+          onSave={handleSolicitarCotacao}
+          onClose={() => setModalCotacao(null)}
+        />
+      )}
+      {modalLiberacao && (
+        <ModalLiberacao
+          carregamento={modalLiberacao}
+          onSave={handleLiberacao}
+          onClose={() => setModalLiberacao(null)}
+        />
+      )}
+
+      {/* Modal: Informar Transportador */}
+      {modalTransportador && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between p-6 border-b border-stone-100">
+              <h3 className="text-lg font-bold text-stone-800 flex items-center gap-2">
+                <Truck className="w-5 h-5 text-blue-600" /> Informar Transportador
+              </h3>
+              <button
+                onClick={() => setModalTransportador(null)}
+                className="p-1 hover:bg-stone-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-stone-400" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-stone-600">
+                Selecione a transportadora responsável pelo carregamento{' '}
+                <strong>{modalTransportador.numero_carregamento}</strong>:
+              </p>
+              <div className="space-y-2">
+                {transportadoras.map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => handleInformarTransportador(t.id)}
+                    className={`w-full text-left px-4 py-3 rounded-xl border text-sm font-medium transition-colors ${
+                      modalTransportador.transportadora_id === t.id
+                        ? 'bg-blue-50 border-blue-300 text-blue-700'
+                        : 'border-stone-200 hover:bg-stone-50 text-stone-700'
+                    }`}
+                  >
+                    <p className="font-bold">{t.nome}</p>
+                    {t.telefone && <p className="text-xs text-stone-400 mt-0.5">{t.telefone}</p>}
+                  </button>
+                ))}
+                {transportadoras.length === 0 && (
+                  <p className="text-sm text-stone-400 text-center py-4">
+                    Nenhuma transportadora cadastrada
+                  </p>
+                )}
+              </div>
+              <div className="flex justify-end">
+                <button
+                  onClick={() => setModalTransportador(null)}
+                  className="px-5 py-2 border border-stone-300 rounded-lg text-sm font-bold text-stone-600 hover:bg-stone-50 transition-colors"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

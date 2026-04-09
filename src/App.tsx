@@ -54,6 +54,9 @@ import {
   Plus,
   ClipboardCheck,
   CheckCircle2,
+  Truck,
+  Calendar,
+  ClipboardList,
 } from 'lucide-react';
 import { PricingRecord, User, AppSettings, NavItem, SavedFormula } from './types';
 import { getAppSettings, markNotificationsAsRead } from './services/db';
@@ -76,6 +79,8 @@ import ApproveExpenses from './components/ExpenseManagement/ApproveExpenses';
 import CardManager from './components/ExpenseManagement/CardManager';
 import ExpenseCategoryManager from './components/ExpenseManagement/ExpenseCategoryManager';
 
+import CarregamentoModule from './components/Carregamento';
+
 import { getPendingCount, getCheckedCount } from './services/expenseService';
 
 import { useNotifications } from './hooks/useNotifications';
@@ -94,7 +99,14 @@ export default function App() {
   const pathParts = location.pathname.split('/').filter(Boolean);
   const activeTab = pathParts[0] || '';
 
-  let activeModule: 'pricing' | 'config' | 'prd' | 'managementReports' | 'expenses' | null = null;
+  let activeModule:
+    | 'pricing'
+    | 'config'
+    | 'prd'
+    | 'managementReports'
+    | 'expenses'
+    | 'carregamento'
+    | null = null;
   if (
     [
       'dashboard',
@@ -142,6 +154,15 @@ export default function App() {
     activeTab === 'expenses_cartoes'
   ) {
     activeModule = 'expenses';
+  } else if (
+    activeTab === 'carregamento_visao_geral' ||
+    activeTab === 'carregamento_solicitacao' ||
+    activeTab === 'carregamento_liberacao' ||
+    activeTab === 'carregamento_logistica' ||
+    activeTab === 'carregamento_calendario' ||
+    activeTab === 'carregamento_relatorios'
+  ) {
+    activeModule = 'carregamento';
   }
 
   const { showInfo } = useToast();
@@ -175,6 +196,7 @@ export default function App() {
   const [isExpenseLancamentosExpanded, setIsExpenseLancamentosExpanded] = useState(true);
   const [isExpenseWorkflowExpanded, setIsExpenseWorkflowExpanded] = useState(false);
   const [isExpenseConfigExpanded, setIsExpenseConfigExpanded] = useState(false);
+  const [isCarregamentoExpanded, setIsCarregamentoExpanded] = useState(true);
   const [pendingExpenseCount, setPendingExpenseCount] = useState(0);
   const [checkedExpenseCount, setCheckedExpenseCount] = useState(0);
 
@@ -466,6 +488,61 @@ export default function App() {
       });
     }
 
+    if (activeModule === 'carregamento') {
+      const allItems = [
+        {
+          id: 'carregamento_group',
+          label: 'Carregamento',
+          icon: Truck,
+          permission: 'carregamento',
+          type: 'parent',
+          children: [
+            {
+              id: 'carregamento_visao_geral',
+              label: 'Visão Geral',
+              icon: LayoutDashboard,
+              permission: 'carregamento',
+            },
+            {
+              id: 'carregamento_solicitacao',
+              label: 'Solicitação de Cotação',
+              icon: ClipboardList,
+              permission: 'carregamento',
+            },
+            {
+              id: 'carregamento_liberacao',
+              label: 'Liberação de Carregamento',
+              icon: CheckCircle2,
+              permission: 'carregamento',
+            },
+            {
+              id: 'carregamento_logistica',
+              label: 'Painel de Logística',
+              icon: Truck,
+              permission: 'carregamento',
+            },
+            {
+              id: 'carregamento_calendario',
+              label: 'Calendário',
+              icon: Calendar,
+              permission: 'carregamento',
+            },
+            {
+              id: 'carregamento_relatorios',
+              label: 'Relatórios',
+              icon: BarChart3,
+              permission: 'carregamento',
+            },
+          ],
+        },
+      ];
+
+      return allItems.filter((item) => {
+        if (currentUser.role === 'master' || currentUser.role === 'admin') return true;
+        return (currentUser.permissions as any)?.[item.permission];
+      });
+    }
+
     return [];
   };
 
@@ -536,7 +613,9 @@ export default function App() {
                   ? 'Precificação'
                   : activeModule === 'expenses'
                     ? 'Cartão Corporativo'
-                    : 'Configuração'}
+                    : activeModule === 'carregamento'
+                      ? 'Carregamento'
+                      : 'Configuração'}
               </p>
             )}
           </div>
@@ -551,6 +630,7 @@ export default function App() {
               if (id === 'expenses_lancamentos_group') return isExpenseLancamentosExpanded;
               if (id === 'expenses_workflow_group') return isExpenseWorkflowExpanded;
               if (id === 'expenses_config_group') return isExpenseConfigExpanded;
+              if (id === 'carregamento_group') return isCarregamentoExpanded;
               return false;
             };
 
@@ -562,21 +642,23 @@ export default function App() {
                 setIsExpenseLancamentosExpanded((p) => !p);
               else if (id === 'expenses_workflow_group') setIsExpenseWorkflowExpanded((p) => !p);
               else if (id === 'expenses_config_group') setIsExpenseConfigExpanded((p) => !p);
+              else if (id === 'carregamento_group') setIsCarregamentoExpanded((p) => !p);
             };
 
             const isExpanded = getGroupExpanded(item.id);
             const isExpenseGroup = item.id.startsWith('expenses_');
+            const isCarregamentoGroup = item.id.startsWith('carregamento_');
 
             if (item.type === 'parent') {
               return (
                 <div key={item.id}>
                   <button
                     onClick={() => toggleGroup(item.id)}
-                    className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-colors ${isExpanded ? (isExpenseGroup ? 'bg-purple-50 text-purple-700 font-medium' : 'bg-emerald-50 text-emerald-700 font-medium') : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900'}`}
+                    className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-colors ${isExpanded ? (isExpenseGroup ? 'bg-purple-50 text-purple-700 font-medium' : isCarregamentoGroup ? 'bg-amber-50 text-amber-700 font-medium' : 'bg-emerald-50 text-emerald-700 font-medium') : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900'}`}
                     title={!isSidebarExpanded ? item.label : undefined}
                   >
                     <Icon
-                      className={`w-5 h-5 flex-shrink-0 ${isExpanded || isActive ? (isExpenseGroup ? 'text-purple-600' : 'text-emerald-600') : 'text-stone-400'}`}
+                      className={`w-5 h-5 flex-shrink-0 ${isExpanded || isActive ? (isExpenseGroup ? 'text-purple-600' : isCarregamentoGroup ? 'text-amber-600' : 'text-emerald-600') : 'text-stone-400'}`}
                     />
                     {isSidebarExpanded && <span className="ml-3 truncate">{item.label}</span>}
                     {isSidebarExpanded && (
@@ -612,11 +694,11 @@ export default function App() {
                                   navigate(`/${child.id}`);
                                 }
                               }}
-                              className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-colors ${isChildActive ? (isExpenseGroup ? 'bg-purple-50 text-purple-700 font-medium' : 'bg-emerald-50 text-emerald-700 font-medium') : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900'}`}
+                              className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-colors ${isChildActive ? (isExpenseGroup ? 'bg-purple-50 text-purple-700 font-medium' : isCarregamentoGroup ? 'bg-amber-50 text-amber-700 font-medium' : 'bg-emerald-50 text-emerald-700 font-medium') : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900'}`}
                               title={!isSidebarExpanded ? child.label : undefined}
                             >
                               <ChildIcon
-                                className={`w-5 h-5 flex-shrink-0 ${isChildActive ? (isExpenseGroup ? 'text-purple-600' : 'text-emerald-600') : 'text-stone-400'}`}
+                                className={`w-5 h-5 flex-shrink-0 ${isChildActive ? (isExpenseGroup ? 'text-purple-600' : isCarregamentoGroup ? 'text-amber-600' : 'text-emerald-600') : 'text-stone-400'}`}
                               />
                               {isSidebarExpanded && (
                                 <span className="ml-3 truncate flex-1">{child.label}</span>
@@ -773,6 +855,7 @@ export default function App() {
                   }
                   if (moduleId === 'prd') navigate('/prd');
                   if (moduleId === 'expenses') navigate('/expenses_lancamentos');
+                  if (moduleId === 'carregamento') navigate('/carregamento_visao_geral');
                 }}
               />
             )}
@@ -883,6 +966,24 @@ export default function App() {
             )}
             {activeModule === 'expenses' && activeTab === 'expenses_cartoes' && (
               <CardManager currentUser={currentUser} />
+            )}
+            {activeModule === 'carregamento' && activeTab === 'carregamento_visao_geral' && (
+              <CarregamentoModule currentUser={currentUser} view="visao_geral" />
+            )}
+            {activeModule === 'carregamento' && activeTab === 'carregamento_solicitacao' && (
+              <CarregamentoModule currentUser={currentUser} view="solicitacao" />
+            )}
+            {activeModule === 'carregamento' && activeTab === 'carregamento_liberacao' && (
+              <CarregamentoModule currentUser={currentUser} view="liberacao" />
+            )}
+            {activeModule === 'carregamento' && activeTab === 'carregamento_logistica' && (
+              <CarregamentoModule currentUser={currentUser} view="logistica" />
+            )}
+            {activeModule === 'carregamento' && activeTab === 'carregamento_calendario' && (
+              <CarregamentoModule currentUser={currentUser} view="calendario" />
+            )}
+            {activeModule === 'carregamento' && activeTab === 'carregamento_relatorios' && (
+              <CarregamentoModule currentUser={currentUser} view="relatorios" />
             )}
           </div>
         </main>
