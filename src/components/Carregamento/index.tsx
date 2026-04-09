@@ -137,37 +137,38 @@ function ModalNovoCarregamento({
   });
   const [saving, setSaving] = useState(false);
   const [pedidoSearch, setPedidoSearch] = useState('');
+  const [allPedidos, setAllPedidos] = useState<any[]>([]);
   const [pedidoResults, setPedidoResults] = useState<any[]>([]);
-  const [searchingPedido, setSearchingPedido] = useState(false);
 
-  const searchPedidos = useCallback(async (query: string) => {
-    if (query.trim().length < 2) { setPedidoResults([]); return; }
-    setSearchingPedido(true);
-    try {
-      const [pedidos, pricings] = await Promise.all([getPedidosVenda(), getPricingRecords()]);
-      const lq = query.toLowerCase();
-      const filtered = pedidos.filter((p: any) => {
-        const pricing = pricings.find((pr: any) => pr.id === p.precificacao_id);
-        const clientName = pricing?.factors?.client?.name || '';
-        return (
-          p.numero_pedido?.toLowerCase().includes(lq) ||
-          p.barra_pedido?.toLowerCase().includes(lq) ||
-          pricing?.formattedCod?.toLowerCase().includes(lq) ||
-          clientName.toLowerCase().includes(lq)
-        );
-      }).map((p: any) => {
-        const pricing = pricings.find((pr: any) => pr.id === p.precificacao_id);
-        return { ...p, pricing, clientName: pricing?.factors?.client?.name };
-      });
-      setPedidoResults(filtered.slice(0, 10));
-    } catch { setPedidoResults([]); }
-    finally { setSearchingPedido(false); }
+  useEffect(() => {
+    let cancelled = false;
+    const loadData = async () => {
+      try {
+        const [pedidos, pricings] = await Promise.all([getPedidosVenda(), getPricingRecords()]);
+        if (cancelled) return;
+        const pricingsMap = new Map(pricings.map((pr: any) => [pr.id, pr]));
+        const enriched = pedidos.map((p: any) => {
+          const pricing = pricingsMap.get(p.precificacao_id);
+          return { ...p, pricing, clientName: pricing?.factors?.client?.name };
+        });
+        setAllPedidos(enriched);
+      } catch { /* silent */ }
+    };
+    loadData();
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
-    const t = setTimeout(() => searchPedidos(pedidoSearch), 400);
-    return () => clearTimeout(t);
-  }, [pedidoSearch, searchPedidos]);
+    const lq = pedidoSearch.trim().toLowerCase();
+    if (lq.length < 2) { setPedidoResults([]); return; }
+    const filtered = allPedidos.filter((p: any) =>
+      p.numero_pedido?.toLowerCase().includes(lq) ||
+      p.barra_pedido?.toLowerCase().includes(lq) ||
+      p.pricing?.formattedCod?.toLowerCase().includes(lq) ||
+      p.clientName?.toLowerCase().includes(lq)
+    );
+    setPedidoResults(filtered.slice(0, 10));
+  }, [pedidoSearch, allPedidos]);
 
   const selectPedido = (p: any) => {
     const pricing = p.pricing;
@@ -216,9 +217,6 @@ function ModalNovoCarregamento({
                 placeholder="Buscar por cliente, nº pedido ou nº precificação..."
                 className="w-full pl-9 pr-4 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
               />
-              {searchingPedido && (
-                <RefreshCw className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-stone-400" />
-              )}
             </div>
             {pedidoResults.length > 0 && (
               <div className="absolute z-10 mt-1 bg-white border border-stone-200 rounded-xl shadow-lg max-h-56 overflow-y-auto w-full max-w-lg">

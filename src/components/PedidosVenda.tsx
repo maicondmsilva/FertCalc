@@ -66,8 +66,10 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
         getPricingRecords(),
       ]);
 
+      const pricingsMap = new Map(pricingsData.map((pr: any) => [pr.id, pr]));
+
       const enriched: EnrichedPedido[] = pedidosData.map((p) => {
-        const pricing = pricingsData.find((pr: any) => pr.id === p.precificacao_id);
+        const pricing = pricingsMap.get(p.precificacao_id);
         const client = pricing?.factors?.client;
         const addr = client?.deliveryAddress ?? client?.address;
         const deliveryStr = addr
@@ -97,7 +99,7 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
         currentUser.role === 'master' || currentUser.role === 'admin'
           ? enriched
           : enriched.filter((p) => {
-              const pricing = pricingsData.find((pr: any) => pr.id === p.precificacao_id);
+              const pricing = pricingsMap.get(p.precificacao_id);
               return pricing?.userId === currentUser.id;
             });
 
