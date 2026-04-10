@@ -32,7 +32,13 @@ export default function Home({ currentUser, onSelectModule }: HomeProps) {
       color: 'bg-emerald-600',
       hoverColor: 'hover:bg-emerald-700',
       textColor: 'text-emerald-600',
-      allowed: true,
+      allowed:
+        currentUser.role === 'master' ||
+        currentUser.role === 'admin' ||
+        currentUser.role === 'manager' ||
+        !!(currentUser.permissions as any)?.dashboard ||
+        !!(currentUser.permissions as any)?.calculator ||
+        !!(currentUser.permissions as any)?.history,
     },
     {
       id: 'carregamento',
@@ -76,7 +82,8 @@ export default function Home({ currentUser, onSelectModule }: HomeProps) {
       allowed:
         currentUser.role === 'master' ||
         currentUser.role === 'admin' ||
-        currentUser.role === 'manager',
+        currentUser.role === 'manager' ||
+        !!(currentUser.permissions as any)?.managementReports,
     },
     {
       id: 'config',
@@ -89,7 +96,9 @@ export default function Home({ currentUser, onSelectModule }: HomeProps) {
       allowed:
         currentUser.role === 'master' ||
         currentUser.role === 'admin' ||
-        currentUser.role === 'manager',
+        !!(currentUser.permissions as any)?.users ||
+        !!(currentUser.permissions as any)?.branches ||
+        !!(currentUser.permissions as any)?.settings,
     },
     {
       id: 'prd',
@@ -102,7 +111,8 @@ export default function Home({ currentUser, onSelectModule }: HomeProps) {
       allowed:
         currentUser.role === 'master' ||
         currentUser.role === 'admin' ||
-        currentUser.role === 'manager',
+        currentUser.role === 'manager' ||
+        !!(currentUser.permissions as any)?.prd,
     },
   ];
 
