@@ -92,18 +92,28 @@ function mapFilial(d: any): Filial {
   };
 }
 
+// Maps a `branches` table row (from Configurações) to the Filial interface
+function mapBranchToFilial(d: any): Filial {
+  return {
+    id: d.id,
+    nome: d.name,
+    codigo: d.id_numeric != null ? String(d.id_numeric) : (d.id ? d.id.slice(0, 8) : ''),
+    ativo: d.ativo ?? true,
+  };
+}
+
 // ─────────────────────────────────────────────────────────────
-//  Filiais
+//  Filiais — busca da tabela `branches` (módulo Configurações)
 // ─────────────────────────────────────────────────────────────
 
 export async function getFiliais(): Promise<Filial[]> {
   const { data, error } = await supabase
-    .from('filiais_carregamento')
+    .from('branches')
     .select('*')
     .eq('ativo', true)
-    .order('nome');
+    .order('id_numeric');
   if (error || !data) return [];
-  return data.map(mapFilial);
+  return data.map(mapBranchToFilial);
 }
 
 export async function getFilialById(id: string): Promise<Filial | null> {
