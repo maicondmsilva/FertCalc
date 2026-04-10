@@ -256,9 +256,11 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
         const created = await createPricingRecord(newPricing as PricingRecord);
         showSuccess('Cópia gerada com sucesso!');
         await loadData(); // Reload to get the proper ID and formattedCod
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Erro ao duplicar:', err);
-        showError('Erro ao duplicar precificação: ' + (err?.message || JSON.stringify(err)));
+        showError(
+          'Erro ao duplicar precificação: ' + (err instanceof Error ? err.message : String(err))
+        );
       }
     }
   };
@@ -334,9 +336,12 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
             : p
         )
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Erro ao enviar exclusão:', err);
-      showError('Erro ao enviar solicitação de exclusão: ' + (err.message || 'Erro desconhecido.'));
+      showError(
+        'Erro ao enviar solicitação de exclusão: ' +
+          (err instanceof Error ? err.message : 'Erro desconhecido.')
+      );
     } finally {
       setIsSubmittingDeletion(false);
     }

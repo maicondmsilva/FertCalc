@@ -142,11 +142,11 @@ export default function ManagementCadastros({
 
   const handleOpenModal = (
     type: 'unidade' | 'indicador' | 'categoria' | 'meta',
-    item: any = null
+    item: Unidade | Indicador | Categoria | MetaMensal | null = null
   ) => {
     setModalType(type);
     setEditingItem(item);
-    setIsDigitavel(type === 'indicador' ? (item ? item.digitavel : true) : true);
+    setIsDigitavel(type === 'indicador' ? (item ? (item as Indicador).digitavel : true) : true);
     setIsModalOpen(true);
   };
 

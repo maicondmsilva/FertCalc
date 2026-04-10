@@ -772,7 +772,7 @@ export default function ManagementDashboard({
     );
     doc.text('Gestão de unidades', 14, 27);
 
-    const tableData: any[][] = [];
+    const tableData: (string | number | Record<string, unknown>)[][] = [];
     const tableHeaders = ['Indicador', ...activeUnidades.map((u) => u.nome), 'Total'];
 
     const categoriasVisiveis = [...categorias]
@@ -806,7 +806,7 @@ export default function ManagementDashboard({
         const isVisibleAny = activeUnidades.some((u) => isVisibleGlobal(u.id));
         if (!isVisibleAny) return;
 
-        const row: any[] = [ind.nome];
+        const row: (string | number | Record<string, unknown>)[] = [ind.nome];
 
         activeUnidades.forEach((u) => {
           const uDat = unitData.find((ud) => ud.unidade.id === u.id);

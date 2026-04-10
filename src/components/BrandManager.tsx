@@ -50,7 +50,7 @@ export default function BrandManager() {
       }
       setName('');
       await loadBrands();
-    } catch (err: any) {
+    } catch (err: unknown) {
       showError('Erro ao salvar marca. Tente novamente.');
     } finally {
       setSaving(false);

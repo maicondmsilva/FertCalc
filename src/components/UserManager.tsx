@@ -177,7 +177,7 @@ export default function UserManager({ currentUser }: UserManagerProps) {
 
     try {
       if (editingId) {
-        const payload: any = {
+        const payload: Record<string, unknown> = {
           name: formData.name,
           email: formData.email,
           nickname: formData.nickname,
@@ -223,9 +223,9 @@ export default function UserManager({ currentUser }: UserManagerProps) {
         managedUserIds: [],
         permissions: getDefaultPermissions('user') as any,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Erro ao salvar usuário:', err);
-      const msg: string = err?.message || err?.details || '';
+      const msg: string = err instanceof Error ? err.message : '';
       if (msg.includes('app_users_email_key') || msg.includes('duplicate key')) {
         showError(
           'Este e-mail já está cadastrado. Use um e-mail diferente ou edite o usuário existente.'

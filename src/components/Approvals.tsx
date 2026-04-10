@@ -303,9 +303,11 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
       setAllPricings(updatedPricings);
       showSuccess(`Solicitação de exclusão ${newStatus.toLowerCase()} com sucesso!`);
       loadData(); // Refresh to ensure sync
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Erro ao processar aprovação da exclusão:', err);
-      showError(`Erro ao processar aprovação da exclusão: ${err.message || 'Erro no servidor'}`);
+      showError(
+        `Erro ao processar aprovação da exclusão: ${err instanceof Error ? err.message : 'Erro no servidor'}`
+      );
     }
   };
 
