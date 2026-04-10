@@ -381,7 +381,11 @@ export function useCalculator({
   const [expandedCalc, setExpandedCalc] = useState<string | null>(null);
   const [microsInGear, setMicrosInGear] = useState<boolean>(true);
 
-  const handleMacroChange = (id: string, field: keyof RawMaterial, value: any) => {
+  const handleMacroChange = (
+    id: string,
+    field: keyof RawMaterial,
+    value: string | number | boolean
+  ) => {
     const nextMacros = macros.map((m) => (m.id === id ? { ...m, [field]: value } : m));
     setMacros(nextMacros);
 
@@ -398,7 +402,11 @@ export function useCalculator({
     );
   };
 
-  const handleMicroChange = (id: string, field: keyof RawMaterial, value: any) => {
+  const handleMicroChange = (
+    id: string,
+    field: keyof RawMaterial,
+    value: string | number | boolean
+  ) => {
     const nextMicros = micros.map((m) => (m.id === id ? { ...m, [field]: value } : m));
     setMicros(nextMicros);
 
@@ -415,7 +423,7 @@ export function useCalculator({
     );
   };
 
-  const handleFactorChange = (field: keyof PricingFactors, value: any) => {
+  const handleFactorChange = (field: keyof PricingFactors, value: string | number | boolean) => {
     setFactors({ ...factors, [field]: value });
   };
 
@@ -592,7 +600,15 @@ export function useCalculator({
       const reqP = targetP * 10;
       const reqK = targetK * 10;
 
-      const model: any = {
+      interface LPModel {
+        optimize: string;
+        opType: string;
+        constraints: Record<string, Record<string, number>>;
+        variables: Record<string, Record<string, number>>;
+        ints: Record<string, number>;
+      }
+
+      const model: LPModel = {
         optimize: 'cost',
         opType: 'min',
         constraints: {
@@ -663,7 +679,9 @@ export function useCalculator({
         }
       });
 
-      const results: any = solver.Solve(model);
+      const results = solver.Solve(
+        model as unknown as Parameters<typeof solver.Solve>[0]
+      ) as unknown as Record<string, number>;
 
       if (results.feasible) {
         const calcIndex = updatedCalculations.findIndex((c) => c.id === calc.id);
@@ -721,7 +739,11 @@ export function useCalculator({
     setCalculations(calculations.filter((c) => c.id !== id));
   };
 
-  const updateCalculation = (id: string, field: keyof TargetFormula, value: any) => {
+  const updateCalculation = (
+    id: string,
+    field: keyof TargetFormula,
+    value: string | number | boolean | RawMaterial[]
+  ) => {
     setCalculations(
       calculations.map((c) => {
         if (c.id === id) {
@@ -732,7 +754,7 @@ export function useCalculator({
             const isAll = value === 'all';
 
             const newMacros = macros.map((m) => {
-              const isMatch = isAll ? !m.isPremiumLine : m.categories?.includes(value);
+              const isMatch = isAll ? !m.isPremiumLine : m.categories?.includes(value as string);
               return {
                 ...m,
                 selected: !!isMatch,
@@ -740,7 +762,7 @@ export function useCalculator({
             });
 
             const newMicros = micros.map((m) => {
-              const isMatch = isAll ? false : m.categories?.includes(value);
+              const isMatch = isAll ? false : m.categories?.includes(value as string);
               return {
                 ...m,
                 selected: !!isMatch,
@@ -765,7 +787,7 @@ export function useCalculator({
     calcId: string,
     microId: string,
     field: keyof RawMaterial,
-    value: any
+    value: string | number | boolean
   ) => {
     setCalculations(
       calculations.map((c) => {
@@ -780,7 +802,11 @@ export function useCalculator({
     );
   };
 
-  const updateCalculationFactors = (id: string, field: keyof PricingFactors, value: any) => {
+  const updateCalculationFactors = (
+    id: string,
+    field: keyof PricingFactors,
+    value: string | number | boolean
+  ) => {
     setCalculations(
       calculations.map((c) => {
         if (c.id === id) {
@@ -800,7 +826,7 @@ export function useCalculator({
     formulaName: string,
     macs: RawMaterial[],
     mics: RawMaterial[],
-    resultingMicros: any,
+    resultingMicros: Record<string, number>,
     targetCa?: number,
     targetS?: number,
     resultingCa?: number,

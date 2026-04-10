@@ -44,23 +44,23 @@ export const lookupCEP = async (cep: string) => {
   const providers = [
     {
       url: `https://viacep.com.br/ws/${cleanCEP}/json/`,
-      parse: (data: any) =>
+      parse: (data: Record<string, unknown>) =>
         data.erro
           ? null
           : {
-              street: data.logradouro,
-              neighborhood: data.bairro,
-              city: data.localidade,
-              state: data.uf,
+              street: data.logradouro as string,
+              neighborhood: data.bairro as string,
+              city: data.localidade as string,
+              state: data.uf as string,
             },
     },
     {
       url: `https://cep.awesomeapi.com.br/json/${cleanCEP}`,
-      parse: (data: any) => ({
-        street: data.address,
-        neighborhood: data.district,
-        city: data.city,
-        state: data.state,
+      parse: (data: Record<string, unknown>) => ({
+        street: data.address as string,
+        neighborhood: data.district as string,
+        city: data.city as string,
+        state: data.state as string,
       }),
     },
   ];
