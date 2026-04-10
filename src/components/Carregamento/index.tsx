@@ -118,6 +118,20 @@ interface ModalNovoCarregamentoProps {
   onClose: () => void;
 }
 
+// Bug 2 fix — determina o tipo de frete em ordem de prioridade
+function derivarTipoFrete(pedido: any, pricing: any): 'CIF' | 'FOB' {
+  if (pedido?.tipo_frete === 'CIF' || pedido?.tipo_frete === 'FOB') {
+    return pedido.tipo_frete as 'CIF' | 'FOB';
+  }
+  if (pricing?.factors?.tipoFrete === 'CIF' || pricing?.factors?.tipoFrete === 'FOB') {
+    return pricing.factors.tipoFrete as 'CIF' | 'FOB';
+  }
+  if (pricing?.factors?.freight != null && Number(pricing.factors.freight) > 0) {
+    return 'CIF';
+  }
+  return 'FOB';
+}
+
 function ModalNovoCarregamento({
   filiais,
   transportadoras,
@@ -134,11 +148,24 @@ function ModalNovoCarregamento({
     pedido_venda_id: '',
     precificacao_id: '',
     cliente_nome: '',
+    _freteAutoDetectado: false,
   });
   const [saving, setSaving] = useState(false);
   const [pedidoSearch, setPedidoSearch] = useState('');
   const [allPedidos, setAllPedidos] = useState<any[]>([]);
   const [pedidoResults, setPedidoResults] = useState<any[]>([]);
+  // Bug 3 fix — fallback para filiais da prop (vindas de branches/Configurações)
+  const [localFiliais, setLocalFiliais] = useState<Filial[]>([]);
+
+  useEffect(() => {
+    if (filiais.length === 0) {
+      getFiliais().then(setLocalFiliais).catch((err) => {
+        console.error('Erro ao carregar filiais:', err);
+      });
+    }
+  }, [filiais]);
+
+  const filiaisDisponiveis = filiais.length > 0 ? filiais : localFiliais;
 
   useEffect(() => {
     let cancelled = false;
@@ -147,11 +174,35 @@ function ModalNovoCarregamento({
         const [pedidos, pricings] = await Promise.all([getPedidosVenda(), getPricingRecords()]);
         if (cancelled) return;
         const pricingsMap = new Map(pricings.map((pr: any) => [pr.id, pr]));
-        const enriched = pedidos.map((p: any) => {
+
+        // Bug 1 fix — pedidos de venda enriquecidos com dados da precificação
+        const pedidosEnriched = pedidos.map((p: any) => {
           const pricing = pricingsMap.get(p.precificacao_id);
-          return { ...p, pricing, clientName: pricing?.factors?.client?.name };
+          return {
+            ...p,
+            pricing,
+            clientName: pricing?.factors?.client?.name,
+            _source: 'pedido',
+          };
         });
-        setAllPedidos(enriched);
+
+        // Bug 1 fix — precificações SEM pedido de venda vinculado
+        const pedidosComPrecificacao = new Set(pedidos.map((p: any) => p.precificacao_id));
+        const pricingsSemPedido = pricings
+          .filter((pr: any) => !pedidosComPrecificacao.has(pr.id))
+          .map((pr: any) => ({
+            id: null,
+            precificacao_id: pr.id,
+            numero_pedido: null,
+            barra_pedido: null,
+            quantidade_real: pr.factors?.totalTons ?? null,
+            tipo_frete: null,
+            pricing: pr,
+            clientName: pr.factors?.client?.name,
+            _source: 'pricing',
+          }));
+
+        setAllPedidos([...pedidosEnriched, ...pricingsSemPedido]);
       } catch { /* silent */ }
     };
     loadData();
@@ -161,26 +212,46 @@ function ModalNovoCarregamento({
   useEffect(() => {
     const lq = pedidoSearch.trim().toLowerCase();
     if (lq.length < 2) { setPedidoResults([]); return; }
-    const filtered = allPedidos.filter((p: any) =>
-      p.numero_pedido?.toLowerCase().includes(lq) ||
-      p.barra_pedido?.toLowerCase().includes(lq) ||
-      p.pricing?.formattedCod?.toLowerCase().includes(lq) ||
-      p.clientName?.toLowerCase().includes(lq)
-    );
+    // Bug 1 fix — busca em todos os campos relevantes
+    const filtered = allPedidos.filter((p: any) => {
+      const searchFields = [
+        p.numero_pedido,
+        p.barra_pedido,
+        p.clientName,
+        p.pricing?.formattedCod,
+        p.pricing?.userName,
+        p.pricing?.factors?.client?.name,
+        p.pricing?.cod != null ? String(p.pricing.cod) : null,
+      ].filter(Boolean).map((s: any) => String(s).toLowerCase());
+      return searchFields.some((f) => f.includes(lq));
+    });
     setPedidoResults(filtered.slice(0, 10));
   }, [pedidoSearch, allPedidos]);
 
   const selectPedido = (p: any) => {
     const pricing = p.pricing;
+    const tipoFrete = derivarTipoFrete(p, pricing);
     setForm((prev) => ({
       ...prev,
-      pedido_venda_id: p.id,
-      precificacao_id: p.precificacao_id,
-      quantidade_total: p.quantidade_real ? String(p.quantidade_real) : prev.quantidade_total,
-      tipo_frete: (pricing?.factors?.freight != null && pricing.factors.freight > 0) ? 'CIF' : 'FOB',
-      cliente_nome: p.clientName || '',
+      pedido_venda_id: p.id || '',
+      precificacao_id: p.precificacao_id || pricing?.id || '',
+      quantidade_total: p.quantidade_real
+        ? String(p.quantidade_real)
+        : (pricing?.factors?.totalTons ? String(pricing.factors.totalTons) : prev.quantidade_total),
+      tipo_frete: tipoFrete,
+      cliente_nome: p.clientName || pricing?.factors?.client?.name || '',
+      _freteAutoDetectado: true,
     }));
-    setPedidoSearch(p.numero_pedido || p.clientName || '');
+    // Bug 1 fix — label correto dependendo da origem
+    if (p._source === 'pricing') {
+      setPedidoSearch(`Precificação #${pricing?.formattedCod || pricing?.cod || ''}`);
+    } else {
+      setPedidoSearch(
+        p.numero_pedido
+          ? `${p.numero_pedido}${p.barra_pedido ? '/' + p.barra_pedido : ''}`
+          : (p.clientName || '')
+      );
+    }
     setPedidoResults([]);
   };
 
@@ -222,16 +293,31 @@ function ModalNovoCarregamento({
               <div className="absolute z-10 mt-1 bg-white border border-stone-200 rounded-xl shadow-lg max-h-56 overflow-y-auto w-full max-w-lg">
                 {pedidoResults.map((p: any) => (
                   <button
-                    key={p.id}
+                    key={p.id ?? `pricing-${p.precificacao_id}`}
                     type="button"
                     onClick={() => selectPedido(p)}
                     className="w-full text-left px-4 py-3 hover:bg-amber-50 transition-colors text-sm border-b border-stone-100 last:border-0"
                   >
-                    <p className="font-bold text-stone-800">
-                      {p.numero_pedido ? `Pedido: ${p.numero_pedido}` : '—'}
-                      {p.barra_pedido ? ` / ${p.barra_pedido}` : ''}
-                    </p>
-                    <p className="text-stone-500 text-xs">{p.clientName || '—'} · {p.pricing?.formattedCod || '—'}</p>
+                    {p._source === 'pricing' ? (
+                      <>
+                        <p className="font-bold text-stone-800">
+                          Precificação #{p.pricing?.formattedCod || p.pricing?.cod || '—'}
+                        </p>
+                        <p className="text-stone-500 text-xs">
+                          {p.clientName || '—'} · Vendedor: {p.pricing?.userName || '—'}
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="font-bold text-stone-800">
+                          {p.numero_pedido ? `Pedido: ${p.numero_pedido}` : '—'}
+                          {p.barra_pedido ? ` / ${p.barra_pedido}` : ''}
+                        </p>
+                        <p className="text-stone-500 text-xs">
+                          {p.clientName || '—'} · COD: {p.pricing?.formattedCod || '—'}
+                        </p>
+                      </>
+                    )}
                   </button>
                 ))}
               </div>
@@ -247,10 +333,15 @@ function ModalNovoCarregamento({
             <div>
               <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
                 Tipo de Frete *
+                {form._freteAutoDetectado && (
+                  <span className="ml-2 text-[10px] font-normal text-emerald-600 normal-case">
+                    ✓ detectado automaticamente
+                  </span>
+                )}
               </label>
               <select
                 value={form.tipo_frete}
-                onChange={(e) => setForm({ ...form, tipo_frete: e.target.value as any })}
+                onChange={(e) => setForm({ ...form, tipo_frete: e.target.value as 'CIF' | 'FOB', _freteAutoDetectado: false })}
                 className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
                 required
               >
@@ -282,9 +373,9 @@ function ModalNovoCarregamento({
               className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
             >
               <option value="">— Selecione —</option>
-              {filiais.map((f) => (
+              {filiaisDisponiveis.map((f) => (
                 <option key={f.id} value={f.id}>
-                  {f.nome} ({f.codigo})
+                  {f.nome}{f.codigo ? ` (${f.codigo})` : ''}
                 </option>
               ))}
             </select>
