@@ -18,8 +18,8 @@ import PricingReport from './components/PricingReport';
 import CommissionReport from './components/CommissionReport';
 import PricingBySeller from './components/PricingBySeller';
 import Login from './components/Login';
+import ResetPassword from './components/ResetPassword';
 import Home from './components/Home';
-// import Dashboard from './components/Dashboard';
 import Dashboard from './components/Dashboard';
 import SavedFormulas from './components/SavedFormulas';
 import {
@@ -292,9 +292,23 @@ export default function App() {
     setEditingPricing(null);
   }, []);
 
+  // Rota de redefinição de senha (acessível sem autenticação)
+  if (location.pathname === '/reset-password') {
+    return <ResetPassword />;
+  }
+
   if (!currentUser) {
     return <Login onLogin={handleLogin} />;
   }
+
+  /**
+   * Verifica se o usuário logado tem permissão para acessar um recurso.
+   * master/admin sempre têm acesso; para outros roles, consulta permissions.
+   */
+  const hasPermission = (permission: string): boolean => {
+    if (currentUser.role === 'master' || currentUser.role === 'admin') return true;
+    return !!(currentUser.permissions as any)?.[permission];
+  };
 
   const getNavItems = () => {
     if (!activeModule) return [];
@@ -329,7 +343,12 @@ export default function App() {
         },
         { id: 'pricelists', label: 'Lista de Preço', icon: Database, permission: 'priceLists' },
         { id: 'history', label: 'Precificações', icon: HistoryIcon, permission: 'history' },
-        { id: 'pedidos_venda', label: 'Pedidos de Venda', icon: ClipboardList, permission: 'history' },
+        {
+          id: 'pedidos_venda',
+          label: 'Pedidos de Venda',
+          icon: ClipboardList,
+          permission: 'history',
+        },
         { id: 'approvals', label: 'Aprovações', icon: ShieldCheck, permission: 'approvals' },
         { id: 'goals', label: 'Metas', icon: Target, permission: 'goals' },
         {
@@ -363,10 +382,7 @@ export default function App() {
         { id: 'agents', label: 'Agentes', icon: UserCheck, permission: 'agents' },
       ];
 
-      return allItems.filter((item) => {
-        if (currentUser.role === 'master' || currentUser.role === 'admin') return true;
-        return (currentUser.permissions as any)?.[item.permission];
-      });
+      return allItems.filter((item) => hasPermission(item.permission));
     }
 
     if (activeModule === 'config') {
@@ -376,10 +392,7 @@ export default function App() {
         { id: 'settings', label: 'Personalização', icon: Settings, permission: 'settings' },
       ];
 
-      return allItems.filter((item) => {
-        if (currentUser.role === 'master' || currentUser.role === 'admin') return true;
-        return (currentUser.permissions as any)?.[item.permission];
-      });
+      return allItems.filter((item) => hasPermission(item.permission));
     }
 
     if (activeModule === 'prd') {
@@ -387,10 +400,7 @@ export default function App() {
         { id: 'prd', label: 'Documentação PRD', icon: BarChart3, permission: 'prd' }, // Using BarChart3 as a placeholder icon
       ];
 
-      return allItems.filter((item) => {
-        if (currentUser.role === 'master' || currentUser.role === 'admin') return true;
-        return (currentUser.permissions as any)?.[item.permission];
-      });
+      return allItems.filter((item) => hasPermission(item.permission));
     }
 
     if (activeModule === 'managementReports') {
@@ -424,10 +434,7 @@ export default function App() {
         },
       ];
 
-      return allItems.filter((item) => {
-        if (currentUser.role === 'master' || currentUser.role === 'admin') return true;
-        return (currentUser.permissions as any)?.[item.permission];
-      });
+      return allItems.filter((item) => hasPermission(item.permission));
     }
 
     if (activeModule === 'expenses') {
@@ -485,10 +492,7 @@ export default function App() {
         },
       ];
 
-      return allItems.filter((item) => {
-        if (currentUser.role === 'master' || currentUser.role === 'admin') return true;
-        return (currentUser.permissions as any)?.[item.permission];
-      });
+      return allItems.filter((item) => hasPermission(item.permission));
     }
 
     if (activeModule === 'carregamento') {
@@ -540,10 +544,7 @@ export default function App() {
         },
       ];
 
-      return allItems.filter((item) => {
-        if (currentUser.role === 'master' || currentUser.role === 'admin') return true;
-        return (currentUser.permissions as any)?.[item.permission];
-      });
+      return allItems.filter((item) => hasPermission(item.permission));
     }
 
     return [];
@@ -673,11 +674,7 @@ export default function App() {
                   {isExpanded && isSidebarExpanded && (
                     <div className="ml-6 mt-1 space-y-1">
                       {item.children
-                        ?.filter((child) => {
-                          if (currentUser.role === 'master' || currentUser.role === 'admin')
-                            return true;
-                          return (currentUser.permissions as any)?.[child.permission];
-                        })
+                        ?.filter((child) => hasPermission(child.permission))
                         .map((child) => {
                           const ChildIcon = child.icon;
                           const isChildActive = activeTab === child.id;
@@ -853,7 +850,6 @@ export default function App() {
                   if (moduleId === 'config') navigate('/users');
                   if (moduleId === 'managementReports') {
                     setIsReportsExpanded(true);
-                    // The label in Home should also be updated if it exists there
                     navigate('/managementReports_dashboard');
                   }
                   if (moduleId === 'prd') navigate('/prd');
@@ -862,135 +858,166 @@ export default function App() {
                 }}
               />
             )}
-            {activeModule === 'pricing' && activeTab === 'dashboard' && (
-              <Dashboard currentUser={currentUser} />
-            )}
-            {(activeTab === 'calculator' || activeTab === 'simplified_calculator') && (
-              <Calculator
-                currentUser={currentUser}
-                isSimplified={activeTab === 'simplified_calculator'}
-                initialData={editingPricing}
-                initialFormulaToLoad={initialFormulaContext.formula}
-                initialBranchId={initialFormulaContext.branchId}
-                initialPriceListId={initialFormulaContext.priceListId}
-                onSaveSuccess={(record) => {
-                  setEditingPricing(null);
-                  navigate('/history');
-                  handleClearEditing();
-                }}
-                onClearEditing={() => {
-                  handleClearEditing();
-                  setInitialFormulaContext({ formula: null, branchId: '', priceListId: '' });
-                }}
-              />
-            )}
-            {activeModule === 'pricing' && activeTab === 'saved_formulas' && (
-              <SavedFormulas
-                currentUser={currentUser}
-                onSendToCalculator={(f, bId, plId) => {
-                  setInitialFormulaContext({ formula: f, branchId: bId, priceListId: plId });
-                  navigate('/calculator');
-                }}
-              />
-            )}
-            {activeModule === 'pricing' && activeTab === 'history' && (
+            {activeModule === 'pricing' &&
+              activeTab === 'dashboard' &&
+              hasPermission('dashboard') && <Dashboard currentUser={currentUser} />}
+            {(activeTab === 'calculator' || activeTab === 'simplified_calculator') &&
+              hasPermission('calculator') && (
+                <Calculator
+                  currentUser={currentUser}
+                  isSimplified={activeTab === 'simplified_calculator'}
+                  initialData={editingPricing}
+                  initialFormulaToLoad={initialFormulaContext.formula}
+                  initialBranchId={initialFormulaContext.branchId}
+                  initialPriceListId={initialFormulaContext.priceListId}
+                  onSaveSuccess={(record) => {
+                    setEditingPricing(null);
+                    navigate('/history');
+                    handleClearEditing();
+                  }}
+                  onClearEditing={() => {
+                    handleClearEditing();
+                    setInitialFormulaContext({ formula: null, branchId: '', priceListId: '' });
+                  }}
+                />
+              )}
+            {activeModule === 'pricing' &&
+              activeTab === 'saved_formulas' &&
+              hasPermission('calculator') && (
+                <SavedFormulas
+                  currentUser={currentUser}
+                  onSendToCalculator={(f, bId, plId) => {
+                    setInitialFormulaContext({ formula: f, branchId: bId, priceListId: plId });
+                    navigate('/calculator');
+                  }}
+                />
+              )}
+            {activeModule === 'pricing' && activeTab === 'history' && hasPermission('history') && (
               <History onEdit={handleEditPricing} currentUser={currentUser} />
             )}
-            {activeModule === 'pricing' && activeTab === 'pedidos_venda' && (
-              <PedidosVenda currentUser={currentUser} />
-            )}
-            {activeModule === 'pricing' && activeTab === 'goals' && (
+            {activeModule === 'pricing' &&
+              activeTab === 'pedidos_venda' &&
+              hasPermission('history') && <PedidosVenda currentUser={currentUser} />}
+            {activeModule === 'pricing' && activeTab === 'goals' && hasPermission('goals') && (
               <Goals currentUser={currentUser} />
             )}
-            {activeModule === 'pricing' && activeTab === 'approvals' && (
-              <Approvals currentUser={currentUser} />
-            )}
-            {activeModule === 'pricing' && activeTab === 'reports' && (
+            {activeModule === 'pricing' &&
+              activeTab === 'approvals' &&
+              hasPermission('approvals') && <Approvals currentUser={currentUser} />}
+            {activeModule === 'pricing' && activeTab === 'reports' && hasPermission('reports') && (
               <Reports currentUser={currentUser} />
             )}
-            {activeModule === 'pricing' && activeTab === 'pricingReport' && (
-              <PricingReport currentUser={currentUser} />
-            )}
-            {activeModule === 'pricing' && activeTab === 'commissionReport' && (
-              <CommissionReport currentUser={currentUser} />
-            )}
-            {activeModule === 'pricing' && activeTab === 'pricingBySeller' && (
-              <PricingBySeller currentUser={currentUser} />
-            )}
-            {activeModule === 'pricing' && activeTab === 'pricelists' && (
-              <PriceListManager currentUser={currentUser} />
-            )}
-            {activeModule === 'pricing' && activeTab === 'materials_brand' && <BrandManager />}
-            {activeModule === 'pricing' && activeTab === 'products' && <ProductManager />}
-            {activeModule === 'pricing' && activeTab === 'incompatibilities' && (
-              <IncompatibilityManager />
-            )}
-            {activeModule === 'pricing' && activeTab === 'clients' && (
+            {activeModule === 'pricing' &&
+              activeTab === 'pricingReport' &&
+              hasPermission('reports') && <PricingReport currentUser={currentUser} />}
+            {activeModule === 'pricing' &&
+              activeTab === 'commissionReport' &&
+              hasPermission('reports') && <CommissionReport currentUser={currentUser} />}
+            {activeModule === 'pricing' &&
+              activeTab === 'pricingBySeller' &&
+              hasPermission('pricingBySeller') && <PricingBySeller currentUser={currentUser} />}
+            {activeModule === 'pricing' &&
+              activeTab === 'pricelists' &&
+              hasPermission('priceLists') && <PriceListManager currentUser={currentUser} />}
+            {activeModule === 'pricing' &&
+              activeTab === 'materials_brand' &&
+              hasPermission('priceLists') && <BrandManager />}
+            {activeModule === 'pricing' &&
+              activeTab === 'products' &&
+              hasPermission('priceLists') && <ProductManager />}
+            {activeModule === 'pricing' &&
+              activeTab === 'incompatibilities' &&
+              hasPermission('priceLists') && <IncompatibilityManager />}
+            {activeModule === 'pricing' && activeTab === 'clients' && hasPermission('clients') && (
               <ClientManager currentUser={currentUser} />
             )}
-            {activeModule === 'pricing' && activeTab === 'agents' && (
+            {activeModule === 'pricing' && activeTab === 'agents' && hasPermission('agents') && (
               <AgentManager currentUser={currentUser} />
             )}
-            {activeModule === 'config' && activeTab === 'branches' && (
+            {activeModule === 'config' && activeTab === 'branches' && hasPermission('branches') && (
               <BranchManager currentUser={currentUser} />
             )}
-            {activeModule === 'config' && activeTab === 'settings' && <SettingsManager />}
-            {activeModule === 'config' && activeTab === 'users' && <UserManager />}
-            {activeModule === 'prd' && activeTab === 'prd' && (
+            {activeModule === 'config' && activeTab === 'settings' && hasPermission('settings') && (
+              <SettingsManager />
+            )}
+            {activeModule === 'config' && activeTab === 'users' && hasPermission('users') && (
+              <UserManager currentUser={currentUser} />
+            )}
+            {activeModule === 'prd' && activeTab === 'prd' && hasPermission('prd') && (
               <PrdModule currentUser={currentUser} />
             )}
             {activeModule === 'managementReports' &&
-              activeTab === 'managementReports_dashboard' && (
+              activeTab === 'managementReports_dashboard' &&
+              hasPermission('managementReports') && (
                 <ManagementReportsModule currentUser={currentUser} activeTab="dashboard" />
               )}
             {activeModule === 'managementReports' &&
-              activeTab === 'managementReports_lancamentos' && (
+              activeTab === 'managementReports_lancamentos' &&
+              hasPermission('managementReports') && (
                 <ManagementReportsModule currentUser={currentUser} activeTab="lancamentos" />
               )}
             {activeModule === 'managementReports' &&
-              activeTab === 'managementReports_cadastros' && (
+              activeTab === 'managementReports_cadastros' &&
+              hasPermission('managementReports') && (
                 <ManagementReportsModule currentUser={currentUser} activeTab="cadastros" />
               )}
             {activeModule === 'expenses' &&
-              (activeTab === 'expenses' || activeTab === 'expenses_lancamentos') && (
+              (activeTab === 'expenses' || activeTab === 'expenses_lancamentos') &&
+              hasPermission('expenses') && (
                 <ExpenseDashboard currentUser={currentUser} view="lancamentos" />
               )}
-            {activeModule === 'expenses' && activeTab === 'expenses_novo' && (
-              <ExpenseDashboard currentUser={currentUser} view="novo" />
-            )}
-            {activeModule === 'expenses' && activeTab === 'expenses_relatorios' && (
-              <ExpenseDashboard currentUser={currentUser} view="relatorios" />
-            )}
-            {activeModule === 'expenses' && activeTab === 'expenses_conferencia' && (
-              <CheckExpenses currentUser={currentUser} />
-            )}
-            {activeModule === 'expenses' && activeTab === 'expenses_aprovacao' && (
-              <ApproveExpenses currentUser={currentUser} />
-            )}
-            {activeModule === 'expenses' && activeTab === 'expenses_categorias' && (
-              <ExpenseCategoryManager />
-            )}
-            {activeModule === 'expenses' && activeTab === 'expenses_cartoes' && (
-              <CardManager currentUser={currentUser} />
-            )}
-            {activeModule === 'carregamento' && activeTab === 'carregamento_visao_geral' && (
-              <CarregamentoModule currentUser={currentUser} view="visao_geral" />
-            )}
-            {activeModule === 'carregamento' && activeTab === 'carregamento_solicitacao' && (
-              <CarregamentoModule currentUser={currentUser} view="solicitacao" />
-            )}
-            {activeModule === 'carregamento' && activeTab === 'carregamento_liberacao' && (
-              <CarregamentoModule currentUser={currentUser} view="liberacao" />
-            )}
-            {activeModule === 'carregamento' && activeTab === 'carregamento_logistica' && (
-              <CarregamentoModule currentUser={currentUser} view="logistica" />
-            )}
-            {activeModule === 'carregamento' && activeTab === 'carregamento_calendario' && (
-              <CarregamentoModule currentUser={currentUser} view="calendario" />
-            )}
-            {activeModule === 'carregamento' && activeTab === 'carregamento_relatorios' && (
-              <CarregamentoModule currentUser={currentUser} view="relatorios" />
-            )}
+            {activeModule === 'expenses' &&
+              activeTab === 'expenses_novo' &&
+              hasPermission('expenses') && (
+                <ExpenseDashboard currentUser={currentUser} view="novo" />
+              )}
+            {activeModule === 'expenses' &&
+              activeTab === 'expenses_relatorios' &&
+              hasPermission('expenses') && (
+                <ExpenseDashboard currentUser={currentUser} view="relatorios" />
+              )}
+            {activeModule === 'expenses' &&
+              activeTab === 'expenses_conferencia' &&
+              hasPermission('expenses') && <CheckExpenses currentUser={currentUser} />}
+            {activeModule === 'expenses' &&
+              activeTab === 'expenses_aprovacao' &&
+              hasPermission('expenses') && <ApproveExpenses currentUser={currentUser} />}
+            {activeModule === 'expenses' &&
+              activeTab === 'expenses_categorias' &&
+              hasPermission('expenses') && <ExpenseCategoryManager />}
+            {activeModule === 'expenses' &&
+              activeTab === 'expenses_cartoes' &&
+              hasPermission('expenses') && <CardManager currentUser={currentUser} />}
+            {activeModule === 'carregamento' &&
+              activeTab === 'carregamento_visao_geral' &&
+              hasPermission('carregamento') && (
+                <CarregamentoModule currentUser={currentUser} view="visao_geral" />
+              )}
+            {activeModule === 'carregamento' &&
+              activeTab === 'carregamento_solicitacao' &&
+              hasPermission('carregamento') && (
+                <CarregamentoModule currentUser={currentUser} view="solicitacao" />
+              )}
+            {activeModule === 'carregamento' &&
+              activeTab === 'carregamento_liberacao' &&
+              hasPermission('carregamento') && (
+                <CarregamentoModule currentUser={currentUser} view="liberacao" />
+              )}
+            {activeModule === 'carregamento' &&
+              activeTab === 'carregamento_logistica' &&
+              hasPermission('carregamento') && (
+                <CarregamentoModule currentUser={currentUser} view="logistica" />
+              )}
+            {activeModule === 'carregamento' &&
+              activeTab === 'carregamento_calendario' &&
+              hasPermission('carregamento') && (
+                <CarregamentoModule currentUser={currentUser} view="calendario" />
+              )}
+            {activeModule === 'carregamento' &&
+              activeTab === 'carregamento_relatorios' &&
+              hasPermission('carregamento') && (
+                <CarregamentoModule currentUser={currentUser} view="relatorios" />
+              )}
           </div>
         </main>
       </div>
