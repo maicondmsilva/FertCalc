@@ -176,7 +176,7 @@ export function FertigranPComparisonModal({
   useEffect(() => {
     if (!selectedFormulaId && dose > 0 && (targetN > 0 || targetP > 0 || targetK > 0)) {
       // Find optimal dose and mix for theoretical target using LP
-      const model: any = {
+      const model: Record<string, unknown> = {
         optimize: 'cost',
         opType: 'min',
         constraints: {
@@ -212,7 +212,10 @@ export function FertigranPComparisonModal({
         }
       });
 
-      const result: any = solver.Solve(model);
+      const result = solver.Solve(model as unknown as Parameters<typeof solver.Solve>[0]) as Record<
+        string,
+        number
+      >;
 
       if (result.feasible) {
         let totalWeight = 0;
@@ -320,10 +323,10 @@ export function FertigranPComparisonModal({
       });
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error saving history:', err);
-      // Show more details if available
-      const errorMsg = err?.message || err?.details || 'Erro ao salvar histórico de comparação.';
+      const errorMsg =
+        err instanceof Error ? err.message : 'Erro ao salvar histórico de comparação.';
       showError(`Erro ao salvar histórico: ${errorMsg}`);
     } finally {
       setIsSaving(false);

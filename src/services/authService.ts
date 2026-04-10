@@ -161,9 +161,9 @@ export async function createAuthUser(
     }
 
     return { success: true };
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.error('[authService] Unexpected error in createAuthUser:', err);
-    return { success: false, error: err?.message || 'Erro inesperado' };
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
 
@@ -187,8 +187,8 @@ export async function updateAuthPassword(
     }
 
     return { success: true };
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.error('[authService] Unexpected error in updateAuthPassword:', err);
-    return { success: false, error: err?.message || 'Erro inesperado' };
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
   }
 }

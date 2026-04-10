@@ -58,7 +58,7 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
         getPricingRecords(),
       ]);
 
-      const pricingsMap = new Map(pricingsData.map((pr: any) => [pr.id, pr]));
+      const pricingsMap = new Map(pricingsData.map((pr) => [pr.id, pr]));
 
       const enriched: EnrichedPedido[] = pedidosData.map((p) => {
         const pricing = pricingsMap.get(p.precificacao_id);

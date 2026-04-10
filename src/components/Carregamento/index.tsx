@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { User } from '../../types';
+import { User, PricingRecord, PedidoVenda } from '../../types';
 import {
   Truck,
   Package,
@@ -111,20 +111,55 @@ function StatusBadge({ status }: { status: StatusCarregamento }) {
 // ─────────────────────────────────────────────────────────────────────────────
 //  MODAL: Novo Carregamento
 // ─────────────────────────────────────────────────────────────────────────────
+
+interface EnrichedPedido {
+  id: string | null;
+  precificacao_id: string | null;
+  numero_pedido?: string | null;
+  barra_pedido?: string | null;
+  quantidade_real?: number | null;
+  tipo_frete?: string | null;
+  pricing?: PricingRecord;
+  clientName?: string;
+  _source: string;
+}
+
+interface CarregamentoFormData {
+  tipo_frete: 'CIF' | 'FOB';
+  quantidade_total: string;
+  filial_id: string;
+  data_prevista_carregamento: string;
+  transportadora_id: string;
+  observacoes: string;
+  pedido_venda_id: string;
+  precificacao_id: string;
+  cliente_nome: string;
+  _freteAutoDetectado: boolean;
+}
+
+interface CotacaoFormData {
+  transportadora_id: string;
+  valor_cotado: string;
+  prazo_dias: string;
+  validade_cotacao: string;
+  observacoes: string;
+}
+
 interface ModalNovoCarregamentoProps {
   filiais: Filial[];
   transportadoras: Transportadora[];
-  onSave: (data: any) => Promise<void>;
+  onSave: (data: CarregamentoFormData) => Promise<void>;
   onClose: () => void;
 }
 
 // Bug 2 fix — determina o tipo de frete em ordem de prioridade
-function derivarTipoFrete(pedido: any, pricing: any): 'CIF' | 'FOB' {
+function derivarTipoFrete(pedido: EnrichedPedido, pricing?: PricingRecord): 'CIF' | 'FOB' {
   if (pedido?.tipo_frete === 'CIF' || pedido?.tipo_frete === 'FOB') {
     return pedido.tipo_frete as 'CIF' | 'FOB';
   }
-  if (pricing?.factors?.tipoFrete === 'CIF' || pricing?.factors?.tipoFrete === 'FOB') {
-    return pricing.factors.tipoFrete as 'CIF' | 'FOB';
+  const factors = pricing?.factors as unknown as Record<string, unknown> | undefined;
+  if (factors?.tipoFrete === 'CIF' || factors?.tipoFrete === 'FOB') {
+    return factors.tipoFrete as 'CIF' | 'FOB';
   }
   if (pricing?.factors?.freight != null && Number(pricing.factors.freight) > 0) {
     return 'CIF';
@@ -138,7 +173,7 @@ function ModalNovoCarregamento({
   onSave,
   onClose,
 }: ModalNovoCarregamentoProps) {
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<CarregamentoFormData>({
     tipo_frete: 'FOB' as 'CIF' | 'FOB',
     quantidade_total: '',
     filial_id: '',
@@ -152,16 +187,18 @@ function ModalNovoCarregamento({
   });
   const [saving, setSaving] = useState(false);
   const [pedidoSearch, setPedidoSearch] = useState('');
-  const [allPedidos, setAllPedidos] = useState<any[]>([]);
-  const [pedidoResults, setPedidoResults] = useState<any[]>([]);
+  const [allPedidos, setAllPedidos] = useState<EnrichedPedido[]>([]);
+  const [pedidoResults, setPedidoResults] = useState<EnrichedPedido[]>([]);
   // Bug 3 fix — fallback para filiais da prop (vindas de branches/Configurações)
   const [localFiliais, setLocalFiliais] = useState<Filial[]>([]);
 
   useEffect(() => {
     if (filiais.length === 0) {
-      getFiliais().then(setLocalFiliais).catch((err) => {
-        console.error('Erro ao carregar filiais:', err);
-      });
+      getFiliais()
+        .then(setLocalFiliais)
+        .catch((err) => {
+          console.error('Erro ao carregar filiais:', err);
+        });
     }
   }, [filiais]);
 
@@ -173,24 +210,24 @@ function ModalNovoCarregamento({
       try {
         const [pedidos, pricings] = await Promise.all([getPedidosVenda(), getPricingRecords()]);
         if (cancelled) return;
-        const pricingsMap = new Map(pricings.map((pr: any) => [pr.id, pr]));
+        const pricingsMap = new Map(pricings.map((pr) => [pr.id, pr]));
 
         // Bug 1 fix — pedidos de venda enriquecidos com dados da precificação
-        const pedidosEnriched = pedidos.map((p: any) => {
+        const pedidosEnriched: EnrichedPedido[] = pedidos.map((p) => {
           const pricing = pricingsMap.get(p.precificacao_id);
           return {
             ...p,
             pricing,
             clientName: pricing?.factors?.client?.name,
-            _source: 'pedido',
+            _source: 'pedido' as const,
           };
         });
 
         // Bug 1 fix — precificações SEM pedido de venda vinculado
-        const pedidosComPrecificacao = new Set(pedidos.map((p: any) => p.precificacao_id));
-        const pricingsSemPedido = pricings
-          .filter((pr: any) => !pedidosComPrecificacao.has(pr.id))
-          .map((pr: any) => ({
+        const pedidosComPrecificacao = new Set(pedidos.map((p) => p.precificacao_id));
+        const pricingsSemPedido: EnrichedPedido[] = pricings
+          .filter((pr) => !pedidosComPrecificacao.has(pr.id))
+          .map((pr) => ({
             id: null,
             precificacao_id: pr.id,
             numero_pedido: null,
@@ -199,21 +236,28 @@ function ModalNovoCarregamento({
             tipo_frete: null,
             pricing: pr,
             clientName: pr.factors?.client?.name,
-            _source: 'pricing',
+            _source: 'pricing' as const,
           }));
 
         setAllPedidos([...pedidosEnriched, ...pricingsSemPedido]);
-      } catch { /* silent */ }
+      } catch {
+        /* silent */
+      }
     };
     loadData();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
     const lq = pedidoSearch.trim().toLowerCase();
-    if (lq.length < 2) { setPedidoResults([]); return; }
+    if (lq.length < 2) {
+      setPedidoResults([]);
+      return;
+    }
     // Bug 1 fix — busca em todos os campos relevantes
-    const filtered = allPedidos.filter((p: any) => {
+    const filtered = allPedidos.filter((p) => {
       const searchFields = [
         p.numero_pedido,
         p.barra_pedido,
@@ -222,13 +266,15 @@ function ModalNovoCarregamento({
         p.pricing?.userName,
         p.pricing?.factors?.client?.name,
         p.pricing?.cod != null ? String(p.pricing.cod) : null,
-      ].filter(Boolean).map((s: any) => String(s).toLowerCase());
+      ]
+        .filter(Boolean)
+        .map((s) => String(s).toLowerCase());
       return searchFields.some((f) => f.includes(lq));
     });
     setPedidoResults(filtered.slice(0, 10));
   }, [pedidoSearch, allPedidos]);
 
-  const selectPedido = (p: any) => {
+  const selectPedido = (p: EnrichedPedido) => {
     const pricing = p.pricing;
     const tipoFrete = derivarTipoFrete(p, pricing);
     setForm((prev) => ({
@@ -237,7 +283,9 @@ function ModalNovoCarregamento({
       precificacao_id: p.precificacao_id || pricing?.id || '',
       quantidade_total: p.quantidade_real
         ? String(p.quantidade_real)
-        : (pricing?.factors?.totalTons ? String(pricing.factors.totalTons) : prev.quantidade_total),
+        : pricing?.factors?.totalTons
+          ? String(pricing.factors.totalTons)
+          : prev.quantidade_total,
       tipo_frete: tipoFrete,
       cliente_nome: p.clientName || pricing?.factors?.client?.name || '',
       _freteAutoDetectado: true,
@@ -249,7 +297,7 @@ function ModalNovoCarregamento({
       setPedidoSearch(
         p.numero_pedido
           ? `${p.numero_pedido}${p.barra_pedido ? '/' + p.barra_pedido : ''}`
-          : (p.clientName || '')
+          : p.clientName || ''
       );
     }
     setPedidoResults([]);
@@ -284,14 +332,16 @@ function ModalNovoCarregamento({
               <input
                 type="text"
                 value={pedidoSearch}
-                onChange={(e) => { setPedidoSearch(e.target.value); }}
+                onChange={(e) => {
+                  setPedidoSearch(e.target.value);
+                }}
                 placeholder="Buscar por cliente, nº pedido ou nº precificação..."
                 className="w-full pl-9 pr-4 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
               />
             </div>
             {pedidoResults.length > 0 && (
               <div className="absolute z-10 mt-1 bg-white border border-stone-200 rounded-xl shadow-lg max-h-56 overflow-y-auto w-full max-w-lg">
-                {pedidoResults.map((p: any) => (
+                {pedidoResults.map((p) => (
                   <button
                     key={p.id ?? `pricing-${p.precificacao_id}`}
                     type="button"
@@ -341,7 +391,13 @@ function ModalNovoCarregamento({
               </label>
               <select
                 value={form.tipo_frete}
-                onChange={(e) => setForm({ ...form, tipo_frete: e.target.value as 'CIF' | 'FOB', _freteAutoDetectado: false })}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    tipo_frete: e.target.value as 'CIF' | 'FOB',
+                    _freteAutoDetectado: false,
+                  })
+                }
                 className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
                 required
               >
@@ -375,7 +431,8 @@ function ModalNovoCarregamento({
               <option value="">— Selecione —</option>
               {filiaisDisponiveis.map((f) => (
                 <option key={f.id} value={f.id}>
-                  {f.nome}{f.codigo ? ` (${f.codigo})` : ''}
+                  {f.nome}
+                  {f.codigo ? ` (${f.codigo})` : ''}
                 </option>
               ))}
             </select>
@@ -453,7 +510,7 @@ function ModalNovoCarregamento({
 interface ModalCotacaoProps {
   carregamento: Carregamento;
   transportadoras: Transportadora[];
-  onSave: (carregamentoId: string, data: any) => Promise<void>;
+  onSave: (carregamentoId: string, data: CotacaoFormData) => Promise<void>;
   onClose: () => void;
 }
 
@@ -1659,7 +1716,7 @@ export default function CarregamentoModule({
   );
 
   // ── Create carregamento ───────────────────────────────────────────────────
-  const handleCreateCarregamento = async (form: any) => {
+  const handleCreateCarregamento = async (form: CarregamentoFormData) => {
     const numero = await gerarNumeroCarregamento();
     await createCarregamento({
       numero_carregamento: numero,
@@ -1679,7 +1736,7 @@ export default function CarregamentoModule({
   };
 
   // ── Solicitar cotação ─────────────────────────────────────────────────────
-  const handleSolicitarCotacao = async (carregamentoId: string, form: any) => {
+  const handleSolicitarCotacao = async (carregamentoId: string, form: CotacaoFormData) => {
     try {
       await createCotacao({
         carregamento_id: carregamentoId,

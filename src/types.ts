@@ -84,7 +84,6 @@ export interface User {
   email: string;
   name: string;
   nickname: string;
-  password?: string;
   ativo: boolean;
   role: 'admin' | 'user' | 'manager' | 'master';
   managedUserIds?: string[];
@@ -536,10 +535,10 @@ export interface ComparisonHistory {
     n: number;
     p: number;
     k: number;
-    fatores_comerciais?: any;
+    fatores_comerciais?: Record<string, unknown>;
     incluir_pdf?: boolean;
-    composicao?: any;
-    garantias_finais?: any;
+    composicao?: Array<{ material: string; qtd: number }>;
+    garantias_finais?: Record<string, unknown>;
   };
   created_at?: string;
 }

@@ -94,14 +94,13 @@ export async function getUserByEmail(emailOrNickname: string): Promise<User | nu
   return mapUser(data);
 }
 
-export async function createUser(user: Omit<User, 'id'> & { password: string }): Promise<User> {
+export async function createUser(user: Omit<User, 'id'>): Promise<User> {
   const { data, error } = await supabase
     .from('app_users')
     .insert({
       email: user.email,
       name: user.name,
       nickname: user.nickname,
-      password: user.password,
       role: user.role,
       ativo: user.ativo ?? true,
       managed_user_ids: user.managedUserIds || [],
@@ -113,15 +112,11 @@ export async function createUser(user: Omit<User, 'id'> & { password: string }):
   return mapUser(data);
 }
 
-export async function updateUser(
-  id: string,
-  user: Partial<User> & { password?: string }
-): Promise<void> {
-  const payload: any = { updated_at: new Date().toISOString() };
+export async function updateUser(id: string, user: Partial<User>): Promise<void> {
+  const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (user.email !== undefined) payload.email = user.email;
   if (user.name !== undefined) payload.name = user.name;
   if (user.nickname !== undefined) payload.nickname = user.nickname;
-  if (user.password !== undefined && user.password !== '') payload.password = user.password;
   if (user.role !== undefined) payload.role = user.role;
   if (user.ativo !== undefined) payload.ativo = user.ativo;
   if (user.managedUserIds !== undefined) payload.managed_user_ids = user.managedUserIds;
@@ -135,7 +130,7 @@ export async function deleteUser(id: string): Promise<void> {
   if (error) throw error;
 }
 
-function mapUser(data: any): User {
+function mapUser(data: Record<string, unknown>): User {
   return {
     id: data.id,
     idNumeric: data.id_numeric,
@@ -147,7 +142,7 @@ function mapUser(data: any): User {
     role: data.role,
     managedUserIds: data.managed_user_ids || [],
     permissions: data.permissions || {},
-  };
+  } as User;
 }
 
 // ============================================================
@@ -175,7 +170,7 @@ export async function createBranch(branch: Omit<Branch, 'id'>): Promise<Branch> 
 }
 
 export async function updateBranch(id: string, branch: Partial<Branch>): Promise<void> {
-  const payload: any = {};
+  const payload: Record<string, unknown> = {};
   if (branch.name !== undefined) payload.name = branch.name;
   if (branch.ativo !== undefined) payload.ativo = branch.ativo;
   const { error } = await supabase.from('branches').update(payload).eq('id', id);
@@ -239,7 +234,7 @@ export async function deleteClient(id: string): Promise<void> {
 }
 
 function clientToDb(client: Partial<Client>) {
-  const d: any = {};
+  const d: Record<string, unknown> = {};
   if (client.code !== undefined) d.code = client.code;
   if (client.name !== undefined) d.name = client.name;
   if (client.document !== undefined) d.document = client.document;
@@ -254,7 +249,7 @@ function clientToDb(client: Partial<Client>) {
   return d;
 }
 
-function mapClient(data: any): Client {
+function mapClient(data: Record<string, unknown>): Client {
   return {
     id: data.id,
     code: data.code,
@@ -267,7 +262,7 @@ function mapClient(data: any): Client {
     address: data.address,
     deliveryAddress: data.delivery_address,
     deliverySameAsAddress: data.delivery_same_as_address,
-  };
+  } as Client;
 }
 
 // ============================================================
@@ -317,7 +312,7 @@ export async function deleteAgent(id: string): Promise<void> {
 }
 
 function agentToDb(agent: Partial<Agent>) {
-  const d: any = {};
+  const d: Record<string, unknown> = {};
   if (agent.code !== undefined) d.code = agent.code;
   if (agent.name !== undefined) d.name = agent.name;
   if (agent.document !== undefined) d.document = agent.document;
@@ -328,7 +323,7 @@ function agentToDb(agent: Partial<Agent>) {
   return d;
 }
 
-function mapAgent(data: any): Agent {
+function mapAgent(data: Record<string, unknown>): Agent {
   return {
     id: data.id,
     code: data.code,
@@ -338,7 +333,7 @@ function mapAgent(data: any): Agent {
     phone: data.phone,
     ie: data.ie,
     address: data.address,
-  };
+  } as Agent;
 }
 
 // ============================================================
@@ -414,7 +409,7 @@ export async function deleteMacroMaterial(id: string): Promise<void> {
 }
 
 function macroToDb(m: Partial<MacroMaterial>) {
-  const d: any = {};
+  const d: Record<string, unknown> = {};
   if (m.code !== undefined) d.code = m.code;
   if (m.name !== undefined) d.name = m.name;
   if (m.n !== undefined) d.n = m.n;
@@ -432,7 +427,7 @@ function macroToDb(m: Partial<MacroMaterial>) {
   return d;
 }
 
-function mapMacro(data: any): MacroMaterial {
+function mapMacro(data: Record<string, unknown>): MacroMaterial {
   return {
     id: data.id,
     code: data.code,
@@ -448,7 +443,7 @@ function mapMacro(data: any): MacroMaterial {
     formulaSuffix: data.formula_suffix,
     isPremiumLine: data.is_premium_line || false,
     minQuantity: data.min_quantity ? Number(data.min_quantity) : 0,
-  };
+  } as MacroMaterial;
 }
 
 // ============================================================
@@ -489,7 +484,11 @@ export async function updateMicroMaterial(
 // ============================================================
 // AUTO SYNC RAW MATERIALS -> PRICE LISTS
 // ============================================================
-async function syncProductToPriceLists(id: string, updates: any, type: 'macro' | 'micro') {
+async function syncProductToPriceLists(
+  id: string,
+  updates: Partial<MacroMaterial> | Partial<MicroMaterial>,
+  type: 'macro' | 'micro'
+) {
   try {
     const { data: priceLists } = await supabase.from('price_lists').select('id, macros, micros');
     if (!priceLists?.length) return;
@@ -497,7 +496,7 @@ async function syncProductToPriceLists(id: string, updates: any, type: 'macro' |
     for (const pl of priceLists) {
       let changed = false;
       const targetArray = type === 'macro' ? pl.macros || [] : pl.micros || [];
-      const updatedArray = targetArray.map((mat: any) => {
+      const updatedArray = targetArray.map((mat: Record<string, unknown>) => {
         if (mat.id === id) {
           changed = true;
           return { ...mat, ...updates };
@@ -523,7 +522,7 @@ export async function deleteMicroMaterial(id: string): Promise<void> {
 }
 
 function microToDb(m: Partial<MicroMaterial>) {
-  const d: any = {};
+  const d: Record<string, unknown> = {};
   if (m.code !== undefined) d.code = m.code;
   if (m.name !== undefined) d.name = m.name;
   if (m.microGuarantees !== undefined) d.micro_guarantees = m.microGuarantees;
@@ -533,7 +532,7 @@ function microToDb(m: Partial<MicroMaterial>) {
   return d;
 }
 
-function mapMicro(data: any): MicroMaterial {
+function mapMicro(data: Record<string, unknown>): MicroMaterial {
   return {
     id: data.id,
     code: data.code,
@@ -542,7 +541,7 @@ function mapMicro(data: any): MicroMaterial {
     categories: data.categories || [],
     formulaSuffix: data.formula_suffix,
     minQuantity: data.min_quantity ? Number(data.min_quantity) : 0,
-  };
+  } as MicroMaterial;
 }
 
 // ============================================================
@@ -819,7 +818,7 @@ export async function createPriceList(pl: Omit<PriceList, 'id'>): Promise<PriceL
 }
 
 export async function updatePriceList(id: string, pl: Partial<PriceList>): Promise<void> {
-  const payload: any = { updated_at: new Date().toISOString() };
+  const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (pl.name !== undefined) payload.name = pl.name;
   if (pl.branchId !== undefined) payload.branch_id = pl.branchId;
   if (pl.date !== undefined) payload.date = pl.date;
@@ -907,7 +906,7 @@ export async function saveProfitabilityToCalc(
 }
 
 function pricingRecordToDb(r: Partial<PricingRecord>) {
-  const d: any = {};
+  const d: Record<string, unknown> = {};
   if (r.userId !== undefined) d.user_id = r.userId;
   if (r.userName !== undefined) d.user_name = r.userName;
   if (r.userCode !== undefined) d.user_code = r.userCode;
@@ -936,11 +935,11 @@ export function formatPricingCod(cod?: number): string {
   return String(cod);
 }
 
-function mapPricingRecord(d: any): PricingRecord {
+function mapPricingRecord(d: Record<string, unknown>): PricingRecord {
   return {
     id: d.id,
     cod: d.cod,
-    formattedCod: formatPricingCod(d.cod),
+    formattedCod: formatPricingCod(d.cod as number),
     userId: d.user_id,
     userName: d.user_name,
     userCode: d.user_code,
@@ -958,7 +957,7 @@ function mapPricingRecord(d: any): PricingRecord {
     transferToUserName: d.transfer_to_user_name,
     deletionRequest: d.deletion_request,
     rejectionObservation: d.rejection_observation,
-  };
+  } as PricingRecord;
 }
 
 export async function transferPricingRecord(
@@ -1102,7 +1101,7 @@ export async function updateSavedFormula(
   id: string,
   formula: Partial<SavedFormula>
 ): Promise<void> {
-  const payload: any = { updated_at: new Date().toISOString() };
+  const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (formula.name !== undefined) payload.name = formula.name;
   if (formula.targetFormula !== undefined) payload.target_formula = formula.targetFormula;
   if (formula.macros !== undefined) payload.macros = formula.macros;
@@ -1169,7 +1168,7 @@ export async function createGoal(goal: Omit<Goal, 'id'>): Promise<Goal> {
 }
 
 export async function updateGoal(id: string, goal: Partial<Goal>): Promise<void> {
-  const payload: any = { updated_at: new Date().toISOString() };
+  const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (goal.status !== undefined) payload.status = goal.status;
   if (goal.targetValue !== undefined) payload.target_value = goal.targetValue;
   if (goal.type !== undefined) payload.type = goal.type;
@@ -1375,13 +1374,16 @@ export async function deleteCompatibilityCategory(id: string): Promise<void> {
 export async function getMgmtUnidades(): Promise<Unidade[]> {
   const { data, error } = await supabase.from('branches').select('*').order('id_numeric');
   if (error || !data) return [];
-  return data.map((b: any) => ({
-    id: b.id,
-    id_numeric: b.id_numeric,
-    nome: b.name,
-    ativo: b.ativo ?? true,
-    ordem_exibicao: b.id_numeric ?? 0,
-  }));
+  return data.map(
+    (b: Record<string, unknown>) =>
+      ({
+        id: b.id,
+        id_numeric: b.id_numeric,
+        nome: b.name,
+        ativo: b.ativo ?? true,
+        ordem_exibicao: b.id_numeric ?? 0,
+      }) as Unidade
+  );
 }
 
 export async function upsertMgmtUnidade(u: Unidade): Promise<void> {
@@ -1500,17 +1502,15 @@ export async function getMgmtConfigs(): Promise<ConfiguracaoIndicador[]> {
 }
 
 export async function upsertMgmtConfig(c: ConfiguracaoIndicador): Promise<void> {
-  const { error } = await supabase
-    .from('management_configs')
-    .upsert(
-      {
-        unidade_id: c.unidade_id,
-        indicador_id: c.indicador_id,
-        nome_personalizado: c.nome_personalizado,
-        visivel: c.visivel,
-      },
-      { onConflict: 'unidade_id,indicador_id' }
-    );
+  const { error } = await supabase.from('management_configs').upsert(
+    {
+      unidade_id: c.unidade_id,
+      indicador_id: c.indicador_id,
+      nome_personalizado: c.nome_personalizado,
+      visivel: c.visivel,
+    },
+    { onConflict: 'unidade_id,indicador_id' }
+  );
   if (error) throw error;
 }
 

@@ -218,7 +218,10 @@ export default function PricingDetailModal({
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const content = await page.getTextContent();
-        fullText += content.items.map((item: any) => item.str).join(' ') + '\n';
+        fullText +=
+          content.items
+            .map((item) => ('str' in item ? (item as { str: string }).str : ''))
+            .join(' ') + '\n';
       }
       const parsed = parsePdfText(fullText);
       setExtractedData(parsed);
@@ -566,7 +569,7 @@ export default function PricingDetailModal({
             fontSize: 8,
             fontStyle: 'bold',
           },
-          didParseCell: (data: any) => {
+          didParseCell: (data) => {
             if (data.row.index === 7) {
               data.cell.styles.fontStyle = 'bold';
               data.cell.styles.fillColor = isPosRent ? [209, 250, 229] : [254, 226, 226];

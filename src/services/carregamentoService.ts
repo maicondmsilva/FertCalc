@@ -16,89 +16,89 @@ import {
 //  Helpers
 // ─────────────────────────────────────────────────────────────
 
-function mapCarregamento(d: any): Carregamento {
+function mapCarregamento(d: Record<string, unknown>): Carregamento {
   return {
-    id: d.id,
-    pedido_precificacao_id: d.pedido_precificacao_id,
-    numero_carregamento: d.numero_carregamento,
-    filial_id: d.filial_id,
-    filial: d.filiais ?? undefined,
-    tipo_frete: d.tipo_frete,
-    status: d.status,
-    tipo_liberacao: d.tipo_liberacao,
+    id: d.id as string,
+    pedido_precificacao_id: d.pedido_precificacao_id as string | undefined,
+    numero_carregamento: d.numero_carregamento as string,
+    filial_id: d.filial_id as string | undefined,
+    filial: (d.filiais as Filial | undefined) ?? undefined,
+    tipo_frete: d.tipo_frete as TipoFrete,
+    status: d.status as StatusCarregamento,
+    tipo_liberacao: d.tipo_liberacao as Carregamento['tipo_liberacao'],
     quantidade_total: Number(d.quantidade_total ?? 0),
     quantidade_liberada: Number(d.quantidade_liberada ?? 0),
     quantidade_carregada: Number(d.quantidade_carregada ?? 0),
     saldo_disponivel: d.saldo_disponivel != null ? Number(d.saldo_disponivel) : undefined,
-    data_prevista_carregamento: d.data_prevista_carregamento,
-    data_real_carregamento: d.data_real_carregamento,
-    data_solicitacao_cotacao: d.data_solicitacao_cotacao,
-    data_liberacao: d.data_liberacao,
-    transportadora_id: d.transportadora_id,
-    transportadora: d.transportadoras ?? undefined,
+    data_prevista_carregamento: d.data_prevista_carregamento as string | undefined,
+    data_real_carregamento: d.data_real_carregamento as string | undefined,
+    data_solicitacao_cotacao: d.data_solicitacao_cotacao as string | undefined,
+    data_liberacao: d.data_liberacao as string | undefined,
+    transportadora_id: d.transportadora_id as string | undefined,
+    transportadora: (d.transportadoras as Transportadora | undefined) ?? undefined,
     valor_frete: d.valor_frete != null ? Number(d.valor_frete) : undefined,
     valor_frete_unitario:
       d.valor_frete_unitario != null ? Number(d.valor_frete_unitario) : undefined,
-    observacoes: d.observacoes,
-    obs_logistica: d.obs_logistica,
-    liberado_por: d.liberado_por,
-    criado_por: d.criado_por,
-    criado_em: d.criado_em,
-    atualizado_em: d.atualizado_em,
+    observacoes: d.observacoes as string | undefined,
+    obs_logistica: d.obs_logistica as string | undefined,
+    liberado_por: d.liberado_por as string | undefined,
+    criado_por: d.criado_por as string | undefined,
+    criado_em: d.criado_em as string,
+    atualizado_em: d.atualizado_em as string,
   };
 }
 
-function mapCotacao(d: any): CotacaoFrete {
+function mapCotacao(d: Record<string, unknown>): CotacaoFrete {
   return {
-    id: d.id,
-    carregamento_id: d.carregamento_id,
-    transportadora_id: d.transportadora_id,
-    transportadora: d.transportadoras ?? undefined,
+    id: d.id as string,
+    carregamento_id: d.carregamento_id as string,
+    transportadora_id: d.transportadora_id as string | undefined,
+    transportadora: (d.transportadoras as Transportadora | undefined) ?? undefined,
     valor_cotado: d.valor_cotado != null ? Number(d.valor_cotado) : undefined,
     prazo_dias: d.prazo_dias != null ? Number(d.prazo_dias) : undefined,
-    validade_cotacao: d.validade_cotacao,
-    status: d.status,
-    observacoes: d.observacoes,
-    arquivo_cotacao: d.arquivo_cotacao,
-    solicitado_por: d.solicitado_por,
-    respondido_por: d.respondido_por,
-    criado_em: d.criado_em,
-    atualizado_em: d.atualizado_em,
+    validade_cotacao: d.validade_cotacao as string | undefined,
+    status: d.status as CotacaoFrete['status'],
+    observacoes: d.observacoes as string | undefined,
+    arquivo_cotacao: d.arquivo_cotacao as string | undefined,
+    solicitado_por: d.solicitado_por as string | undefined,
+    respondido_por: d.respondido_por as string | undefined,
+    criado_em: d.criado_em as string,
+    atualizado_em: d.atualizado_em as string,
   };
 }
 
-function mapTransportadora(d: any): Transportadora {
+function mapTransportadora(d: Record<string, unknown>): Transportadora {
   return {
-    id: d.id,
-    nome: d.nome,
-    cnpj: d.cnpj,
-    contato: d.contato,
-    telefone: d.telefone,
-    email: d.email,
-    ativo: d.ativo ?? true,
-    criado_em: d.criado_em,
+    id: d.id as string,
+    nome: d.nome as string,
+    cnpj: d.cnpj as string | undefined,
+    contato: d.contato as string | undefined,
+    telefone: d.telefone as string | undefined,
+    email: d.email as string | undefined,
+    ativo: (d.ativo ?? true) as boolean,
+    criado_em: d.criado_em as string | undefined,
   };
 }
 
-function mapFilial(d: any): Filial {
+function mapFilial(d: Record<string, unknown>): Filial {
   return {
-    id: d.id,
-    nome: d.nome,
-    codigo: d.codigo,
-    cidade: d.cidade,
-    estado: d.estado,
-    ativo: d.ativo ?? true,
-    criado_em: d.criado_em,
+    id: d.id as string,
+    nome: d.nome as string,
+    codigo: d.codigo as string,
+    cidade: d.cidade as string | undefined,
+    estado: d.estado as string | undefined,
+    ativo: (d.ativo ?? true) as boolean,
+    criado_em: d.criado_em as string | undefined,
   };
 }
 
 // Maps a `branches` table row (from Configurações) to the Filial interface
-function mapBranchToFilial(d: any): Filial {
+function mapBranchToFilial(d: Record<string, unknown>): Filial {
   return {
-    id: d.id,
-    nome: d.name,
-    codigo: d.id_numeric != null ? String(d.id_numeric) : (d.id ? d.id.slice(0, 8) : ''),
-    ativo: d.ativo ?? true,
+    id: d.id as string,
+    nome: d.name as string,
+    codigo: d.id_numeric != null ? String(d.id_numeric) : d.id ? (d.id as string).slice(0, 8) : '',
+    ativo: (d.ativo ?? true) as boolean,
   };
 }
 
