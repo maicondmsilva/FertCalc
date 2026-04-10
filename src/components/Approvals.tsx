@@ -21,6 +21,7 @@ import {
   createNotification,
   getUsers,
 } from '../services/db';
+import { logAudit } from '../services/auditService';
 import { useToast } from './Toast';
 import { useConfirm } from '../hooks/useConfirm';
 import { ConfirmDialog } from './ui/ConfirmDialog';
@@ -167,6 +168,19 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
         type: 'pricing_approval',
       });
 
+      await logAudit({
+        user_id: currentUser.id,
+        user_name: currentUser.name,
+        action: newStatus === 'Aprovada' ? 'pricing.approved' : 'pricing.rejected',
+        entity_type: 'pricing_record',
+        entity_id: id,
+        metadata: {
+          client: pricing.factors?.client?.name,
+          formattedCod: pricing.formattedCod,
+          reason: newStatus === 'Reprovada' ? reason : undefined,
+        },
+      });
+
       setAllPricings((prev) =>
         prev.map((p) =>
           p.id === id
@@ -261,6 +275,20 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
         logger.warn('Falha ao enviar notificação:', notifyErr);
       }
 
+      await logAudit({
+        user_id: currentUser.id,
+        user_name: currentUser.name,
+        action:
+          newStatus === 'Aprovada' ? 'pricing.deletion_approved' : 'pricing.deletion_rejected',
+        entity_type: 'pricing_record',
+        entity_id: id,
+        metadata: {
+          client: pricing.factors?.client?.name,
+          formattedCod: pricing.formattedCod,
+          reason: newStatus === 'Reprovada' ? reason : undefined,
+        },
+      });
+
       const updatedPricings = allPricings.map((p) =>
         p.id === id
           ? {
@@ -300,6 +328,19 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
         date: new Date().toISOString(),
         read: false,
         type: 'goal_approval',
+      });
+      await logAudit({
+        user_id: currentUser.id,
+        user_name: currentUser.name,
+        action: newStatus === 'Aprovada' ? 'goal.approved' : 'goal.rejected',
+        entity_type: 'goal',
+        entity_id: id,
+        metadata: {
+          userId: goal.userId,
+          type: goal.type,
+          month: goal.month,
+          year: goal.year,
+        },
       });
       setGoals((prev) => prev.filter((g) => g.id !== id));
       showSuccess(`Meta ${newStatus.toLowerCase()} com sucesso!`);

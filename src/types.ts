@@ -84,7 +84,6 @@ export interface User {
   email: string;
   name: string;
   nickname: string;
-  password?: string;
   ativo: boolean;
   role: 'admin' | 'user' | 'manager' | 'master';
   managedUserIds?: string[];

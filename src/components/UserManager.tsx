@@ -186,7 +186,6 @@ export default function UserManager({ currentUser }: UserManagerProps) {
           managedUserIds: formData.role === 'manager' ? formData.managedUserIds : [],
           permissions: formData.permissions,
         };
-        if (formData.password) payload.password = formData.password;
         await updateUser(editingId, payload);
         setEditingId(null);
       } else {
@@ -204,7 +203,6 @@ export default function UserManager({ currentUser }: UserManagerProps) {
           name: formData.name,
           email: formData.email,
           nickname: formData.nickname,
-          password: formData.password,
           role: formData.role,
           ativo: formData.ativo,
           managedUserIds: formData.role === 'manager' ? formData.managedUserIds : [],

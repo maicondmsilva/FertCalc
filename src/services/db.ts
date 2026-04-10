@@ -94,14 +94,13 @@ export async function getUserByEmail(emailOrNickname: string): Promise<User | nu
   return mapUser(data);
 }
 
-export async function createUser(user: Omit<User, 'id'> & { password: string }): Promise<User> {
+export async function createUser(user: Omit<User, 'id'>): Promise<User> {
   const { data, error } = await supabase
     .from('app_users')
     .insert({
       email: user.email,
       name: user.name,
       nickname: user.nickname,
-      password: user.password,
       role: user.role,
       ativo: user.ativo ?? true,
       managed_user_ids: user.managedUserIds || [],
@@ -113,15 +112,11 @@ export async function createUser(user: Omit<User, 'id'> & { password: string }):
   return mapUser(data);
 }
 
-export async function updateUser(
-  id: string,
-  user: Partial<User> & { password?: string }
-): Promise<void> {
+export async function updateUser(id: string, user: Partial<User>): Promise<void> {
   const payload: any = { updated_at: new Date().toISOString() };
   if (user.email !== undefined) payload.email = user.email;
   if (user.name !== undefined) payload.name = user.name;
   if (user.nickname !== undefined) payload.nickname = user.nickname;
-  if (user.password !== undefined && user.password !== '') payload.password = user.password;
   if (user.role !== undefined) payload.role = user.role;
   if (user.ativo !== undefined) payload.ativo = user.ativo;
   if (user.managedUserIds !== undefined) payload.managed_user_ids = user.managedUserIds;
@@ -1500,17 +1495,15 @@ export async function getMgmtConfigs(): Promise<ConfiguracaoIndicador[]> {
 }
 
 export async function upsertMgmtConfig(c: ConfiguracaoIndicador): Promise<void> {
-  const { error } = await supabase
-    .from('management_configs')
-    .upsert(
-      {
-        unidade_id: c.unidade_id,
-        indicador_id: c.indicador_id,
-        nome_personalizado: c.nome_personalizado,
-        visivel: c.visivel,
-      },
-      { onConflict: 'unidade_id,indicador_id' }
-    );
+  const { error } = await supabase.from('management_configs').upsert(
+    {
+      unidade_id: c.unidade_id,
+      indicador_id: c.indicador_id,
+      nome_personalizado: c.nome_personalizado,
+      visivel: c.visivel,
+    },
+    { onConflict: 'unidade_id,indicador_id' }
+  );
   if (error) throw error;
 }
 

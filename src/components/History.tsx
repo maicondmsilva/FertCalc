@@ -33,6 +33,7 @@ import { ConfirmDialog } from './ui/ConfirmDialog';
 import { useConfirm } from '../hooks/useConfirm';
 import { getPricingTotalTons, getPricingTotalSaleValue } from '../utils/pricingMetrics';
 import { notifyPricingDeleted } from '../services/notificationService';
+import { logAudit } from '../services/auditService';
 
 interface HistoryProps {
   onEdit?: (pricing: PricingRecord) => void;
@@ -201,6 +202,18 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
 
         // ✅ Notificar Exclusão
         await notifyPricingDeleted(pricing, currentUser);
+
+        await logAudit({
+          user_id: currentUser.id,
+          user_name: currentUser.name,
+          action: 'pricing.deleted',
+          entity_type: 'pricing_record',
+          entity_id: id,
+          metadata: {
+            client: pricing.factors?.client?.name,
+            formattedCod: pricing.formattedCod,
+          },
+        });
 
         setPricings(pricings.filter((p) => p.id !== id));
         showSuccess('Precificação excluída com sucesso!');
