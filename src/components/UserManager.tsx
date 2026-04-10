@@ -241,18 +241,26 @@ export default function UserManager({ currentUser }: UserManagerProps) {
   };
 
   /**
-   * Verifica se o usuário logado pode editar/excluir outro usuário.
-   * Apenas master pode gerenciar outros masters.
-   * Admin não pode editar/excluir master.
+   * Verifica se o usuário logado pode editar outro usuário.
+   * Apenas master pode editar outros masters. Usuário pode editar a si mesmo.
    */
-  const canManageUser = (targetUser: User): boolean => {
+  const canEditUser = (targetUser: User): boolean => {
     if (targetUser.role === 'master' && currentUser.role !== 'master') return false;
-    if (targetUser.id === currentUser.id) return false; // Não pode excluir a si mesmo
+    return true;
+  };
+
+  /**
+   * Verifica se o usuário logado pode excluir outro usuário.
+   * Apenas master pode excluir outros masters. Não pode excluir a si mesmo.
+   */
+  const canDeleteUser = (targetUser: User): boolean => {
+    if (targetUser.role === 'master' && currentUser.role !== 'master') return false;
+    if (targetUser.id === currentUser.id) return false;
     return true;
   };
 
   const startEdit = (user: User) => {
-    if (user.role === 'master' && currentUser.role !== 'master') {
+    if (!canEditUser(user)) {
       showError('Apenas usuários Master podem editar outros usuários Master.');
       return;
     }
@@ -287,7 +295,7 @@ export default function UserManager({ currentUser }: UserManagerProps) {
 
   const handleDeleteUser = async (id: string) => {
     const targetUser = users.find((u) => u.id === id);
-    if (targetUser && !canManageUser(targetUser)) {
+    if (targetUser && !canDeleteUser(targetUser)) {
       showError('Você não tem permissão para excluir este usuário.');
       return;
     }
@@ -857,29 +865,25 @@ export default function UserManager({ currentUser }: UserManagerProps) {
                     <div className="flex justify-end gap-2">
                       <button
                         onClick={() => startEdit(user)}
-                        disabled={!canManageUser(user) && user.id !== currentUser.id}
+                        disabled={!canEditUser(user)}
                         className={`p-1 transition-colors ${
-                          canManageUser(user) || user.id === currentUser.id
+                          canEditUser(user)
                             ? 'text-stone-400 hover:text-emerald-600'
                             : 'text-stone-200 cursor-not-allowed'
                         }`}
-                        title={
-                          canManageUser(user) || user.id === currentUser.id
-                            ? 'Editar'
-                            : 'Sem permissão para editar'
-                        }
+                        title={canEditUser(user) ? 'Editar' : 'Sem permissão para editar'}
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleDeleteUser(user.id)}
-                        disabled={!canManageUser(user)}
+                        disabled={!canDeleteUser(user)}
                         className={`p-1 transition-colors ${
-                          canManageUser(user)
+                          canDeleteUser(user)
                             ? 'text-stone-400 hover:text-red-500'
                             : 'text-stone-200 cursor-not-allowed'
                         }`}
-                        title={canManageUser(user) ? 'Excluir' : 'Sem permissão para excluir'}
+                        title={canDeleteUser(user) ? 'Excluir' : 'Sem permissão para excluir'}
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>

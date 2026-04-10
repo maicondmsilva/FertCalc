@@ -134,9 +134,8 @@ export async function restoreSession(): Promise<User | null> {
  * Cria um usuário no Supabase Auth (auth.users) vinculado ao perfil da app.
  * Deve ser chamado ao criar um novo usuário pelo UserManager.
  *
- * NOTA: Usa supabase.auth.signUp que funciona com a anon key.
- * Em produção, considere usar a Admin API (supabase.auth.admin.createUser)
- * via Edge Function para evitar e-mail de confirmação automático.
+ * TODO: Migrar para supabase.auth.admin.createUser via Edge Function em produção.
+ * Usar signUp com anon key pode disparar e-mails de confirmação automaticamente.
  */
 export async function createAuthUser(
   email: string,
@@ -170,11 +169,11 @@ export async function createAuthUser(
 
 /**
  * Atualiza a senha de um usuário no Supabase Auth.
- * Utiliza supabase.auth.updateUser para o usuário logado.
+ * Utiliza supabase.auth.updateUser — funciona apenas para o usuário logado
+ * atualizando sua própria senha (ex: via página de redefinição de senha).
  *
- * NOTA: Esta função só funciona para o usuário logado (atualizar a própria senha).
- * Para admin atualizar senha de outro usuário, seria necessário usar
- * supabase.auth.admin.updateUserById via Edge Function.
+ * TODO: Para admin atualizar senha de outro usuário, implementar Edge Function
+ * usando supabase.auth.admin.updateUserById com a service_role key.
  */
 export async function updateAuthPassword(
   newPassword: string
