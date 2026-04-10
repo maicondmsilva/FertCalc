@@ -12,51 +12,52 @@ import {
 // ============================================================
 // HELPERS
 // ============================================================
-function mapExpense(d: any): CreditCardExpense {
+function mapExpense(d: Record<string, unknown>): CreditCardExpense {
   return {
-    id: d.id,
-    description: d.description,
+    id: d.id as string,
+    description: d.description as string,
     amount: Number(d.amount),
-    date: d.date,
-    categoryId: d.category_id,
-    categoryName: d.category_name ?? d.expense_categories?.name,
+    date: d.date as string,
+    categoryId: d.category_id as string,
+    categoryName: (d.category_name ??
+      (d.expense_categories as Record<string, unknown> | null)?.name) as string | undefined,
     status: d.status as ExpenseStatus,
-    cardName: d.card_name,
-    installments: d.installments ?? 1,
-    currentInstallment: d.current_installment,
-    receipt: d.receipt,
-    observation: d.observation,
-    userId: d.user_id,
-    userName: d.user_name,
-    periodMonth: d.period_month,
-    periodYear: d.period_year,
-    createdAt: d.created_at,
-    updatedAt: d.updated_at,
+    cardName: d.card_name as string | undefined,
+    installments: (d.installments ?? 1) as number,
+    currentInstallment: d.current_installment as number | undefined,
+    receipt: d.receipt as string | undefined,
+    observation: d.observation as string | undefined,
+    userId: d.user_id as string,
+    userName: d.user_name as string,
+    periodMonth: d.period_month as number,
+    periodYear: d.period_year as number,
+    createdAt: d.created_at as string | undefined,
+    updatedAt: d.updated_at as string | undefined,
   };
 }
 
-function mapCategory(d: any): ExpenseCategory {
+function mapCategory(d: Record<string, unknown>): ExpenseCategory {
   return {
-    id: d.id,
-    name: d.name,
+    id: d.id as string,
+    name: d.name as string,
     budgetLimit: d.budget_limit != null ? Number(d.budget_limit) : undefined,
-    color: d.color,
-    icon: d.icon,
-    active: d.active ?? true,
-    createdAt: d.created_at,
-    updatedAt: d.updated_at,
+    color: d.color as string | undefined,
+    icon: d.icon as string | undefined,
+    active: (d.active ?? true) as boolean,
+    createdAt: d.created_at as string | undefined,
+    updatedAt: d.updated_at as string | undefined,
   };
 }
 
-function mapAudit(d: any): ExpenseAudit {
+function mapAudit(d: Record<string, unknown>): ExpenseAudit {
   return {
-    id: d.id,
-    expenseId: d.expense_id,
+    id: d.id as string,
+    expenseId: d.expense_id as string,
     action: d.action as AuditAction,
-    userId: d.user_id,
-    userName: d.user_name,
-    observation: d.observation,
-    createdAt: d.created_at,
+    userId: d.user_id as string,
+    userName: d.user_name as string,
+    observation: d.observation as string | undefined,
+    createdAt: d.created_at as string,
   };
 }
 
@@ -88,7 +89,11 @@ export async function getExpenseById(id: string): Promise<CreditCardExpense | nu
   return mapExpense(data);
 }
 
-export async function createExpense(expense: Omit<CreditCardExpense, 'id' | 'createdAt' | 'updatedAt' | 'categoryName'>, auditUserId: string, auditUserName: string): Promise<CreditCardExpense> {
+export async function createExpense(
+  expense: Omit<CreditCardExpense, 'id' | 'createdAt' | 'updatedAt' | 'categoryName'>,
+  auditUserId: string,
+  auditUserName: string
+): Promise<CreditCardExpense> {
   const { data, error } = await supabase
     .from('credit_card_expenses')
     .insert({
@@ -117,8 +122,13 @@ export async function createExpense(expense: Omit<CreditCardExpense, 'id' | 'cre
   return mapExpense(data);
 }
 
-export async function updateExpense(id: string, expense: Partial<CreditCardExpense>, auditUserId: string, auditUserName: string): Promise<void> {
-  const payload: any = { updated_at: new Date().toISOString() };
+export async function updateExpense(
+  id: string,
+  expense: Partial<CreditCardExpense>,
+  auditUserId: string,
+  auditUserName: string
+): Promise<void> {
+  const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (expense.description !== undefined) payload.description = expense.description;
   if (expense.amount !== undefined) payload.amount = expense.amount;
   if (expense.date !== undefined) payload.date = expense.date;
@@ -126,7 +136,8 @@ export async function updateExpense(id: string, expense: Partial<CreditCardExpen
   if (expense.status !== undefined) payload.status = expense.status;
   if (expense.cardName !== undefined) payload.card_name = expense.cardName;
   if (expense.installments !== undefined) payload.installments = expense.installments;
-  if (expense.currentInstallment !== undefined) payload.current_installment = expense.currentInstallment;
+  if (expense.currentInstallment !== undefined)
+    payload.current_installment = expense.currentInstallment;
   if (expense.receipt !== undefined) payload.receipt = expense.receipt;
   if (expense.observation !== undefined) payload.observation = expense.observation;
   if (expense.periodMonth !== undefined) payload.period_month = expense.periodMonth;
@@ -138,7 +149,11 @@ export async function updateExpense(id: string, expense: Partial<CreditCardExpen
   await createAuditEntry(id, 'editado', auditUserId, auditUserName);
 }
 
-export async function deleteExpense(id: string, auditUserId: string, auditUserName: string): Promise<void> {
+export async function deleteExpense(
+  id: string,
+  auditUserId: string,
+  auditUserName: string
+): Promise<void> {
   await createAuditEntry(id, 'excluido', auditUserId, auditUserName);
   const { error } = await supabase.from('credit_card_expenses').delete().eq('id', id);
   if (error) throw error;
@@ -162,7 +177,12 @@ export async function approveExpense(id: string, userId: string, userName: strin
   await createAuditEntry(id, 'aprovado', userId, userName);
 }
 
-export async function rejectExpense(id: string, userId: string, userName: string, observation: string): Promise<void> {
+export async function rejectExpense(
+  id: string,
+  userId: string,
+  userName: string,
+  observation: string
+): Promise<void> {
   const { error } = await supabase
     .from('credit_card_expenses')
     .update({ status: 'rejeitado', updated_at: new Date().toISOString() })
@@ -184,7 +204,13 @@ export async function getExpenseAudit(expenseId: string): Promise<ExpenseAudit[]
   return data.map(mapAudit);
 }
 
-async function createAuditEntry(expenseId: string, action: AuditAction, userId: string, userName: string, observation?: string): Promise<void> {
+async function createAuditEntry(
+  expenseId: string,
+  action: AuditAction,
+  userId: string,
+  userName: string,
+  observation?: string
+): Promise<void> {
   const { error } = await supabase.from('expense_audit').insert({
     expense_id: expenseId,
     action,
@@ -210,7 +236,9 @@ export async function getExpenseCategories(): Promise<ExpenseCategory[]> {
   return data.map(mapCategory);
 }
 
-export async function createExpenseCategory(category: Omit<ExpenseCategory, 'id' | 'createdAt' | 'updatedAt'>): Promise<ExpenseCategory> {
+export async function createExpenseCategory(
+  category: Omit<ExpenseCategory, 'id' | 'createdAt' | 'updatedAt'>
+): Promise<ExpenseCategory> {
   const { data, error } = await supabase
     .from('expense_categories')
     .insert({
@@ -226,8 +254,11 @@ export async function createExpenseCategory(category: Omit<ExpenseCategory, 'id'
   return mapCategory(data);
 }
 
-export async function updateExpenseCategory(id: string, category: Partial<ExpenseCategory>): Promise<void> {
-  const payload: any = { updated_at: new Date().toISOString() };
+export async function updateExpenseCategory(
+  id: string,
+  category: Partial<ExpenseCategory>
+): Promise<void> {
+  const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (category.name !== undefined) payload.name = category.name;
   if (category.budgetLimit !== undefined) payload.budget_limit = category.budgetLimit;
   if (category.color !== undefined) payload.color = category.color;
@@ -266,16 +297,15 @@ export async function getCheckedCount(): Promise<number> {
 // ============================================================
 // BUDGET STATUS
 // ============================================================
-export async function getCategoryBudgetStatus(period: ExpensePeriod): Promise<CategoryBudgetStatus[]> {
-  const [categories, expenses] = await Promise.all([
-    getExpenseCategories(),
-    getExpenses(period),
-  ]);
+export async function getCategoryBudgetStatus(
+  period: ExpensePeriod
+): Promise<CategoryBudgetStatus[]> {
+  const [categories, expenses] = await Promise.all([getExpenseCategories(), getExpenses(period)]);
 
   return categories
-    .filter(c => c.active)
-    .map(category => {
-      const categoryExpenses = expenses.filter(e => e.categoryId === category.id);
+    .filter((c) => c.active)
+    .map((category) => {
+      const categoryExpenses = expenses.filter((e) => e.categoryId === category.id);
       const totalSpent = categoryExpenses.reduce((sum, e) => sum + e.amount, 0);
       const budgetLimit = category.budgetLimit || 0;
       return {

@@ -1,27 +1,27 @@
 import { supabase } from './supabase';
 import { PedidoVenda } from '../types';
 
-function mapPedido(d: any): PedidoVenda {
+function mapPedido(d: Record<string, unknown>): PedidoVenda {
   return {
-    id: d.id,
-    precificacao_id: d.precificacao_id,
-    numero_pedido: d.numero_pedido,
-    barra_pedido: d.barra_pedido,
-    data_pedido: d.data_pedido,
+    id: d.id as string,
+    precificacao_id: d.precificacao_id as string,
+    numero_pedido: d.numero_pedido as string | undefined,
+    barra_pedido: d.barra_pedido as string | undefined,
+    data_pedido: d.data_pedido as string | undefined,
     quantidade_real: d.quantidade_real != null ? Number(d.quantidade_real) : undefined,
-    embalagem: d.embalagem,
+    embalagem: d.embalagem as string | undefined,
     valor_unitario_negociado:
       d.valor_unitario_negociado != null ? Number(d.valor_unitario_negociado) : undefined,
     valor_total_negociado:
       d.valor_total_negociado != null ? Number(d.valor_total_negociado) : undefined,
-    tipo_frete: d.tipo_frete,
+    tipo_frete: d.tipo_frete as string | undefined,
     valor_frete: d.valor_frete != null ? Number(d.valor_frete) : undefined,
-    status: d.status ?? 'pendente',
-    pdf_url: d.pdf_url,
-    dados_extraidos: d.dados_extraidos,
-    importado_por: d.importado_por,
-    criado_em: d.criado_em,
-    atualizado_em: d.atualizado_em,
+    status: (d.status ?? 'pendente') as PedidoVenda['status'],
+    pdf_url: d.pdf_url as string | undefined,
+    dados_extraidos: d.dados_extraidos as Record<string, unknown> | undefined,
+    importado_por: d.importado_por as string | undefined,
+    criado_em: d.criado_em as string | undefined,
+    atualizado_em: d.atualizado_em as string | undefined,
   };
 }
 
