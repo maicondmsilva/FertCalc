@@ -276,7 +276,7 @@ function ModalNovoCarregamento({ filiais, onSave, onClose }: ModalNovoCarregamen
   const selectPedido = (p: EnrichedPedido) => {
     const pricing = p.pricing;
     const tipoFrete = derivarTipoFrete(p, pricing);
-    const freteVal = pricing?.factors?.freight ?? 0;
+    const freteVal = Number(pricing?.factors?.freight ?? 0);
     setForm((prev) => ({
       ...prev,
       pedido_venda_id: p.id || '',
@@ -287,7 +287,7 @@ function ModalNovoCarregamento({ filiais, onSave, onClose }: ModalNovoCarregamen
           ? String(pricing.factors.totalTons)
           : prev.quantidade_total,
       tipo_frete: tipoFrete,
-      valor_frete: freteVal > 0 ? String(freteVal) : '',
+      valor_frete: freteVal > 0 ? freteVal.toFixed(2) : '',
       cliente_nome: p.clientName || pricing?.factors?.client?.name || '',
       _freteAutoDetectado: true,
     }));
@@ -636,6 +636,191 @@ function ModalCotacao({ carregamento, transportadoras, onSave, onClose }: ModalC
               className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg text-sm font-bold transition-colors"
             >
               {saving ? 'Salvando...' : 'Solicitar Cotação'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  MODAL: Solicitar Cotação (multi-transportadora)
+// ─────────────────────────────────────────────────────────────────────────────
+interface ModalSolicitarCotacaoProps {
+  carregamento: Carregamento;
+  transportadoras: Transportadora[];
+  onSave: (
+    carregamentoId: string,
+    transportadoraIds: string[],
+    prazo_dias?: number,
+    observacoes?: string
+  ) => Promise<void>;
+  onClose: () => void;
+}
+
+function ModalSolicitarCotacao({
+  carregamento,
+  transportadoras,
+  onSave,
+  onClose,
+}: ModalSolicitarCotacaoProps) {
+  const { showError } = useToast();
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [prazo, setPrazo] = useState('');
+  const [observacoes, setObservacoes] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const toggleTransportadora = (id: string) => {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedIds.length === 0) {
+      showError('Selecione ao menos uma transportadora.');
+      return;
+    }
+    setSaving(true);
+    await onSave(
+      carregamento.id,
+      selectedIds,
+      prazo ? parseInt(prazo) : undefined,
+      observacoes || undefined
+    );
+    setSaving(false);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between p-6 border-b border-stone-100 flex-shrink-0">
+          <h3 className="text-lg font-bold text-stone-800 flex items-center gap-2">
+            <Truck className="w-5 h-5 text-blue-600" /> Solicitar Cotação de Frete
+          </h3>
+          <button onClick={onClose} className="p-1 hover:bg-stone-100 rounded-lg transition-colors">
+            <X className="w-5 h-5 text-stone-400" />
+          </button>
+        </div>
+
+        {/* Carregamento details */}
+        <div className="px-6 py-4 bg-blue-50 border-b border-blue-100 flex-shrink-0">
+          <p className="font-mono font-bold text-stone-800 text-sm">
+            {carregamento.numero_carregamento}
+          </p>
+          <div className="flex items-center gap-3 mt-1 flex-wrap">
+            <span
+              className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${
+                carregamento.tipo_frete === 'CIF'
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'bg-amber-100 text-amber-700'
+              }`}
+            >
+              {carregamento.tipo_frete}
+            </span>
+            <span className="text-xs text-stone-600">
+              {carregamento.quantidade_total.toFixed(3)} ton
+            </span>
+            {carregamento.filial && (
+              <span className="text-xs text-stone-600 flex items-center gap-1">
+                <MapPin className="w-3 h-3" />
+                {carregamento.filial.nome}
+              </span>
+            )}
+            {carregamento.data_prevista_carregamento && (
+              <span className="text-xs text-stone-500 flex items-center gap-1">
+                <Calendar className="w-3 h-3" />
+                {fmtDate(carregamento.data_prevista_carregamento)}
+              </span>
+            )}
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto flex-1">
+          {/* Transportadoras checkboxes */}
+          <div>
+            <label className="block text-xs font-bold text-stone-500 uppercase mb-2">
+              Selecionar Transportadoras *
+            </label>
+            {transportadoras.length === 0 ? (
+              <p className="text-sm text-stone-400">Nenhuma transportadora cadastrada.</p>
+            ) : (
+              <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                {transportadoras.map((t) => (
+                  <label
+                    key={t.id}
+                    className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
+                      selectedIds.includes(t.id)
+                        ? 'border-blue-400 bg-blue-50'
+                        : 'border-stone-200 hover:border-stone-300 hover:bg-stone-50'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(t.id)}
+                      onChange={() => toggleTransportadora(t.id)}
+                      className="w-4 h-4 text-blue-600 rounded flex-shrink-0"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-stone-800">{t.nome}</p>
+                      {t.email && <p className="text-xs text-stone-500">{t.email}</p>}
+                    </div>
+                  </label>
+                ))}
+              </div>
+            )}
+            {selectedIds.length > 0 && (
+              <p className="text-xs text-blue-600 mt-2 font-medium">
+                {selectedIds.length} transportadora
+                {selectedIds.length > 1 ? 's' : ''} selecionada
+                {selectedIds.length > 1 ? 's' : ''}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+              Prazo Desejado (dias) — opcional
+            </label>
+            <input
+              type="number"
+              min="1"
+              value={prazo}
+              onChange={(e) => setPrazo(e.target.value)}
+              placeholder="Ex: 7"
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+              Observações — opcional
+            </label>
+            <textarea
+              value={observacoes}
+              onChange={(e) => setObservacoes(e.target.value)}
+              rows={2}
+              placeholder="Instruções especiais, restrições, etc."
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm resize-none"
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-5 py-2 border border-stone-300 rounded-lg text-sm font-bold text-stone-600 hover:bg-stone-50 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving || selectedIds.length === 0}
+              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg text-sm font-bold transition-colors"
+            >
+              {saving
+                ? 'Solicitando...'
+                : `Solicitar${selectedIds.length > 0 ? ` (${selectedIds.length})` : ''}`}
             </button>
           </div>
         </form>
@@ -1011,50 +1196,297 @@ function SolicitacaoCotacao({
   carregamentos,
   transportadoras,
   loading,
-  onAction,
+  onSolicitarCotacao,
 }: {
   carregamentos: Carregamento[];
   transportadoras: Transportadora[];
   loading: boolean;
-  onAction: (c: Carregamento, action: string) => void;
+  onSolicitarCotacao: (
+    carregamentoId: string,
+    transportadoraIds: string[],
+    prazo_dias?: number,
+    observacoes?: string
+  ) => Promise<void>;
 }) {
   const elegiveis = carregamentos.filter((c) => c.status === 'aguardando_cotacao');
   const emAndamento = carregamentos.filter((c) =>
     ['cotacao_solicitada', 'cotacao_recebida'].includes(c.status)
   );
 
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [modalCarregamento, setModalCarregamento] = useState<Carregamento | null>(null);
+  const [cotacoesPorCarregamento, setCotacoesPorCarregamento] = useState<
+    Record<string, CotacaoFrete[]>
+  >({});
+  const [loadingCotacoes, setLoadingCotacoes] = useState<Record<string, boolean>>({});
+
+  const toggleExpand = async (c: Carregamento) => {
+    if (expandedId === c.id) {
+      setExpandedId(null);
+      return;
+    }
+    setExpandedId(c.id);
+    if (!cotacoesPorCarregamento[c.id]) {
+      setLoadingCotacoes((prev) => ({ ...prev, [c.id]: true }));
+      const cotacoes = await getCotacoesCarregamento(c.id);
+      setCotacoesPorCarregamento((prev) => ({ ...prev, [c.id]: cotacoes }));
+      setLoadingCotacoes((prev) => ({ ...prev, [c.id]: false }));
+    }
+  };
+
+  const STATUS_COTACAO_COLOR: Record<string, string> = {
+    pendente: 'bg-yellow-100 text-yellow-700',
+    aprovada: 'bg-green-100 text-green-700',
+    reprovada: 'bg-red-100 text-red-700',
+    expirada: 'bg-stone-100 text-stone-500',
+  };
+
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-xl border border-stone-200 shadow-sm">
-        <div className="p-4 border-b border-stone-100">
+      {/* ── Aguardando Cotação ── */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <Clock className="w-4 h-4 text-yellow-500" />
           <h3 className="font-bold text-stone-800 text-sm">
             Aguardando Cotação ({elegiveis.length})
           </h3>
-          <p className="text-xs text-stone-500 mt-0.5">
-            Clique em "Solicitar Cotação" para iniciar o processo
-          </p>
+          <span className="text-xs text-stone-400 font-normal">
+            — selecione as transportadoras para solicitar cotação
+          </span>
         </div>
+
         {loading ? (
           <div className="flex justify-center py-12">
             <RefreshCw className="w-6 h-6 animate-spin text-stone-300" />
           </div>
+        ) : elegiveis.length === 0 ? (
+          <div className="bg-white rounded-xl border border-stone-200 shadow-sm p-8 text-center text-stone-400">
+            <Package className="w-12 h-12 mx-auto mb-3 opacity-30" />
+            <p className="text-sm">Nenhum carregamento aguardando cotação</p>
+          </div>
         ) : (
-          <TabelaCarregamentos
-            carregamentos={elegiveis}
-            onAction={onAction}
-            showActions={['cotacao']}
-          />
+          <div className="space-y-3">
+            {elegiveis.map((c) => (
+              <div
+                key={c.id}
+                className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden"
+              >
+                <div className="p-4 flex items-center gap-3">
+                  <button
+                    onClick={() => toggleExpand(c)}
+                    className="flex items-center gap-2 flex-1 text-left min-w-0"
+                  >
+                    {expandedId === c.id ? (
+                      <ChevronDown className="w-4 h-4 text-stone-400 flex-shrink-0" />
+                    ) : (
+                      <ChevronRight className="w-4 h-4 text-stone-400 flex-shrink-0" />
+                    )}
+                    <div className="min-w-0">
+                      <p className="font-mono font-bold text-stone-800 text-sm">
+                        {c.numero_carregamento}
+                      </p>
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                        <span
+                          className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                            c.tipo_frete === 'CIF'
+                              ? 'bg-blue-100 text-blue-700'
+                              : 'bg-amber-100 text-amber-700'
+                          }`}
+                        >
+                          {c.tipo_frete}
+                        </span>
+                        <span className="text-xs text-stone-500">
+                          {c.quantidade_total.toFixed(3)} ton
+                        </span>
+                        {c.filial && (
+                          <span className="text-xs text-stone-500 flex items-center gap-1">
+                            <MapPin className="w-3 h-3" />
+                            {c.filial.nome}
+                          </span>
+                        )}
+                        {c.data_prevista_carregamento && (
+                          <span className="text-xs text-stone-500 flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            {fmtDate(c.data_prevista_carregamento)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => setModalCarregamento(c)}
+                    className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 text-xs font-bold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    <Truck className="w-3.5 h-3.5" />
+                    Solicitar Cotação
+                  </button>
+                </div>
+
+                {expandedId === c.id && (
+                  <div className="border-t border-stone-100 bg-stone-50 p-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                      <div>
+                        <p className="text-stone-400 font-bold uppercase text-[10px]">Qtd Total</p>
+                        <p className="text-stone-700 font-mono mt-0.5">
+                          {c.quantidade_total.toFixed(3)} ton
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-stone-400 font-bold uppercase text-[10px]">Tipo Frete</p>
+                        <p className="text-stone-700 mt-0.5">{c.tipo_frete}</p>
+                      </div>
+                      <div>
+                        <p className="text-stone-400 font-bold uppercase text-[10px]">
+                          Data Prevista
+                        </p>
+                        <p className="text-stone-700 mt-0.5">
+                          {fmtDate(c.data_prevista_carregamento)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-stone-400 font-bold uppercase text-[10px]">Filial</p>
+                        <p className="text-stone-700 mt-0.5">{c.filial?.nome ?? '—'}</p>
+                      </div>
+                    </div>
+                    {c.observacoes && (
+                      <p className="text-xs text-stone-600 mt-3">
+                        <span className="font-bold">Obs: </span>
+                        {c.observacoes}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
-      <div className="bg-white rounded-xl border border-stone-200 shadow-sm">
-        <div className="p-4 border-b border-stone-100">
+      {/* ── Cotações em Andamento ── */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <ClipboardList className="w-4 h-4 text-blue-500" />
           <h3 className="font-bold text-stone-800 text-sm">
             Cotações em Andamento ({emAndamento.length})
           </h3>
         </div>
-        <TabelaCarregamentos carregamentos={emAndamento} />
+
+        {loading ? (
+          <div className="flex justify-center py-8">
+            <RefreshCw className="w-6 h-6 animate-spin text-stone-300" />
+          </div>
+        ) : emAndamento.length === 0 ? (
+          <div className="bg-white rounded-xl border border-stone-200 shadow-sm p-8 text-center text-stone-400">
+            <p className="text-sm">Nenhuma cotação em andamento</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {emAndamento.map((c) => (
+              <div
+                key={c.id}
+                className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden"
+              >
+                <button
+                  onClick={() => toggleExpand(c)}
+                  className="w-full p-4 flex items-center gap-3 text-left"
+                >
+                  {expandedId === c.id ? (
+                    <ChevronDown className="w-4 h-4 text-stone-400 flex-shrink-0" />
+                  ) : (
+                    <ChevronRight className="w-4 h-4 text-stone-400 flex-shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <p className="font-mono font-bold text-stone-800 text-sm">
+                        {c.numero_carregamento}
+                      </p>
+                      <StatusBadge status={c.status} />
+                      <span
+                        className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                          c.tipo_frete === 'CIF'
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'bg-amber-100 text-amber-700'
+                        }`}
+                      >
+                        {c.tipo_frete}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                      <span className="text-xs text-stone-500">
+                        {c.quantidade_total.toFixed(3)} ton
+                      </span>
+                      {c.filial && <span className="text-xs text-stone-500">{c.filial.nome}</span>}
+                      {c.data_solicitacao_cotacao && (
+                        <span className="text-xs text-stone-400">
+                          Solicitado em: {fmtDate(c.data_solicitacao_cotacao)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </button>
+
+                {expandedId === c.id && (
+                  <div className="border-t border-stone-100 bg-stone-50 p-4">
+                    {loadingCotacoes[c.id] ? (
+                      <div className="flex justify-center py-4">
+                        <RefreshCw className="w-4 h-4 animate-spin text-stone-300" />
+                      </div>
+                    ) : (cotacoesPorCarregamento[c.id] ?? []).length === 0 ? (
+                      <p className="text-xs text-stone-400">Nenhuma cotação registrada.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        <p className="text-xs font-bold text-stone-500 uppercase mb-2">
+                          Transportadoras Contactadas
+                        </p>
+                        {(cotacoesPorCarregamento[c.id] ?? []).map((cot) => (
+                          <div
+                            key={cot.id}
+                            className="flex items-center justify-between p-2 bg-white border border-stone-100 rounded-lg"
+                          >
+                            <div>
+                              <p className="text-xs font-bold text-stone-700">
+                                {cot.transportadora?.nome ?? '—'}
+                              </p>
+                              {cot.prazo_dias != null && (
+                                <p className="text-[10px] text-stone-400">
+                                  Prazo: {cot.prazo_dias} dias
+                                </p>
+                              )}
+                              {cot.observacoes && (
+                                <p className="text-[10px] text-stone-400">{cot.observacoes}</p>
+                              )}
+                            </div>
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded capitalize ${
+                                STATUS_COTACAO_COLOR[cot.status] ?? 'bg-stone-100 text-stone-500'
+                              }`}
+                            >
+                              {cot.status}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
+
+      {/* Modal */}
+      {modalCarregamento && (
+        <ModalSolicitarCotacao
+          carregamento={modalCarregamento}
+          transportadoras={transportadoras}
+          onSave={async (carregamentoId, transportadoraIds, prazo_dias, observacoes) => {
+            await onSolicitarCotacao(carregamentoId, transportadoraIds, prazo_dias, observacoes);
+            setModalCarregamento(null);
+          }}
+          onClose={() => setModalCarregamento(null)}
+        />
+      )}
     </div>
   );
 }
@@ -2153,7 +2585,7 @@ export default function CarregamentoModule({
     }
   };
 
-  // ── Solicitar cotação ─────────────────────────────────────────────────────
+  // ── Solicitar cotação (único — usado pelo ModalCotacao na visão geral) ───────
   const handleSolicitarCotacao = async (carregamentoId: string, form: CotacaoFormData) => {
     try {
       await createCotacao({
@@ -2174,6 +2606,38 @@ export default function CarregamentoModule({
       await load();
     } catch {
       showError('Erro ao solicitar cotação.');
+    }
+  };
+
+  // ── Solicitar cotação para múltiplas transportadoras (view Solicitação) ───
+  const handleSolicitarCotacaoMultipla = async (
+    carregamentoId: string,
+    transportadoraIds: string[],
+    prazo_dias?: number,
+    observacoes?: string
+  ) => {
+    try {
+      await Promise.all(
+        transportadoraIds.map((tid) =>
+          createCotacao({
+            carregamento_id: carregamentoId,
+            transportadora_id: tid,
+            prazo_dias,
+            observacoes,
+            status: 'pendente',
+            solicitado_por: currentUser.id,
+          })
+        )
+      );
+      await updateStatusCarregamento(carregamentoId, 'cotacao_solicitada', {
+        data_solicitacao_cotacao: new Date().toISOString(),
+      });
+      showSuccess(
+        `Cotação solicitada para ${transportadoraIds.length} transportadora${transportadoraIds.length > 1 ? 's' : ''}!`
+      );
+      await load();
+    } catch {
+      showError('Erro ao solicitar cotações.');
     }
   };
 
@@ -2273,7 +2737,7 @@ export default function CarregamentoModule({
           carregamentos={carregamentos}
           transportadoras={transportadoras}
           loading={loading}
-          onAction={handleAction}
+          onSolicitarCotacao={handleSolicitarCotacaoMultipla}
         />
       )}
       {view === 'liberacao' && (
