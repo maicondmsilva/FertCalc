@@ -1,13 +1,13 @@
 import React from 'react';
-import { 
-  Calculator, 
-  History, 
-  Users, 
-  UserCheck, 
-  Target, 
-  Database, 
-  Building2, 
-  Settings, 
+import {
+  Calculator,
+  History,
+  Users,
+  UserCheck,
+  Target,
+  Database,
+  Building2,
+  Settings,
   LogOut,
   ChevronLeft,
   ChevronRight,
@@ -17,7 +17,7 @@ import {
   Download,
   ShieldCheck,
   Shield,
-  CreditCard
+  CreditCard,
 } from 'lucide-react';
 import { User } from '../types';
 
@@ -39,7 +39,7 @@ export const menuItems = [
 
 interface SidebarProps {
   activeTab: string;
-  setActiveTab: (tab: any) => void;
+  setActiveTab: (tab: string) => void;
   currentUser: User | null;
   onLogout: () => void;
   isCollapsed: boolean;
@@ -51,21 +51,20 @@ interface SidebarProps {
   showInstall?: boolean;
 }
 
-export default function Sidebar({ 
-  activeTab, 
-  setActiveTab, 
-  currentUser, 
-  onLogout, 
-  isCollapsed, 
+export default function Sidebar({
+  activeTab,
+  setActiveTab,
+  currentUser,
+  onLogout,
+  isCollapsed,
   setIsCollapsed,
   unreadNotifications,
   searchQuery,
   setSearchQuery,
   onInstall,
-  showInstall
+  showInstall,
 }: SidebarProps) {
-  
-  const hasPermission = (item: any) => {
+  const hasPermission = (item: { permission?: string }) => {
     if (!currentUser) return false;
     if (currentUser.role === 'master' || currentUser.role === 'admin') return true;
     if (!currentUser.permissions) {
@@ -78,10 +77,10 @@ export default function Sidebar({
 
   const filteredItems = menuItems
     .filter(hasPermission)
-    .filter(item => item.label.toLowerCase().includes(searchQuery.toLowerCase()));
+    .filter((item) => item.label.toLowerCase().includes(searchQuery.toLowerCase()));
 
   return (
-    <div 
+    <div
       className={`bg-stone-900 text-white h-screen flex flex-col transition-all duration-300 ${isCollapsed ? 'w-20' : 'w-64'} fixed left-0 top-0 z-50 hidden md:flex`}
     >
       <div className="p-4 flex items-center justify-between border-b border-stone-800">
@@ -93,7 +92,7 @@ export default function Sidebar({
             <span className="font-bold text-lg truncate">AgroCalc</span>
           </div>
         )}
-        <button 
+        <button
           onClick={() => setIsCollapsed(!isCollapsed)}
           className="p-1.5 hover:bg-stone-800 rounded-lg transition-colors"
         >
@@ -105,8 +104,8 @@ export default function Sidebar({
         <div className="px-4 py-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-500" />
-            <input 
-              type="text" 
+            <input
+              type="text"
               placeholder="Buscar menu..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -123,14 +122,16 @@ export default function Sidebar({
               key={item.id}
               onClick={() => setActiveTab(item.id)}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all group relative ${
-                activeTab === item.id 
-                  ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/20' 
+                activeTab === item.id
+                  ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/20'
                   : 'text-stone-400 hover:bg-stone-800 hover:text-white'
               }`}
             >
-              <item.icon className={`w-5 h-5 shrink-0 ${activeTab === item.id ? 'text-white' : 'group-hover:text-emerald-400'}`} />
+              <item.icon
+                className={`w-5 h-5 shrink-0 ${activeTab === item.id ? 'text-white' : 'group-hover:text-emerald-400'}`}
+              />
               {!isCollapsed && <span className="font-medium truncate">{item.label}</span>}
-              
+
               {isCollapsed && (
                 <div className="absolute left-full ml-2 px-2 py-1 bg-stone-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">
                   {item.label}
@@ -138,7 +139,9 @@ export default function Sidebar({
               )}
 
               {item.id === 'approvals' && unreadNotifications > 0 && (
-                <div className={`absolute ${isCollapsed ? 'top-1 right-1' : 'right-3'} bg-red-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center`}>
+                <div
+                  className={`absolute ${isCollapsed ? 'top-1 right-1' : 'right-3'} bg-red-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center`}
+                >
                   {unreadNotifications}
                 </div>
               )}

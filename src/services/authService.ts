@@ -129,3 +129,66 @@ export async function restoreSession(): Promise<User | null> {
     return null;
   }
 }
+
+/**
+ * Cria um usuário no Supabase Auth (auth.users) vinculado ao perfil da app.
+ * Deve ser chamado ao criar um novo usuário pelo UserManager.
+ *
+ * TODO: Migrar para supabase.auth.admin.createUser via Edge Function em produção.
+ * Usar signUp com anon key pode disparar e-mails de confirmação automaticamente.
+ */
+export async function createAuthUser(
+  email: string,
+  password: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        // Dados extras que ficam no auth.users.user_metadata
+        data: { source: 'admin_panel' },
+      },
+    });
+
+    if (error) {
+      logger.warn('[authService] createAuthUser error:', error.message);
+      if (error.message.includes('already registered')) {
+        // Usuário já existe no Auth — ok, pode ser um re-cadastro
+        return { success: true };
+      }
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (err: unknown) {
+    logger.error('[authService] Unexpected error in createAuthUser:', err);
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/**
+ * Atualiza a senha de um usuário no Supabase Auth.
+ * Utiliza supabase.auth.updateUser — funciona apenas para o usuário logado
+ * atualizando sua própria senha (ex: via página de redefinição de senha).
+ *
+ * TODO: Para admin atualizar senha de outro usuário, implementar Edge Function
+ * usando supabase.auth.admin.updateUserById com a service_role key.
+ */
+export async function updateAuthPassword(
+  newPassword: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+
+    if (error) {
+      logger.warn('[authService] updateAuthPassword error:', error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (err: unknown) {
+    logger.error('[authService] Unexpected error in updateAuthPassword:', err);
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}

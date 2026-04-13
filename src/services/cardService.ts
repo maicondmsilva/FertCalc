@@ -1,16 +1,16 @@
 import { supabase } from './supabase';
 import { CreditCard } from '../types/expense.types';
 
-function mapCard(d: any): CreditCard {
+function mapCard(d: Record<string, unknown>): CreditCard {
   return {
-    id: d.id,
-    name: d.name,
-    lastFour: d.last_four,
-    userId: d.user_id,
-    churchId: d.church_id,
-    active: d.active ?? true,
-    createdAt: d.created_at,
-    updatedAt: d.updated_at,
+    id: d.id as string,
+    name: d.name as string,
+    lastFour: d.last_four as string | undefined,
+    userId: d.user_id as string,
+    churchId: d.church_id as string,
+    active: (d.active ?? true) as boolean,
+    createdAt: d.created_at as string | undefined,
+    updatedAt: d.updated_at as string | undefined,
   };
 }
 
@@ -34,7 +34,9 @@ export async function getCardsByUser(userId: string): Promise<CreditCard[]> {
   return data.map(mapCard);
 }
 
-export async function createCard(card: Omit<CreditCard, 'id' | 'createdAt' | 'updatedAt'>): Promise<CreditCard> {
+export async function createCard(
+  card: Omit<CreditCard, 'id' | 'createdAt' | 'updatedAt'>
+): Promise<CreditCard> {
   const { data, error } = await supabase
     .from('credit_cards')
     .insert({
@@ -51,7 +53,7 @@ export async function createCard(card: Omit<CreditCard, 'id' | 'createdAt' | 'up
 }
 
 export async function updateCard(id: string, card: Partial<CreditCard>): Promise<void> {
-  const payload: any = { updated_at: new Date().toISOString() };
+  const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (card.name !== undefined) payload.name = card.name;
   if (card.lastFour !== undefined) payload.last_four = card.lastFour;
   if (card.userId !== undefined) payload.user_id = card.userId;

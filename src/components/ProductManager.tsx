@@ -139,9 +139,9 @@ export default function ProductManager() {
       showSuccess('Produto salvo com sucesso!');
       await loadAll();
       setIsModalOpen(false);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      showError(`Erro ao salvar: ${err?.message || 'Tente novamente.'}`);
+      showError(`Erro ao salvar: ${err instanceof Error ? err.message : 'Tente novamente.'}`);
     } finally {
       setSaving(false);
     }
@@ -168,7 +168,7 @@ export default function ProductManager() {
       ...p,
       microGuarantees: [...(p.microGuarantees || []), { name: '', value: 0 }],
     }));
-  const updateGuarantee = (i: number, field: keyof MicroGuarantee, val: any) =>
+  const updateGuarantee = (i: number, field: keyof MicroGuarantee, val: string | number) =>
     setForm((p) => {
       const g = [...(p.microGuarantees || [])];
       g[i] = { ...g[i], [field]: val };

@@ -81,7 +81,7 @@ export default function CardManager({ currentUser }: CardManagerProps) {
 
   const startEdit = (card: CreditCard) => {
     setEditingId(card.id);
-    const foundUser = users.find(u => u.id === card.userId);
+    const foundUser = users.find((u) => u.id === card.userId);
     setForm({
       name: card.name,
       lastFour: card.lastFour || '',
@@ -97,22 +97,22 @@ export default function CardManager({ currentUser }: CardManagerProps) {
   const handleUserSearchChange = (value: string) => {
     setUserSearch(value);
     // Only clear the selected user if the new value differs from the currently selected user's name
-    setForm(f => f.userName && value === f.userName ? f : { ...f, userId: '', userName: '' });
+    setForm((f) => (f.userName && value === f.userName ? f : { ...f, userId: '', userName: '' }));
     if (value.trim().length < 2) {
       setUserResults([]);
       setShowUserDropdown(false);
       return;
     }
     const q = value.toLowerCase();
-    const filtered = users.filter(u =>
-      u.name.toLowerCase().includes(q) || u.nickname?.toLowerCase().includes(q)
+    const filtered = users.filter(
+      (u) => u.name.toLowerCase().includes(q) || u.nickname?.toLowerCase().includes(q)
     );
     setUserResults(filtered.slice(0, 8));
     setShowUserDropdown(true);
   };
 
   const handleSelectUser = (user: User) => {
-    setForm(f => ({ ...f, userId: user.id, userName: user.name }));
+    setForm((f) => ({ ...f, userId: user.id, userName: user.name }));
     setUserSearch(user.name);
     setShowUserDropdown(false);
     setUserResults([]);
@@ -149,9 +149,9 @@ export default function CardManager({ currentUser }: CardManagerProps) {
       }
       await loadCards();
       resetForm();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Erro ao salvar cartão:', err);
-      setError(err?.message || 'Erro ao salvar cartão.');
+      setError(err instanceof Error ? err.message : 'Erro ao salvar cartão.');
     } finally {
       setSaving(false);
     }
@@ -192,11 +192,16 @@ export default function CardManager({ currentUser }: CardManagerProps) {
             <CreditCardIcon className="w-7 h-7 text-purple-600" />
             Cartões
           </h1>
-          <p className="text-stone-500 text-sm mt-1">Gerenciamento de cartões de crédito corporativos</p>
+          <p className="text-stone-500 text-sm mt-1">
+            Gerenciamento de cartões de crédito corporativos
+          </p>
         </div>
         {!showForm && (
           <button
-            onClick={() => { resetForm(); setShowForm(true); }}
+            onClick={() => {
+              resetForm();
+              setShowForm(true);
+            }}
             className="flex items-center gap-2 px-4 py-2 text-sm font-bold bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-colors"
           >
             <Plus className="w-4 h-4" />
@@ -224,7 +229,7 @@ export default function CardManager({ currentUser }: CardManagerProps) {
               <input
                 type="text"
                 value={form.name}
-                onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                 placeholder="Ex: Cartão Diretoria"
                 className="w-full border border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none"
               />
@@ -237,7 +242,9 @@ export default function CardManager({ currentUser }: CardManagerProps) {
                 type="text"
                 maxLength={4}
                 value={form.lastFour}
-                onChange={(e) => setForm(f => ({ ...f, lastFour: e.target.value.replace(/\D/g, '') }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, lastFour: e.target.value.replace(/\D/g, '') }))
+                }
                 placeholder="1234"
                 className="w-full border border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none"
               />
@@ -259,13 +266,11 @@ export default function CardManager({ currentUser }: CardManagerProps) {
                 className="w-full border border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none"
               />
               {form.userId && (
-                <p className="text-xs text-emerald-600 mt-1 font-medium">
-                  ✓ {form.userName}
-                </p>
+                <p className="text-xs text-emerald-600 mt-1 font-medium">✓ {form.userName}</p>
               )}
               {showUserDropdown && userResults.length > 0 && (
                 <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-stone-200 rounded-xl shadow-lg overflow-hidden">
-                  {userResults.map(u => (
+                  {userResults.map((u) => (
                     <button
                       key={u.id}
                       type="button"
@@ -286,15 +291,19 @@ export default function CardManager({ currentUser }: CardManagerProps) {
               {userSearch.length >= 2 && userResults.length === 0 && !form.userId && (
                 <p className="text-xs text-stone-400 mt-1">Nenhum usuário encontrado.</p>
               )}
-              <p className="text-xs text-stone-400 mt-1">Deixe em branco para associar ao seu usuário.</p>
+              <p className="text-xs text-stone-400 mt-1">
+                Deixe em branco para associar ao seu usuário.
+              </p>
             </div>
             {editingId && (
               <div className="flex items-center gap-3">
-                <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider">Ativo</label>
+                <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider">
+                  Ativo
+                </label>
                 <input
                   type="checkbox"
                   checked={form.active}
-                  onChange={(e) => setForm(f => ({ ...f, active: e.target.checked }))}
+                  onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))}
                   className="w-4 h-4 text-purple-600 rounded"
                 />
               </div>
@@ -332,25 +341,35 @@ export default function CardManager({ currentUser }: CardManagerProps) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-stone-100 bg-stone-50">
-                <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Nome</th>
-                <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Dígitos</th>
-                <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Usuário</th>
-                <th className="text-center py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Status</th>
-                <th className="text-center py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Ações</th>
+                <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">
+                  Nome
+                </th>
+                <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">
+                  Dígitos
+                </th>
+                <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">
+                  Usuário
+                </th>
+                <th className="text-center py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="text-center py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">
+                  Ações
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100">
-              {cards.map(card => (
+              {cards.map((card) => (
                 <tr key={card.id} className="hover:bg-stone-50 transition-colors">
                   <td className="py-3 px-4 font-medium text-stone-800">{card.name}</td>
                   <td className="py-3 px-4 text-stone-600">
                     {card.lastFour ? `**** ${card.lastFour}` : '—'}
                   </td>
-                  <td className="py-3 px-4 text-stone-600">
-                    {getUserName(card.userId)}
-                  </td>
+                  <td className="py-3 px-4 text-stone-600">{getUserName(card.userId)}</td>
                   <td className="py-3 px-4 text-center">
-                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-bold ${card.active ? 'bg-emerald-100 text-emerald-700' : 'bg-stone-100 text-stone-500'}`}>
+                    <span
+                      className={`inline-flex px-2 py-0.5 rounded-full text-xs font-bold ${card.active ? 'bg-emerald-100 text-emerald-700' : 'bg-stone-100 text-stone-500'}`}
+                    >
                       {card.active ? 'Ativo' : 'Inativo'}
                     </span>
                   </td>

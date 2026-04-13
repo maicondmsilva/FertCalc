@@ -2,11 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { Users, Plus, Trash2, Save, User as UserIcon, Edit2, X } from 'lucide-react';
 import { User } from '../types';
 import { getUsers, createUser, updateUser, deleteUser } from '../services/db';
+import { createAuthUser } from '../services/authService';
 import { useToast } from './Toast';
 import { useConfirm } from '../hooks/useConfirm';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 
-export default function UserManager() {
+interface UserManagerProps {
+  currentUser: User;
+}
+
+export default function UserManager({ currentUser }: UserManagerProps) {
   const { showSuccess, showError } = useToast();
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
   const [users, setUsers] = useState<User[]>([]);
@@ -171,10 +176,8 @@ export default function UserManager() {
     setLoading(true);
 
     try {
-      // Nickname checking or validation can happen here if needed
-
       if (editingId) {
-        const payload: any = {
+        const payload: Record<string, unknown> = {
           name: formData.name,
           email: formData.email,
           nickname: formData.nickname,
@@ -183,16 +186,23 @@ export default function UserManager() {
           managedUserIds: formData.role === 'manager' ? formData.managedUserIds : [],
           permissions: formData.permissions,
         };
-        if (formData.password) payload.password = formData.password;
         await updateUser(editingId, payload);
         setEditingId(null);
       } else {
+        // 1. Criar usuário no Supabase Auth (auth.users) para login funcionar
+        const authResult = await createAuthUser(formData.email, formData.password);
+        if (!authResult.success) {
+          showError(`Erro ao criar autenticação: ${authResult.error || 'Erro desconhecido'}`);
+          setLoading(false);
+          return;
+        }
+
+        // 2. Criar perfil na tabela app_users
         await createUser({
           idNumeric: 0, // Database SERIAL takes over
           name: formData.name,
           email: formData.email,
           nickname: formData.nickname,
-          password: formData.password,
           role: formData.role,
           ativo: formData.ativo,
           managedUserIds: formData.role === 'manager' ? formData.managedUserIds : [],
@@ -213,9 +223,9 @@ export default function UserManager() {
         managedUserIds: [],
         permissions: getDefaultPermissions('user') as any,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Erro ao salvar usuário:', err);
-      const msg: string = err?.message || err?.details || '';
+      const msg: string = err instanceof Error ? err.message : '';
       if (msg.includes('app_users_email_key') || msg.includes('duplicate key')) {
         showError(
           'Este e-mail já está cadastrado. Use um e-mail diferente ou edite o usuário existente.'
@@ -228,7 +238,30 @@ export default function UserManager() {
     }
   };
 
+  /**
+   * Verifica se o usuário logado pode editar outro usuário.
+   * Apenas master pode editar outros masters. Usuário pode editar a si mesmo.
+   */
+  const canEditUser = (targetUser: User): boolean => {
+    if (targetUser.role === 'master' && currentUser.role !== 'master') return false;
+    return true;
+  };
+
+  /**
+   * Verifica se o usuário logado pode excluir outro usuário.
+   * Apenas master pode excluir outros masters. Não pode excluir a si mesmo.
+   */
+  const canDeleteUser = (targetUser: User): boolean => {
+    if (targetUser.role === 'master' && currentUser.role !== 'master') return false;
+    if (targetUser.id === currentUser.id) return false;
+    return true;
+  };
+
   const startEdit = (user: User) => {
+    if (!canEditUser(user)) {
+      showError('Apenas usuários Master podem editar outros usuários Master.');
+      return;
+    }
     setEditingId(user.id);
     setFormData({
       name: user.name,
@@ -259,6 +292,11 @@ export default function UserManager() {
   };
 
   const handleDeleteUser = async (id: string) => {
+    const targetUser = users.find((u) => u.id === id);
+    if (targetUser && !canDeleteUser(targetUser)) {
+      showError('Você não tem permissão para excluir este usuário.');
+      return;
+    }
     const ok = await confirm({
       title: 'Excluir Usuário',
       message: 'Tem certeza que deseja excluir este usuário? Esta ação não pode ser desfeita.',
@@ -825,15 +863,25 @@ export default function UserManager() {
                     <div className="flex justify-end gap-2">
                       <button
                         onClick={() => startEdit(user)}
-                        className="text-stone-400 hover:text-emerald-600 p-1 transition-colors"
-                        title="Editar"
+                        disabled={!canEditUser(user)}
+                        className={`p-1 transition-colors ${
+                          canEditUser(user)
+                            ? 'text-stone-400 hover:text-emerald-600'
+                            : 'text-stone-200 cursor-not-allowed'
+                        }`}
+                        title={canEditUser(user) ? 'Editar' : 'Sem permissão para editar'}
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleDeleteUser(user.id)}
-                        className="text-stone-400 hover:text-red-500 p-1 transition-colors"
-                        title="Excluir"
+                        disabled={!canDeleteUser(user)}
+                        className={`p-1 transition-colors ${
+                          canDeleteUser(user)
+                            ? 'text-stone-400 hover:text-red-500'
+                            : 'text-stone-200 cursor-not-allowed'
+                        }`}
+                        title={canDeleteUser(user) ? 'Excluir' : 'Sem permissão para excluir'}
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>

@@ -238,7 +238,7 @@ interface MacroRowProps {
   key?: React.Key;
   m: RawMaterial;
   currency: 'BRL' | 'USD';
-  onChange: (id: string, field: keyof RawMaterial, value: any) => void;
+  onChange: (id: string, field: keyof RawMaterial, value: string | number | boolean) => void;
   onRemove: (id: string) => void;
   premium?: boolean;
 }
@@ -335,11 +335,17 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
     loadAll();
   }, []);
 
-  const handleMacroChange = (id: string, field: keyof RawMaterial, value: any) =>
-    setMacros((prev) => prev.map((m) => (m.id === id ? { ...m, [field]: value } : m)));
+  const handleMacroChange = (
+    id: string,
+    field: keyof RawMaterial,
+    value: string | number | boolean
+  ) => setMacros((prev) => prev.map((m) => (m.id === id ? { ...m, [field]: value } : m)));
 
-  const handleMicroChange = (id: string, field: keyof RawMaterial, value: any) =>
-    setMicros((prev) => prev.map((m) => (m.id === id ? { ...m, [field]: value } : m)));
+  const handleMicroChange = (
+    id: string,
+    field: keyof RawMaterial,
+    value: string | number | boolean
+  ) => setMicros((prev) => prev.map((m) => (m.id === id ? { ...m, [field]: value } : m)));
 
   const addMacrosFromModal = (ids: string[]) => {
     const toAdd = allMacros.filter((m) => ids.includes(m.id) && !macros.some((x) => x.id === m.id));
@@ -424,8 +430,8 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
         cancelForm();
         showSuccess('Lista de preços salva com sucesso!');
       }
-    } catch (err: any) {
-      showError(`Erro ao salvar: ${err?.message || 'Tente novamente.'}`);
+    } catch (err: unknown) {
+      showError(`Erro ao salvar: ${err instanceof Error ? err.message : 'Tente novamente.'}`);
     } finally {
       setSaving(false);
     }

@@ -1,7 +1,7 @@
 export enum NotificationGroup {
   PRICING = 'PRICING',
   TRANSFER = 'TRANSFER',
-  SYSTEM = 'SYSTEM'
+  SYSTEM = 'SYSTEM',
 }
 
 export enum NotificationType {
@@ -9,11 +9,11 @@ export enum NotificationType {
   PRICING_UPDATED = 'PRICING_UPDATED',
   PRICING_DELETED = 'PRICING_DELETED',
   TRANSFER_ACCEPTED = 'TRANSFER_ACCEPTED',
-  SYSTEM_INFO = 'SYSTEM_INFO'
+  SYSTEM_INFO = 'SYSTEM_INFO',
 }
 
 export interface NotificationPayload {
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface Notification {

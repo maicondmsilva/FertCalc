@@ -84,7 +84,6 @@ export interface User {
   email: string;
   name: string;
   nickname: string;
-  password?: string;
   ativo: boolean;
   role: 'admin' | 'user' | 'manager' | 'master';
   managedUserIds?: string[];
@@ -153,8 +152,6 @@ export interface User {
     carregamento_all_filiais?: boolean;
     carregamento_cancelar?: boolean;
     carregamento_configurar_filiais?: boolean;
-    // Módulo Pedidos de Venda
-    pedidosVenda?: boolean;
   };
 }
 
@@ -257,7 +254,9 @@ export interface Client {
   stateRegistration?: string;
   fazenda?: string;
   address?: Address;
-  deliveryAddress?: Address; // Endereço de Entrega
+  // Endereço de Entrega
+  deliveryAddress?: Address;
+  deliverySameAsAddress?: boolean;
 }
 
 export interface Agent {
@@ -501,6 +500,28 @@ export interface FertigranPFormula {
   updated_at?: string;
 }
 
+export interface PedidoVenda {
+  id: string;
+  precificacao_id: string;
+  numero_pedido?: string;
+  barra_pedido?: string;
+  data_pedido?: string; // Vencimento
+  quantidade_real?: number;
+  embalagem?: string; // Sacaria
+  valor_unitario_negociado?: number;
+  valor_total_negociado?: number;
+  tipo_frete?: string; // CIF ou FOB
+  valor_frete?: number; // valor do frete quando CIF
+  status: 'pendente' | 'em_carregamento' | 'concluido' | 'cancelado';
+  pdf_url?: string;
+  dados_extraidos?: Record<string, any>;
+  importado_por?: string;
+  criado_em?: string;
+  atualizado_em?: string;
+  // Joined fields
+  precificacao?: PricingRecord;
+}
+
 export interface ComparisonHistory {
   id: string;
   usuario_id: string;
@@ -514,10 +535,10 @@ export interface ComparisonHistory {
     n: number;
     p: number;
     k: number;
-    fatores_comerciais?: any;
+    fatores_comerciais?: Record<string, unknown>;
     incluir_pdf?: boolean;
-    composicao?: any;
-    garantias_finais?: any;
+    composicao?: Array<{ material: string; qtd: number }>;
+    garantias_finais?: Record<string, unknown>;
   };
   created_at?: string;
 }

@@ -33,6 +33,7 @@ import { ConfirmDialog } from './ui/ConfirmDialog';
 import { useConfirm } from '../hooks/useConfirm';
 import { getPricingTotalTons, getPricingTotalSaleValue } from '../utils/pricingMetrics';
 import { notifyPricingDeleted } from '../services/notificationService';
+import { logAudit } from '../services/auditService';
 
 interface HistoryProps {
   onEdit?: (pricing: PricingRecord) => void;
@@ -202,6 +203,18 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
         // ✅ Notificar Exclusão
         await notifyPricingDeleted(pricing, currentUser);
 
+        await logAudit({
+          user_id: currentUser.id,
+          user_name: currentUser.name,
+          action: 'pricing.deleted',
+          entity_type: 'pricing_record',
+          entity_id: id,
+          metadata: {
+            client: pricing.factors?.client?.name,
+            formattedCod: pricing.formattedCod,
+          },
+        });
+
         setPricings(pricings.filter((p) => p.id !== id));
         showSuccess('Precificação excluída com sucesso!');
       } catch (err) {
@@ -243,9 +256,11 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
         const created = await createPricingRecord(newPricing as PricingRecord);
         showSuccess('Cópia gerada com sucesso!');
         await loadData(); // Reload to get the proper ID and formattedCod
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Erro ao duplicar:', err);
-        showError('Erro ao duplicar precificação: ' + (err?.message || JSON.stringify(err)));
+        showError(
+          'Erro ao duplicar precificação: ' + (err instanceof Error ? err.message : String(err))
+        );
       }
     }
   };
@@ -321,9 +336,12 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
             : p
         )
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Erro ao enviar exclusão:', err);
-      showError('Erro ao enviar solicitação de exclusão: ' + (err.message || 'Erro desconhecido.'));
+      showError(
+        'Erro ao enviar solicitação de exclusão: ' +
+          (err instanceof Error ? err.message : 'Erro desconhecido.')
+      );
     } finally {
       setIsSubmittingDeletion(false);
     }

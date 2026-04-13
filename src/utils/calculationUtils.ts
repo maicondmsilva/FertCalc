@@ -11,8 +11,8 @@ export function calculateSummary(
   currentMicros: RawMaterial[],
   factors: PricingFactors
 ): PricingSummary {
-  const selectedMacros = currentMacros.filter(m => m.selected);
-  const selectedMicros = currentMicros.filter(m => m.selected);
+  const selectedMacros = currentMacros.filter((m) => m.selected);
+  const selectedMicros = currentMicros.filter((m) => m.selected);
   const allSelected = [...selectedMacros, ...selectedMicros];
 
   let totalWeight = 0; // unidades coerentes com a aplicação (qty)
@@ -24,7 +24,7 @@ export function calculateSummary(
   let totalCa_kg = 0;
   const resultingMicros: Record<string, number> = {};
 
-  allSelected.forEach(m => {
+  allSelected.forEach((m) => {
     const qty = Number(m.quantity) || 0;
     totalWeight += qty;
     baseCost += (qty / 1000) * (Number(m.price) || 0);
@@ -36,7 +36,7 @@ export function calculateSummary(
     totalCa_kg += qty * ((Number(m.ca) || 0) / 100);
 
     if (m.microGuarantees) {
-      m.microGuarantees.forEach(g => {
+      m.microGuarantees.forEach((g) => {
         const micro_kg = qty * ((Number(g.value) || 0) / 100);
         resultingMicros[g.name] = (resultingMicros[g.name] || 0) + micro_kg;
       });
@@ -52,8 +52,8 @@ export function calculateSummary(
   const interestValue = basePrice * monthlyInterestRate;
 
   // Tax, commission and freight
-  const taxValue = basePrice * (Number(factors?.taxRate || 0));
-  const commissionValue = basePrice * (Number(factors?.commission || 0));
+  const taxValue = basePrice * Number(factors?.taxRate || 0);
+  const commissionValue = basePrice * Number(factors?.commission || 0);
   const freightValue = Number(factors?.freight || 0);
 
   // Discount and margin (applied to basePrice)
@@ -64,8 +64,9 @@ export function calculateSummary(
   const marginValue = priceAfterDiscount * margin;
 
   // Final price and sale value (using totalTons as multiplier when present)
-  const finalPrice = priceAfterDiscount + interestValue + taxValue + commissionValue + freightValue + marginValue;
-  const totalSaleValue = finalPrice * (Number(factors?.totalTons || 0));
+  const finalPrice =
+    priceAfterDiscount + interestValue + taxValue + commissionValue + freightValue + marginValue;
+  const totalSaleValue = finalPrice * Number(factors?.totalTons || 0);
 
   // Resulting guarantees (%). If totalWeight is zero avoid division by zero.
   const resultingN = totalWeight ? (totalN_kg / totalWeight) * 100 : 0;
@@ -89,7 +90,7 @@ export function calculateSummary(
     resultingK,
     resultingS,
     resultingCa,
-    resultingMicros
+    resultingMicros,
   };
 }
 
@@ -97,13 +98,17 @@ export function calculateSummary(
  * buildSolverModel — helper mínimo para montar o model que o solver espera.
  * A implementação no componente principal é mais completa; use/ajuste conforme necessidade.
  */
-export function buildSolverModel(constraints: any = {}, variables: any = {}, objectiveKey = 'cost'): any {
+export function buildSolverModel(
+  constraints: Record<string, Record<string, number>> = {},
+  variables: Record<string, Record<string, number>> = {},
+  objectiveKey = 'cost'
+): Record<string, unknown> {
   return {
     optimize: objectiveKey,
     opType: 'min',
     constraints: constraints,
     variables: variables,
-    ints: {}
+    ints: {},
   };
 }
 
@@ -111,8 +116,11 @@ export function buildSolverModel(constraints: any = {}, variables: any = {}, obj
  * applyResultsToMaterials — mapeia resultados (obj with ids->values) para a lista de materiais.
  * Atualiza `quantity` do material com o valor retornado pelo solver (ou 0).
  */
-export function applyResultsToMaterials(results: Record<string, number>, materials: RawMaterial[]): RawMaterial[] {
-  return materials.map(mat => {
+export function applyResultsToMaterials(
+  results: Record<string, number>,
+  materials: RawMaterial[]
+): RawMaterial[] {
+  return materials.map((mat) => {
     const qty = Number(results?.[mat.id] || 0);
     return { ...mat, quantity: qty };
   });

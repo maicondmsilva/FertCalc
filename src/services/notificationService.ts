@@ -10,10 +10,13 @@ interface NotificationPayload {
   title: string;
   message: string;
   action_url?: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
-export const getNotifications = async (userId: string, limit: number = 20): Promise<Notification[]> => {
+export const getNotifications = async (
+  userId: string,
+  limit: number = 20
+): Promise<Notification[]> => {
   const { data, error } = await supabase
     .from('notifications')
     .select('*')
@@ -29,7 +32,10 @@ export const getNotifications = async (userId: string, limit: number = 20): Prom
   return (data ?? []) as Notification[];
 };
 
-export const markNotificationAsRead = async (notificationId: string, userId: string): Promise<void> => {
+export const markNotificationAsRead = async (
+  notificationId: string,
+  userId: string
+): Promise<void> => {
   const { error } = await supabase
     .from('notifications')
     .update({ is_read: true })
@@ -56,10 +62,7 @@ export const markAllNotificationsAsRead = async (userId: string): Promise<void> 
 };
 
 export const deleteAllNotifications = async (userId: string): Promise<void> => {
-  const { error } = await supabase
-    .from('notifications')
-    .delete()
-    .eq('user_id', userId);
+  const { error } = await supabase.from('notifications').delete().eq('user_id', userId);
 
   if (error) {
     console.error('Error clearing notifications:', error);
@@ -67,7 +70,10 @@ export const deleteAllNotifications = async (userId: string): Promise<void> => {
   }
 };
 
-export const saveNotification = async (notification: Omit<Notification, 'id' | 'created_at' | 'user_id'>, userId: string): Promise<Notification> => {
+export const saveNotification = async (
+  notification: Omit<Notification, 'id' | 'created_at' | 'user_id'>,
+  userId: string
+): Promise<Notification> => {
   const { data, error } = await supabase
     .from('notifications')
     .insert({
@@ -103,7 +109,7 @@ export const createNotification = async (payload: NotificationPayload) => {
 export const notifyPricingCreated = async (pricing: PricingRecord, vendedor: User) => {
   const managers = await getManagersOfUser(vendedor.id);
   const clientName = pricing.factors?.client?.name || 'Cliente Desconhecido';
-  
+
   for (const manager of managers) {
     await createNotification({
       user_id: manager.id,
@@ -112,7 +118,7 @@ export const notifyPricingCreated = async (pricing: PricingRecord, vendedor: Use
       title: 'Nova Precificação',
       message: `${vendedor.name} criou precificação para ${clientName}`,
       action_url: `/calculator?id=${pricing.id}`,
-      metadata: { pricingId: pricing.id }
+      metadata: { pricingId: pricing.id },
     });
   }
 };
@@ -120,7 +126,7 @@ export const notifyPricingCreated = async (pricing: PricingRecord, vendedor: Use
 export const notifyPricingEdited = async (pricing: PricingRecord, vendedor: User) => {
   const managers = await getManagersOfUser(vendedor.id);
   const clientName = pricing.factors?.client?.name || 'Cliente Desconhecido';
-  
+
   for (const manager of managers) {
     await createNotification({
       user_id: manager.id,
@@ -129,7 +135,7 @@ export const notifyPricingEdited = async (pricing: PricingRecord, vendedor: User
       title: 'Precificação Editada',
       message: `Precificação editada por ${vendedor.name} para o cliente ${clientName}`,
       action_url: `/calculator?id=${pricing.id}`,
-      metadata: { pricingId: pricing.id }
+      metadata: { pricingId: pricing.id },
     });
   }
 };
@@ -137,7 +143,7 @@ export const notifyPricingEdited = async (pricing: PricingRecord, vendedor: User
 export const notifyPricingDeleted = async (pricing: PricingRecord, vendedor: User) => {
   const managers = await getManagersOfUser(vendedor.id);
   const clientName = pricing.factors?.client?.name || 'Cliente Desconhecido';
-  
+
   for (const manager of managers) {
     await createNotification({
       user_id: manager.id,
@@ -145,12 +151,17 @@ export const notifyPricingDeleted = async (pricing: PricingRecord, vendedor: Use
       group_type: NotificationGroup.PRICING,
       title: 'Precificação Deletada',
       message: `${vendedor.name} deletou precificação para ${clientName}`,
-      metadata: { pricingId: pricing.id }
+      metadata: { pricingId: pricing.id },
     });
   }
 };
 
-export const notifyTransferInitiated = async (pricing: PricingRecord, currentVendedor: User, targetVendorId: string, targetVendorName: string) => {
+export const notifyTransferInitiated = async (
+  pricing: PricingRecord,
+  currentVendedor: User,
+  targetVendorId: string,
+  targetVendorName: string
+) => {
   // Notify the new vendor
   await createNotification({
     user_id: targetVendorId,
@@ -159,7 +170,7 @@ export const notifyTransferInitiated = async (pricing: PricingRecord, currentVen
     title: 'Precificação Transferida',
     message: `Precificação transferida para você por ${currentVendedor.name}`,
     action_url: `/calculator?id=${pricing.id}`,
-    metadata: { pricingId: pricing.id, fromUserId: currentVendedor.id }
+    metadata: { pricingId: pricing.id, fromUserId: currentVendedor.id },
   });
 
   // Notify the managers of the new vendor
@@ -172,18 +183,22 @@ export const notifyTransferInitiated = async (pricing: PricingRecord, currentVen
       title: 'Transferência de Precificação',
       message: `${currentVendedor.name} transferiu precificação para ${targetVendorName}`,
       action_url: `/calculator?id=${pricing.id}`,
-      metadata: { pricingId: pricing.id, targetVendorId }
+      metadata: { pricingId: pricing.id, targetVendorId },
     });
   }
 };
 
-export const notifyTransferAccepted = async (pricingId: string, acceptedByVendorName: string, originalVendorId: string) => {
+export const notifyTransferAccepted = async (
+  pricingId: string,
+  acceptedByVendorName: string,
+  originalVendorId: string
+) => {
   await createNotification({
     user_id: originalVendorId,
     type: NotificationType.TRANSFER_ACCEPTED,
     group_type: NotificationGroup.TRANSFER,
     title: 'Transferência Aceita',
     message: `${acceptedByVendorName} aceitou sua transferência de precificação`,
-    metadata: { pricingId }
+    metadata: { pricingId },
   });
 };

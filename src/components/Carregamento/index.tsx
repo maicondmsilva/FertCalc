@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { User } from '../../types';
+import { User, PricingRecord, PedidoVenda } from '../../types';
 import {
   Truck,
   Package,
@@ -44,10 +44,8 @@ import {
   getCarregamentosCalendario,
   getAlertasCarregamento,
 } from '../../services/carregamentoService';
-import type { PedidoVendaEnriquecido } from '../../types/pedidoVenda';
-import { getPedidosVenda } from '../../services/pedidosVendaService';
 import { getPricingRecords } from '../../services/db';
-import type { PricingRecord } from '../../types';
+import { getPedidosVenda } from '../../services/pedidosVendaService';
 import { useToast } from '../Toast';
 
 // ─── Sub-view type ─────────────────────────────────────────────────────────────
@@ -113,60 +111,196 @@ function StatusBadge({ status }: { status: StatusCarregamento }) {
 // ─────────────────────────────────────────────────────────────────────────────
 //  MODAL: Novo Carregamento
 // ─────────────────────────────────────────────────────────────────────────────
+
+interface EnrichedPedido {
+  id: string | null;
+  precificacao_id: string | null;
+  numero_pedido?: string | null;
+  barra_pedido?: string | null;
+  quantidade_real?: number | null;
+  tipo_frete?: string | null;
+  pricing?: PricingRecord;
+  clientName?: string;
+  _source: string;
+}
+
+interface CarregamentoFormData {
+  tipo_frete: 'CIF' | 'FOB';
+  quantidade_total: string;
+  filial_id: string;
+  data_prevista_carregamento: string;
+  transportadora_id: string;
+  observacoes: string;
+  pedido_venda_id: string;
+  precificacao_id: string;
+  cliente_nome: string;
+  _freteAutoDetectado: boolean;
+}
+
+interface CotacaoFormData {
+  transportadora_id: string;
+  valor_cotado: string;
+  prazo_dias: string;
+  validade_cotacao: string;
+  observacoes: string;
+}
+
 interface ModalNovoCarregamentoProps {
   filiais: Filial[];
   transportadoras: Transportadora[];
-  pedidos: PedidoVendaEnriquecido[];
-  onSave: (data: any) => Promise<void>;
+  onSave: (data: CarregamentoFormData) => Promise<void>;
   onClose: () => void;
+}
+
+// Bug 2 fix — determina o tipo de frete em ordem de prioridade
+function derivarTipoFrete(pedido: EnrichedPedido, pricing?: PricingRecord): 'CIF' | 'FOB' {
+  if (pedido?.tipo_frete === 'CIF' || pedido?.tipo_frete === 'FOB') {
+    return pedido.tipo_frete as 'CIF' | 'FOB';
+  }
+  const factors = pricing?.factors as unknown as Record<string, unknown> | undefined;
+  if (factors?.tipoFrete === 'CIF' || factors?.tipoFrete === 'FOB') {
+    return factors.tipoFrete as 'CIF' | 'FOB';
+  }
+  if (pricing?.factors?.freight != null && Number(pricing.factors.freight) > 0) {
+    return 'CIF';
+  }
+  return 'FOB';
 }
 
 function ModalNovoCarregamento({
   filiais,
   transportadoras,
-  pedidos,
   onSave,
   onClose,
 }: ModalNovoCarregamentoProps) {
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<CarregamentoFormData>({
     tipo_frete: 'FOB' as 'CIF' | 'FOB',
     quantidade_total: '',
     filial_id: '',
     data_prevista_carregamento: '',
     transportadora_id: '',
     observacoes: '',
-    pedido_precificacao_id: '',
+    pedido_venda_id: '',
+    precificacao_id: '',
+    cliente_nome: '',
+    _freteAutoDetectado: false,
   });
   const [saving, setSaving] = useState(false);
-
-  // Pedido search
   const [pedidoSearch, setPedidoSearch] = useState('');
-  const [selectedPedido, setSelectedPedido] = useState<PedidoVendaEnriquecido | null>(null);
+  const [allPedidos, setAllPedidos] = useState<EnrichedPedido[]>([]);
+  const [pedidoResults, setPedidoResults] = useState<EnrichedPedido[]>([]);
+  // Bug 3 fix — fallback para filiais da prop (vindas de branches/Configurações)
+  const [localFiliais, setLocalFiliais] = useState<Filial[]>([]);
 
-  const filteredPedidos =
-    pedidoSearch.length >= 2
-      ? pedidos
-          .filter((p) => {
-            const term = pedidoSearch.toLowerCase();
-            return (
-              p.cliente_nome?.toLowerCase().includes(term) ||
-              p.numero_pedido?.toLowerCase().includes(term) ||
-              p.precificacao_cod?.toLowerCase().includes(term)
-            );
-          })
-          .slice(0, 8)
-      : [];
+  useEffect(() => {
+    if (filiais.length === 0) {
+      getFiliais()
+        .then(setLocalFiliais)
+        .catch((err) => {
+          console.error('Erro ao carregar filiais:', err);
+        });
+    }
+  }, [filiais]);
 
-  const handleSelectPedido = (p: PedidoVendaEnriquecido) => {
-    setSelectedPedido(p);
-    setPedidoSearch('');
-    // Auto-fill from pedido
+  const filiaisDisponiveis = filiais.length > 0 ? filiais : localFiliais;
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadData = async () => {
+      try {
+        const [pedidos, pricings] = await Promise.all([getPedidosVenda(), getPricingRecords()]);
+        if (cancelled) return;
+        const pricingsMap = new Map(pricings.map((pr) => [pr.id, pr]));
+
+        // Bug 1 fix — pedidos de venda enriquecidos com dados da precificação
+        const pedidosEnriched: EnrichedPedido[] = pedidos.map((p) => {
+          const pricing = pricingsMap.get(p.precificacao_id);
+          return {
+            ...p,
+            pricing,
+            clientName: pricing?.factors?.client?.name,
+            _source: 'pedido' as const,
+          };
+        });
+
+        // Bug 1 fix — precificações SEM pedido de venda vinculado
+        const pedidosComPrecificacao = new Set(pedidos.map((p) => p.precificacao_id));
+        const pricingsSemPedido: EnrichedPedido[] = pricings
+          .filter((pr) => !pedidosComPrecificacao.has(pr.id))
+          .map((pr) => ({
+            id: null,
+            precificacao_id: pr.id,
+            numero_pedido: null,
+            barra_pedido: null,
+            quantidade_real: pr.factors?.totalTons ?? null,
+            tipo_frete: null,
+            pricing: pr,
+            clientName: pr.factors?.client?.name,
+            _source: 'pricing' as const,
+          }));
+
+        setAllPedidos([...pedidosEnriched, ...pricingsSemPedido]);
+      } catch {
+        /* silent */
+      }
+    };
+    loadData();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const lq = pedidoSearch.trim().toLowerCase();
+    if (lq.length < 2) {
+      setPedidoResults([]);
+      return;
+    }
+    // Bug 1 fix — busca em todos os campos relevantes
+    const filtered = allPedidos.filter((p) => {
+      const searchFields = [
+        p.numero_pedido,
+        p.barra_pedido,
+        p.clientName,
+        p.pricing?.formattedCod,
+        p.pricing?.userName,
+        p.pricing?.factors?.client?.name,
+        p.pricing?.cod != null ? String(p.pricing.cod) : null,
+      ]
+        .filter(Boolean)
+        .map((s) => String(s).toLowerCase());
+      return searchFields.some((f) => f.includes(lq));
+    });
+    setPedidoResults(filtered.slice(0, 10));
+  }, [pedidoSearch, allPedidos]);
+
+  const selectPedido = (p: EnrichedPedido) => {
+    const pricing = p.pricing;
+    const tipoFrete = derivarTipoFrete(p, pricing);
     setForm((prev) => ({
       ...prev,
-      pedido_precificacao_id: p.precificacao_id,
-      tipo_frete: (p.tipo_frete as 'CIF' | 'FOB') || prev.tipo_frete,
-      quantidade_total: p.quantidade_real ? String(p.quantidade_real) : prev.quantidade_total,
+      pedido_venda_id: p.id || '',
+      precificacao_id: p.precificacao_id || pricing?.id || '',
+      quantidade_total: p.quantidade_real
+        ? String(p.quantidade_real)
+        : pricing?.factors?.totalTons
+          ? String(pricing.factors.totalTons)
+          : prev.quantidade_total,
+      tipo_frete: tipoFrete,
+      cliente_nome: p.clientName || pricing?.factors?.client?.name || '',
+      _freteAutoDetectado: true,
     }));
+    // Bug 1 fix — label correto dependendo da origem
+    if (p._source === 'pricing') {
+      setPedidoSearch(`Precificação #${pricing?.formattedCod || pricing?.cod || ''}`);
+    } else {
+      setPedidoSearch(
+        p.numero_pedido
+          ? `${p.numero_pedido}${p.barra_pedido ? '/' + p.barra_pedido : ''}`
+          : p.clientName || ''
+      );
+    }
+    setPedidoResults([]);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -188,64 +322,60 @@ function ModalNovoCarregamento({
           </button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {/* Pedido Search */}
+          {/* Pedido de Venda / Precificação search */}
           <div>
             <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
-              Vincular Pedido de Venda
+              Pedido de Venda / Precificação
             </label>
-            {selectedPedido ? (
-              <div className="flex items-center gap-2 p-2 bg-amber-50 border border-amber-200 rounded-lg text-sm">
-                <FileText className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                <span className="font-bold text-stone-800">
-                  #{selectedPedido.numero_pedido || '—'}
-                  {selectedPedido.barra_pedido && `/${selectedPedido.barra_pedido}`}
-                </span>
-                <span className="text-stone-500">— {selectedPedido.cliente_nome || 'Cliente'}</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedPedido(null);
-                    setForm((prev) => ({ ...prev, pedido_precificacao_id: '' }));
-                  }}
-                  className="ml-auto p-0.5 hover:bg-amber-100 rounded"
-                >
-                  <X className="w-3.5 h-3.5 text-stone-400" />
-                </button>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+              <input
+                type="text"
+                value={pedidoSearch}
+                onChange={(e) => {
+                  setPedidoSearch(e.target.value);
+                }}
+                placeholder="Buscar por cliente, nº pedido ou nº precificação..."
+                className="w-full pl-9 pr-4 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+              />
+            </div>
+            {pedidoResults.length > 0 && (
+              <div className="absolute z-10 mt-1 bg-white border border-stone-200 rounded-xl shadow-lg max-h-56 overflow-y-auto w-full max-w-lg">
+                {pedidoResults.map((p) => (
+                  <button
+                    key={p.id ?? `pricing-${p.precificacao_id}`}
+                    type="button"
+                    onClick={() => selectPedido(p)}
+                    className="w-full text-left px-4 py-3 hover:bg-amber-50 transition-colors text-sm border-b border-stone-100 last:border-0"
+                  >
+                    {p._source === 'pricing' ? (
+                      <>
+                        <p className="font-bold text-stone-800">
+                          Precificação #{p.pricing?.formattedCod || p.pricing?.cod || '—'}
+                        </p>
+                        <p className="text-stone-500 text-xs">
+                          {p.clientName || '—'} · Vendedor: {p.pricing?.userName || '—'}
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="font-bold text-stone-800">
+                          {p.numero_pedido ? `Pedido: ${p.numero_pedido}` : '—'}
+                          {p.barra_pedido ? ` / ${p.barra_pedido}` : ''}
+                        </p>
+                        <p className="text-stone-500 text-xs">
+                          {p.clientName || '—'} · COD: {p.pricing?.formattedCod || '—'}
+                        </p>
+                      </>
+                    )}
+                  </button>
+                ))}
               </div>
-            ) : (
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-stone-400 w-4 h-4" />
-                <input
-                  type="text"
-                  value={pedidoSearch}
-                  onChange={(e) => setPedidoSearch(e.target.value)}
-                  placeholder="Buscar por cliente, nº pedido ou nº precificação..."
-                  className="w-full pl-9 pr-4 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
-                />
-                {filteredPedidos.length > 0 && (
-                  <div className="absolute z-20 mt-1 w-full bg-white border border-stone-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                    {filteredPedidos.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => handleSelectPedido(p)}
-                        className="w-full text-left px-3 py-2 hover:bg-amber-50 text-sm border-b border-stone-100 last:border-0"
-                      >
-                        <span className="font-bold text-stone-800">
-                          #{p.numero_pedido || '—'}
-                          {p.barra_pedido && `/${p.barra_pedido}`}
-                        </span>
-                        <span className="text-stone-500 ml-2">{p.cliente_nome || ''}</span>
-                        {p.precificacao_cod && (
-                          <span className="text-xs text-stone-400 ml-2">
-                            (Prec. #{p.precificacao_cod})
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+            )}
+            {form.cliente_nome && (
+              <p className="text-xs text-emerald-600 font-medium mt-1">
+                ✓ Vinculado: {form.cliente_nome}
+              </p>
             )}
           </div>
 
@@ -253,10 +383,21 @@ function ModalNovoCarregamento({
             <div>
               <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
                 Tipo de Frete *
+                {form._freteAutoDetectado && (
+                  <span className="ml-2 text-[10px] font-normal text-emerald-600 normal-case">
+                    ✓ detectado automaticamente
+                  </span>
+                )}
               </label>
               <select
                 value={form.tipo_frete}
-                onChange={(e) => setForm({ ...form, tipo_frete: e.target.value as any })}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    tipo_frete: e.target.value as 'CIF' | 'FOB',
+                    _freteAutoDetectado: false,
+                  })
+                }
                 className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
                 required
               >
@@ -288,9 +429,10 @@ function ModalNovoCarregamento({
               className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
             >
               <option value="">— Selecione —</option>
-              {filiais.map((f) => (
+              {filiaisDisponiveis.map((f) => (
                 <option key={f.id} value={f.id}>
-                  {f.nome} ({f.codigo})
+                  {f.nome}
+                  {f.codigo ? ` (${f.codigo})` : ''}
                 </option>
               ))}
             </select>
@@ -368,7 +510,7 @@ function ModalNovoCarregamento({
 interface ModalCotacaoProps {
   carregamento: Carregamento;
   transportadoras: Transportadora[];
-  onSave: (carregamentoId: string, data: any) => Promise<void>;
+  onSave: (carregamentoId: string, data: CotacaoFormData) => Promise<void>;
   onClose: () => void;
 }
 
@@ -1508,7 +1650,6 @@ export default function CarregamentoModule({
   const [carregamentos, setCarregamentos] = useState<Carregamento[]>([]);
   const [filiais, setFiliais] = useState<Filial[]>([]);
   const [transportadoras, setTransportadoras] = useState<Transportadora[]>([]);
-  const [pedidosVenda, setPedidosVenda] = useState<PedidoVendaEnriquecido[]>([]);
   const [kpi, setKpi] = useState<KPICarregamento>({
     aguardando_cotacao: 0,
     em_carregamento: 0,
@@ -1533,40 +1674,16 @@ export default function CarregamentoModule({
     setLoading(true);
     setLoadError(null);
     try {
-      const [cgs, fls, trs, kpiData, rawPedidos, pricings] = await Promise.all([
+      const [cgs, fls, trs, kpiData] = await Promise.all([
         getCarregamentos(),
         getFiliais(),
         getTransportadoras(),
         getKPICarregamento(),
-        getPedidosVenda(),
-        getPricingRecords(),
       ]);
       setCarregamentos(cgs);
       setFiliais(fls);
       setTransportadoras(trs);
       setKpi(kpiData);
-
-      // Enrich pedidos with pricing data
-      const pricingMap = new Map<string, PricingRecord>();
-      pricings.forEach((p: PricingRecord) => pricingMap.set(p.id, p));
-      const enriched: PedidoVendaEnriquecido[] = rawPedidos.map((pv) => {
-        const pricing = pricingMap.get(pv.precificacao_id);
-        return {
-          ...pv,
-          cliente_nome: pricing?.factors?.client?.name,
-          vendedor_nome: pricing?.userName,
-          vendedor_id: pricing?.userId,
-          formulacao:
-            pricing?.calculations?.map((c) => c.formula).join(', ') ||
-            pricing?.factors?.targetFormula,
-          precificacao_cod:
-            pricing?.formattedCod ||
-            (pricing?.cod ? String(pricing.cod).padStart(4, '0') : undefined),
-        };
-      });
-      setPedidosVenda(
-        enriched.filter((p) => p.status === 'pendente' || p.status === 'em_carregamento')
-      );
     } catch (err) {
       console.error('Erro ao carregar dados de carregamento:', err);
       setLoadError('Erro ao carregar dados. Tente novamente.');
@@ -1599,33 +1716,27 @@ export default function CarregamentoModule({
   );
 
   // ── Create carregamento ───────────────────────────────────────────────────
-  const handleCreateCarregamento = async (form: any) => {
-    try {
-      const numero = await gerarNumeroCarregamento();
-      await createCarregamento({
-        numero_carregamento: numero,
-        tipo_frete: form.tipo_frete,
-        quantidade_total: parseFloat(form.quantidade_total),
-        quantidade_liberada: 0,
-        quantidade_carregada: 0,
-        filial_id: form.filial_id || undefined,
-        data_prevista_carregamento: form.data_prevista_carregamento || undefined,
-        transportadora_id: form.transportadora_id || undefined,
-        observacoes: form.observacoes || undefined,
-        pedido_precificacao_id: form.pedido_precificacao_id || undefined,
-        status: 'aguardando_cotacao',
-        criado_por: currentUser.id,
-      });
-      setShowModalNovo(false);
-      showSuccess('Carregamento criado com sucesso!');
-      await load();
-    } catch {
-      showError('Erro ao criar carregamento.');
-    }
+  const handleCreateCarregamento = async (form: CarregamentoFormData) => {
+    const numero = await gerarNumeroCarregamento();
+    await createCarregamento({
+      numero_carregamento: numero,
+      tipo_frete: form.tipo_frete,
+      quantidade_total: parseFloat(form.quantidade_total),
+      quantidade_liberada: 0,
+      quantidade_carregada: 0,
+      filial_id: form.filial_id || undefined,
+      data_prevista_carregamento: form.data_prevista_carregamento || undefined,
+      transportadora_id: form.transportadora_id || undefined,
+      observacoes: form.observacoes || undefined,
+      status: 'aguardando_cotacao',
+      criado_por: currentUser.id,
+    });
+    setShowModalNovo(false);
+    await load();
   };
 
   // ── Solicitar cotação ─────────────────────────────────────────────────────
-  const handleSolicitarCotacao = async (carregamentoId: string, form: any) => {
+  const handleSolicitarCotacao = async (carregamentoId: string, form: CotacaoFormData) => {
     try {
       await createCotacao({
         carregamento_id: carregamentoId,
@@ -1640,8 +1751,8 @@ export default function CarregamentoModule({
       await updateStatusCarregamento(carregamentoId, 'cotacao_solicitada', {
         data_solicitacao_cotacao: new Date().toISOString(),
       });
-      setModalCotacao(null);
       showSuccess('Cotação solicitada com sucesso!');
+      setModalCotacao(null);
       await load();
     } catch {
       showError('Erro ao solicitar cotação.');
@@ -1765,7 +1876,6 @@ export default function CarregamentoModule({
         <ModalNovoCarregamento
           filiais={filiais}
           transportadoras={transportadoras}
-          pedidos={pedidosVenda}
           onSave={handleCreateCarregamento}
           onClose={() => setShowModalNovo(false)}
         />

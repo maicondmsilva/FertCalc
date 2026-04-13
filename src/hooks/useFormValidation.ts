@@ -46,7 +46,7 @@ export function useFormValidation(schema: ValidationSchema) {
   const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   const validateField = useCallback(
-    (fieldName: string, value: any): string | null => {
+    (fieldName: string, value: unknown): string | null => {
       const fieldSchema = schema[fieldName];
       if (!fieldSchema) return null;
 
@@ -82,7 +82,7 @@ export function useFormValidation(schema: ValidationSchema) {
   }, []);
 
   const handleBlur = useCallback(
-    (fieldName: string, value: any) => {
+    (fieldName: string, value: unknown) => {
       setFieldTouched(fieldName, true);
       const error = validateField(fieldName, value);
       setFieldError(fieldName, error);
@@ -91,7 +91,7 @@ export function useFormValidation(schema: ValidationSchema) {
   );
 
   const handleChange = useCallback(
-    (fieldName: string, value: any) => {
+    (fieldName: string, value: unknown) => {
       // Only validate if field was already touched
       if (touched[fieldName]) {
         const error = validateField(fieldName, value);

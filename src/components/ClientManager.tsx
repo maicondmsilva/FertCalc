@@ -27,9 +27,36 @@ import { ConfirmDialog } from './ui/ConfirmDialog';
 import { useConfirm } from '../hooks/useConfirm';
 import { useFormValidation, validationRules, ValidationSchema } from '../hooks/useFormValidation';
 import { ValidatedInput } from './ui/ValidatedInput';
-import { BRAZILIAN_STATES } from '../constants/appConstants';
 
-const emptyAddress = { cep: '', street: '', number: '', neighborhood: '', city: '', state: '' };
+const BRAZILIAN_STATES = [
+  'AC',
+  'AL',
+  'AP',
+  'AM',
+  'BA',
+  'CE',
+  'DF',
+  'ES',
+  'GO',
+  'MA',
+  'MT',
+  'MS',
+  'MG',
+  'PA',
+  'PB',
+  'PR',
+  'PE',
+  'PI',
+  'RJ',
+  'RN',
+  'RS',
+  'RO',
+  'RR',
+  'SC',
+  'SP',
+  'SE',
+  'TO',
+];
 
 const initialFormData = {
   code: '',
@@ -39,9 +66,9 @@ const initialFormData = {
   phone: '',
   stateRegistration: '',
   fazenda: '',
-  address: { ...emptyAddress },
-  deliveryAddress: { ...emptyAddress },
-  sameAsCorrespondence: false,
+  address: { cep: '', street: '', number: '', neighborhood: '', city: '', state: '' },
+  deliveryAddress: { cep: '', street: '', number: '', neighborhood: '', city: '', state: '' },
+  deliverySameAsAddress: false,
 };
 
 const clientValidationSchema: ValidationSchema = {
@@ -109,6 +136,7 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
   const [viewingClient, setViewingClient] = useState<Client | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [formData, setFormData] = useState(initialFormData);
+  const [showForm, setShowForm] = useState(false);
 
   useEffect(() => {
     loadClients();
@@ -121,13 +149,30 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
     setLoading(false);
   };
 
-  const handleCEPChange = async (cep: string, field: 'address' | 'deliveryAddress' = 'address') => {
+  const handleCEPChange = async (cep: string) => {
     const formattedCEP = formatCEP(cep);
-    setFormData((prev) => ({ ...prev, [field]: { ...prev[field], cep: formattedCEP } }));
+    setFormData((prev) => ({ ...prev, address: { ...prev.address, cep: formattedCEP } }));
     if (formattedCEP.replace(/\D/g, '').length === 8) {
       const addressData = await lookupCEP(formattedCEP);
       if (addressData) {
-        setFormData((prev) => ({ ...prev, [field]: { ...prev[field], ...addressData } }));
+        setFormData((prev) => ({ ...prev, address: { ...prev.address, ...addressData } }));
+      }
+    }
+  };
+
+  const handleDeliveryCEPChange = async (cep: string) => {
+    const formattedCEP = formatCEP(cep);
+    setFormData((prev) => ({
+      ...prev,
+      deliveryAddress: { ...prev.deliveryAddress!, cep: formattedCEP },
+    }));
+    if (formattedCEP.replace(/\D/g, '').length === 8) {
+      const addressData = await lookupCEP(formattedCEP);
+      if (addressData) {
+        setFormData((prev) => ({
+          ...prev,
+          deliveryAddress: { ...prev.deliveryAddress!, ...addressData },
+        }));
       }
     }
   };
@@ -144,26 +189,18 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
 
     setLoading(true);
     try {
-      const payload = {
-        ...formData,
-        deliveryAddress: formData.sameAsCorrespondence
-          ? formData.address
-          : formData.deliveryAddress,
-      };
-      // Remove UI-only field
-      const { sameAsCorrespondence: _sac, ...clientPayload } = payload;
-
       if (editingClient) {
-        await updateClient(editingClient.id, clientPayload as any);
+        await updateClient(editingClient.id, formData as any);
         showSuccess('Cliente atualizado com sucesso!');
       } else {
         const nextCode = await getNextClientCode();
-        await createClient({ ...clientPayload, code: nextCode } as any);
+        await createClient({ ...formData, code: nextCode } as any);
         showSuccess('Cliente salvo com sucesso!');
       }
       await loadClients();
       setFormData(initialFormData);
       setEditingClient(null);
+      setShowForm(false);
       clearAllErrors();
     } catch {
       showError('Erro ao salvar cliente. Tente novamente.');
@@ -174,10 +211,6 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
 
   const startEdit = (client: Client) => {
     setEditingClient(client);
-    const sameAddr =
-      !!client.deliveryAddress &&
-      !!client.address &&
-      JSON.stringify(client.address) === JSON.stringify(client.deliveryAddress);
     setFormData({
       code: client.code || '',
       name: client.name || '',
@@ -186,11 +219,19 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
       phone: client.phone || '',
       stateRegistration: client.stateRegistration || '',
       fazenda: client.fazenda || '',
-      address: client.address || { ...emptyAddress },
-      deliveryAddress: client.deliveryAddress || { ...emptyAddress },
-      sameAsCorrespondence: sameAddr,
+      address: client.address || initialFormData.address,
+      deliveryAddress: client.deliveryAddress || initialFormData.deliveryAddress,
+      deliverySameAsAddress: client.deliverySameAsAddress || false,
     });
+    setShowForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleFormCancel = () => {
+    setShowForm(false);
+    setEditingClient(null);
+    setFormData(initialFormData);
+    clearAllErrors();
   };
 
   const handleDeleteClient = async (id: string) => {
@@ -220,7 +261,7 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
   return (
     <div className="space-y-6">
       <ConfirmDialog {...confirmState} onConfirm={handleConfirm} onCancel={handleCancel} />
-      {(canCreate && !editingClient) || (canEdit && editingClient) ? (
+      {showForm && ((canCreate && !editingClient) || (canEdit && editingClient)) && (
         <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
           <h2 className="text-xl font-bold text-stone-800 mb-6 flex items-center">
             <UserIcon className="w-5 h-5 mr-2 text-emerald-600" />
@@ -343,7 +384,7 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
                   <input
                     type="text"
                     value={formData.address.cep || ''}
-                    onChange={(e) => handleCEPChange(e.target.value, 'address')}
+                    onChange={(e) => handleCEPChange(e.target.value)}
                     className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
                     placeholder="00000-000"
                   />
@@ -420,10 +461,10 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
                     }
                     className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
                   >
-                    <option value="">—</option>
-                    {BRAZILIAN_STATES.map((uf) => (
-                      <option key={uf} value={uf}>
-                        {uf}
+                    <option value="">UF</option>
+                    {BRAZILIAN_STATES.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
                       </option>
                     ))}
                   </select>
@@ -431,44 +472,56 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
               </div>
             </div>
 
+            {/* Endereço de Entrega */}
             <div className="border-t border-stone-100 pt-6">
               <h3 className="text-sm font-bold text-stone-800 mb-4 flex items-center gap-2">
                 <MapPin className="w-4 h-4 text-blue-600" /> Endereço de Entrega
-                <label className="ml-4 flex items-center gap-2 text-xs font-normal text-stone-600 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.sameAsCorrespondence}
-                    onChange={(e) =>
-                      setFormData({ ...formData, sameAsCorrespondence: e.target.checked })
-                    }
-                    className="rounded border-stone-300 text-emerald-600 focus:ring-emerald-500"
-                  />
-                  Mesmo endereço de correspondência
-                </label>
               </h3>
-              {!formData.sameAsCorrespondence && (
+              <label className="flex items-center gap-2 mb-4 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.deliverySameAsAddress}
+                  onChange={(e) => {
+                    const same = e.target.checked;
+                    setFormData({
+                      ...formData,
+                      deliverySameAsAddress: same,
+                      deliveryAddress: same
+                        ? { ...formData.address }
+                        : initialFormData.deliveryAddress,
+                    });
+                  }}
+                  className="rounded text-emerald-600 focus:ring-emerald-500"
+                />
+                <span className="text-sm font-medium text-stone-600">
+                  Endereço de entrega igual ao de correspondência
+                </span>
+              </label>
+              {!formData.deliverySameAsAddress && (
                 <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
                   <div>
-                    <label className="block text-xs font-medium text-stone-500 mb-1">CEP</label>
+                    <label className="block text-xs font-medium text-stone-500 mb-1">
+                      CEP de Entrega
+                    </label>
                     <input
                       type="text"
-                      value={formData.deliveryAddress.cep || ''}
-                      onChange={(e) => handleCEPChange(e.target.value, 'deliveryAddress')}
+                      value={formData.deliveryAddress?.cep || ''}
+                      onChange={(e) => handleDeliveryCEPChange(e.target.value)}
                       className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
                       placeholder="00000-000"
                     />
                   </div>
                   <div className="md:col-span-3">
                     <label className="block text-xs font-medium text-stone-500 mb-1">
-                      Rua / Logradouro
+                      Rua / Logradouro de Entrega
                     </label>
                     <input
                       type="text"
-                      value={formData.deliveryAddress.street || ''}
+                      value={formData.deliveryAddress?.street || ''}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          deliveryAddress: { ...formData.deliveryAddress, street: e.target.value },
+                          deliveryAddress: { ...formData.deliveryAddress!, street: e.target.value },
                         })
                       }
                       className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
@@ -478,26 +531,28 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
                     <label className="block text-xs font-medium text-stone-500 mb-1">Nº</label>
                     <input
                       type="text"
-                      value={formData.deliveryAddress.number || ''}
+                      value={formData.deliveryAddress?.number || ''}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          deliveryAddress: { ...formData.deliveryAddress, number: e.target.value },
+                          deliveryAddress: { ...formData.deliveryAddress!, number: e.target.value },
                         })
                       }
                       className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-stone-500 mb-1">Bairro</label>
+                    <label className="block text-xs font-medium text-stone-500 mb-1">
+                      Bairro de Entrega
+                    </label>
                     <input
                       type="text"
-                      value={formData.deliveryAddress.neighborhood || ''}
+                      value={formData.deliveryAddress?.neighborhood || ''}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
                           deliveryAddress: {
-                            ...formData.deliveryAddress,
+                            ...formData.deliveryAddress!,
                             neighborhood: e.target.value,
                           },
                         })
@@ -506,14 +561,16 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
                     />
                   </div>
                   <div className="md:col-span-2">
-                    <label className="block text-xs font-medium text-stone-500 mb-1">Cidade</label>
+                    <label className="block text-xs font-medium text-stone-500 mb-1">
+                      Cidade de Entrega
+                    </label>
                     <input
                       type="text"
-                      value={formData.deliveryAddress.city || ''}
+                      value={formData.deliveryAddress?.city || ''}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          deliveryAddress: { ...formData.deliveryAddress, city: e.target.value },
+                          deliveryAddress: { ...formData.deliveryAddress!, city: e.target.value },
                         })
                       }
                       className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
@@ -521,22 +578,22 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-stone-500 mb-1">
-                      Estado (UF)
+                      Estado de Entrega (UF)
                     </label>
                     <select
-                      value={formData.deliveryAddress.state || ''}
+                      value={formData.deliveryAddress?.state || ''}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          deliveryAddress: { ...formData.deliveryAddress, state: e.target.value },
+                          deliveryAddress: { ...formData.deliveryAddress!, state: e.target.value },
                         })
                       }
                       className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
                     >
-                      <option value="">—</option>
-                      {BRAZILIAN_STATES.map((uf) => (
-                        <option key={uf} value={uf}>
-                          {uf}
+                      <option value="">UF</option>
+                      {BRAZILIAN_STATES.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
                         </option>
                       ))}
                     </select>
@@ -546,18 +603,13 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
             </div>
 
             <div className="flex justify-end gap-2">
-              {editingClient && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingClient(null);
-                    setFormData(initialFormData);
-                  }}
-                  className="px-6 py-2 border border-stone-300 text-stone-600 rounded-lg hover:bg-stone-50 transition-colors"
-                >
-                  Cancelar
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={handleFormCancel}
+                className="px-6 py-2 border border-stone-300 text-stone-600 rounded-lg hover:bg-stone-50 transition-colors"
+              >
+                Cancelar
+              </button>
               <button
                 type="submit"
                 disabled={loading}
@@ -569,22 +621,36 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
             </div>
           </form>
         </div>
-      ) : null}
+      )}
 
       <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
         <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
           <h3 className="text-lg font-bold text-stone-800">
             Clientes Cadastrados ({clients.length})
           </h3>
-          <div className="relative w-full md:w-64">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-stone-400 w-4 h-4" />
-            <input
-              type="text"
-              placeholder="Buscar cliente..."
-              value={searchTerm || ''}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
-            />
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            <div className="relative flex-1 md:w-64">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-stone-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Buscar cliente..."
+                value={searchTerm || ''}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+            {canCreate && !showForm && (
+              <button
+                onClick={() => {
+                  setEditingClient(null);
+                  setFormData(initialFormData);
+                  setShowForm(true);
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition-colors text-sm whitespace-nowrap"
+              >
+                <Plus className="w-4 h-4" /> Novo Cliente
+              </button>
+            )}
           </div>
         </div>
 
@@ -723,7 +789,7 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
               </div>
               <div className="pt-6 border-t border-stone-100">
                 <h3 className="text-sm font-bold text-stone-800 mb-4 flex items-center gap-2">
-                  <MapPin className="w-4 h-4 text-emerald-600" /> Endereço
+                  <MapPin className="w-4 h-4 text-emerald-600" /> Endereço de Correspondência
                 </h3>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
@@ -750,6 +816,48 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
                   </div>
                 </div>
               </div>
+              {viewingClient.deliverySameAsAddress ? (
+                <div className="pt-4 border-t border-stone-100">
+                  <p className="text-sm text-stone-500 italic flex items-center gap-1">
+                    <MapPin className="w-3.5 h-3.5 text-blue-500" />
+                    Endereço de entrega igual ao de correspondência
+                  </p>
+                </div>
+              ) : viewingClient.deliveryAddress?.street ? (
+                <div className="pt-6 border-t border-stone-100">
+                  <h3 className="text-sm font-bold text-stone-800 mb-4 flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-blue-600" /> Endereço de Entrega
+                  </h3>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-stone-400">CEP</p>
+                      <p className="text-stone-800">
+                        {viewingClient.deliveryAddress?.cep || '---'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-stone-400">Rua</p>
+                      <p className="text-stone-800">
+                        {viewingClient.deliveryAddress?.street || '---'},{' '}
+                        {viewingClient.deliveryAddress?.number || 'S/N'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-stone-400">Bairro</p>
+                      <p className="text-stone-800">
+                        {viewingClient.deliveryAddress?.neighborhood || '---'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-stone-400">Cidade/UF</p>
+                      <p className="text-stone-800">
+                        {viewingClient.deliveryAddress?.city || '---'} -{' '}
+                        {viewingClient.deliveryAddress?.state || '---'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
             </div>
             <div className="p-6 border-t border-stone-100 bg-stone-50 flex justify-end gap-3">
               <button
