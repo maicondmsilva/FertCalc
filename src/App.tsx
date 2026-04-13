@@ -22,6 +22,7 @@ import ResetPassword from './components/ResetPassword';
 import Home from './components/Home';
 import Dashboard from './components/Dashboard';
 import SavedFormulas from './components/SavedFormulas';
+import AccessProfileManager from './components/AccessProfileManager';
 import {
   LayoutDashboard,
   History as HistoryIcon,
@@ -133,7 +134,7 @@ export default function App() {
     ].includes(activeTab)
   ) {
     activeModule = 'pricing';
-  } else if (['branches', 'settings', 'users'].includes(activeTab)) {
+  } else if (['branches', 'settings', 'users', 'access_profiles'].includes(activeTab)) {
     activeModule = 'config';
   } else if (activeTab === 'prd') {
     activeModule = 'prd';
@@ -388,6 +389,12 @@ export default function App() {
     if (activeModule === 'config') {
       const allItems = [
         { id: 'users', label: 'Usuários', icon: Users, permission: 'users' },
+        {
+          id: 'access_profiles',
+          label: 'Perfis de Acesso',
+          icon: ShieldCheck,
+          permission: 'users',
+        },
         { id: 'branches', label: 'Filiais', icon: Building2, permission: 'branches' },
         { id: 'settings', label: 'Personalização', icon: Settings, permission: 'settings' },
       ];
@@ -943,6 +950,9 @@ export default function App() {
             {activeModule === 'config' && activeTab === 'users' && hasPermission('users') && (
               <UserManager currentUser={currentUser} />
             )}
+            {activeModule === 'config' &&
+              activeTab === 'access_profiles' &&
+              hasPermission('users') && <AccessProfileManager />}
             {activeModule === 'prd' && activeTab === 'prd' && hasPermission('prd') && (
               <PrdModule currentUser={currentUser} />
             )}
