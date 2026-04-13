@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Trash2, Save, User as UserIcon, Edit2, X } from 'lucide-react';
+import { Users, Plus, Trash2, Save, User as UserIcon, Edit2, X, ShieldCheck } from 'lucide-react';
 import { User } from '../types';
 import { getUsers, createUser, updateUser, deleteUser } from '../services/db';
 import { createAuthUser } from '../services/authService';
 import { useToast } from './Toast';
 import { useConfirm } from '../hooks/useConfirm';
 import { ConfirmDialog } from './ui/ConfirmDialog';
+import { AccessProfile, getAccessProfiles } from '../services/accessProfileService';
 
 interface UserManagerProps {
   currentUser: User;
@@ -15,6 +16,8 @@ export default function UserManager({ currentUser }: UserManagerProps) {
   const { showSuccess, showError } = useToast();
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
   const [users, setUsers] = useState<User[]>([]);
+  const [accessProfiles, setAccessProfiles] = useState<AccessProfile[]>([]);
+  const [appliedProfileId, setAppliedProfileId] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -71,6 +74,7 @@ export default function UserManager({ currentUser }: UserManagerProps) {
 
   useEffect(() => {
     loadUsers();
+    getAccessProfiles().then(setAccessProfiles);
   }, []);
 
   const loadUsers = async () => {
@@ -154,11 +158,23 @@ export default function UserManager({ currentUser }: UserManagerProps) {
   };
 
   const handleRoleChange = (role: 'master' | 'user' | 'manager' | 'admin') => {
+    setAppliedProfileId('');
     setFormData({
       ...formData,
       role,
       permissions: getDefaultPermissions(role) as any,
     });
+  };
+
+  const handleApplyProfile = (profileId: string) => {
+    setAppliedProfileId(profileId);
+    if (!profileId) return;
+    const profile = accessProfiles.find((p) => p.id === profileId);
+    if (!profile) return;
+    setFormData((prev) => ({
+      ...prev,
+      permissions: { ...prev.permissions, ...profile.permissions } as any,
+    }));
   };
 
   const saveUser = async (e: React.FormEvent) => {
@@ -212,6 +228,7 @@ export default function UserManager({ currentUser }: UserManagerProps) {
 
       await loadUsers();
       showSuccess(editingId ? 'Usuário atualizado com sucesso!' : 'Usuário criado com sucesso!');
+      setAppliedProfileId('');
       setFormData({
         name: '',
         email: '',
@@ -263,6 +280,7 @@ export default function UserManager({ currentUser }: UserManagerProps) {
       return;
     }
     setEditingId(user.id);
+    setAppliedProfileId('');
     setFormData({
       name: user.name,
       email: user.email,
@@ -278,6 +296,7 @@ export default function UserManager({ currentUser }: UserManagerProps) {
 
   const cancelEdit = () => {
     setEditingId(null);
+    setAppliedProfileId('');
     setFormData({
       name: '',
       email: '',
@@ -436,6 +455,44 @@ export default function UserManager({ currentUser }: UserManagerProps) {
                   </span>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* PERFIL DE ACESSO — Aplicar template de permissões */}
+          {accessProfiles.length > 0 && (
+            <div className="pt-2 border-t border-stone-200">
+              <label className="block text-sm font-bold text-stone-600 mb-1 flex items-center gap-1">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                Aplicar Perfil de Acesso
+              </label>
+              <div className="flex items-center gap-3 flex-wrap">
+                <select
+                  value={appliedProfileId}
+                  onChange={(e) => handleApplyProfile(e.target.value)}
+                  className="px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
+                >
+                  <option value="">— Selecionar perfil —</option>
+                  {accessProfiles.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                      {p.description ? ` — ${p.description}` : ''}
+                    </option>
+                  ))}
+                </select>
+                {appliedProfileId && (
+                  <span className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded font-medium">
+                    ✓ Perfil aplicado:{' '}
+                    <strong>
+                      {accessProfiles.find((p) => p.id === appliedProfileId)?.name}
+                    </strong>{' '}
+                    — permissões preenchidas (editáveis abaixo)
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-stone-400 mt-1">
+                Ao selecionar um perfil, as permissões abaixo serão preenchidas automaticamente.
+                Você pode ajustá-las individualmente antes de salvar.
+              </p>
             </div>
           )}
 
