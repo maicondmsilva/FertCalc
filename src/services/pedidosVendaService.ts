@@ -60,7 +60,8 @@ export async function createPedidoVenda(
   pedido: Omit<PedidoVenda, 'id' | 'criado_em' | 'atualizado_em'>
 ): Promise<PedidoVenda | null> {
   const { data, error } = await supabase.from('pedidos_venda').insert(pedido).select().single();
-  if (error || !data) return null;
+  if (error) throw error;
+  if (!data) return null;
   return mapPedido(data);
 }
 

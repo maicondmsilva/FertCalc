@@ -257,7 +257,7 @@ export interface Client {
   stateRegistration?: string;
   fazenda?: string;
   address?: Address;
-  deliveryAddress?: Address;
+  deliveryAddress?: Address; // Endereço de Entrega
 }
 
 export interface Agent {
