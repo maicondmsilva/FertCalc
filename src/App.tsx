@@ -80,6 +80,7 @@ import CardManager from './components/ExpenseManagement/CardManager';
 import ExpenseCategoryManager from './components/ExpenseManagement/ExpenseCategoryManager';
 
 import CarregamentoModule from './components/Carregamento';
+import PedidosVenda from './components/PedidosVenda';
 
 import { getPendingCount, getCheckedCount } from './services/expenseService';
 
@@ -114,6 +115,7 @@ export default function App() {
       'simplified_calculator',
       'saved_formulas',
       'history',
+      'pedidosVenda',
       'goals',
       'approvals',
       'reports',
@@ -327,6 +329,12 @@ export default function App() {
         },
         { id: 'pricelists', label: 'Lista de Preço', icon: Database, permission: 'priceLists' },
         { id: 'history', label: 'Precificações', icon: HistoryIcon, permission: 'history' },
+        {
+          id: 'pedidosVenda',
+          label: 'Pedidos de Venda',
+          icon: FileEdit,
+          permission: 'pedidosVenda',
+        },
         { id: 'approvals', label: 'Aprovações', icon: ShieldCheck, permission: 'approvals' },
         { id: 'goals', label: 'Metas', icon: Target, permission: 'goals' },
         {
@@ -892,6 +900,9 @@ export default function App() {
             )}
             {activeModule === 'pricing' && activeTab === 'history' && (
               <History onEdit={handleEditPricing} currentUser={currentUser} />
+            )}
+            {activeModule === 'pricing' && activeTab === 'pedidosVenda' && (
+              <PedidosVenda currentUser={currentUser} />
             )}
             {activeModule === 'pricing' && activeTab === 'goals' && (
               <Goals currentUser={currentUser} />
