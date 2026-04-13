@@ -36,6 +36,7 @@ import {
   gerarNumeroCarregamento,
   getFiliais,
   getTransportadoras,
+  getAllTransportadoras,
   createTransportadora,
   updateTransportadora,
   getCotacoesCarregamento,
@@ -46,7 +47,6 @@ import {
   getCarregamentosCalendario,
   getAlertasCarregamento,
 } from '../../services/carregamentoService';
-import { supabase } from '../../services/supabase';
 import { getPricingRecords } from '../../services/db';
 import { getPedidosVenda } from '../../services/pedidosVendaService';
 import { useToast } from '../Toast';
@@ -309,9 +309,8 @@ function ModalNovoCarregamento({ filiais, onSave, onClose }: ModalNovoCarregamen
     setSaving(true);
     try {
       await onSave(form);
-    } catch (err) {
-      console.error('Erro ao criar carregamento:', err);
-      showError('Erro ao criar carregamento. Verifique os dados e tente novamente.');
+    } catch {
+      // Error toast is handled by the parent (handleCreateCarregamento)
     } finally {
       setSaving(false);
     }
@@ -1775,20 +1774,8 @@ function TransportadoraManager() {
   const carregarTodas = useCallback(async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.from('transportadoras').select('*').order('nome');
-      if (error) throw error;
-      setLista(
-        (data ?? []).map((d: Record<string, unknown>) => ({
-          id: d.id as string,
-          nome: d.nome as string,
-          cnpj: d.cnpj as string | undefined,
-          contato: d.contato as string | undefined,
-          telefone: d.telefone as string | undefined,
-          email: d.email as string | undefined,
-          ativo: (d.ativo ?? true) as boolean,
-          criado_em: d.criado_em as string | undefined,
-        }))
-      );
+      const data = await getAllTransportadoras();
+      setLista(data);
     } catch (err) {
       console.error(err);
       showError('Erro ao carregar transportadoras.');
@@ -2161,6 +2148,7 @@ export default function CarregamentoModule({
           ? (err as { message: string }).message
           : 'Erro ao criar carregamento. Verifique os dados e tente novamente.';
       showError(msg);
+      // Rethrow so the modal's handleSubmit can keep saving=false without closing
       throw err;
     }
   };

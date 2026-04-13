@@ -165,6 +165,12 @@ export async function getTransportadoras(): Promise<Transportadora[]> {
   return data.map(mapTransportadora);
 }
 
+export async function getAllTransportadoras(): Promise<Transportadora[]> {
+  const { data, error } = await supabase.from('transportadoras').select('*').order('nome');
+  if (error || !data) return [];
+  return data.map(mapTransportadora);
+}
+
 export async function createTransportadora(
   payload: Omit<Transportadora, 'id' | 'criado_em'>
 ): Promise<Transportadora | null> {
