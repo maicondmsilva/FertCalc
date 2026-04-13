@@ -326,7 +326,7 @@ export default function App() {
           ],
         },
         { id: 'pricelists', label: 'Lista de Preço', icon: Database, permission: 'priceLists' },
-        { id: 'history', label: 'Situação', icon: HistoryIcon, permission: 'history' },
+        { id: 'history', label: 'Precificações', icon: HistoryIcon, permission: 'history' },
         { id: 'approvals', label: 'Aprovações', icon: ShieldCheck, permission: 'approvals' },
         { id: 'goals', label: 'Metas', icon: Target, permission: 'goals' },
         {

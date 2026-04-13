@@ -153,6 +153,8 @@ export interface User {
     carregamento_all_filiais?: boolean;
     carregamento_cancelar?: boolean;
     carregamento_configurar_filiais?: boolean;
+    // Módulo Pedidos de Venda
+    pedidosVenda?: boolean;
   };
 }
 
@@ -255,6 +257,7 @@ export interface Client {
   stateRegistration?: string;
   fazenda?: string;
   address?: Address;
+  deliveryAddress?: Address;
 }
 
 export interface Agent {

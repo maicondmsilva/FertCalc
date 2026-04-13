@@ -32,18 +32,14 @@ import {
   MetaMensal,
   ConfiguracaoIndicador,
   DiasUteisMes,
-  ProfitabilityAnalysis
+  ProfitabilityAnalysis,
 } from '../types';
 
 // ============================================================
 // APP SETTINGS
 // ============================================================
 export async function getAppSettings(): Promise<AppSettings | null> {
-  const { data, error } = await supabase
-    .from('app_settings')
-    .select('*')
-    .limit(1)
-    .single();
+  const { data, error } = await supabase.from('app_settings').select('*').limit(1).single();
   if (error || !data) return null;
   return {
     companyName: data.company_name,
@@ -93,7 +89,7 @@ export async function getUserByEmail(emailOrNickname: string): Promise<User | nu
     .select('*')
     .or(`email.eq."${emailOrNickname}",nickname.eq."${emailOrNickname}"`)
     .maybeSingle();
-    
+
   if (error || !data) return null;
   return mapUser(data);
 }
@@ -117,7 +113,10 @@ export async function createUser(user: Omit<User, 'id'> & { password: string }):
   return mapUser(data);
 }
 
-export async function updateUser(id: string, user: Partial<User> & { password?: string }): Promise<void> {
+export async function updateUser(
+  id: string,
+  user: Partial<User> & { password?: string }
+): Promise<void> {
   const payload: any = { updated_at: new Date().toISOString() };
   if (user.email !== undefined) payload.email = user.email;
   if (user.name !== undefined) payload.name = user.name;
@@ -157,7 +156,12 @@ function mapUser(data: any): User {
 export async function getBranches(): Promise<Branch[]> {
   const { data, error } = await supabase.from('branches').select('*').order('id_numeric');
   if (error || !data) return [];
-  return data.map(d => ({ id: d.id, id_numeric: d.id_numeric, name: d.name, ativo: d.ativo ?? true }));
+  return data.map((d) => ({
+    id: d.id,
+    id_numeric: d.id_numeric,
+    name: d.name,
+    ativo: d.ativo ?? true,
+  }));
 }
 
 export async function createBranch(branch: Omit<Branch, 'id'>): Promise<Branch> {
@@ -195,7 +199,7 @@ export async function getClients(): Promise<Client[]> {
 export async function getNextClientCode(): Promise<string> {
   const { data } = await supabase.from('clients').select('code');
   if (!data || data.length === 0) return '1';
-  const nums = data.map(d => parseInt(d.code || '0', 10)).filter(n => !isNaN(n));
+  const nums = data.map((d) => parseInt(d.code || '0', 10)).filter((n) => !isNaN(n));
   const max = nums.length > 0 ? Math.max(...nums) : 0;
   return String(max + 1);
 }
@@ -244,6 +248,7 @@ function clientToDb(client: Partial<Client>) {
   if (client.stateRegistration !== undefined) d.state_registration = client.stateRegistration;
   if (client.fazenda !== undefined) d.fazenda = client.fazenda;
   if (client.address !== undefined) d.address = client.address;
+  if (client.deliveryAddress !== undefined) d.delivery_address = client.deliveryAddress;
   return d;
 }
 
@@ -258,6 +263,7 @@ function mapClient(data: any): Client {
     stateRegistration: data.state_registration,
     fazenda: data.fazenda,
     address: data.address,
+    deliveryAddress: data.delivery_address,
   };
 }
 
@@ -273,17 +279,13 @@ export async function getAgents(): Promise<Agent[]> {
 export async function getNextAgentCode(): Promise<string> {
   const { data } = await supabase.from('agents').select('code');
   if (!data || data.length === 0) return '1';
-  const nums = data.map(d => parseInt(d.code || '0', 10)).filter(n => !isNaN(n));
+  const nums = data.map((d) => parseInt(d.code || '0', 10)).filter((n) => !isNaN(n));
   const max = nums.length > 0 ? Math.max(...nums) : 0;
   return String(max + 1);
 }
 
 export async function createAgent(agent: Omit<Agent, 'id'>): Promise<Agent> {
-  const { data, error } = await supabase
-    .from('agents')
-    .insert(agentToDb(agent))
-    .select()
-    .single();
+  const { data, error } = await supabase.from('agents').insert(agentToDb(agent)).select().single();
   if (error) throw error;
   return mapAgent(data);
 }
@@ -342,7 +344,7 @@ function mapAgent(data: any): Agent {
 export async function getBrands(): Promise<Brand[]> {
   const { data, error } = await supabase.from('brands').select('*').order('name');
   if (error || !data) return [];
-  return data.map(d => ({ id: d.id, code: d.code, name: d.name }));
+  return data.map((d) => ({ id: d.id, code: d.code, name: d.name }));
 }
 
 export async function createBrand(brand: Omit<Brand, 'id'>): Promise<Brand> {
@@ -356,7 +358,10 @@ export async function createBrand(brand: Omit<Brand, 'id'>): Promise<Brand> {
 }
 
 export async function updateBrand(id: string, brand: Partial<Brand>): Promise<void> {
-  const { error } = await supabase.from('brands').update({ code: brand.code, name: brand.name }).eq('id', id);
+  const { error } = await supabase
+    .from('brands')
+    .update({ code: brand.code, name: brand.name })
+    .eq('id', id);
   if (error) throw error;
 }
 
@@ -374,7 +379,9 @@ export async function getMacroMaterials(): Promise<MacroMaterial[]> {
   return data.map(mapMacro);
 }
 
-export async function createMacroMaterial(material: Omit<MacroMaterial, 'id'>): Promise<MacroMaterial> {
+export async function createMacroMaterial(
+  material: Omit<MacroMaterial, 'id'>
+): Promise<MacroMaterial> {
   const { data, error } = await supabase
     .from('macro_materials')
     .insert(macroToDb(material))
@@ -384,13 +391,16 @@ export async function createMacroMaterial(material: Omit<MacroMaterial, 'id'>): 
   return mapMacro(data);
 }
 
-export async function updateMacroMaterial(id: string, material: Partial<MacroMaterial>): Promise<void> {
+export async function updateMacroMaterial(
+  id: string,
+  material: Partial<MacroMaterial>
+): Promise<void> {
   const { error } = await supabase
     .from('macro_materials')
     .update({ ...macroToDb(material as any), updated_at: new Date().toISOString() })
     .eq('id', id);
   if (error) throw error;
-  
+
   // Auto-sync into Price Lists
   await syncProductToPriceLists(id, material, 'macro');
 }
@@ -447,7 +457,9 @@ export async function getMicroMaterials(): Promise<MicroMaterial[]> {
   return data.map(mapMicro);
 }
 
-export async function createMicroMaterial(material: Omit<MicroMaterial, 'id'>): Promise<MicroMaterial> {
+export async function createMicroMaterial(
+  material: Omit<MicroMaterial, 'id'>
+): Promise<MicroMaterial> {
   const { data, error } = await supabase
     .from('micro_materials')
     .insert(microToDb(material))
@@ -457,13 +469,16 @@ export async function createMicroMaterial(material: Omit<MicroMaterial, 'id'>): 
   return mapMicro(data);
 }
 
-export async function updateMicroMaterial(id: string, material: Partial<MicroMaterial>): Promise<void> {
+export async function updateMicroMaterial(
+  id: string,
+  material: Partial<MicroMaterial>
+): Promise<void> {
   const { error } = await supabase
     .from('micro_materials')
     .update({ ...microToDb(material as any), updated_at: new Date().toISOString() })
     .eq('id', id);
   if (error) throw error;
-  
+
   // Auto-sync into Price Lists
   await syncProductToPriceLists(id, material, 'micro');
 }
@@ -482,7 +497,7 @@ async function syncProductToPriceLists(id: string, updates: any, type: 'macro' |
       const updatedArray = targetArray.map((mat: any) => {
         if (mat.id === id) {
           changed = true;
-          return { ...mat, ...updates }; 
+          return { ...mat, ...updates };
         }
         return mat;
       });
@@ -533,7 +548,7 @@ function mapMicro(data: any): MicroMaterial {
 export async function getFinishedProducts(): Promise<FinishedProduct[]> {
   const { data, error } = await supabase.from('finished_products').select('*').order('name');
   if (error || !data) return [];
-  return data.map(d => ({
+  return data.map((d) => ({
     id: d.id,
     code: d.code,
     name: d.name,
@@ -543,25 +558,46 @@ export async function getFinishedProducts(): Promise<FinishedProduct[]> {
   }));
 }
 
-export async function createFinishedProduct(product: Omit<FinishedProduct, 'id'>): Promise<FinishedProduct> {
+export async function createFinishedProduct(
+  product: Omit<FinishedProduct, 'id'>
+): Promise<FinishedProduct> {
   const { data, error } = await supabase
     .from('finished_products')
-    .insert({ code: product.code, name: product.name, description: product.description, price: product.price, min_quantity: product.minQuantity || 0 })
+    .insert({
+      code: product.code,
+      name: product.name,
+      description: product.description,
+      price: product.price,
+      min_quantity: product.minQuantity || 0,
+    })
     .select()
     .single();
   if (error) throw error;
-  return { id: data.id, code: data.code, name: data.name, description: data.description, price: data.price ? Number(data.price) : undefined, minQuantity: data.min_quantity ? Number(data.min_quantity) : 0 };
+  return {
+    id: data.id,
+    code: data.code,
+    name: data.name,
+    description: data.description,
+    price: data.price ? Number(data.price) : undefined,
+    minQuantity: data.min_quantity ? Number(data.min_quantity) : 0,
+  };
 }
 
-export async function updateFinishedProduct(id: string, product: Partial<FinishedProduct>): Promise<void> {
-  const { error } = await supabase.from('finished_products').update({
-    code: product.code,
-    name: product.name,
-    description: product.description,
-    price: product.price,
-    min_quantity: product.minQuantity,
-    updated_at: new Date().toISOString(),
-  }).eq('id', id);
+export async function updateFinishedProduct(
+  id: string,
+  product: Partial<FinishedProduct>
+): Promise<void> {
+  const { error } = await supabase
+    .from('finished_products')
+    .update({
+      code: product.code,
+      name: product.name,
+      description: product.description,
+      price: product.price,
+      min_quantity: product.minQuantity,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id);
   if (error) throw error;
 }
 
@@ -577,26 +613,47 @@ export async function getUnifiedProducts(): Promise<UnifiedProduct[]> {
   const [macros, micros, finished] = await Promise.all([
     getMacroMaterials(),
     getMicroMaterials(),
-    getFinishedProducts()
+    getFinishedProducts(),
   ]);
 
   const unified: UnifiedProduct[] = [
-    ...macros.map(m => ({
-      id: m.id, type: 'macro' as NutrientType, name: m.name, code: m.code || '',
-      minQuantity: m.minQuantity || 0, categories: m.categories || [],
-      n: m.n, p: m.p, k: m.k, s: m.s, ca: m.ca, microGuarantees: m.microGuarantees,
-      brandId: m.brandId, formulaSuffix: m.formulaSuffix, isPremiumLine: m.isPremiumLine
+    ...macros.map((m) => ({
+      id: m.id,
+      type: 'macro' as NutrientType,
+      name: m.name,
+      code: m.code || '',
+      minQuantity: m.minQuantity || 0,
+      categories: m.categories || [],
+      n: m.n,
+      p: m.p,
+      k: m.k,
+      s: m.s,
+      ca: m.ca,
+      microGuarantees: m.microGuarantees,
+      brandId: m.brandId,
+      formulaSuffix: m.formulaSuffix,
+      isPremiumLine: m.isPremiumLine,
     })),
-    ...micros.map(m => ({
-      id: m.id, type: 'micro' as NutrientType, name: m.name, code: m.code || '',
-      minQuantity: m.minQuantity || 0, categories: m.categories || [],
-      microGuarantees: m.microGuarantees, formulaSuffix: m.formulaSuffix
+    ...micros.map((m) => ({
+      id: m.id,
+      type: 'micro' as NutrientType,
+      name: m.name,
+      code: m.code || '',
+      minQuantity: m.minQuantity || 0,
+      categories: m.categories || [],
+      microGuarantees: m.microGuarantees,
+      formulaSuffix: m.formulaSuffix,
     })),
-    ...finished.map(f => ({
-      id: f.id, type: 'finished' as NutrientType, name: f.name, code: f.code || '',
-      minQuantity: f.minQuantity || 0, categories: [],
-      description: f.description, price: f.price
-    }))
+    ...finished.map((f) => ({
+      id: f.id,
+      type: 'finished' as NutrientType,
+      name: f.name,
+      code: f.code || '',
+      minQuantity: f.minQuantity || 0,
+      categories: [],
+      description: f.description,
+      price: f.price,
+    })),
   ];
   return unified;
 }
@@ -604,25 +661,40 @@ export async function getUnifiedProducts(): Promise<UnifiedProduct[]> {
 export async function saveUnifiedProduct(p: Partial<UnifiedProduct>, id?: string): Promise<void> {
   if (p.type === 'macro') {
     const macroData = {
-      name: p.name!, code: p.code, minQuantity: p.minQuantity, categories: p.categories || [],
-      n: p.n || 0, p: p.p || 0, k: p.k || 0, s: p.s || 0, ca: p.ca || 0,
-      microGuarantees: p.microGuarantees || [], brandId: p.brandId,
-      formulaSuffix: p.formulaSuffix, isPremiumLine: p.isPremiumLine
+      name: p.name!,
+      code: p.code,
+      minQuantity: p.minQuantity,
+      categories: p.categories || [],
+      n: p.n || 0,
+      p: p.p || 0,
+      k: p.k || 0,
+      s: p.s || 0,
+      ca: p.ca || 0,
+      microGuarantees: p.microGuarantees || [],
+      brandId: p.brandId,
+      formulaSuffix: p.formulaSuffix,
+      isPremiumLine: p.isPremiumLine,
     };
     if (id) await updateMacroMaterial(id, macroData);
     else await createMacroMaterial(macroData as any);
   } else if (p.type === 'micro') {
     const microData = {
-      name: p.name!, code: p.code, minQuantity: p.minQuantity, categories: p.categories || [],
+      name: p.name!,
+      code: p.code,
+      minQuantity: p.minQuantity,
+      categories: p.categories || [],
       microGuarantees: p.microGuarantees || [],
-      formulaSuffix: p.formulaSuffix
+      formulaSuffix: p.formulaSuffix,
     };
     if (id) await updateMicroMaterial(id, microData);
     else await createMicroMaterial(microData as any);
   } else if (p.type === 'finished') {
     const finishedData = {
-      name: p.name!, code: p.code!, minQuantity: p.minQuantity,
-      description: p.description, price: p.price
+      name: p.name!,
+      code: p.code!,
+      minQuantity: p.minQuantity,
+      description: p.description,
+      price: p.price,
     };
     if (id) await updateFinishedProduct(id, finishedData);
     else await createFinishedProduct(finishedData as any);
@@ -639,9 +711,12 @@ export async function deleteUnifiedProduct(id: string, type: NutrientType): Prom
 // INCOMPATIBILITY RULES
 // ============================================================
 export async function getIncompatibilityRules(): Promise<IncompatibilityRule[]> {
-  const { data, error } = await supabase.from('incompatibility_rules').select('*').order('created_at');
+  const { data, error } = await supabase
+    .from('incompatibility_rules')
+    .select('*')
+    .order('created_at');
   if (error || !data) return [];
-  return data.map(d => ({
+  return data.map((d) => ({
     id: d.id,
     materialAId: d.material_a_id,
     materialBId: d.material_b_id,
@@ -650,7 +725,9 @@ export async function getIncompatibilityRules(): Promise<IncompatibilityRule[]> 
   }));
 }
 
-export async function createIncompatibilityRule(rule: Omit<IncompatibilityRule, 'id'>): Promise<IncompatibilityRule> {
+export async function createIncompatibilityRule(
+  rule: Omit<IncompatibilityRule, 'id'>
+): Promise<IncompatibilityRule> {
   const { data, error } = await supabase
     .from('incompatibility_rules')
     .insert({
@@ -662,7 +739,13 @@ export async function createIncompatibilityRule(rule: Omit<IncompatibilityRule, 
     .select()
     .single();
   if (error) throw error;
-  return { id: data.id, materialAId: data.material_a_id, materialBId: data.material_b_id, materialAName: data.material_a_name, materialBName: data.material_b_name };
+  return {
+    id: data.id,
+    materialAId: data.material_a_id,
+    materialBId: data.material_b_id,
+    materialAName: data.material_a_name,
+    materialBName: data.material_b_name,
+  };
 }
 
 export async function deleteIncompatibilityRule(id: string): Promise<void> {
@@ -674,16 +757,21 @@ export async function deleteIncompatibilityRule(id: string): Promise<void> {
 // PRICE LISTS
 // ============================================================
 export async function getPriceLists(): Promise<PriceList[]> {
-  const { data, error } = await supabase.from('price_lists').select('*').order('created_at', { ascending: false });
+  const { data, error } = await supabase
+    .from('price_lists')
+    .select('*')
+    .order('created_at', { ascending: false });
   if (error || !data) return [];
-  return data.map(d => ({
+  return data.map((d) => ({
     id: d.id,
     name: d.name,
     branchId: d.branch_id,
     date: d.date,
     currency: d.currency,
-    exchangeRate: d.currency === 'USD' ? (d.exchange_rate ? Number(d.exchange_rate) : undefined) : undefined,
-    dollarRate: d.currency === 'BRL' ? (d.exchange_rate ? Number(d.exchange_rate) : undefined) : undefined,
+    exchangeRate:
+      d.currency === 'USD' ? (d.exchange_rate ? Number(d.exchange_rate) : undefined) : undefined,
+    dollarRate:
+      d.currency === 'BRL' ? (d.exchange_rate ? Number(d.exchange_rate) : undefined) : undefined,
     macros: d.macros || [],
     micros: d.micros || [],
   }));
@@ -704,16 +792,26 @@ export async function createPriceList(pl: Omit<PriceList, 'id'>): Promise<PriceL
     .select()
     .single();
   if (error) throw error;
-  return { 
-    id: data.id, 
-    name: data.name, 
-    branchId: data.branch_id, 
-    date: data.date, 
-    currency: data.currency, 
-    exchangeRate: data.currency === 'USD' ? (data.exchange_rate ? Number(data.exchange_rate) : undefined) : undefined, 
-    dollarRate: data.currency === 'BRL' ? (data.exchange_rate ? Number(data.exchange_rate) : undefined) : undefined, 
-    macros: data.macros || [], 
-    micros: data.micros || [] 
+  return {
+    id: data.id,
+    name: data.name,
+    branchId: data.branch_id,
+    date: data.date,
+    currency: data.currency,
+    exchangeRate:
+      data.currency === 'USD'
+        ? data.exchange_rate
+          ? Number(data.exchange_rate)
+          : undefined
+        : undefined,
+    dollarRate:
+      data.currency === 'BRL'
+        ? data.exchange_rate
+          ? Number(data.exchange_rate)
+          : undefined
+        : undefined,
+    macros: data.macros || [],
+    micros: data.micros || [],
   };
 }
 
@@ -723,7 +821,8 @@ export async function updatePriceList(id: string, pl: Partial<PriceList>): Promi
   if (pl.branchId !== undefined) payload.branch_id = pl.branchId;
   if (pl.date !== undefined) payload.date = pl.date;
   if (pl.currency !== undefined) payload.currency = pl.currency;
-  if (pl.exchangeRate !== undefined && pl.currency === 'USD') payload.exchange_rate = pl.exchangeRate;
+  if (pl.exchangeRate !== undefined && pl.currency === 'USD')
+    payload.exchange_rate = pl.exchangeRate;
   if (pl.dollarRate !== undefined && pl.currency === 'BRL') payload.exchange_rate = pl.dollarRate;
   if (pl.macros !== undefined) payload.macros = pl.macros;
   if (pl.micros !== undefined) payload.micros = pl.micros;
@@ -740,12 +839,17 @@ export async function deletePriceList(id: string): Promise<void> {
 // PRICING RECORDS
 // ============================================================
 export async function getPricingRecords(): Promise<PricingRecord[]> {
-  const { data, error } = await supabase.from('pricing_records').select('*').order('created_at', { ascending: false });
+  const { data, error } = await supabase
+    .from('pricing_records')
+    .select('*')
+    .order('created_at', { ascending: false });
   if (error || !data) return [];
   return data.map(mapPricingRecord);
 }
 
-export async function createPricingRecord(record: Omit<PricingRecord, 'id'>): Promise<PricingRecord> {
+export async function createPricingRecord(
+  record: Omit<PricingRecord, 'id'>
+): Promise<PricingRecord> {
   const { data, error } = await supabase
     .from('pricing_records')
     .insert(pricingRecordToDb(record))
@@ -755,7 +859,10 @@ export async function createPricingRecord(record: Omit<PricingRecord, 'id'>): Pr
   return mapPricingRecord(data);
 }
 
-export async function updatePricingRecord(id: string, record: Partial<PricingRecord>): Promise<void> {
+export async function updatePricingRecord(
+  id: string,
+  record: Partial<PricingRecord>
+): Promise<void> {
   const { error } = await supabase
     .from('pricing_records')
     .update({ ...pricingRecordToDb(record as any), updated_at: new Date().toISOString() })
@@ -851,15 +958,24 @@ function mapPricingRecord(d: any): PricingRecord {
   };
 }
 
-export async function transferPricingRecord(id: string, targetUserId: string, targetUserName: string, currentUser: User): Promise<void> {
+export async function transferPricingRecord(
+  id: string,
+  targetUserId: string,
+  targetUserName: string,
+  currentUser: User
+): Promise<void> {
   const historyEntry: PricingHistoryEntry = {
     date: new Date().toISOString(),
     userId: currentUser.id,
     userName: currentUser.name,
-    action: `Transferência iniciada para ${targetUserName}`
+    action: `Transferência iniciada para ${targetUserName}`,
   };
 
-  const { data: pricing, error: fetchError } = await supabase.from('pricing_records').select('history').eq('id', id).single();
+  const { data: pricing, error: fetchError } = await supabase
+    .from('pricing_records')
+    .select('history')
+    .eq('id', id)
+    .single();
   if (fetchError) throw fetchError;
 
   const newHistory = [...(pricing.history || []), historyEntry];
@@ -870,7 +986,7 @@ export async function transferPricingRecord(id: string, targetUserId: string, ta
       transfer_to_user_id: targetUserId,
       transfer_to_user_name: targetUserName,
       history: newHistory,
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     })
     .eq('id', id);
 
@@ -884,7 +1000,7 @@ export async function transferPricingRecord(id: string, targetUserId: string, ta
     date: new Date().toISOString(),
     read: false,
     type: 'pricing_transfer',
-    dataId: id
+    dataId: id,
   });
 }
 
@@ -893,10 +1009,14 @@ export async function acceptPricingTransfer(id: string, user: User): Promise<voi
     date: new Date().toISOString(),
     userId: user.id,
     userName: user.name,
-    action: `Transferência aceita por ${user.name}`
+    action: `Transferência aceita por ${user.name}`,
   };
 
-  const { data: pricing, error: fetchError } = await supabase.from('pricing_records').select('history').eq('id', id).single();
+  const { data: pricing, error: fetchError } = await supabase
+    .from('pricing_records')
+    .select('history')
+    .eq('id', id)
+    .single();
   if (fetchError) throw fetchError;
 
   const newHistory = [...(pricing.history || []), historyEntry];
@@ -910,7 +1030,7 @@ export async function acceptPricingTransfer(id: string, user: User): Promise<voi
       transfer_to_user_id: null,
       transfer_to_user_name: null,
       history: newHistory,
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     })
     .eq('id', id);
 
@@ -924,9 +1044,12 @@ export async function acceptPricingTransfer(id: string, user: User): Promise<voi
 import { SavedFormula } from '../types';
 
 export async function getSavedFormulas(): Promise<SavedFormula[]> {
-  const { data, error } = await supabase.from('saved_formulas').select('*').order('created_at', { ascending: false });
+  const { data, error } = await supabase
+    .from('saved_formulas')
+    .select('*')
+    .order('created_at', { ascending: false });
   if (error || !data) return [];
-  return data.map(d => ({
+  return data.map((d) => ({
     id: d.id,
     userId: d.user_id,
     userName: d.user_name,
@@ -952,7 +1075,7 @@ export async function createSavedFormula(formula: Omit<SavedFormula, 'id'>): Pro
       date: formula.date,
       target_formula: formula.targetFormula,
       macros: formula.macros,
-      micros: formula.micros
+      micros: formula.micros,
     })
     .select()
     .single();
@@ -972,7 +1095,10 @@ export async function createSavedFormula(formula: Omit<SavedFormula, 'id'>): Pro
   };
 }
 
-export async function updateSavedFormula(id: string, formula: Partial<SavedFormula>): Promise<void> {
+export async function updateSavedFormula(
+  id: string,
+  formula: Partial<SavedFormula>
+): Promise<void> {
   const payload: any = { updated_at: new Date().toISOString() };
   if (formula.name !== undefined) payload.name = formula.name;
   if (formula.targetFormula !== undefined) payload.target_formula = formula.targetFormula;
@@ -991,15 +1117,16 @@ export async function deleteSavedFormula(id: string): Promise<void> {
   if (error) throw error;
 }
 
-
-
 // ============================================================
 // GOALS
 // ============================================================
 export async function getGoals(): Promise<Goal[]> {
-  const { data, error } = await supabase.from('goals').select('*').order('created_at', { ascending: false });
+  const { data, error } = await supabase
+    .from('goals')
+    .select('*')
+    .order('created_at', { ascending: false });
   if (error || !data) return [];
-  return data.map(d => ({
+  return data.map((d) => ({
     id: d.id,
     userId: d.user_id,
     userName: d.user_name,
@@ -1026,7 +1153,16 @@ export async function createGoal(goal: Omit<Goal, 'id'>): Promise<Goal> {
     .select()
     .single();
   if (error) throw error;
-  return { id: data.id, userId: data.user_id, userName: data.user_name, type: data.type, targetValue: Number(data.target_value), month: data.month, year: data.year, status: data.status };
+  return {
+    id: data.id,
+    userId: data.user_id,
+    userName: data.user_name,
+    type: data.type,
+    targetValue: Number(data.target_value),
+    month: data.month,
+    year: data.year,
+    status: data.status,
+  };
 }
 
 export async function updateGoal(id: string, goal: Partial<Goal>): Promise<void> {
@@ -1055,7 +1191,7 @@ export async function deleteGoal(id: string): Promise<void> {
 // ============================================================
 export async function getNotifications(userId?: string): Promise<Notification[]> {
   let query = supabase.from('notifications').select('*').order('created_at', { ascending: false });
-  
+
   if (userId) {
     // Busca notificações do usuário OU globais (onde user_id é null)
     query = query.or(`user_id.eq.${userId},user_id.is.null`);
@@ -1063,7 +1199,7 @@ export async function getNotifications(userId?: string): Promise<Notification[]>
 
   const { data, error } = await query;
   if (error || !data) return [];
-  return data.map(d => ({
+  return data.map((d) => ({
     id: d.id,
     userId: d.user_id,
     title: d.title,
@@ -1075,10 +1211,14 @@ export async function getNotifications(userId?: string): Promise<Notification[]>
   }));
 }
 
-export async function createNotification(notification: Omit<Notification, 'id'>): Promise<Notification> {
+export async function createNotification(
+  notification: Omit<Notification, 'id'>
+): Promise<Notification> {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  const validUserId = notification.userId && uuidRegex.test(notification.userId) ? notification.userId : null;
-  const validDataId = notification.dataId && uuidRegex.test(notification.dataId) ? notification.dataId : null;
+  const validUserId =
+    notification.userId && uuidRegex.test(notification.userId) ? notification.userId : null;
+  const validDataId =
+    notification.dataId && uuidRegex.test(notification.dataId) ? notification.dataId : null;
 
   const { data, error } = await supabase
     .from('notifications')
@@ -1094,7 +1234,16 @@ export async function createNotification(notification: Omit<Notification, 'id'>)
     .select()
     .single();
   if (error) throw error;
-  return { id: data.id, userId: data.user_id, title: data.title, message: data.message, date: data.date, read: data.read, type: data.type, dataId: data.data_id };
+  return {
+    id: data.id,
+    userId: data.user_id,
+    title: data.title,
+    message: data.message,
+    date: data.date,
+    read: data.read,
+    type: data.type,
+    dataId: data.data_id,
+  };
 }
 
 export async function markNotificationsAsRead(notificationIds: string[]): Promise<void> {
@@ -1109,10 +1258,7 @@ export async function markNotificationsAsRead(notificationIds: string[]): Promis
 export async function deleteAllNotifications(userId: string): Promise<void> {
   // Deleta apenas as notificações privadas do usuário.
   // Notificações globais (null) permanecem ou poderiam ser marcadas como lidas se necessário.
-  const { error } = await supabase
-    .from('notifications')
-    .delete()
-    .eq('user_id', userId);
+  const { error } = await supabase.from('notifications').delete().eq('user_id', userId);
   if (error) throw error;
 }
 
@@ -1121,10 +1267,12 @@ export async function deleteAllNotifications(userId: string): Promise<void> {
 // ============================================================
 
 /**
- * Simulates a password reset request. 
+ * Simulates a password reset request.
  * Since we don't have an email server configured yet, this will just check if user exists.
  */
-export async function requestPasswordReset(email: string): Promise<{ success: boolean; message: string }> {
+export async function requestPasswordReset(
+  email: string
+): Promise<{ success: boolean; message: string }> {
   const user = await getUserByEmail(email);
   if (!user) {
     return { success: false, message: 'Usuário não encontrado.' };
@@ -1134,7 +1282,7 @@ export async function requestPasswordReset(email: string): Promise<{ success: bo
   // For now, we simulate success
   return {
     success: true,
-    message: 'Um link de recuperação foi enviado para o seu e-mail (Simulado).'
+    message: 'Um link de recuperação foi enviado para o seu e-mail (Simulado).',
   };
 }
 
@@ -1143,15 +1291,14 @@ export async function requestPasswordReset(email: string): Promise<{ success: bo
 // ============================================================
 
 export async function getFertigranPFormulas(): Promise<FertigranPFormula[]> {
-  const { data, error } = await supabase
-    .from('fertigran_p_formulas')
-    .select('*')
-    .eq('ativo', true);
+  const { data, error } = await supabase.from('fertigran_p_formulas').select('*').eq('ativo', true);
   if (error) throw error;
   return data || [];
 }
 
-export async function saveComparisonHistory(history: Omit<ComparisonHistory, 'id' | 'created_at'>): Promise<ComparisonHistory> {
+export async function saveComparisonHistory(
+  history: Omit<ComparisonHistory, 'id' | 'created_at'>
+): Promise<ComparisonHistory> {
   const { data, error } = await supabase
     .from('comparison_history')
     .insert([history])
@@ -1185,7 +1332,9 @@ export async function getCompatibilityCategories(): Promise<CompatibilityCategor
   return data || [];
 }
 
-export async function createCompatibilityCategory(category: Omit<CompatibilityCategory, 'id' | 'created_at' | 'updated_at'>): Promise<CompatibilityCategory> {
+export async function createCompatibilityCategory(
+  category: Omit<CompatibilityCategory, 'id' | 'created_at' | 'updated_at'>
+): Promise<CompatibilityCategory> {
   const { data, error } = await supabase
     .from('compatibility_categories')
     .insert([category])
@@ -1195,7 +1344,10 @@ export async function createCompatibilityCategory(category: Omit<CompatibilityCa
   return data;
 }
 
-export async function updateCompatibilityCategory(id: string, category: Partial<CompatibilityCategory>): Promise<CompatibilityCategory> {
+export async function updateCompatibilityCategory(
+  id: string,
+  category: Partial<CompatibilityCategory>
+): Promise<CompatibilityCategory> {
   const { data, error } = await supabase
     .from('compatibility_categories')
     .update({ ...category, updated_at: new Date().toISOString() })
@@ -1218,17 +1370,14 @@ export async function deleteCompatibilityCategory(id: string): Promise<void> {
 // MANAGEMENT REPORTS - UNIDADES (usa tabela branches como fonte única)
 // ============================================================
 export async function getMgmtUnidades(): Promise<Unidade[]> {
-  const { data, error } = await supabase
-    .from('branches')
-    .select('*')
-    .order('id_numeric');
+  const { data, error } = await supabase.from('branches').select('*').order('id_numeric');
   if (error || !data) return [];
   return data.map((b: any) => ({
     id: b.id,
     id_numeric: b.id_numeric,
     nome: b.name,
     ativo: b.ativo ?? true,
-    ordem_exibicao: b.id_numeric ?? 0
+    ordem_exibicao: b.id_numeric ?? 0,
   }));
 }
 
@@ -1248,23 +1397,21 @@ export async function deleteMgmtUnidade(id: string): Promise<void> {
 // MANAGEMENT REPORTS - CATEGORIAS
 // ============================================================
 export async function getMgmtCategorias(): Promise<Categoria[]> {
-  const { data, error } = await supabase
-    .from('management_categorias')
-    .select('*')
-    .order('ordem');
+  const { data, error } = await supabase.from('management_categorias').select('*').order('ordem');
   if (error || !data) return [];
   return data;
 }
 
 export async function upsertMgmtCategoria(c: Categoria): Promise<void> {
-  const { error } = await supabase
-    .from('management_categorias')
-    .upsert({
+  const { error } = await supabase.from('management_categorias').upsert(
+    {
       id: c.id,
       nome: c.nome,
       ordem: c.ordem,
       visivel_capa: c.visivel_capa ?? true,
-    }, { onConflict: 'id' });
+    },
+    { onConflict: 'id' }
+  );
   if (error) throw error;
 }
 
@@ -1277,18 +1424,13 @@ export async function deleteMgmtCategoria(id: string): Promise<void> {
 // MANAGEMENT REPORTS - INDICADORES
 // ============================================================
 export async function getMgmtIndicadores(): Promise<Indicador[]> {
-  const { data, error } = await supabase
-    .from('management_indicadores')
-    .select('*')
-    .order('ordem');
+  const { data, error } = await supabase.from('management_indicadores').select('*').order('ordem');
   if (error || !data) return [];
   return data;
 }
 
 export async function upsertMgmtIndicador(i: Indicador): Promise<void> {
-  const { error } = await supabase
-    .from('management_indicadores')
-    .upsert(i, { onConflict: 'id' });
+  const { error } = await supabase.from('management_indicadores').upsert(i, { onConflict: 'id' });
   if (error) throw error;
 }
 
@@ -1300,7 +1442,10 @@ export async function deleteMgmtIndicador(id: string): Promise<void> {
 // ============================================================
 // MANAGEMENT REPORTS - LANÇAMENTOS
 // ============================================================
-export async function getMgmtLancamentos(filters?: { data?: string; unidade_id?: string }): Promise<Lancamento[]> {
+export async function getMgmtLancamentos(filters?: {
+  data?: string;
+  unidade_id?: string;
+}): Promise<Lancamento[]> {
   let query = supabase.from('management_lancamentos').select('*');
   if (filters?.data) query = query.eq('data', filters.data);
   if (filters?.unidade_id) query = query.eq('unidade_id', filters.unidade_id);
@@ -1311,7 +1456,7 @@ export async function getMgmtLancamentos(filters?: { data?: string; unidade_id?:
 
 export async function upsertMgmtLancamentos(lancamentos: Partial<Lancamento>[]): Promise<void> {
   const now = new Date().toISOString();
-  const rows = lancamentos.map(l => ({ ...l, updated_at: now }));
+  const rows = lancamentos.map((l) => ({ ...l, updated_at: now }));
   const { error } = await supabase
     .from('management_lancamentos')
     .upsert(rows, { onConflict: 'id' });
@@ -1333,9 +1478,7 @@ export async function getMgmtMetas(): Promise<MetaMensal[]> {
 }
 
 export async function upsertMgmtMeta(m: MetaMensal): Promise<void> {
-  const { error } = await supabase
-    .from('management_metas')
-    .upsert(m, { onConflict: 'id' });
+  const { error } = await supabase.from('management_metas').upsert(m, { onConflict: 'id' });
   if (error) throw error;
 }
 
@@ -1357,7 +1500,12 @@ export async function upsertMgmtConfig(c: ConfiguracaoIndicador): Promise<void> 
   const { error } = await supabase
     .from('management_configs')
     .upsert(
-      { unidade_id: c.unidade_id, indicador_id: c.indicador_id, nome_personalizado: c.nome_personalizado, visivel: c.visivel },
+      {
+        unidade_id: c.unidade_id,
+        indicador_id: c.indicador_id,
+        nome_personalizado: c.nome_personalizado,
+        visivel: c.visivel,
+      },
       { onConflict: 'unidade_id,indicador_id' }
     );
   if (error) throw error;
@@ -1388,7 +1536,11 @@ export async function upsertMgmtDiasUteis(d: DiasUteisMes): Promise<void> {
   if (error) throw error;
 }
 
-export async function deleteMgmtDiasUteis(unidade_id: string, ano: number, mes: number): Promise<void> {
+export async function deleteMgmtDiasUteis(
+  unidade_id: string,
+  ano: number,
+  mes: number
+): Promise<void> {
   const { error } = await supabase
     .from('management_dias_uteis')
     .delete()

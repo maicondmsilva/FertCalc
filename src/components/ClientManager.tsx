@@ -27,6 +27,9 @@ import { ConfirmDialog } from './ui/ConfirmDialog';
 import { useConfirm } from '../hooks/useConfirm';
 import { useFormValidation, validationRules, ValidationSchema } from '../hooks/useFormValidation';
 import { ValidatedInput } from './ui/ValidatedInput';
+import { BRAZILIAN_STATES } from '../constants/appConstants';
+
+const emptyAddress = { cep: '', street: '', number: '', neighborhood: '', city: '', state: '' };
 
 const initialFormData = {
   code: '',
@@ -36,7 +39,9 @@ const initialFormData = {
   phone: '',
   stateRegistration: '',
   fazenda: '',
-  address: { cep: '', street: '', number: '', neighborhood: '', city: '', state: '' },
+  address: { ...emptyAddress },
+  deliveryAddress: { ...emptyAddress },
+  sameAsCorrespondence: false,
 };
 
 const clientValidationSchema: ValidationSchema = {
@@ -116,13 +121,13 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
     setLoading(false);
   };
 
-  const handleCEPChange = async (cep: string) => {
+  const handleCEPChange = async (cep: string, field: 'address' | 'deliveryAddress' = 'address') => {
     const formattedCEP = formatCEP(cep);
-    setFormData((prev) => ({ ...prev, address: { ...prev.address, cep: formattedCEP } }));
+    setFormData((prev) => ({ ...prev, [field]: { ...prev[field], cep: formattedCEP } }));
     if (formattedCEP.replace(/\D/g, '').length === 8) {
       const addressData = await lookupCEP(formattedCEP);
       if (addressData) {
-        setFormData((prev) => ({ ...prev, address: { ...prev.address, ...addressData } }));
+        setFormData((prev) => ({ ...prev, [field]: { ...prev[field], ...addressData } }));
       }
     }
   };
@@ -139,12 +144,21 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
 
     setLoading(true);
     try {
+      const payload = {
+        ...formData,
+        deliveryAddress: formData.sameAsCorrespondence
+          ? formData.address
+          : formData.deliveryAddress,
+      };
+      // Remove UI-only field
+      const { sameAsCorrespondence: _sac, ...clientPayload } = payload;
+
       if (editingClient) {
-        await updateClient(editingClient.id, formData as any);
+        await updateClient(editingClient.id, clientPayload as any);
         showSuccess('Cliente atualizado com sucesso!');
       } else {
         const nextCode = await getNextClientCode();
-        await createClient({ ...formData, code: nextCode } as any);
+        await createClient({ ...clientPayload, code: nextCode } as any);
         showSuccess('Cliente salvo com sucesso!');
       }
       await loadClients();
@@ -160,6 +174,10 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
 
   const startEdit = (client: Client) => {
     setEditingClient(client);
+    const sameAddr =
+      !!client.deliveryAddress &&
+      !!client.address &&
+      JSON.stringify(client.address) === JSON.stringify(client.deliveryAddress);
     setFormData({
       code: client.code || '',
       name: client.name || '',
@@ -168,7 +186,9 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
       phone: client.phone || '',
       stateRegistration: client.stateRegistration || '',
       fazenda: client.fazenda || '',
-      address: client.address || initialFormData.address,
+      address: client.address || { ...emptyAddress },
+      deliveryAddress: client.deliveryAddress || { ...emptyAddress },
+      sameAsCorrespondence: sameAddr,
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -315,7 +335,7 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
 
             <div className="border-t border-stone-100 pt-6">
               <h3 className="text-sm font-bold text-stone-800 mb-4 flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-emerald-600" /> Endereço
+                <MapPin className="w-4 h-4 text-emerald-600" /> Endereço de Correspondência
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
                 <div>
@@ -323,7 +343,7 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
                   <input
                     type="text"
                     value={formData.address.cep || ''}
-                    onChange={(e) => handleCEPChange(e.target.value)}
+                    onChange={(e) => handleCEPChange(e.target.value, 'address')}
                     className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
                     placeholder="00000-000"
                   />
@@ -390,20 +410,139 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
                   <label className="block text-xs font-medium text-stone-500 mb-1">
                     Estado (UF)
                   </label>
-                  <input
-                    type="text"
+                  <select
                     value={formData.address.state || ''}
                     onChange={(e) =>
                       setFormData({
                         ...formData,
-                        address: { ...formData.address, state: e.target.value.toUpperCase() },
+                        address: { ...formData.address, state: e.target.value },
                       })
                     }
-                    maxLength={2}
                     className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
-                  />
+                  >
+                    <option value="">—</option>
+                    {BRAZILIAN_STATES.map((uf) => (
+                      <option key={uf} value={uf}>
+                        {uf}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
+            </div>
+
+            <div className="border-t border-stone-100 pt-6">
+              <h3 className="text-sm font-bold text-stone-800 mb-4 flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-blue-600" /> Endereço de Entrega
+                <label className="ml-4 flex items-center gap-2 text-xs font-normal text-stone-600 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.sameAsCorrespondence}
+                    onChange={(e) =>
+                      setFormData({ ...formData, sameAsCorrespondence: e.target.checked })
+                    }
+                    className="rounded border-stone-300 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  Mesmo endereço de correspondência
+                </label>
+              </h3>
+              {!formData.sameAsCorrespondence && (
+                <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-stone-500 mb-1">CEP</label>
+                    <input
+                      type="text"
+                      value={formData.deliveryAddress.cep || ''}
+                      onChange={(e) => handleCEPChange(e.target.value, 'deliveryAddress')}
+                      className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                      placeholder="00000-000"
+                    />
+                  </div>
+                  <div className="md:col-span-3">
+                    <label className="block text-xs font-medium text-stone-500 mb-1">
+                      Rua / Logradouro
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.deliveryAddress.street || ''}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          deliveryAddress: { ...formData.deliveryAddress, street: e.target.value },
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-stone-500 mb-1">Nº</label>
+                    <input
+                      type="text"
+                      value={formData.deliveryAddress.number || ''}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          deliveryAddress: { ...formData.deliveryAddress, number: e.target.value },
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-stone-500 mb-1">Bairro</label>
+                    <input
+                      type="text"
+                      value={formData.deliveryAddress.neighborhood || ''}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          deliveryAddress: {
+                            ...formData.deliveryAddress,
+                            neighborhood: e.target.value,
+                          },
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-medium text-stone-500 mb-1">Cidade</label>
+                    <input
+                      type="text"
+                      value={formData.deliveryAddress.city || ''}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          deliveryAddress: { ...formData.deliveryAddress, city: e.target.value },
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-stone-500 mb-1">
+                      Estado (UF)
+                    </label>
+                    <select
+                      value={formData.deliveryAddress.state || ''}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          deliveryAddress: { ...formData.deliveryAddress, state: e.target.value },
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">—</option>
+                      {BRAZILIAN_STATES.map((uf) => (
+                        <option key={uf} value={uf}>
+                          {uf}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-2">
