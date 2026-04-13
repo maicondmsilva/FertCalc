@@ -131,33 +131,40 @@ export async function restoreSession(): Promise<User | null> {
 }
 
 /**
- * Cria um usuário no Supabase Auth (auth.users) vinculado ao perfil da app.
- * Deve ser chamado ao criar um novo usuário pelo UserManager.
- *
- * TODO: Migrar para supabase.auth.admin.createUser via Edge Function em produção.
- * Usar signUp com anon key pode disparar e-mails de confirmação automaticamente.
+ * Cria um usuário no Supabase Auth (auth.users) via Edge Function admin-create-user.
+ * Usa supabase.auth.admin.createUser para criar o usuário já confirmado,
+ * sem disparar e-mail de confirmação, e sem expor a service_role key no frontend.
  */
 export async function createAuthUser(
   email: string,
   password: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        // Dados extras que ficam no auth.users.user_metadata
-        data: { source: 'admin_panel' },
-      },
-    });
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
 
-    if (error) {
-      logger.warn('[authService] createAuthUser error:', error.message);
-      if (error.message.includes('already registered')) {
-        // Usuário já existe no Auth — ok, pode ser um re-cadastro
-        return { success: true };
+    if (!token) {
+      return { success: false, error: 'Usuário não autenticado' };
+    }
+
+    const res = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-create-user`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ email, password }),
       }
-      return { success: false, error: error.message };
+    );
+
+    if (!res.ok) {
+      const err = await res.json() as { error?: string };
+      const message = err.error ?? 'Erro ao criar usuário no Auth';
+      logger.warn('[authService] createAuthUser error:', message);
+      return { success: false, error: message };
     }
 
     return { success: true };
@@ -168,12 +175,9 @@ export async function createAuthUser(
 }
 
 /**
- * Atualiza a senha de um usuário no Supabase Auth.
- * Utiliza supabase.auth.updateUser — funciona apenas para o usuário logado
- * atualizando sua própria senha (ex: via página de redefinição de senha).
- *
- * TODO: Para admin atualizar senha de outro usuário, implementar Edge Function
- * usando supabase.auth.admin.updateUserById com a service_role key.
+ * Atualiza a senha do usuário logado no Supabase Auth.
+ * Funciona apenas para o próprio usuário autenticado
+ * (ex: via página de redefinição de senha com link por e-mail).
  */
 export async function updateAuthPassword(
   newPassword: string
@@ -189,6 +193,50 @@ export async function updateAuthPassword(
     return { success: true };
   } catch (err: unknown) {
     logger.error('[authService] Unexpected error in updateAuthPassword:', err);
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/**
+ * Atualiza a senha de qualquer usuário via Edge Function admin-update-password.
+ * Usa supabase.auth.admin.updateUserById no servidor, sem expor a service_role key.
+ * Deve ser chamada por administradores ao redefinir a senha de outro usuário.
+ */
+export async function adminUpdateAuthPassword(
+  userId: string,
+  newPassword: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+
+    if (!token) {
+      return { success: false, error: 'Usuário não autenticado' };
+    }
+
+    const res = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-update-password`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ user_id: userId, new_password: newPassword }),
+      }
+    );
+
+    if (!res.ok) {
+      const err = await res.json() as { error?: string };
+      const message = err.error ?? 'Erro ao atualizar senha no Auth';
+      logger.warn('[authService] adminUpdateAuthPassword error:', message);
+      return { success: false, error: message };
+    }
+
+    return { success: true };
+  } catch (err: unknown) {
+    logger.error('[authService] Unexpected error in adminUpdateAuthPassword:', err);
     return { success: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
