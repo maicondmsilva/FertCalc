@@ -29,9 +29,33 @@ import { useFormValidation, validationRules, ValidationSchema } from '../hooks/u
 import { ValidatedInput } from './ui/ValidatedInput';
 
 const BRAZILIAN_STATES = [
-  'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA',
-  'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN',
-  'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO',
+  'AC',
+  'AL',
+  'AP',
+  'AM',
+  'BA',
+  'CE',
+  'DF',
+  'ES',
+  'GO',
+  'MA',
+  'MT',
+  'MS',
+  'MG',
+  'PA',
+  'PB',
+  'PR',
+  'PE',
+  'PI',
+  'RJ',
+  'RN',
+  'RS',
+  'RO',
+  'RR',
+  'SC',
+  'SP',
+  'SE',
+  'TO',
 ];
 
 const initialFormData = {
@@ -138,11 +162,17 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
 
   const handleDeliveryCEPChange = async (cep: string) => {
     const formattedCEP = formatCEP(cep);
-    setFormData((prev) => ({ ...prev, deliveryAddress: { ...prev.deliveryAddress!, cep: formattedCEP } }));
+    setFormData((prev) => ({
+      ...prev,
+      deliveryAddress: { ...prev.deliveryAddress!, cep: formattedCEP },
+    }));
     if (formattedCEP.replace(/\D/g, '').length === 8) {
       const addressData = await lookupCEP(formattedCEP);
       if (addressData) {
-        setFormData((prev) => ({ ...prev, deliveryAddress: { ...prev.deliveryAddress!, ...addressData } }));
+        setFormData((prev) => ({
+          ...prev,
+          deliveryAddress: { ...prev.deliveryAddress!, ...addressData },
+        }));
       }
     }
   };
@@ -432,7 +462,11 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
                     className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
                   >
                     <option value="">UF</option>
-                    {BRAZILIAN_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
+                    {BRAZILIAN_STATES.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -452,7 +486,9 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
                     setFormData({
                       ...formData,
                       deliverySameAsAddress: same,
-                      deliveryAddress: same ? { ...formData.address } : initialFormData.deliveryAddress,
+                      deliveryAddress: same
+                        ? { ...formData.address }
+                        : initialFormData.deliveryAddress,
                     });
                   }}
                   className="rounded text-emerald-600 focus:ring-emerald-500"
@@ -464,7 +500,9 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
               {!formData.deliverySameAsAddress && (
                 <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
                   <div>
-                    <label className="block text-xs font-medium text-stone-500 mb-1">CEP de Entrega</label>
+                    <label className="block text-xs font-medium text-stone-500 mb-1">
+                      CEP de Entrega
+                    </label>
                     <input
                       type="text"
                       value={formData.deliveryAddress?.cep || ''}
@@ -474,11 +512,18 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
                     />
                   </div>
                   <div className="md:col-span-3">
-                    <label className="block text-xs font-medium text-stone-500 mb-1">Rua / Logradouro de Entrega</label>
+                    <label className="block text-xs font-medium text-stone-500 mb-1">
+                      Rua / Logradouro de Entrega
+                    </label>
                     <input
                       type="text"
                       value={formData.deliveryAddress?.street || ''}
-                      onChange={(e) => setFormData({ ...formData, deliveryAddress: { ...formData.deliveryAddress!, street: e.target.value } })}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          deliveryAddress: { ...formData.deliveryAddress!, street: e.target.value },
+                        })
+                      }
                       className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
@@ -487,37 +532,70 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
                     <input
                       type="text"
                       value={formData.deliveryAddress?.number || ''}
-                      onChange={(e) => setFormData({ ...formData, deliveryAddress: { ...formData.deliveryAddress!, number: e.target.value } })}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          deliveryAddress: { ...formData.deliveryAddress!, number: e.target.value },
+                        })
+                      }
                       className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-stone-500 mb-1">Bairro de Entrega</label>
+                    <label className="block text-xs font-medium text-stone-500 mb-1">
+                      Bairro de Entrega
+                    </label>
                     <input
                       type="text"
                       value={formData.deliveryAddress?.neighborhood || ''}
-                      onChange={(e) => setFormData({ ...formData, deliveryAddress: { ...formData.deliveryAddress!, neighborhood: e.target.value } })}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          deliveryAddress: {
+                            ...formData.deliveryAddress!,
+                            neighborhood: e.target.value,
+                          },
+                        })
+                      }
                       className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div className="md:col-span-2">
-                    <label className="block text-xs font-medium text-stone-500 mb-1">Cidade de Entrega</label>
+                    <label className="block text-xs font-medium text-stone-500 mb-1">
+                      Cidade de Entrega
+                    </label>
                     <input
                       type="text"
                       value={formData.deliveryAddress?.city || ''}
-                      onChange={(e) => setFormData({ ...formData, deliveryAddress: { ...formData.deliveryAddress!, city: e.target.value } })}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          deliveryAddress: { ...formData.deliveryAddress!, city: e.target.value },
+                        })
+                      }
                       className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-stone-500 mb-1">Estado de Entrega (UF)</label>
+                    <label className="block text-xs font-medium text-stone-500 mb-1">
+                      Estado de Entrega (UF)
+                    </label>
                     <select
                       value={formData.deliveryAddress?.state || ''}
-                      onChange={(e) => setFormData({ ...formData, deliveryAddress: { ...formData.deliveryAddress!, state: e.target.value } })}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          deliveryAddress: { ...formData.deliveryAddress!, state: e.target.value },
+                        })
+                      }
                       className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="">UF</option>
-                      {BRAZILIAN_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
+                      {BRAZILIAN_STATES.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>
@@ -563,7 +641,11 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
             </div>
             {canCreate && !showForm && (
               <button
-                onClick={() => { setEditingClient(null); setFormData(initialFormData); setShowForm(true); }}
+                onClick={() => {
+                  setEditingClient(null);
+                  setFormData(initialFormData);
+                  setShowForm(true);
+                }}
                 className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition-colors text-sm whitespace-nowrap"
               >
                 <Plus className="w-4 h-4" /> Novo Cliente
@@ -749,7 +831,9 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
                       <p className="text-stone-400">CEP</p>
-                      <p className="text-stone-800">{viewingClient.deliveryAddress?.cep || '---'}</p>
+                      <p className="text-stone-800">
+                        {viewingClient.deliveryAddress?.cep || '---'}
+                      </p>
                     </div>
                     <div>
                       <p className="text-stone-400">Rua</p>
@@ -760,7 +844,9 @@ export default function ClientManager({ currentUser }: { currentUser: User }) {
                     </div>
                     <div>
                       <p className="text-stone-400">Bairro</p>
-                      <p className="text-stone-800">{viewingClient.deliveryAddress?.neighborhood || '---'}</p>
+                      <p className="text-stone-800">
+                        {viewingClient.deliveryAddress?.neighborhood || '---'}
+                      </p>
                     </div>
                     <div>
                       <p className="text-stone-400">Cidade/UF</p>
