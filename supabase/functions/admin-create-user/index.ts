@@ -21,10 +21,9 @@ Deno.serve(async (req: Request) => {
     const { email, password } = await req.json() as {
       email: string;
       password: string;
-      name?: string;
     };
 
-    if (!email || !password) {
+    if (!email?.trim() || !password?.trim()) {
       return new Response(JSON.stringify({ error: 'email and password are required' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -49,10 +48,11 @@ Deno.serve(async (req: Request) => {
     }
 
     // Verify the caller has admin (master) privileges in the app_users table
+    // Use callerUser.id to match auth.uid() — more reliable than email matching
     const { data: callerProfile, error: profileError } = await supabaseAdmin
       .from('app_users')
       .select('role')
-      .eq('email', callerUser.email)
+      .eq('id', callerUser.id)
       .single();
 
     if (profileError || !callerProfile || callerProfile.role !== 'master') {
