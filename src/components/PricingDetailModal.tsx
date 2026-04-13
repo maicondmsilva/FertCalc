@@ -1,6 +1,17 @@
 import React, { useState } from 'react';
 import { PricingRecord, User, AppSettings } from '../types';
-import { X, Edit3, Trash2, Info, FileDown, Download, FileSpreadsheet, Tag } from 'lucide-react';
+import {
+  X,
+  Edit3,
+  Trash2,
+  Info,
+  FileDown,
+  Download,
+  FileSpreadsheet,
+  Tag,
+  Upload,
+  FileText,
+} from 'lucide-react';
 import { generatePricingPDF } from '../utils/pdfGenerator';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -18,6 +29,10 @@ import { ConfirmDialog } from './ui/ConfirmDialog';
 import { useConfirm } from '../hooks/useConfirm';
 import { Send, UserCheck, CheckCircle2, CheckCircle, XCircle } from 'lucide-react';
 import { notifyTransferInitiated, notifyTransferAccepted } from '../services/notificationService';
+import { extractTextFromPDF, parsePedidoData } from '../utils/pdfImporter';
+import type { DadosExtraidosPDF } from '../types/pedidoVenda';
+import { createPedidoVenda, getPedidoByPrecificacaoId } from '../services/pedidosVendaService';
+import type { PedidoVenda } from '../types/pedidoVenda';
 
 interface PricingDetailModalProps {
   selectedPricing: PricingRecord;
@@ -58,6 +73,17 @@ export default function PricingDetailModal({
   const [isAcceptingTransfer, setIsAcceptingTransfer] = useState(false);
   const [loadingTransfer, setLoadingTransfer] = useState(false);
 
+  // PDF Import state
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importData, setImportData] = useState<DadosExtraidosPDF | null>(null);
+  const [importingPDF, setImportingPDF] = useState(false);
+  const [linkedPedido, setLinkedPedido] = useState<PedidoVenda | null>(null);
+
+  // Check if a pedido already exists for this pricing
+  React.useEffect(() => {
+    getPedidoByPrecificacaoId(selectedPricing.id).then((p) => setLinkedPedido(p));
+  }, [selectedPricing.id]);
+
   React.useEffect(() => {
     if (isTransferring) {
       loadSellers();
@@ -73,6 +99,59 @@ export default function PricingDetailModal({
       );
     } catch {
       showError('Erro ao carregar lista de vendedores.');
+    }
+  };
+
+  // ── PDF Import handlers ─────────────────────────────────────
+  const handlePDFFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportingPDF(true);
+    try {
+      const text = await extractTextFromPDF(file);
+      const data = parsePedidoData(text);
+      setImportData(data);
+      setShowImportModal(true);
+    } catch {
+      showError('Erro ao extrair dados do PDF. Verifique se o arquivo é válido.');
+    } finally {
+      setImportingPDF(false);
+      // Reset the input so same file can be re-selected
+      e.target.value = '';
+    }
+  };
+
+  const handleSaveImportedPedido = async () => {
+    if (!importData) return;
+    setImportingPDF(true);
+    try {
+      const pedido = await createPedidoVenda({
+        precificacao_id: selectedPricing.id,
+        numero_pedido: importData.numero_pedido,
+        barra_pedido: importData.barra_pedido,
+        data_pedido: importData.data_pedido,
+        quantidade_real: importData.quantidade_real,
+        valor_unitario_negociado: importData.valor_unitario,
+        valor_total_negociado: importData.valor_total,
+        embalagem: importData.embalagem,
+        tipo_frete: importData.tipo_frete,
+        valor_frete: importData.valor_frete,
+        status: 'pendente',
+        dados_extraidos: importData as Record<string, unknown>,
+        importado_por: currentUser.id,
+      });
+      if (pedido) {
+        setLinkedPedido(pedido);
+        showSuccess('Pedido de Venda importado com sucesso!');
+      } else {
+        showError('Erro ao salvar pedido de venda.');
+      }
+    } catch {
+      showError('Erro ao salvar pedido de venda.');
+    } finally {
+      setImportingPDF(false);
+      setShowImportModal(false);
+      setImportData(null);
     }
   };
 
@@ -1123,7 +1202,29 @@ export default function PricingDetailModal({
                   >
                     <FileSpreadsheet className="w-4 h-4" /> Excel
                   </button>
+                  {/* Importar Pedido button */}
+                  <label className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors text-sm cursor-pointer">
+                    <Upload className="w-4 h-4" />
+                    {importingPDF ? 'Importando...' : 'Importar Pedido'}
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      className="hidden"
+                      onChange={handlePDFFileSelect}
+                      disabled={importingPDF}
+                    />
+                  </label>
                 </div>
+                {/* Linked pedido badge */}
+                {linkedPedido && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-emerald-600" />
+                    <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg">
+                      Pedido vinculado: #{linkedPedido.numero_pedido || '—'}
+                      {linkedPedido.barra_pedido && `/${linkedPedido.barra_pedido}`}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1135,6 +1236,135 @@ export default function PricingDetailModal({
           </button>
         </div>
       </div>
+
+      {/* PDF Import Confirmation Modal */}
+      {showImportModal && importData && (
+        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-stone-100">
+              <h3 className="text-lg font-bold text-stone-800 flex items-center gap-2">
+                <Upload className="w-5 h-5 text-blue-600" /> Confirmar Dados do Pedido
+              </h3>
+              <button
+                onClick={() => {
+                  setShowImportModal(false);
+                  setImportData(null);
+                }}
+                className="p-1 hover:bg-stone-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-stone-400" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-xs text-stone-500">
+                Revise e corrija os dados extraídos do PDF antes de salvar.
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                <ImportField
+                  label="Nº Pedido"
+                  value={importData.numero_pedido ?? ''}
+                  onChange={(v) => setImportData({ ...importData, numero_pedido: v })}
+                />
+                <ImportField
+                  label="Barra"
+                  value={importData.barra_pedido ?? ''}
+                  onChange={(v) => setImportData({ ...importData, barra_pedido: v })}
+                />
+                <ImportField
+                  label="Data (YYYY-MM-DD)"
+                  value={importData.data_pedido ?? ''}
+                  onChange={(v) => setImportData({ ...importData, data_pedido: v })}
+                />
+                <ImportField
+                  label="Quantidade Real (ton)"
+                  value={String(importData.quantidade_real ?? '')}
+                  onChange={(v) =>
+                    setImportData({ ...importData, quantidade_real: v ? parseFloat(v) : undefined })
+                  }
+                  type="number"
+                />
+                <ImportField
+                  label="Valor Unitário (R$)"
+                  value={String(importData.valor_unitario ?? '')}
+                  onChange={(v) =>
+                    setImportData({ ...importData, valor_unitario: v ? parseFloat(v) : undefined })
+                  }
+                  type="number"
+                />
+                <ImportField
+                  label="Valor Total (R$)"
+                  value={String(importData.valor_total ?? '')}
+                  onChange={(v) =>
+                    setImportData({ ...importData, valor_total: v ? parseFloat(v) : undefined })
+                  }
+                  type="number"
+                />
+                <ImportField
+                  label="Embalagem"
+                  value={importData.embalagem ?? ''}
+                  onChange={(v) => setImportData({ ...importData, embalagem: v })}
+                />
+                <ImportField
+                  label="Tipo de Frete"
+                  value={importData.tipo_frete ?? ''}
+                  onChange={(v) => setImportData({ ...importData, tipo_frete: v })}
+                />
+                <ImportField
+                  label="Valor Frete (R$)"
+                  value={String(importData.valor_frete ?? '')}
+                  onChange={(v) =>
+                    setImportData({ ...importData, valor_frete: v ? parseFloat(v) : undefined })
+                  }
+                  type="number"
+                />
+              </div>
+            </div>
+            <div className="p-6 border-t border-stone-100 flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowImportModal(false);
+                  setImportData(null);
+                }}
+                className="px-4 py-2 border border-stone-300 text-stone-600 rounded-lg hover:bg-stone-50 transition-colors text-sm font-bold"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveImportedPedido}
+                disabled={importingPDF}
+                className="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors text-sm disabled:opacity-50"
+              >
+                {importingPDF ? 'Salvando...' : 'Salvar Pedido'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ImportField({
+  label,
+  value,
+  onChange,
+  type = 'text',
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  type?: string;
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-bold text-stone-500 uppercase mb-1">{label}</label>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+        step={type === 'number' ? '0.01' : undefined}
+      />
     </div>
   );
 }
