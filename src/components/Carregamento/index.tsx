@@ -17,6 +17,7 @@ import {
   MapPin,
   FileText,
   Eye,
+  Search,
 } from 'lucide-react';
 import {
   Carregamento,
@@ -43,6 +44,11 @@ import {
   getCarregamentosCalendario,
   getAlertasCarregamento,
 } from '../../services/carregamentoService';
+import type { PedidoVendaEnriquecido } from '../../types/pedidoVenda';
+import { getPedidosVenda } from '../../services/pedidosVendaService';
+import { getPricingRecords } from '../../services/db';
+import type { PricingRecord } from '../../types';
+import { useToast } from '../Toast';
 
 // ─── Sub-view type ─────────────────────────────────────────────────────────────
 type CarregamentoView =
@@ -110,6 +116,7 @@ function StatusBadge({ status }: { status: StatusCarregamento }) {
 interface ModalNovoCarregamentoProps {
   filiais: Filial[];
   transportadoras: Transportadora[];
+  pedidos: PedidoVendaEnriquecido[];
   onSave: (data: any) => Promise<void>;
   onClose: () => void;
 }
@@ -117,6 +124,7 @@ interface ModalNovoCarregamentoProps {
 function ModalNovoCarregamento({
   filiais,
   transportadoras,
+  pedidos,
   onSave,
   onClose,
 }: ModalNovoCarregamentoProps) {
@@ -127,8 +135,39 @@ function ModalNovoCarregamento({
     data_prevista_carregamento: '',
     transportadora_id: '',
     observacoes: '',
+    pedido_precificacao_id: '',
   });
   const [saving, setSaving] = useState(false);
+
+  // Pedido search
+  const [pedidoSearch, setPedidoSearch] = useState('');
+  const [selectedPedido, setSelectedPedido] = useState<PedidoVendaEnriquecido | null>(null);
+
+  const filteredPedidos =
+    pedidoSearch.length >= 2
+      ? pedidos
+          .filter((p) => {
+            const term = pedidoSearch.toLowerCase();
+            return (
+              p.cliente_nome?.toLowerCase().includes(term) ||
+              p.numero_pedido?.toLowerCase().includes(term) ||
+              p.precificacao_cod?.toLowerCase().includes(term)
+            );
+          })
+          .slice(0, 8)
+      : [];
+
+  const handleSelectPedido = (p: PedidoVendaEnriquecido) => {
+    setSelectedPedido(p);
+    setPedidoSearch('');
+    // Auto-fill from pedido
+    setForm((prev) => ({
+      ...prev,
+      pedido_precificacao_id: p.precificacao_id,
+      tipo_frete: (p.tipo_frete as 'CIF' | 'FOB') || prev.tipo_frete,
+      quantidade_total: p.quantidade_real ? String(p.quantidade_real) : prev.quantidade_total,
+    }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -149,6 +188,67 @@ function ModalNovoCarregamento({
           </button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {/* Pedido Search */}
+          <div>
+            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+              Vincular Pedido de Venda
+            </label>
+            {selectedPedido ? (
+              <div className="flex items-center gap-2 p-2 bg-amber-50 border border-amber-200 rounded-lg text-sm">
+                <FileText className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                <span className="font-bold text-stone-800">
+                  #{selectedPedido.numero_pedido || '—'}
+                  {selectedPedido.barra_pedido && `/${selectedPedido.barra_pedido}`}
+                </span>
+                <span className="text-stone-500">— {selectedPedido.cliente_nome || 'Cliente'}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedPedido(null);
+                    setForm((prev) => ({ ...prev, pedido_precificacao_id: '' }));
+                  }}
+                  className="ml-auto p-0.5 hover:bg-amber-100 rounded"
+                >
+                  <X className="w-3.5 h-3.5 text-stone-400" />
+                </button>
+              </div>
+            ) : (
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-stone-400 w-4 h-4" />
+                <input
+                  type="text"
+                  value={pedidoSearch}
+                  onChange={(e) => setPedidoSearch(e.target.value)}
+                  placeholder="Buscar por cliente, nº pedido ou nº precificação..."
+                  className="w-full pl-9 pr-4 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                />
+                {filteredPedidos.length > 0 && (
+                  <div className="absolute z-20 mt-1 w-full bg-white border border-stone-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    {filteredPedidos.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => handleSelectPedido(p)}
+                        className="w-full text-left px-3 py-2 hover:bg-amber-50 text-sm border-b border-stone-100 last:border-0"
+                      >
+                        <span className="font-bold text-stone-800">
+                          #{p.numero_pedido || '—'}
+                          {p.barra_pedido && `/${p.barra_pedido}`}
+                        </span>
+                        <span className="text-stone-500 ml-2">{p.cliente_nome || ''}</span>
+                        {p.precificacao_cod && (
+                          <span className="text-xs text-stone-400 ml-2">
+                            (Prec. #{p.precificacao_cod})
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
@@ -1404,9 +1504,11 @@ export default function CarregamentoModule({
   currentUser,
   view = 'visao_geral',
 }: CarregamentoModuleProps) {
+  const { showSuccess, showError } = useToast();
   const [carregamentos, setCarregamentos] = useState<Carregamento[]>([]);
   const [filiais, setFiliais] = useState<Filial[]>([]);
   const [transportadoras, setTransportadoras] = useState<Transportadora[]>([]);
+  const [pedidosVenda, setPedidosVenda] = useState<PedidoVendaEnriquecido[]>([]);
   const [kpi, setKpi] = useState<KPICarregamento>({
     aguardando_cotacao: 0,
     em_carregamento: 0,
@@ -1431,16 +1533,40 @@ export default function CarregamentoModule({
     setLoading(true);
     setLoadError(null);
     try {
-      const [cgs, fls, trs, kpiData] = await Promise.all([
+      const [cgs, fls, trs, kpiData, rawPedidos, pricings] = await Promise.all([
         getCarregamentos(),
         getFiliais(),
         getTransportadoras(),
         getKPICarregamento(),
+        getPedidosVenda(),
+        getPricingRecords(),
       ]);
       setCarregamentos(cgs);
       setFiliais(fls);
       setTransportadoras(trs);
       setKpi(kpiData);
+
+      // Enrich pedidos with pricing data
+      const pricingMap = new Map<string, PricingRecord>();
+      pricings.forEach((p: PricingRecord) => pricingMap.set(p.id, p));
+      const enriched: PedidoVendaEnriquecido[] = rawPedidos.map((pv) => {
+        const pricing = pricingMap.get(pv.precificacao_id);
+        return {
+          ...pv,
+          cliente_nome: pricing?.factors?.client?.name,
+          vendedor_nome: pricing?.userName,
+          vendedor_id: pricing?.userId,
+          formulacao:
+            pricing?.calculations?.map((c) => c.formula).join(', ') ||
+            pricing?.factors?.targetFormula,
+          precificacao_cod:
+            pricing?.formattedCod ||
+            (pricing?.cod ? String(pricing.cod).padStart(4, '0') : undefined),
+        };
+      });
+      setPedidosVenda(
+        enriched.filter((p) => p.status === 'pendente' || p.status === 'em_carregamento')
+      );
     } catch (err) {
       console.error('Erro ao carregar dados de carregamento:', err);
       setLoadError('Erro ao carregar dados. Tente novamente.');
@@ -1474,41 +1600,52 @@ export default function CarregamentoModule({
 
   // ── Create carregamento ───────────────────────────────────────────────────
   const handleCreateCarregamento = async (form: any) => {
-    const numero = await gerarNumeroCarregamento();
-    await createCarregamento({
-      numero_carregamento: numero,
-      tipo_frete: form.tipo_frete,
-      quantidade_total: parseFloat(form.quantidade_total),
-      quantidade_liberada: 0,
-      quantidade_carregada: 0,
-      filial_id: form.filial_id || undefined,
-      data_prevista_carregamento: form.data_prevista_carregamento || undefined,
-      transportadora_id: form.transportadora_id || undefined,
-      observacoes: form.observacoes || undefined,
-      status: 'aguardando_cotacao',
-      criado_por: currentUser.id,
-    });
-    setShowModalNovo(false);
-    await load();
+    try {
+      const numero = await gerarNumeroCarregamento();
+      await createCarregamento({
+        numero_carregamento: numero,
+        tipo_frete: form.tipo_frete,
+        quantidade_total: parseFloat(form.quantidade_total),
+        quantidade_liberada: 0,
+        quantidade_carregada: 0,
+        filial_id: form.filial_id || undefined,
+        data_prevista_carregamento: form.data_prevista_carregamento || undefined,
+        transportadora_id: form.transportadora_id || undefined,
+        observacoes: form.observacoes || undefined,
+        pedido_precificacao_id: form.pedido_precificacao_id || undefined,
+        status: 'aguardando_cotacao',
+        criado_por: currentUser.id,
+      });
+      setShowModalNovo(false);
+      showSuccess('Carregamento criado com sucesso!');
+      await load();
+    } catch {
+      showError('Erro ao criar carregamento.');
+    }
   };
 
   // ── Solicitar cotação ─────────────────────────────────────────────────────
   const handleSolicitarCotacao = async (carregamentoId: string, form: any) => {
-    await createCotacao({
-      carregamento_id: carregamentoId,
-      transportadora_id: form.transportadora_id || undefined,
-      valor_cotado: form.valor_cotado ? parseFloat(form.valor_cotado) : undefined,
-      prazo_dias: form.prazo_dias ? parseInt(form.prazo_dias) : undefined,
-      validade_cotacao: form.validade_cotacao || undefined,
-      observacoes: form.observacoes || undefined,
-      status: 'pendente',
-      solicitado_por: currentUser.id,
-    });
-    await updateStatusCarregamento(carregamentoId, 'cotacao_solicitada', {
-      data_solicitacao_cotacao: new Date().toISOString(),
-    });
-    setModalCotacao(null);
-    await load();
+    try {
+      await createCotacao({
+        carregamento_id: carregamentoId,
+        transportadora_id: form.transportadora_id || undefined,
+        valor_cotado: form.valor_cotado ? parseFloat(form.valor_cotado) : undefined,
+        prazo_dias: form.prazo_dias ? parseInt(form.prazo_dias) : undefined,
+        validade_cotacao: form.validade_cotacao || undefined,
+        observacoes: form.observacoes || undefined,
+        status: 'pendente',
+        solicitado_por: currentUser.id,
+      });
+      await updateStatusCarregamento(carregamentoId, 'cotacao_solicitada', {
+        data_solicitacao_cotacao: new Date().toISOString(),
+      });
+      setModalCotacao(null);
+      showSuccess('Cotação solicitada com sucesso!');
+      await load();
+    } catch {
+      showError('Erro ao solicitar cotação.');
+    }
   };
 
   // ── Liberar ───────────────────────────────────────────────────────────────
@@ -1628,6 +1765,7 @@ export default function CarregamentoModule({
         <ModalNovoCarregamento
           filiais={filiais}
           transportadoras={transportadoras}
+          pedidos={pedidosVenda}
           onSave={handleCreateCarregamento}
           onClose={() => setShowModalNovo(false)}
         />
