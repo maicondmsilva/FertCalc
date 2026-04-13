@@ -1,5 +1,7 @@
 -- Migration: create_access_profiles
 -- Creates the access_profiles table that stores reusable permission templates.
+-- Only admin and master users can manage (create/update/delete) profiles.
+-- All authenticated users can view profiles (needed for the "apply profile" dropdown).
 
 CREATE TABLE IF NOT EXISTS public.access_profiles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -10,24 +12,29 @@ CREATE TABLE IF NOT EXISTS public.access_profiles (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- RLS: apenas master e admin podem gerenciar perfis
+-- RLS: todos autenticados podem visualizar; apenas admin/master podem gerenciar
 ALTER TABLE public.access_profiles ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Masters e admins podem ver perfis"
+-- SELECT: todos os usuários autenticados podem ver os perfis
+-- (necessário para o dropdown "Aplicar Perfil" no cadastro de usuários)
+CREATE POLICY "Autenticados podem ver perfis de acesso"
   ON public.access_profiles FOR SELECT
-  USING (true);
+  USING (auth.uid() IS NOT NULL);
 
-CREATE POLICY "Masters e admins podem criar perfis"
+-- INSERT: apenas admin e master podem criar perfis
+CREATE POLICY "Admin e master podem criar perfis de acesso"
   ON public.access_profiles FOR INSERT
-  WITH CHECK (true);
+  WITH CHECK (is_admin_or_master());
 
-CREATE POLICY "Masters e admins podem editar perfis"
+-- UPDATE: apenas admin e master podem editar perfis
+CREATE POLICY "Admin e master podem editar perfis de acesso"
   ON public.access_profiles FOR UPDATE
-  USING (true);
+  USING (is_admin_or_master());
 
-CREATE POLICY "Masters podem excluir perfis"
+-- DELETE: apenas admin e master podem excluir perfis
+CREATE POLICY "Admin e master podem excluir perfis de acesso"
   ON public.access_profiles FOR DELETE
-  USING (true);
+  USING (is_admin_or_master());
 
 -- Trigger to keep updated_at current
 CREATE OR REPLACE FUNCTION public.update_access_profiles_updated_at()
