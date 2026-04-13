@@ -382,6 +382,7 @@ export interface PricingFactors {
   discount: number;
   margin: number;
   freight: number;
+  tipoFrete?: 'CIF' | 'FOB';
   taxRate: number;
   commission: number;
   monthlyInterestRate: number;

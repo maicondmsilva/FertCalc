@@ -680,13 +680,16 @@ export default function Calculator({
                             <input
                               type="number"
                               value={calc.factors.freight === 0 ? '' : calc.factors.freight}
-                              onChange={(e) =>
+                              onChange={(e) => {
+                                const freightVal =
+                                  e.target.value === '' ? 0 : Number(e.target.value);
+                                updateCalculationFactors(calc.id, 'freight', freightVal);
                                 updateCalculationFactors(
                                   calc.id,
-                                  'freight',
-                                  e.target.value === '' ? 0 : Number(e.target.value)
-                                )
-                              }
+                                  'tipoFrete',
+                                  freightVal > 0 ? 'CIF' : 'FOB'
+                                );
+                              }}
                               className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500"
                             />
                           </div>

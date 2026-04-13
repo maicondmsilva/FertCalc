@@ -36,6 +36,8 @@ import {
   gerarNumeroCarregamento,
   getFiliais,
   getTransportadoras,
+  createTransportadora,
+  updateTransportadora,
   getCotacoesCarregamento,
   createCotacao,
   updateCotacao,
@@ -44,6 +46,7 @@ import {
   getCarregamentosCalendario,
   getAlertasCarregamento,
 } from '../../services/carregamentoService';
+import { supabase } from '../../services/supabase';
 import { getPricingRecords } from '../../services/db';
 import { getPedidosVenda } from '../../services/pedidosVendaService';
 import { useToast } from '../Toast';
@@ -55,7 +58,8 @@ type CarregamentoView =
   | 'liberacao'
   | 'logistica'
   | 'calendario'
-  | 'relatorios';
+  | 'relatorios'
+  | 'transportadoras';
 
 interface CarregamentoModuleProps {
   currentUser: User;
@@ -129,11 +133,11 @@ interface CarregamentoFormData {
   quantidade_total: string;
   filial_id: string;
   data_prevista_carregamento: string;
-  transportadora_id: string;
   observacoes: string;
   pedido_venda_id: string;
   precificacao_id: string;
   cliente_nome: string;
+  valor_frete: string;
   _freteAutoDetectado: boolean;
 }
 
@@ -147,7 +151,6 @@ interface CotacaoFormData {
 
 interface ModalNovoCarregamentoProps {
   filiais: Filial[];
-  transportadoras: Transportadora[];
   onSave: (data: CarregamentoFormData) => Promise<void>;
   onClose: () => void;
 }
@@ -157,9 +160,8 @@ function derivarTipoFrete(pedido: EnrichedPedido, pricing?: PricingRecord): 'CIF
   if (pedido?.tipo_frete === 'CIF' || pedido?.tipo_frete === 'FOB') {
     return pedido.tipo_frete as 'CIF' | 'FOB';
   }
-  const factors = pricing?.factors as unknown as Record<string, unknown> | undefined;
-  if (factors?.tipoFrete === 'CIF' || factors?.tipoFrete === 'FOB') {
-    return factors.tipoFrete as 'CIF' | 'FOB';
+  if (pricing?.factors?.tipoFrete === 'CIF' || pricing?.factors?.tipoFrete === 'FOB') {
+    return pricing.factors.tipoFrete;
   }
   if (pricing?.factors?.freight != null && Number(pricing.factors.freight) > 0) {
     return 'CIF';
@@ -167,22 +169,18 @@ function derivarTipoFrete(pedido: EnrichedPedido, pricing?: PricingRecord): 'CIF
   return 'FOB';
 }
 
-function ModalNovoCarregamento({
-  filiais,
-  transportadoras,
-  onSave,
-  onClose,
-}: ModalNovoCarregamentoProps) {
+function ModalNovoCarregamento({ filiais, onSave, onClose }: ModalNovoCarregamentoProps) {
+  const { showError } = useToast();
   const [form, setForm] = useState<CarregamentoFormData>({
     tipo_frete: 'FOB' as 'CIF' | 'FOB',
     quantidade_total: '',
     filial_id: '',
     data_prevista_carregamento: '',
-    transportadora_id: '',
     observacoes: '',
     pedido_venda_id: '',
     precificacao_id: '',
     cliente_nome: '',
+    valor_frete: '',
     _freteAutoDetectado: false,
   });
   const [saving, setSaving] = useState(false);
@@ -240,8 +238,9 @@ function ModalNovoCarregamento({
           }));
 
         setAllPedidos([...pedidosEnriched, ...pricingsSemPedido]);
-      } catch {
-        /* silent */
+      } catch (err) {
+        console.error('Erro ao carregar pedidos/precificações:', err);
+        showError('Erro ao carregar pedidos de venda.');
       }
     };
     loadData();
@@ -277,6 +276,7 @@ function ModalNovoCarregamento({
   const selectPedido = (p: EnrichedPedido) => {
     const pricing = p.pricing;
     const tipoFrete = derivarTipoFrete(p, pricing);
+    const freteVal = pricing?.factors?.freight ?? 0;
     setForm((prev) => ({
       ...prev,
       pedido_venda_id: p.id || '',
@@ -287,6 +287,7 @@ function ModalNovoCarregamento({
           ? String(pricing.factors.totalTons)
           : prev.quantidade_total,
       tipo_frete: tipoFrete,
+      valor_frete: freteVal > 0 ? String(freteVal) : '',
       cliente_nome: p.clientName || pricing?.factors?.client?.name || '',
       _freteAutoDetectado: true,
     }));
@@ -306,8 +307,14 @@ function ModalNovoCarregamento({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    await onSave(form);
-    setSaving(false);
+    try {
+      await onSave(form);
+    } catch (err) {
+      console.error('Erro ao criar carregamento:', err);
+      showError('Erro ao criar carregamento. Verifique os dados e tente novamente.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -453,20 +460,22 @@ function ModalNovoCarregamento({
           {form.tipo_frete === 'CIF' && (
             <div>
               <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
-                Transportadora (CIF)
+                Valor do Frete (R$/t)
+                {form._freteAutoDetectado && form.valor_frete && (
+                  <span className="ml-2 text-[10px] font-normal text-emerald-600 normal-case">
+                    ✓ preenchido da precificação
+                  </span>
+                )}
               </label>
-              <select
-                value={form.transportadora_id}
-                onChange={(e) => setForm({ ...form, transportadora_id: e.target.value })}
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.valor_frete}
+                onChange={(e) => setForm({ ...form, valor_frete: e.target.value })}
+                placeholder="0,00"
                 className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
-              >
-                <option value="">— Selecione —</option>
-                {transportadoras.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.nome}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
           )}
 
@@ -1640,6 +1649,417 @@ function RelatoriosCarregamento({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  MODAL: Informar Transportador (Logística)
+// ─────────────────────────────────────────────────────────────────────────────
+interface ModalInformarTransportadorProps {
+  carregamento: Carregamento;
+  transportadoras: Transportadora[];
+  onSave: (transportadoraId: string, valorFrete?: number) => Promise<void>;
+  onClose: () => void;
+}
+
+function ModalInformarTransportador({
+  carregamento,
+  transportadoras,
+  onSave,
+  onClose,
+}: ModalInformarTransportadorProps) {
+  const [transportadoraId, setTransportadoraId] = useState(carregamento.transportadora_id ?? '');
+  const [valorFrete, setValorFrete] = useState(
+    carregamento.valor_frete != null ? String(carregamento.valor_frete) : ''
+  );
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    await onSave(transportadoraId, valorFrete ? parseFloat(valorFrete) : undefined);
+    setSaving(false);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="flex items-center justify-between p-6 border-b border-stone-100">
+          <h3 className="text-lg font-bold text-stone-800 flex items-center gap-2">
+            <Truck className="w-5 h-5 text-blue-600" /> Informar Transportador
+          </h3>
+          <button onClick={onClose} className="p-1 hover:bg-stone-100 rounded-lg transition-colors">
+            <X className="w-5 h-5 text-stone-400" />
+          </button>
+        </div>
+        <div className="px-6 py-3 bg-stone-50 border-b border-stone-100 text-sm text-stone-600">
+          <span className="font-bold">{carregamento.numero_carregamento}</span> &mdash;{' '}
+          {carregamento.tipo_frete} &mdash; {carregamento.quantidade_total} ton
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+              Transportadora *
+            </label>
+            <select
+              value={transportadoraId}
+              onChange={(e) => setTransportadoraId(e.target.value)}
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+              required
+            >
+              <option value="">— Selecione —</option>
+              {transportadoras.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.nome}
+                  {t.telefone ? ` — ${t.telefone}` : ''}
+                </option>
+              ))}
+            </select>
+            {transportadoras.length === 0 && (
+              <p className="text-xs text-amber-600 mt-1">
+                Nenhuma transportadora cadastrada. Acesse Logística → Transportadoras para
+                cadastrar.
+              </p>
+            )}
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+              Valor do Frete (R$)
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={valorFrete}
+              onChange={(e) => setValorFrete(e.target.value)}
+              placeholder="0,00"
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+            />
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-5 py-2 border border-stone-300 rounded-lg text-sm font-bold text-stone-600 hover:bg-stone-50 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving || !transportadoraId}
+              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg text-sm font-bold transition-colors"
+            >
+              {saving ? 'Salvando...' : 'Confirmar'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  COMPONENT: Transportadora Manager
+// ─────────────────────────────────────────────────────────────────────────────
+function TransportadoraManager() {
+  const { showSuccess, showError } = useToast();
+  const [lista, setLista] = useState<Transportadora[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [editando, setEditando] = useState<Transportadora | null>(null);
+  const [criando, setCriando] = useState(false);
+  const [form, setForm] = useState<Omit<Transportadora, 'id' | 'criado_em'>>({
+    nome: '',
+    cnpj: '',
+    contato: '',
+    telefone: '',
+    email: '',
+    ativo: true,
+  });
+
+  const carregarTodas = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.from('transportadoras').select('*').order('nome');
+      if (error) throw error;
+      setLista(
+        (data ?? []).map((d: Record<string, unknown>) => ({
+          id: d.id as string,
+          nome: d.nome as string,
+          cnpj: d.cnpj as string | undefined,
+          contato: d.contato as string | undefined,
+          telefone: d.telefone as string | undefined,
+          email: d.email as string | undefined,
+          ativo: (d.ativo ?? true) as boolean,
+          criado_em: d.criado_em as string | undefined,
+        }))
+      );
+    } catch (err) {
+      console.error(err);
+      showError('Erro ao carregar transportadoras.');
+    } finally {
+      setLoading(false);
+    }
+  }, [showError]);
+
+  useEffect(() => {
+    carregarTodas();
+  }, [carregarTodas]);
+
+  const abrirCriacao = () => {
+    setForm({ nome: '', cnpj: '', contato: '', telefone: '', email: '', ativo: true });
+    setEditando(null);
+    setCriando(true);
+  };
+
+  const abrirEdicao = (t: Transportadora) => {
+    setForm({
+      nome: t.nome,
+      cnpj: t.cnpj ?? '',
+      contato: t.contato ?? '',
+      telefone: t.telefone ?? '',
+      email: t.email ?? '',
+      ativo: t.ativo,
+    });
+    setEditando(t);
+    setCriando(true);
+  };
+
+  const fechar = () => {
+    setCriando(false);
+    setEditando(null);
+  };
+
+  const salvar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      if (editando) {
+        await updateTransportadora(editando.id, form);
+        showSuccess('Transportadora atualizada com sucesso!');
+      } else {
+        await createTransportadora(form);
+        showSuccess('Transportadora cadastrada com sucesso!');
+      }
+      fechar();
+      await carregarTodas();
+    } catch (err) {
+      console.error(err);
+      showError('Erro ao salvar transportadora.');
+    }
+  };
+
+  const alternarAtivo = async (t: Transportadora) => {
+    try {
+      await updateTransportadora(t.id, { ativo: !t.ativo });
+      showSuccess(t.ativo ? 'Transportadora desativada.' : 'Transportadora ativada.');
+      await carregarTodas();
+    } catch (err) {
+      console.error(err);
+      showError('Erro ao alterar status da transportadora.');
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="font-bold text-stone-800 text-sm flex items-center gap-2">
+            <Truck className="w-4 h-4 text-stone-400" />
+            Transportadoras
+          </h3>
+          <p className="text-xs text-stone-500 mt-0.5">
+            Gerencie as transportadoras disponíveis para cotação de frete
+          </p>
+        </div>
+        <button
+          onClick={abrirCriacao}
+          className="flex items-center gap-2 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-colors"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Nova Transportadora
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-8">
+          <RefreshCw className="w-5 h-5 animate-spin text-stone-300" />
+        </div>
+      ) : lista.length === 0 ? (
+        <div className="text-center py-8 text-stone-400 text-sm">
+          Nenhuma transportadora cadastrada
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm text-left">
+            <thead className="bg-stone-50 text-stone-500 uppercase text-[10px] font-bold border-b border-stone-200">
+              <tr>
+                <th className="px-4 py-3">Nome</th>
+                <th className="px-4 py-3">CNPJ</th>
+                <th className="px-4 py-3">Contato</th>
+                <th className="px-4 py-3">Telefone</th>
+                <th className="px-4 py-3">E-mail</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3 text-right">Ações</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-stone-100">
+              {lista.map((t) => (
+                <tr
+                  key={t.id}
+                  className={`hover:bg-stone-50 transition-colors ${!t.ativo ? 'opacity-50' : ''}`}
+                >
+                  <td className="px-4 py-3 font-bold text-stone-800">{t.nome}</td>
+                  <td className="px-4 py-3 text-stone-600 font-mono text-xs">{t.cnpj || '—'}</td>
+                  <td className="px-4 py-3 text-stone-600 text-xs">{t.contato || '—'}</td>
+                  <td className="px-4 py-3 text-stone-600 text-xs">{t.telefone || '—'}</td>
+                  <td className="px-4 py-3 text-stone-600 text-xs">{t.email || '—'}</td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${
+                        t.ativo ? 'bg-emerald-100 text-emerald-700' : 'bg-stone-100 text-stone-500'
+                      }`}
+                    >
+                      {t.ativo ? 'Ativo' : 'Inativo'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex justify-end gap-1">
+                      <button
+                        onClick={() => abrirEdicao(t)}
+                        className="px-2.5 py-1 text-xs font-bold bg-blue-50 text-blue-700 rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => alternarAtivo(t)}
+                        className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-colors ${
+                          t.ativo
+                            ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
+                            : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                        }`}
+                      >
+                        {t.ativo ? 'Desativar' : 'Ativar'}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Formulário de criação/edição */}
+      {criando && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+            <div className="flex items-center justify-between p-6 border-b border-stone-100">
+              <h3 className="text-lg font-bold text-stone-800 flex items-center gap-2">
+                <Truck className="w-5 h-5 text-amber-600" />
+                {editando ? 'Editar Transportadora' : 'Nova Transportadora'}
+              </h3>
+              <button
+                onClick={fechar}
+                className="p-1 hover:bg-stone-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-stone-400" />
+              </button>
+            </div>
+            <form onSubmit={salvar} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                  Nome *
+                </label>
+                <input
+                  type="text"
+                  value={form.nome}
+                  onChange={(e) => setForm({ ...form, nome: e.target.value })}
+                  className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                    CNPJ
+                  </label>
+                  <input
+                    type="text"
+                    value={form.cnpj ?? ''}
+                    onChange={(e) => setForm({ ...form, cnpj: e.target.value })}
+                    placeholder="00.000.000/0000-00"
+                    className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                    Contato
+                  </label>
+                  <input
+                    type="text"
+                    value={form.contato ?? ''}
+                    onChange={(e) => setForm({ ...form, contato: e.target.value })}
+                    className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                    Telefone
+                  </label>
+                  <input
+                    type="text"
+                    value={form.telefone ?? ''}
+                    onChange={(e) => setForm({ ...form, telefone: e.target.value })}
+                    placeholder="(00) 00000-0000"
+                    className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                    E-mail
+                  </label>
+                  <input
+                    type="email"
+                    value={form.email ?? ''}
+                    onChange={(e) => setForm({ ...form, email: e.target.value })}
+                    className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
+                  />
+                </div>
+              </div>
+              {editando && (
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.ativo}
+                      onChange={(e) => setForm({ ...form, ativo: e.target.checked })}
+                      className="w-4 h-4 text-amber-600 rounded"
+                    />
+                    <span className="text-sm text-stone-700">Ativo</span>
+                  </label>
+                </div>
+              )}
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={fechar}
+                  className="px-5 py-2 border border-stone-300 rounded-lg text-sm font-bold text-stone-600 hover:bg-stone-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-bold transition-colors"
+                >
+                  {editando ? 'Salvar Alterações' : 'Cadastrar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  MAIN MODULE
 // ─────────────────────────────────────────────────────────────────────────────
 export default function CarregamentoModule({
@@ -1717,22 +2137,32 @@ export default function CarregamentoModule({
 
   // ── Create carregamento ───────────────────────────────────────────────────
   const handleCreateCarregamento = async (form: CarregamentoFormData) => {
-    const numero = await gerarNumeroCarregamento();
-    await createCarregamento({
-      numero_carregamento: numero,
-      tipo_frete: form.tipo_frete,
-      quantidade_total: parseFloat(form.quantidade_total),
-      quantidade_liberada: 0,
-      quantidade_carregada: 0,
-      filial_id: form.filial_id || undefined,
-      data_prevista_carregamento: form.data_prevista_carregamento || undefined,
-      transportadora_id: form.transportadora_id || undefined,
-      observacoes: form.observacoes || undefined,
-      status: 'aguardando_cotacao',
-      criado_por: currentUser.id,
-    });
-    setShowModalNovo(false);
-    await load();
+    try {
+      const numero = await gerarNumeroCarregamento();
+      await createCarregamento({
+        numero_carregamento: numero,
+        tipo_frete: form.tipo_frete,
+        quantidade_total: parseFloat(form.quantidade_total),
+        quantidade_liberada: 0,
+        quantidade_carregada: 0,
+        filial_id: form.filial_id || undefined,
+        data_prevista_carregamento: form.data_prevista_carregamento || undefined,
+        observacoes: form.observacoes || undefined,
+        valor_frete: form.valor_frete ? parseFloat(form.valor_frete) : undefined,
+        status: 'aguardando_cotacao',
+        criado_por: currentUser.id,
+      });
+      showSuccess('Carregamento criado com sucesso!');
+      setShowModalNovo(false);
+      await load();
+    } catch (err: unknown) {
+      const msg =
+        err && typeof err === 'object' && 'message' in err
+          ? (err as { message: string }).message
+          : 'Erro ao criar carregamento. Verifique os dados e tente novamente.';
+      showError(msg);
+      throw err;
+    }
   };
 
   // ── Solicitar cotação ─────────────────────────────────────────────────────
@@ -1781,10 +2211,11 @@ export default function CarregamentoModule({
   };
 
   // ── Informar transportador ────────────────────────────────────────────────
-  const handleInformarTransportador = async (transportadoraId: string) => {
+  const handleInformarTransportador = async (transportadoraId: string, valorFrete?: number) => {
     if (!modalTransportador) return;
     await updateCarregamento(modalTransportador.id, {
       transportadora_id: transportadoraId,
+      valor_frete: valorFrete,
       status: 'em_carregamento',
     });
     setModalTransportador(null);
@@ -1799,6 +2230,7 @@ export default function CarregamentoModule({
     logistica: 'Painel de Logística',
     calendario: 'Calendário de Carregamentos',
     relatorios: 'Relatórios',
+    transportadoras: 'Transportadoras',
   };
 
   return (
@@ -1870,12 +2302,16 @@ export default function CarregamentoModule({
       {view === 'relatorios' && (
         <RelatoriosCarregamento filiais={filiais} transportadoras={transportadoras} />
       )}
+      {view === 'transportadoras' && (
+        <div className="bg-white rounded-xl border border-stone-200 shadow-sm p-5">
+          <TransportadoraManager />
+        </div>
+      )}
 
       {/* Modals */}
       {showModalNovo && (
         <ModalNovoCarregamento
           filiais={filiais}
-          transportadoras={transportadoras}
           onSave={handleCreateCarregamento}
           onClose={() => setShowModalNovo(false)}
         />
@@ -1898,56 +2334,12 @@ export default function CarregamentoModule({
 
       {/* Modal: Informar Transportador */}
       {modalTransportador && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-            <div className="flex items-center justify-between p-6 border-b border-stone-100">
-              <h3 className="text-lg font-bold text-stone-800 flex items-center gap-2">
-                <Truck className="w-5 h-5 text-blue-600" /> Informar Transportador
-              </h3>
-              <button
-                onClick={() => setModalTransportador(null)}
-                className="p-1 hover:bg-stone-100 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5 text-stone-400" />
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
-              <p className="text-sm text-stone-600">
-                Selecione a transportadora responsável pelo carregamento{' '}
-                <strong>{modalTransportador.numero_carregamento}</strong>:
-              </p>
-              <div className="space-y-2">
-                {transportadoras.map((t) => (
-                  <button
-                    key={t.id}
-                    onClick={() => handleInformarTransportador(t.id)}
-                    className={`w-full text-left px-4 py-3 rounded-xl border text-sm font-medium transition-colors ${
-                      modalTransportador.transportadora_id === t.id
-                        ? 'bg-blue-50 border-blue-300 text-blue-700'
-                        : 'border-stone-200 hover:bg-stone-50 text-stone-700'
-                    }`}
-                  >
-                    <p className="font-bold">{t.nome}</p>
-                    {t.telefone && <p className="text-xs text-stone-400 mt-0.5">{t.telefone}</p>}
-                  </button>
-                ))}
-                {transportadoras.length === 0 && (
-                  <p className="text-sm text-stone-400 text-center py-4">
-                    Nenhuma transportadora cadastrada
-                  </p>
-                )}
-              </div>
-              <div className="flex justify-end">
-                <button
-                  onClick={() => setModalTransportador(null)}
-                  className="px-5 py-2 border border-stone-300 rounded-lg text-sm font-bold text-stone-600 hover:bg-stone-50 transition-colors"
-                >
-                  Fechar
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ModalInformarTransportador
+          carregamento={modalTransportador}
+          transportadoras={transportadoras}
+          onSave={handleInformarTransportador}
+          onClose={() => setModalTransportador(null)}
+        />
       )}
     </div>
   );

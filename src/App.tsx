@@ -163,7 +163,8 @@ export default function App() {
     activeTab === 'carregamento_liberacao' ||
     activeTab === 'carregamento_logistica' ||
     activeTab === 'carregamento_calendario' ||
-    activeTab === 'carregamento_relatorios'
+    activeTab === 'carregamento_relatorios' ||
+    activeTab === 'carregamento_transportadoras'
   ) {
     activeModule = 'carregamento';
   }
@@ -545,6 +546,12 @@ export default function App() {
               id: 'carregamento_relatorios',
               label: 'Relatórios',
               icon: BarChart3,
+              permission: 'carregamento',
+            },
+            {
+              id: 'carregamento_transportadoras',
+              label: 'Transportadoras',
+              icon: Truck,
               permission: 'carregamento',
             },
           ],
@@ -1027,6 +1034,11 @@ export default function App() {
               activeTab === 'carregamento_relatorios' &&
               hasPermission('carregamento') && (
                 <CarregamentoModule currentUser={currentUser} view="relatorios" />
+              )}
+            {activeModule === 'carregamento' &&
+              activeTab === 'carregamento_transportadoras' &&
+              hasPermission('carregamento') && (
+                <CarregamentoModule currentUser={currentUser} view="transportadoras" />
               )}
           </div>
         </main>
