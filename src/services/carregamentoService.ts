@@ -165,6 +165,12 @@ export async function getTransportadoras(): Promise<Transportadora[]> {
   return data.map(mapTransportadora);
 }
 
+export async function getAllTransportadoras(): Promise<Transportadora[]> {
+  const { data, error } = await supabase.from('transportadoras').select('*').order('nome');
+  if (error || !data) return [];
+  return data.map(mapTransportadora);
+}
+
 export async function createTransportadora(
   payload: Omit<Transportadora, 'id' | 'criado_em'>
 ): Promise<Transportadora | null> {
@@ -225,11 +231,11 @@ export async function getCarregamentoById(id: string): Promise<Carregamento | nu
 
 export async function createCarregamento(
   payload: Omit<Carregamento, 'id' | 'criado_em' | 'atualizado_em' | 'filial' | 'transportadora'>
-): Promise<Carregamento | null> {
+): Promise<Carregamento> {
   const { data, error } = await supabase.from('carregamentos').insert(payload).select().single();
   if (error || !data) {
     console.error('Erro ao criar carregamento:', error);
-    return null;
+    throw error ?? new Error('Falha ao criar carregamento: nenhum dado retornado');
   }
   return mapCarregamento(data);
 }
