@@ -86,8 +86,7 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
 
   useEffect(() => {
     loadLocais();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtroFilialLocais]);
+  }, [loadLocais]);
 
   const loadBranches = async () => {
     setLoading(true);
