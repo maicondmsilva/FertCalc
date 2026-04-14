@@ -33,6 +33,7 @@ export interface Filial {
 // ── Transportadora ────────────────────────────────────────────
 export interface Transportadora {
   id: string;
+  id_numeric?: number;
   nome: string;
   cnpj?: string;
   contato?: string;
@@ -131,4 +132,20 @@ export interface KPICarregamento {
   em_carregamento: number;
   carregados_hoje: number;
   valor_frete_mes: number;
+}
+
+// ── Local de Carregamento ─────────────────────────────────────
+export interface LocalCarregamento {
+  id: string;
+  id_numeric: number;
+  nome: string;
+  filial_id?: string;
+  filial?: Filial;
+  endereco?: string;
+  cidade?: string;
+  estado?: string;
+  maps_url?: string;
+  ativo: boolean;
+  criado_em?: string;
+  atualizado_em?: string;
 }
