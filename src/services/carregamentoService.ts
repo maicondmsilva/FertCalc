@@ -70,6 +70,7 @@ function mapCotacao(d: Record<string, unknown>): CotacaoFrete {
 function mapTransportadora(d: Record<string, unknown>): Transportadora {
   return {
     id: d.id as string,
+    id_numeric: d.id_numeric != null ? Number(d.id_numeric) : undefined,
     nome: d.nome as string,
     cnpj: d.cnpj as string | undefined,
     contato: d.contato as string | undefined,
