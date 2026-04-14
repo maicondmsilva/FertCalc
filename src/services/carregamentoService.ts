@@ -103,17 +103,17 @@ function mapBranchToFilial(d: Record<string, unknown>): Filial {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  Filiais — busca da tabela `branches` (módulo Configurações)
+//  Filiais — busca da tabela `filiais_carregamento`
 // ─────────────────────────────────────────────────────────────
 
 export async function getFiliais(): Promise<Filial[]> {
   const { data, error } = await supabase
-    .from('branches')
+    .from('filiais_carregamento')
     .select('*')
     .eq('ativo', true)
-    .order('id_numeric');
+    .order('nome');
   if (error || !data) return [];
-  return data.map(mapBranchToFilial);
+  return data.map(mapFilial);
 }
 
 export async function getFilialById(id: string): Promise<Filial | null> {
@@ -268,14 +268,32 @@ export async function deleteCarregamento(id: string): Promise<boolean> {
   return !error;
 }
 
-// Generate a unique carregamento number
+// Generate a unique carregamento number with retry on conflict
 export async function gerarNumeroCarregamento(): Promise<string> {
   const year = new Date().getFullYear();
-  const { count } = await supabase
-    .from('carregamentos')
-    .select('*', { count: 'exact', head: true });
-  const seq = ((count ?? 0) + 1).toString().padStart(4, '0');
-  return `CAR-${year}-${seq}`;
+  const maxRetries = 3;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const { count } = await supabase
+      .from('carregamentos')
+      .select('*', { count: 'exact', head: true });
+    const seq = ((count ?? 0) + 1 + attempt).toString().padStart(4, '0');
+    const numero = `CAR-${year}-${seq}`;
+
+    // Check if this number already exists
+    const { count: existing } = await supabase
+      .from('carregamentos')
+      .select('*', { count: 'exact', head: true })
+      .eq('numero_carregamento', numero);
+
+    if (!existing || existing === 0) {
+      return numero;
+    }
+  }
+
+  // Fallback: use timestamp-based suffix to guarantee uniqueness
+  const ts = Date.now().toString(36);
+  return `CAR-${year}-${ts}`;
 }
 
 // ─────────────────────────────────────────────────────────────

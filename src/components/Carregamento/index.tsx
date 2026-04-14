@@ -2565,6 +2565,7 @@ export default function CarregamentoModule({
         quantidade_liberada: 0,
         quantidade_carregada: 0,
         filial_id: form.filial_id || undefined,
+        pedido_precificacao_id: form.precificacao_id || undefined,
         data_prevista_carregamento: form.data_prevista_carregamento || undefined,
         observacoes: form.observacoes || undefined,
         valor_frete: form.valor_frete ? parseFloat(form.valor_frete) : undefined,
