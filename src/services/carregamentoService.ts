@@ -80,18 +80,6 @@ function mapTransportadora(d: Record<string, unknown>): Transportadora {
   };
 }
 
-function mapFilial(d: Record<string, unknown>): Filial {
-  return {
-    id: d.id as string,
-    nome: d.nome as string,
-    codigo: d.codigo as string,
-    cidade: d.cidade as string | undefined,
-    estado: d.estado as string | undefined,
-    ativo: (d.ativo ?? true) as boolean,
-    criado_em: d.criado_em as string | undefined,
-  };
-}
-
 // Maps a `branches` table row (from Configurações) to the Filial interface
 function mapBranchToFilial(d: Record<string, unknown>): Filial {
   return {
@@ -103,52 +91,17 @@ function mapBranchToFilial(d: Record<string, unknown>): Filial {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  Filiais — busca da tabela `filiais_carregamento`
+//  Filiais — busca da tabela `branches` (Configurações)
 // ─────────────────────────────────────────────────────────────
 
 export async function getFiliais(): Promise<Filial[]> {
   const { data, error } = await supabase
-    .from('filiais_carregamento')
+    .from('branches')
     .select('*')
     .eq('ativo', true)
-    .order('nome');
+    .order('name');
   if (error || !data) return [];
-  return data.map(mapFilial);
-}
-
-export async function getFilialById(id: string): Promise<Filial | null> {
-  const { data, error } = await supabase
-    .from('filiais_carregamento')
-    .select('*')
-    .eq('id', id)
-    .single();
-  if (error || !data) return null;
-  return mapFilial(data);
-}
-
-export async function createFilial(
-  payload: Omit<Filial, 'id' | 'criado_em'>
-): Promise<Filial | null> {
-  const { data, error } = await supabase
-    .from('filiais_carregamento')
-    .insert(payload)
-    .select()
-    .single();
-  if (error || !data) return null;
-  return mapFilial(data);
-}
-
-export async function updateFilial(
-  id: string,
-  payload: Partial<Omit<Filial, 'id' | 'criado_em'>>
-): Promise<boolean> {
-  const { error } = await supabase.from('filiais_carregamento').update(payload).eq('id', id);
-  return !error;
-}
-
-export async function deleteFilial(id: string): Promise<boolean> {
-  const { error } = await supabase.from('filiais_carregamento').delete().eq('id', id);
-  return !error;
+  return data.map(mapBranchToFilial);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -199,7 +152,7 @@ export async function deleteTransportadora(id: string): Promise<boolean> {
 export async function getCarregamentos(filialId?: string): Promise<Carregamento[]> {
   let query = supabase
     .from('carregamentos')
-    .select('*, filiais_carregamento(*), transportadoras(*)')
+    .select('*, branches(*), transportadoras(*)')
     .order('criado_em', { ascending: false });
 
   if (filialId) {
@@ -210,7 +163,7 @@ export async function getCarregamentos(filialId?: string): Promise<Carregamento[
   if (error || !data) return [];
   return data.map((d) => ({
     ...mapCarregamento(d),
-    filial: d.filiais_carregamento ? mapFilial(d.filiais_carregamento) : undefined,
+    filial: d.branches ? mapBranchToFilial(d.branches as Record<string, unknown>) : undefined,
     transportadora: d.transportadoras ? mapTransportadora(d.transportadoras) : undefined,
   }));
 }
@@ -218,13 +171,13 @@ export async function getCarregamentos(filialId?: string): Promise<Carregamento[
 export async function getCarregamentoById(id: string): Promise<Carregamento | null> {
   const { data, error } = await supabase
     .from('carregamentos')
-    .select('*, filiais_carregamento(*), transportadoras(*)')
+    .select('*, branches(*), transportadoras(*)')
     .eq('id', id)
     .single();
   if (error || !data) return null;
   return {
     ...mapCarregamento(data),
-    filial: data.filiais_carregamento ? mapFilial(data.filiais_carregamento) : undefined,
+    filial: data.branches ? mapBranchToFilial(data.branches as Record<string, unknown>) : undefined,
     transportadora: data.transportadoras ? mapTransportadora(data.transportadoras) : undefined,
   };
 }
@@ -445,7 +398,7 @@ export async function getCarregamentosRelatorio(
 ): Promise<Carregamento[]> {
   let query = supabase
     .from('carregamentos')
-    .select('*, filiais_carregamento(*), transportadoras(*)')
+    .select('*, branches(*), transportadoras(*)')
     .order('criado_em', { ascending: false });
 
   if (filtros.filial_id) query = query.eq('filial_id', filtros.filial_id);
@@ -459,7 +412,7 @@ export async function getCarregamentosRelatorio(
   if (error || !data) return [];
   return data.map((d) => ({
     ...mapCarregamento(d),
-    filial: d.filiais_carregamento ? mapFilial(d.filiais_carregamento) : undefined,
+    filial: d.branches ? mapBranchToFilial(d.branches as Record<string, unknown>) : undefined,
     transportadora: d.transportadoras ? mapTransportadora(d.transportadoras) : undefined,
   }));
 }
@@ -478,7 +431,7 @@ export async function getCarregamentosCalendario(
 
   let query = supabase
     .from('carregamentos')
-    .select('*, filiais_carregamento(*), transportadoras(*)')
+    .select('*, branches(*), transportadoras(*)')
     .not('data_prevista_carregamento', 'is', null)
     .gte('data_prevista_carregamento', startDate)
     .lte('data_prevista_carregamento', endDate);
@@ -489,7 +442,7 @@ export async function getCarregamentosCalendario(
   if (error || !data) return [];
   return data.map((d) => ({
     ...mapCarregamento(d),
-    filial: d.filiais_carregamento ? mapFilial(d.filiais_carregamento) : undefined,
+    filial: d.branches ? mapBranchToFilial(d.branches as Record<string, unknown>) : undefined,
     transportadora: d.transportadoras ? mapTransportadora(d.transportadoras) : undefined,
   }));
 }
