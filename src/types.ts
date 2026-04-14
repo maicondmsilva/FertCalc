@@ -87,6 +87,7 @@ export interface User {
   ativo: boolean;
   role: 'admin' | 'user' | 'manager' | 'master';
   managedUserIds?: string[];
+  filiais_permitidas?: string[]; // array de UUIDs de branches permitidas
   permissions?: {
     // Módulos (acesso à página)
     dashboard: boolean;

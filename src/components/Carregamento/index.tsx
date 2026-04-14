@@ -27,6 +27,7 @@ import {
   KPICarregamento,
   StatusCarregamento,
   FiltrosRelatorioCarregamento,
+  LocalCarregamento,
 } from '../../types/carregamento';
 import {
   getCarregamentos,
@@ -49,6 +50,7 @@ import {
 } from '../../services/carregamentoService';
 import { getPricingRecords } from '../../services/db';
 import { getPedidosVenda } from '../../services/pedidosVendaService';
+import { getLocaisAtivos } from '../../services/locaisCarregamentoService';
 import { useToast } from '../Toast';
 
 // ─── Sub-view type ─────────────────────────────────────────────────────────────
@@ -132,6 +134,7 @@ interface CarregamentoFormData {
   tipo_frete: 'CIF' | 'FOB';
   quantidade_total: string;
   filial_id: string;
+  local_carregamento_id: string;
   data_prevista_carregamento: string;
   observacoes: string;
   pedido_venda_id: string;
@@ -175,6 +178,7 @@ function ModalNovoCarregamento({ filiais, onSave, onClose }: ModalNovoCarregamen
     tipo_frete: 'FOB' as 'CIF' | 'FOB',
     quantidade_total: '',
     filial_id: '',
+    local_carregamento_id: '',
     data_prevista_carregamento: '',
     observacoes: '',
     pedido_venda_id: '',
@@ -187,6 +191,7 @@ function ModalNovoCarregamento({ filiais, onSave, onClose }: ModalNovoCarregamen
   const [pedidoSearch, setPedidoSearch] = useState('');
   const [allPedidos, setAllPedidos] = useState<EnrichedPedido[]>([]);
   const [pedidoResults, setPedidoResults] = useState<EnrichedPedido[]>([]);
+  const [locais, setLocais] = useState<LocalCarregamento[]>([]);
   // Bug 3 fix — fallback para filiais da prop (vindas de branches/Configurações)
   const [localFiliais, setLocalFiliais] = useState<Filial[]>([]);
 
@@ -199,6 +204,17 @@ function ModalNovoCarregamento({ filiais, onSave, onClose }: ModalNovoCarregamen
         });
     }
   }, [filiais]);
+
+  useEffect(() => {
+    setForm((prev) => ({ ...prev, local_carregamento_id: '' }));
+    if (form.filial_id) {
+      getLocaisAtivos(form.filial_id)
+        .then(setLocais)
+        .catch(() => setLocais([]));
+    } else {
+      setLocais([]);
+    }
+  }, [form.filial_id]);
 
   const filiaisDisponiveis = filiais.length > 0 ? filiais : localFiliais;
 
@@ -442,6 +458,31 @@ function ModalNovoCarregamento({ filiais, onSave, onClose }: ModalNovoCarregamen
                 </option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+              Local de Carregamento
+            </label>
+            <select
+              value={form.local_carregamento_id}
+              onChange={(e) => setForm({ ...form, local_carregamento_id: e.target.value })}
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
+              disabled={!form.filial_id}
+            >
+              <option value="">— Selecione o local (opcional) —</option>
+              {locais.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.nome}
+                  {l.cidade ? ` — ${l.cidade}${l.estado ? `/${l.estado}` : ''}` : ''}
+                </option>
+              ))}
+            </select>
+            {!form.filial_id && (
+              <p className="text-xs text-stone-400 mt-1">
+                Selecione uma filial para ver os locais disponíveis
+              </p>
+            )}
           </div>
 
           <div>
@@ -979,6 +1020,7 @@ function TabelaCarregamentos({
             <th className="px-4 py-3">Tipo</th>
             <th className="px-4 py-3">Status</th>
             <th className="px-4 py-3">Filial</th>
+            <th className="px-4 py-3">Local</th>
             <th className="px-4 py-3">Qtd (ton)</th>
             <th className="px-4 py-3">Dt. Prevista</th>
             <th className="px-4 py-3">Transportadora</th>
@@ -1006,6 +1048,19 @@ function TabelaCarregamentos({
                 <StatusBadge status={c.status} />
               </td>
               <td className="px-4 py-3 text-stone-600 text-xs">{c.filial?.nome ?? '—'}</td>
+              <td className="px-4 py-3 text-stone-600 text-xs">
+                {c.local_carregamento ? (
+                  <span className="flex items-center gap-1">
+                    <MapPin className="w-3 h-3 text-stone-400 flex-shrink-0" />
+                    {c.local_carregamento.nome}
+                    {c.local_carregamento.cidade && (
+                      <span className="text-stone-400">— {c.local_carregamento.cidade}</span>
+                    )}
+                  </span>
+                ) : (
+                  '—'
+                )}
+              </td>
               <td className="px-4 py-3 text-stone-700 font-mono">
                 <div className="text-xs">
                   <span className="font-bold">{c.quantidade_total.toFixed(3)}</span>
@@ -1888,6 +1943,38 @@ function CalendarioCarregamentos({ currentUser }: { currentUser: User }) {
               <span>{selected.filial?.nome ?? '—'}</span>
             </div>
             <div>
+              <p className="text-xs text-stone-400 uppercase font-bold mb-0.5">
+                Local de Carregamento
+              </p>
+              {selected.local_carregamento ? (
+                <span className="flex items-center gap-1">
+                  <MapPin className="w-3 h-3 text-stone-400" />
+                  {selected.local_carregamento.nome}
+                  {selected.local_carregamento.cidade && (
+                    <span className="text-stone-500">
+                      — {selected.local_carregamento.cidade}
+                      {selected.local_carregamento.estado
+                        ? `/${selected.local_carregamento.estado}`
+                        : ''}
+                    </span>
+                  )}
+                  {selected.local_carregamento.maps_url && (
+                    <a
+                      href={selected.local_carregamento.maps_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ml-1 text-xs text-blue-600 hover:underline"
+                      title="Abrir no Google Maps"
+                    >
+                      🗺️
+                    </a>
+                  )}
+                </span>
+              ) : (
+                <span className="text-stone-400">—</span>
+              )}
+            </div>
+            <div>
               <p className="text-xs text-stone-400 uppercase font-bold mb-0.5">Data Prevista</p>
               <span>{fmtDate(selected.data_prevista_carregamento)}</span>
             </div>
@@ -2509,12 +2596,26 @@ export default function CarregamentoModule({
     currentUser.role === 'admin' ||
     (currentUser.permissions as any)?.carregamento_solicitar_cotacao;
 
+  const podeVerTodas =
+    currentUser.role === 'master' ||
+    currentUser.role === 'admin' ||
+    currentUser.permissions?.carregamento_all_filiais;
+
+  const filiaisVisiveis = podeVerTodas
+    ? filiais
+    : filiais.filter((f) => currentUser.filiais_permitidas?.includes(f.id));
+
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
     try {
+      const canSeeAll =
+        currentUser.role === 'master' ||
+        currentUser.role === 'admin' ||
+        currentUser.permissions?.carregamento_all_filiais;
+      const filtroPorFiliais = canSeeAll ? undefined : currentUser.filiais_permitidas;
       const [cgs, fls, trs, kpiData] = await Promise.all([
-        getCarregamentos(),
+        getCarregamentos(undefined, filtroPorFiliais),
         getFiliais(),
         getTransportadoras(),
         getKPICarregamento(),
@@ -2565,6 +2666,7 @@ export default function CarregamentoModule({
         quantidade_liberada: 0,
         quantidade_carregada: 0,
         filial_id: form.filial_id || undefined,
+        local_carregamento_id: form.local_carregamento_id || undefined,
         pedido_precificacao_id: form.precificacao_id || undefined,
         data_prevista_carregamento: form.data_prevista_carregamento || undefined,
         observacoes: form.observacoes || undefined,
@@ -2764,7 +2866,7 @@ export default function CarregamentoModule({
       {/* Modals */}
       {showModalNovo && (
         <ModalNovoCarregamento
-          filiais={filiais}
+          filiais={filiaisVisiveis}
           onSave={handleCreateCarregamento}
           onClose={() => setShowModalNovo(false)}
         />

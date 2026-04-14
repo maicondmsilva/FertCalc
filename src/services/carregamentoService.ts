@@ -4,6 +4,7 @@ import {
   CotacaoFrete,
   Transportadora,
   Filial,
+  LocalCarregamento,
   AlertaCarregamento,
   HistoricoCarregamento,
   FiltrosRelatorioCarregamento,
@@ -45,6 +46,8 @@ function mapCarregamento(d: Record<string, unknown>): Carregamento {
     criado_por: d.criado_por as string | undefined,
     criado_em: d.criado_em as string,
     atualizado_em: d.atualizado_em as string,
+    local_carregamento_id: d.local_carregamento_id as string | undefined,
+    local_carregamento: undefined,
   };
 }
 
@@ -88,6 +91,22 @@ function mapBranchToFilial(d: Record<string, unknown>): Filial {
     nome: d.name as string,
     codigo: d.id_numeric != null ? String(d.id_numeric) : d.id ? (d.id as string).slice(0, 8) : '',
     ativo: (d.ativo ?? true) as boolean,
+  };
+}
+
+function mapLocalCarregamento(d: Record<string, unknown>): LocalCarregamento {
+  return {
+    id: d.id as string,
+    id_numeric: Number(d.id_numeric),
+    nome: d.nome as string,
+    filial_id: d.filial_id as string | undefined,
+    endereco: d.endereco as string | undefined,
+    cidade: d.cidade as string | undefined,
+    estado: d.estado as string | undefined,
+    maps_url: d.maps_url as string | undefined,
+    ativo: Boolean(d.ativo),
+    criado_em: d.criado_em as string | undefined,
+    atualizado_em: d.atualizado_em as string | undefined,
   };
 }
 
@@ -150,14 +169,19 @@ export async function deleteTransportadora(id: string): Promise<boolean> {
 //  Carregamentos
 // ─────────────────────────────────────────────────────────────
 
-export async function getCarregamentos(filialId?: string): Promise<Carregamento[]> {
+export async function getCarregamentos(
+  filialId?: string,
+  filiais_permitidas?: string[]
+): Promise<Carregamento[]> {
   let query = supabase
     .from('carregamentos')
-    .select('*, branches(*), transportadoras(*)')
+    .select('*, branches(*), transportadoras(*), locais_carregamento(*)')
     .order('criado_em', { ascending: false });
 
   if (filialId) {
     query = query.eq('filial_id', filialId);
+  } else if (filiais_permitidas && filiais_permitidas.length > 0) {
+    query = query.in('filial_id', filiais_permitidas);
   }
 
   const { data, error } = await query;
@@ -166,13 +190,16 @@ export async function getCarregamentos(filialId?: string): Promise<Carregamento[
     ...mapCarregamento(d),
     filial: d.branches ? mapBranchToFilial(d.branches as Record<string, unknown>) : undefined,
     transportadora: d.transportadoras ? mapTransportadora(d.transportadoras) : undefined,
+    local_carregamento: d.locais_carregamento
+      ? mapLocalCarregamento(d.locais_carregamento as Record<string, unknown>)
+      : undefined,
   }));
 }
 
 export async function getCarregamentoById(id: string): Promise<Carregamento | null> {
   const { data, error } = await supabase
     .from('carregamentos')
-    .select('*, branches(*), transportadoras(*)')
+    .select('*, branches(*), transportadoras(*), locais_carregamento(*)')
     .eq('id', id)
     .single();
   if (error || !data) return null;
@@ -180,6 +207,9 @@ export async function getCarregamentoById(id: string): Promise<Carregamento | nu
     ...mapCarregamento(data),
     filial: data.branches ? mapBranchToFilial(data.branches as Record<string, unknown>) : undefined,
     transportadora: data.transportadoras ? mapTransportadora(data.transportadoras) : undefined,
+    local_carregamento: data.locais_carregamento
+      ? mapLocalCarregamento(data.locais_carregamento as Record<string, unknown>)
+      : undefined,
   };
 }
 
@@ -399,13 +429,15 @@ export async function getCarregamentosRelatorio(
 ): Promise<Carregamento[]> {
   let query = supabase
     .from('carregamentos')
-    .select('*, branches(*), transportadoras(*)')
+    .select('*, branches(*), transportadoras(*), locais_carregamento(*)')
     .order('criado_em', { ascending: false });
 
   if (filtros.filial_id) query = query.eq('filial_id', filtros.filial_id);
   if (filtros.tipo_frete) query = query.eq('tipo_frete', filtros.tipo_frete);
   if (filtros.status) query = query.eq('status', filtros.status);
   if (filtros.transportadora_id) query = query.eq('transportadora_id', filtros.transportadora_id);
+  if (filtros.local_carregamento_id)
+    query = query.eq('local_carregamento_id', filtros.local_carregamento_id);
   if (filtros.data_inicio) query = query.gte('criado_em', filtros.data_inicio);
   if (filtros.data_fim) query = query.lte('criado_em', filtros.data_fim + 'T23:59:59');
 
@@ -415,6 +447,9 @@ export async function getCarregamentosRelatorio(
     ...mapCarregamento(d),
     filial: d.branches ? mapBranchToFilial(d.branches as Record<string, unknown>) : undefined,
     transportadora: d.transportadoras ? mapTransportadora(d.transportadoras) : undefined,
+    local_carregamento: d.locais_carregamento
+      ? mapLocalCarregamento(d.locais_carregamento as Record<string, unknown>)
+      : undefined,
   }));
 }
 
@@ -432,7 +467,7 @@ export async function getCarregamentosCalendario(
 
   let query = supabase
     .from('carregamentos')
-    .select('*, branches(*), transportadoras(*)')
+    .select('*, branches(*), transportadoras(*), locais_carregamento(*)')
     .not('data_prevista_carregamento', 'is', null)
     .gte('data_prevista_carregamento', startDate)
     .lte('data_prevista_carregamento', endDate);
@@ -445,5 +480,8 @@ export async function getCarregamentosCalendario(
     ...mapCarregamento(d),
     filial: d.branches ? mapBranchToFilial(d.branches as Record<string, unknown>) : undefined,
     transportadora: d.transportadoras ? mapTransportadora(d.transportadoras) : undefined,
+    local_carregamento: d.locais_carregamento
+      ? mapLocalCarregamento(d.locais_carregamento as Record<string, unknown>)
+      : undefined,
   }));
 }
