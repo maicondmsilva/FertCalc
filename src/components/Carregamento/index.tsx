@@ -206,8 +206,8 @@ function ModalNovoCarregamento({ filiais, onSave, onClose }: ModalNovoCarregamen
   }, [filiais]);
 
   useEffect(() => {
-    setForm((prev) => ({ ...prev, local_carregamento_id: '' }));
     if (form.filial_id) {
+      setForm((prev) => ({ ...prev, local_carregamento_id: '' }));
       getLocaisAtivos(form.filial_id)
         .then(setLocais)
         .catch(() => setLocais([]));
