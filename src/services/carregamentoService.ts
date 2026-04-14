@@ -271,16 +271,30 @@ export async function deleteCarregamento(id: string): Promise<boolean> {
 // Generate a unique carregamento number with retry on conflict
 export async function gerarNumeroCarregamento(): Promise<string> {
   const year = new Date().getFullYear();
+  const prefix = `CAR-${year}-`;
   const maxRetries = 3;
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
-    const { count } = await supabase
+    // Find the highest existing sequence number for this year
+    const { data } = await supabase
       .from('carregamentos')
-      .select('*', { count: 'exact', head: true });
-    const seq = ((count ?? 0) + 1 + attempt).toString().padStart(4, '0');
-    const numero = `CAR-${year}-${seq}`;
+      .select('numero_carregamento')
+      .like('numero_carregamento', `${prefix}%`)
+      .order('numero_carregamento', { ascending: false })
+      .limit(1);
 
-    // Check if this number already exists
+    let nextSeq = 1;
+    if (data && data.length > 0) {
+      const last = data[0].numero_carregamento as string;
+      const lastSeq = parseInt(last.replace(prefix, ''), 10);
+      if (!isNaN(lastSeq)) {
+        nextSeq = lastSeq + 1;
+      }
+    }
+
+    const numero = `${prefix}${nextSeq.toString().padStart(4, '0')}`;
+
+    // Verify uniqueness before returning
     const { count: existing } = await supabase
       .from('carregamentos')
       .select('*', { count: 'exact', head: true })
@@ -293,7 +307,7 @@ export async function gerarNumeroCarregamento(): Promise<string> {
 
   // Fallback: use timestamp-based suffix to guarantee uniqueness
   const ts = Date.now().toString(36);
-  return `CAR-${year}-${ts}`;
+  return `${prefix}${ts}`;
 }
 
 // ─────────────────────────────────────────────────────────────
