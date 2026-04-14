@@ -105,6 +105,7 @@ export async function createUser(user: Omit<User, 'id'>): Promise<User> {
       ativo: user.ativo ?? true,
       managed_user_ids: user.managedUserIds || [],
       permissions: user.permissions || {},
+      filiais_permitidas: user.filiais_permitidas || [],
     })
     .select()
     .single();
@@ -121,6 +122,7 @@ export async function updateUser(id: string, user: Partial<User>): Promise<void>
   if (user.ativo !== undefined) payload.ativo = user.ativo;
   if (user.managedUserIds !== undefined) payload.managed_user_ids = user.managedUserIds;
   if (user.permissions !== undefined) payload.permissions = user.permissions;
+  if (user.filiais_permitidas !== undefined) payload.filiais_permitidas = user.filiais_permitidas;
   const { error } = await supabase.from('app_users').update(payload).eq('id', id);
   if (error) throw error;
 }
@@ -141,6 +143,7 @@ function mapUser(data: Record<string, unknown>): User {
     ativo: !!data.ativo,
     role: data.role,
     managedUserIds: data.managed_user_ids || [],
+    filiais_permitidas: (data.filiais_permitidas as string[]) || [],
     permissions: data.permissions || {},
   } as User;
 }

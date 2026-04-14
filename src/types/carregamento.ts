@@ -74,6 +74,8 @@ export interface Carregamento {
   // joined fields
   cliente_nome?: string;
   vendedor_nome?: string;
+  local_carregamento_id?: string;
+  local_carregamento?: LocalCarregamento;
 }
 
 // ── Cotação de Frete ──────────────────────────────────────────
@@ -122,6 +124,7 @@ export interface FiltrosRelatorioCarregamento {
   tipo_frete?: TipoFrete | '';
   status?: StatusCarregamento | '';
   transportadora_id?: string;
+  local_carregamento_id?: string;
   data_inicio?: string;
   data_fim?: string;
 }

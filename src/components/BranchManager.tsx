@@ -27,8 +27,33 @@ import {
 } from '../services/locaisCarregamentoService';
 
 const ESTADOS_BR = [
-  'AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG',
-  'PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO',
+  'AC',
+  'AL',
+  'AP',
+  'AM',
+  'BA',
+  'CE',
+  'DF',
+  'ES',
+  'GO',
+  'MA',
+  'MT',
+  'MS',
+  'MG',
+  'PA',
+  'PB',
+  'PR',
+  'PE',
+  'PI',
+  'RJ',
+  'RN',
+  'RS',
+  'RO',
+  'RR',
+  'SC',
+  'SP',
+  'SE',
+  'TO',
 ];
 
 const branchValidationSchema: ValidationSchema = {
@@ -80,14 +105,6 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
   });
   const [savingLocal, setSavingLocal] = useState(false);
 
-  useEffect(() => {
-    loadBranches();
-  }, []);
-
-  useEffect(() => {
-    loadLocais();
-  }, [loadLocais]);
-
   const loadBranches = async () => {
     setLoading(true);
     const data = await getBranches();
@@ -101,6 +118,14 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
     setLocais(data);
     setLoadingLocais(false);
   }, [filtroFilialLocais]);
+
+  useEffect(() => {
+    loadBranches();
+  }, []);
+
+  useEffect(() => {
+    loadLocais();
+  }, [loadLocais]);
 
   // ── Filiais handlers ─────────────────────────────────────────
   const saveBranch = async (e: React.FormEvent) => {
@@ -174,7 +199,15 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
 
   // ── Locais handlers ──────────────────────────────────────────
   const resetFormLocal = () => {
-    setFormLocal({ nome: '', filial_id: '', endereco: '', cidade: '', estado: '', maps_url: '', ativo: true });
+    setFormLocal({
+      nome: '',
+      filial_id: '',
+      endereco: '',
+      cidade: '',
+      estado: '',
+      maps_url: '',
+      ativo: true,
+    });
   };
 
   const openNewLocal = () => {
@@ -204,8 +237,14 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
   };
 
   const saveLocal = async () => {
-    if (!formLocal.nome.trim()) { showError('Nome é obrigatório.'); return; }
-    if (!formLocal.filial_id) { showError('Filial é obrigatória.'); return; }
+    if (!formLocal.nome.trim()) {
+      showError('Nome é obrigatório.');
+      return;
+    }
+    if (!formLocal.filial_id) {
+      showError('Filial é obrigatória.');
+      return;
+    }
     setSavingLocal(true);
     try {
       if (editingLocal) {
@@ -255,7 +294,7 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
   };
 
   const locaisFiltrados = filtroFilialLocais
-    ? locais.filter(l => l.filial_id === filtroFilialLocais)
+    ? locais.filter((l) => l.filial_id === filtroFilialLocais)
     : locais;
 
   return (
@@ -430,9 +469,13 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
               className="text-xs border border-stone-200 rounded-lg px-3 py-1.5 text-stone-600 bg-white outline-none focus:ring-2 focus:ring-emerald-500"
             >
               <option value="">Todas as filiais</option>
-              {branches.filter(b => b.ativo).map(b => (
-                <option key={b.id} value={b.id}>{b.name}</option>
-              ))}
+              {branches
+                .filter((b) => b.ativo)
+                .map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
             </select>
             {canCreate && (
               <button
@@ -460,10 +503,11 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
             </thead>
             <tbody className="divide-y divide-stone-100">
               {locaisFiltrados.map((local) => {
-                const filialNome = branches.find(b => b.id === local.filial_id)?.name ?? '—';
-                const cidadeEstado = local.cidade && local.estado
-                  ? `${local.cidade} / ${local.estado}`
-                  : local.cidade || local.estado || '—';
+                const filialNome = branches.find((b) => b.id === local.filial_id)?.name ?? '—';
+                const cidadeEstado =
+                  local.cidade && local.estado
+                    ? `${local.cidade} / ${local.estado}`
+                    : local.cidade || local.estado || '—';
                 return (
                   <tr
                     key={local.id}
@@ -504,12 +548,22 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
                           color: local.ativo ? 'rgb(6 95 70)' : 'rgb(107 114 128)',
                           border: `1px solid ${local.ativo ? 'rgb(167 243 208)' : 'rgb(229 231 235)'}`,
                         }}
-                        title={canEdit ? (local.ativo ? 'Clique para desativar' : 'Clique para ativar') : ''}
+                        title={
+                          canEdit
+                            ? local.ativo
+                              ? 'Clique para desativar'
+                              : 'Clique para ativar'
+                            : ''
+                        }
                       >
                         {local.ativo ? (
-                          <><ToggleRight className="w-3 h-3" /> Ativo</>
+                          <>
+                            <ToggleRight className="w-3 h-3" /> Ativo
+                          </>
                         ) : (
-                          <><ToggleLeft className="w-3 h-3" /> Inativo</>
+                          <>
+                            <ToggleLeft className="w-3 h-3" /> Inativo
+                          </>
                         )}
                       </button>
                     </td>
@@ -564,7 +618,9 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
             <div className="flex items-center justify-between p-6 border-b border-stone-100">
               <h2 className="text-lg font-bold text-stone-800 flex items-center gap-2">
                 <MapPin className="w-5 h-5 text-emerald-600" />
-                {editingLocal ? `Editar Local #${editingLocal.id_numeric}` : 'Novo Local de Carregamento'}
+                {editingLocal
+                  ? `Editar Local #${editingLocal.id_numeric}`
+                  : 'Novo Local de Carregamento'}
               </h2>
               <button
                 onClick={closeModalLocal}
@@ -581,7 +637,7 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
                 <input
                   type="text"
                   value={formLocal.nome}
-                  onChange={(e) => setFormLocal(f => ({ ...f, nome: e.target.value }))}
+                  onChange={(e) => setFormLocal((f) => ({ ...f, nome: e.target.value }))}
                   placeholder="Nome do local..."
                   className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
                 />
@@ -592,13 +648,17 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
                 </label>
                 <select
                   value={formLocal.filial_id}
-                  onChange={(e) => setFormLocal(f => ({ ...f, filial_id: e.target.value }))}
+                  onChange={(e) => setFormLocal((f) => ({ ...f, filial_id: e.target.value }))}
                   className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
                 >
                   <option value="">Selecione a filial...</option>
-                  {branches.filter(b => b.ativo).map(b => (
-                    <option key={b.id} value={b.id}>{b.name}</option>
-                  ))}
+                  {branches
+                    .filter((b) => b.ativo)
+                    .map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
                 </select>
               </div>
               <div>
@@ -608,7 +668,7 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
                 <input
                   type="text"
                   value={formLocal.endereco}
-                  onChange={(e) => setFormLocal(f => ({ ...f, endereco: e.target.value }))}
+                  onChange={(e) => setFormLocal((f) => ({ ...f, endereco: e.target.value }))}
                   placeholder="Endereço completo..."
                   className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
                 />
@@ -621,7 +681,7 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
                   <input
                     type="text"
                     value={formLocal.cidade}
-                    onChange={(e) => setFormLocal(f => ({ ...f, cidade: e.target.value }))}
+                    onChange={(e) => setFormLocal((f) => ({ ...f, cidade: e.target.value }))}
                     placeholder="Cidade..."
                     className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
                   />
@@ -632,12 +692,14 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
                   </label>
                   <select
                     value={formLocal.estado}
-                    onChange={(e) => setFormLocal(f => ({ ...f, estado: e.target.value }))}
+                    onChange={(e) => setFormLocal((f) => ({ ...f, estado: e.target.value }))}
                     className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
                   >
                     <option value="">UF...</option>
-                    {ESTADOS_BR.map(uf => (
-                      <option key={uf} value={uf}>{uf}</option>
+                    {ESTADOS_BR.map((uf) => (
+                      <option key={uf} value={uf}>
+                        {uf}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -650,7 +712,7 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
                   <input
                     type="url"
                     value={formLocal.maps_url}
-                    onChange={(e) => setFormLocal(f => ({ ...f, maps_url: e.target.value }))}
+                    onChange={(e) => setFormLocal((f) => ({ ...f, maps_url: e.target.value }))}
                     placeholder="https://maps.google.com/..."
                     className="flex-1 px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
                   />
@@ -674,14 +736,14 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
                 <div className="flex gap-3">
                   <button
                     type="button"
-                    onClick={() => setFormLocal(f => ({ ...f, ativo: true }))}
+                    onClick={() => setFormLocal((f) => ({ ...f, ativo: true }))}
                     className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${formLocal.ativo ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : 'border-stone-200 text-stone-500 hover:bg-stone-50'}`}
                   >
                     ● Ativo
                   </button>
                   <button
                     type="button"
-                    onClick={() => setFormLocal(f => ({ ...f, ativo: false }))}
+                    onClick={() => setFormLocal((f) => ({ ...f, ativo: false }))}
                     className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${!formLocal.ativo ? 'bg-stone-100 border-stone-300 text-stone-600' : 'border-stone-200 text-stone-500 hover:bg-stone-50'}`}
                   >
                     ○ Inativo

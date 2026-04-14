@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Plus, Trash2, Save, User as UserIcon, Edit2, X, ShieldCheck } from 'lucide-react';
-import { User } from '../types';
-import { getUsers, createUser, updateUser, deleteUser } from '../services/db';
+import { User, Branch } from '../types';
+import { getUsers, createUser, updateUser, deleteUser, getBranches } from '../services/db';
 import { createAuthUser } from '../services/authService';
 import { useToast } from './Toast';
 import { useConfirm } from '../hooks/useConfirm';
@@ -16,6 +16,7 @@ export default function UserManager({ currentUser }: UserManagerProps) {
   const { showSuccess, showError } = useToast();
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
   const [users, setUsers] = useState<User[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [accessProfiles, setAccessProfiles] = useState<AccessProfile[]>([]);
   const [appliedProfileId, setAppliedProfileId] = useState<string>('');
   const [loading, setLoading] = useState(false);
@@ -29,6 +30,7 @@ export default function UserManager({ currentUser }: UserManagerProps) {
     ativo: true,
     role: 'user' as 'master' | 'user' | 'manager' | 'admin',
     managedUserIds: [] as string[],
+    filiais_permitidas: [] as string[],
     permissions: {
       dashboard: true,
       calculator: true,
@@ -74,6 +76,7 @@ export default function UserManager({ currentUser }: UserManagerProps) {
 
   useEffect(() => {
     loadUsers();
+    getBranches().then(setBranches);
     getAccessProfiles().then(setAccessProfiles);
   }, []);
 
@@ -166,6 +169,15 @@ export default function UserManager({ currentUser }: UserManagerProps) {
     });
   };
 
+  const toggleFilial = (filialId: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      filiais_permitidas: prev.filiais_permitidas.includes(filialId)
+        ? prev.filiais_permitidas.filter((id) => id !== filialId)
+        : [...prev.filiais_permitidas, filialId],
+    }));
+  };
+
   const handleApplyProfile = (profileId: string) => {
     setAppliedProfileId(profileId);
     if (!profileId) return;
@@ -201,6 +213,7 @@ export default function UserManager({ currentUser }: UserManagerProps) {
           ativo: formData.ativo,
           managedUserIds: formData.role === 'manager' ? formData.managedUserIds : [],
           permissions: formData.permissions,
+          filiais_permitidas: formData.filiais_permitidas,
         };
         await updateUser(editingId, payload);
         setEditingId(null);
@@ -223,6 +236,7 @@ export default function UserManager({ currentUser }: UserManagerProps) {
           ativo: formData.ativo,
           managedUserIds: formData.role === 'manager' ? formData.managedUserIds : [],
           permissions: formData.permissions as any,
+          filiais_permitidas: formData.filiais_permitidas,
         });
       }
 
@@ -238,6 +252,7 @@ export default function UserManager({ currentUser }: UserManagerProps) {
         ativo: true,
         role: 'user',
         managedUserIds: [],
+        filiais_permitidas: [],
         permissions: getDefaultPermissions('user') as any,
       });
     } catch (err: unknown) {
@@ -290,6 +305,7 @@ export default function UserManager({ currentUser }: UserManagerProps) {
       ativo: user.ativo,
       role: user.role as any,
       managedUserIds: user.managedUserIds || [],
+      filiais_permitidas: user.filiais_permitidas || [],
       permissions: (user.permissions || getDefaultPermissions(user.role)) as any,
     });
   };
@@ -306,6 +322,7 @@ export default function UserManager({ currentUser }: UserManagerProps) {
       ativo: true,
       role: 'user',
       managedUserIds: [],
+      filiais_permitidas: [],
       permissions: getDefaultPermissions('user') as any,
     });
   };
@@ -482,10 +499,8 @@ export default function UserManager({ currentUser }: UserManagerProps) {
                 {appliedProfileId && (
                   <span className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded font-medium">
                     ✓ Perfil aplicado:{' '}
-                    <strong>
-                      {accessProfiles.find((p) => p.id === appliedProfileId)?.name}
-                    </strong>{' '}
-                    — permissões preenchidas (editáveis abaixo)
+                    <strong>{accessProfiles.find((p) => p.id === appliedProfileId)?.name}</strong> —
+                    permissões preenchidas (editáveis abaixo)
                   </span>
                 )}
               </div>
@@ -795,6 +810,58 @@ export default function UserManager({ currentUser }: UserManagerProps) {
                 módulo.
               </p>
             </div>
+          </div>
+
+          {/* Filiais Permitidas no Carregamento */}
+          <div className="border border-stone-200 rounded-xl overflow-hidden">
+            <div className="bg-stone-50 px-4 py-3 border-b border-stone-200">
+              <h4 className="font-bold text-stone-700 text-sm flex items-center gap-2">
+                🏭 Filiais Permitidas no Carregamento
+              </h4>
+              <p className="text-xs text-stone-400 mt-0.5">
+                Deixe vazio para herdar de "Ver Todas as Filiais". Se o usuário não tiver a
+                permissão "Ver Todas as Filiais" e nenhuma filial for selecionada, ele não verá
+                carregamentos.
+              </p>
+            </div>
+            {(formData.permissions as any)?.carregamento_all_filiais ? (
+              <p className="px-4 py-3 text-xs text-amber-600 font-medium">
+                ⚠️ Este usuário já tem acesso a todas as filiais via permissão "Ver Todas as
+                Filiais".
+              </p>
+            ) : (
+              <div className="p-3 grid grid-cols-2 gap-2">
+                {branches.length === 0 ? (
+                  <p className="col-span-2 text-xs text-stone-400">Nenhuma filial cadastrada.</p>
+                ) : (
+                  branches.map((b) => (
+                    <label
+                      key={b.id}
+                      className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors text-sm ${
+                        formData.filiais_permitidas.includes(b.id)
+                          ? 'border-emerald-400 bg-emerald-50'
+                          : 'border-stone-200 hover:border-stone-300 hover:bg-stone-50'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={formData.filiais_permitidas.includes(b.id)}
+                        onChange={() => toggleFilial(b.id)}
+                        className="rounded"
+                      />
+                      <span>
+                        {b.id_numeric && (
+                          <span className="text-stone-400 text-xs font-mono mr-1">
+                            #{b.id_numeric}
+                          </span>
+                        )}
+                        {b.name}
+                      </span>
+                    </label>
+                  ))
+                )}
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end gap-3">

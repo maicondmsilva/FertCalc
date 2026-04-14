@@ -81,6 +81,7 @@ const PERMISSION_GROUPS: PermissionGroup[] = [
       { id: 'carregamento_relatorios', label: 'Relatórios Carregamento' },
       { id: 'carregamento_cancelar', label: 'Cancelar Carregamentos' },
       { id: 'carregamento_all_filiais', label: 'Ver Todas as Filiais' },
+      { id: 'carregamento_configurar_filiais', label: 'Configurar Filiais do Carregamento' },
       { id: 'carregamento_admin', label: 'Admin do Módulo' },
     ],
   },
@@ -168,8 +169,7 @@ function ProfileModal({ initial, onSave, onClose, saving }: ProfileModalProps) {
     return base;
   });
 
-  const toggle = (id: string) =>
-    setPermissions((prev) => ({ ...prev, [id]: !prev[id] }));
+  const toggle = (id: string) => setPermissions((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -232,8 +232,13 @@ function ProfileModal({ initial, onSave, onClose, saving }: ProfileModalProps) {
               Permissões — selecione os módulos que este perfil deve ter acesso
             </p>
             {PERMISSION_GROUPS.map((group) => (
-              <div key={group.title} className={`border border-stone-200 rounded-xl overflow-hidden`}>
-                <div className={`${group.headerClass} px-4 py-2 text-xs font-bold uppercase tracking-wider`}>
+              <div
+                key={group.title}
+                className={`border border-stone-200 rounded-xl overflow-hidden`}
+              >
+                <div
+                  className={`${group.headerClass} px-4 py-2 text-xs font-bold uppercase tracking-wider`}
+                >
                   {group.title}
                 </div>
                 <div className="p-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
