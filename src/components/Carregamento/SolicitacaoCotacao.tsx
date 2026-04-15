@@ -16,6 +16,7 @@ import {
   Pencil,
   Trash2,
   AlertTriangle,
+  History,
 } from 'lucide-react';
 import { User, Client } from '../../types';
 import {
@@ -42,6 +43,7 @@ import {
   notifyCotacaoCancelada,
 } from '../../services/notificationService';
 import { useToast } from '../Toast';
+import HistoricoModificacoes from '../HistoricoModificacoes';
 
 // ─────────────────────────────────────────────────────────────
 //  Props
@@ -567,6 +569,235 @@ function PainelResponsavel({
 }
 
 // ─────────────────────────────────────────────────────────────
+//  Modal: Editar Cotação (vendedor edita campos antes da aprovação)
+// ─────────────────────────────────────────────────────────────
+
+interface ModalEditarCotacaoProps {
+  cotacao: CotacaoSolicitada;
+  filiais: Filial[];
+  onSave: (
+    e: React.FormEvent,
+    form: {
+      clienteNome: string;
+      clienteId: string;
+      filialId: string;
+      localId: string;
+      endereco: string;
+      fazenda: string;
+      maps: string;
+      produto: string;
+      qtd: string;
+      obs: string;
+    }
+  ) => Promise<void>;
+  onClose: () => void;
+  saving: boolean;
+}
+
+function ModalEditarCotacao({
+  cotacao,
+  filiais,
+  onSave,
+  onClose,
+  saving,
+}: ModalEditarCotacaoProps) {
+  const [clienteNome, setClienteNome] = useState(cotacao.cliente_nome ?? '');
+  const [filialId, setFilialId] = useState(cotacao.filial_id ?? '');
+  const [localId, setLocalId] = useState(cotacao.local_carregamento_id ?? '');
+  const [endereco, setEndereco] = useState(cotacao.endereco_entrega ?? '');
+  const [fazenda, setFazenda] = useState(cotacao.fazenda ?? '');
+  const [maps, setMaps] = useState(cotacao.maps_url ?? '');
+  const [produto, setProduto] = useState(cotacao.produto ?? '');
+  const [qtd, setQtd] = useState(
+    cotacao.quantidade_ton != null ? String(cotacao.quantidade_ton) : ''
+  );
+  const [obs, setObs] = useState(cotacao.observacoes ?? '');
+  const [locais, setLocais] = useState<LocalCarregamento[]>([]);
+
+  useEffect(() => {
+    if (!filialId) {
+      setLocais([]);
+      return;
+    }
+    import('../../services/locaisCarregamentoService').then(({ getLocaisAtivos }) =>
+      getLocaisAtivos(filialId)
+        .then(setLocais)
+        .catch(() => setLocais([]))
+    );
+  }, [filialId]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    onSave(e, {
+      clienteNome,
+      clienteId: cotacao.cliente_id ?? '',
+      filialId,
+      localId,
+      endereco,
+      fazenda,
+      maps,
+      produto,
+      qtd,
+      obs,
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-5 border-b border-stone-100">
+          <div>
+            <p className="font-bold text-stone-800">Editar Cotação</p>
+            <p className="text-xs text-stone-400 mt-0.5">{cotacao.numero_cotacao}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-stone-400 hover:text-stone-700 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+              Cliente <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={clienteNome}
+              onChange={(e) => setClienteNome(e.target.value)}
+              required
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                Filial
+              </label>
+              <select
+                value={filialId}
+                onChange={(e) => {
+                  setFilialId(e.target.value);
+                  setLocalId('');
+                }}
+                className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+              >
+                <option value="">Selecione...</option>
+                {filiais.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.nome}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                Local de Carregamento
+              </label>
+              <select
+                value={localId}
+                onChange={(e) => setLocalId(e.target.value)}
+                className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                disabled={!filialId}
+              >
+                <option value="">Selecione...</option>
+                {locais.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.nome}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Produto</label>
+            <input
+              type="text"
+              value={produto}
+              onChange={(e) => setProduto(e.target.value)}
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+              Quantidade (ton)
+            </label>
+            <input
+              type="number"
+              step="0.001"
+              min="0"
+              value={qtd}
+              onChange={(e) => setQtd(e.target.value)}
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+              Endereço de Entrega
+            </label>
+            <input
+              type="text"
+              value={endereco}
+              onChange={(e) => setEndereco(e.target.value)}
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Fazenda</label>
+            <input
+              type="text"
+              value={fazenda}
+              onChange={(e) => setFazenda(e.target.value)}
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+              Link Google Maps
+            </label>
+            <input
+              type="url"
+              value={maps}
+              onChange={(e) => setMaps(e.target.value)}
+              placeholder="https://maps.google.com/..."
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+              Observações
+            </label>
+            <textarea
+              rows={3}
+              value={obs}
+              onChange={(e) => setObs(e.target.value)}
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none resize-none"
+            />
+          </div>
+          <div className="flex gap-3 justify-end pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="px-5 py-2 border border-stone-300 rounded-lg text-sm font-bold text-stone-600 hover:bg-stone-50 transition-colors disabled:opacity-50"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="px-5 py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white rounded-lg text-sm font-bold transition-colors"
+            >
+              {saving ? 'Salvando...' : 'Salvar Alterações'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 //  Main Component
 // ─────────────────────────────────────────────────────────────
 
@@ -628,6 +859,13 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
   const [excluindoCotacao, setExcluindoCotacao] = useState<CotacaoSolicitada | null>(null);
   const [motivoExclusaoCotacao, setMotivoExclusaoCotacao] = useState('');
   const [excluindoLoading, setExcluindoLoading] = useState(false);
+
+  // Edit state
+  const [editandoCotacao, setEditandoCotacao] = useState<CotacaoSolicitada | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+
+  // History state
+  const [historicoCotacao, setHistoricoCotacao] = useState<CotacaoSolicitada | null>(null);
 
   // ── Load data ──
   const loadFiliais = useCallback(async () => {
@@ -831,6 +1069,62 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
       showError('Erro ao excluir cotação.');
     } finally {
       setExcluindoLoading(false);
+    }
+  };
+
+  // ── Edit cotação handler ──
+  const handleEditarCotacao = async (
+    e: React.FormEvent,
+    form: {
+      clienteNome: string;
+      clienteId: string;
+      filialId: string;
+      localId: string;
+      endereco: string;
+      fazenda: string;
+      maps: string;
+      produto: string;
+      qtd: string;
+      obs: string;
+    }
+  ) => {
+    e.preventDefault();
+    if (!editandoCotacao) return;
+    if (!form.clienteNome.trim()) {
+      showError('Informe o nome do cliente.');
+      return;
+    }
+    setEditSaving(true);
+    const anterior = editandoCotacao;
+    const updates: Partial<CotacaoSolicitada> = {
+      cliente_nome: form.clienteNome.trim(),
+      filial_id: form.filialId || undefined,
+      local_carregamento_id: form.localId || undefined,
+      endereco_entrega: form.endereco.trim() || undefined,
+      fazenda: form.fazenda.trim() || undefined,
+      maps_url: form.maps.trim() || undefined,
+      produto: form.produto.trim() || undefined,
+      quantidade_ton: form.qtd ? parseFloat(form.qtd) : undefined,
+      observacoes: form.obs.trim() || undefined,
+    };
+    try {
+      await updateCotacaoSolicitada(editandoCotacao.id, updates);
+      await registrarAuditLog({
+        tabela: 'cotacoes_solicitadas',
+        registro_id: editandoCotacao.id,
+        acao: 'UPDATE',
+        dados_anteriores: anterior as unknown as Record<string, unknown>,
+        dados_novos: { ...anterior, ...updates } as unknown as Record<string, unknown>,
+        usuario_id: currentUser.id,
+        usuario_nome: currentUser.name ?? currentUser.id,
+      });
+      showSuccess('Cotação atualizada com sucesso!');
+      setEditandoCotacao(null);
+      await handleUpdate();
+    } catch {
+      showError('Erro ao editar cotação.');
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -1148,6 +1442,15 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
                               );
                               return (
                                 <>
+                                  {perms.canEdit && (
+                                    <button
+                                      onClick={() => setEditandoCotacao(c)}
+                                      className="text-stone-400 hover:text-amber-600 transition-colors p-1"
+                                      title="Editar cotação"
+                                    >
+                                      <Pencil className="w-4 h-4" />
+                                    </button>
+                                  )}
                                   {perms.canDelete && (
                                     <button
                                       onClick={() => {
@@ -1160,6 +1463,13 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
                                       <Trash2 className="w-4 h-4" />
                                     </button>
                                   )}
+                                  <button
+                                    onClick={() => setHistoricoCotacao(c)}
+                                    className="text-stone-400 hover:text-blue-600 transition-colors p-1"
+                                    title="Histórico de modificações"
+                                  >
+                                    <History className="w-4 h-4" />
+                                  </button>
                                 </>
                               );
                             })()}
@@ -1271,6 +1581,13 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
                                       <Trash2 className="w-4 h-4" />
                                     </button>
                                   )}
+                                  <button
+                                    onClick={() => setHistoricoCotacao(c)}
+                                    className="text-stone-400 hover:text-blue-600 transition-colors p-1"
+                                    title="Histórico de modificações"
+                                  >
+                                    <History className="w-4 h-4" />
+                                  </button>
                                 </>
                               );
                             })()}
@@ -1359,6 +1676,28 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
             </div>
           </div>
         </div>
+      )}
+
+      {/* Edit cotação modal */}
+      {editandoCotacao && (
+        <ModalEditarCotacao
+          cotacao={editandoCotacao}
+          filiais={filiais}
+          onSave={handleEditarCotacao}
+          onClose={() => setEditandoCotacao(null)}
+          saving={editSaving}
+        />
+      )}
+
+      {/* History modal for cotações */}
+      {historicoCotacao && (
+        <HistoricoModificacoes
+          tabela="cotacoes_solicitadas"
+          registroId={historicoCotacao.id}
+          titulo={historicoCotacao.numero_cotacao}
+          isOpen={!!historicoCotacao}
+          onClose={() => setHistoricoCotacao(null)}
+        />
       )}
     </div>
   );
