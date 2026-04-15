@@ -884,7 +884,7 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
             setShowNovoPedido(false);
             setNovoPedidoPricing(null);
           }}
-          onSuccess={() => {}}
+          onSuccess={() => loadData()}
         />
       )}
     </div>

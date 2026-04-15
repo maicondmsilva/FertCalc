@@ -183,11 +183,7 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
           </p>
           {filtered.map((p) => {
             const isExpanded = expandedIds.has(p.id);
-            const saldo = p.saldo_disponivel ?? (
-              p.quantidade_real != null && p.quantidade_carregada != null
-                ? p.quantidade_real - p.quantidade_carregada
-                : p.quantidade_real ?? null
-            );
+            const saldo = p.saldo_disponivel ?? null;
 
             return (
               <div

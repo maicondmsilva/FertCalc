@@ -35,6 +35,13 @@ function mapPedido(d: Record<string, unknown>): PedidoVenda {
     filial_id: d.filial_id as string | undefined,
     formulacao_alterada: d.formulacao_alterada as boolean | undefined,
     pedido_pai_id: d.pedido_pai_id as string | undefined,
+    // Computed saldo
+    saldo_disponivel:
+      d.saldo_disponivel != null
+        ? Number(d.saldo_disponivel)
+        : d.quantidade_real != null
+          ? Number(d.quantidade_real) - (d.quantidade_carregada != null ? Number(d.quantidade_carregada) : 0)
+          : undefined,
   };
 }
 

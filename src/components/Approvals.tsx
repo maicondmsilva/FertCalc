@@ -711,7 +711,7 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
             setShowNovoPedido(false);
             setNovoPedidoPricing(null);
           }}
-          onSuccess={() => {}}
+          onSuccess={() => loadData()}
         />
       )}
     </div>
