@@ -25,6 +25,11 @@ import {
   updateLocalCarregamento,
   deleteLocalCarregamento,
 } from '../services/locaisCarregamentoService';
+import { formatId } from '../utils/formatId';
+
+function fmtBranchNum(branch: { id_numeric?: number; id: string }): string {
+  return branch.id_numeric != null ? formatId(branch.id_numeric) : branch.id.slice(0, 8);
+}
 
 const ESTADOS_BR = [
   'AC',
@@ -307,7 +312,7 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
           <h2 className="text-xl font-bold text-stone-800 mb-6 flex items-center">
             <Building2 className="w-5 h-5 mr-2 text-emerald-600" />
             {editingBranch
-              ? `Editar Filial — ${editingBranch.id_numeric}`
+              ? `Editar Filial — ${fmtBranchNum(editingBranch)}`
               : 'Cadastrar Nova Filial'}
           </h2>
           <form onSubmit={saveBranch} className="flex gap-4 items-end">
@@ -375,8 +380,8 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
                   className={`hover:bg-stone-50 transition-colors ${!branch.ativo ? 'opacity-60' : ''}`}
                 >
                   <td className="px-5 py-3">
-                    <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-100 text-emerald-700 font-bold text-sm">
-                      {branch.id_numeric}
+                    <span className="inline-flex items-center justify-center w-10 h-8 rounded-lg bg-emerald-50 border border-emerald-100 text-emerald-700 font-mono font-bold text-sm">
+                      {fmtBranchNum(branch)}
                     </span>
                   </td>
                   <td className="px-5 py-3">
@@ -514,8 +519,8 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
                     className={`hover:bg-stone-50 transition-colors ${!local.ativo ? 'opacity-60' : ''}`}
                   >
                     <td className="px-5 py-3">
-                      <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-100 text-emerald-700 font-bold text-sm">
-                        {local.id_numeric}
+                      <span className="inline-flex items-center justify-center w-10 h-8 rounded-lg bg-emerald-50 border border-emerald-100 text-emerald-700 font-mono font-bold text-sm">
+                        {local.id_numeric != null ? formatId(local.id_numeric) : '—'}
                       </span>
                     </td>
                     <td className="px-5 py-3">

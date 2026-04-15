@@ -22,6 +22,7 @@ function mapCarregamento(d: Record<string, unknown>): Carregamento {
     id: d.id as string,
     pedido_precificacao_id: d.pedido_precificacao_id as string | undefined,
     numero_carregamento: d.numero_carregamento as string,
+    numero: d.numero != null ? Number(d.numero) : undefined,
     filial_id: d.filial_id as string | undefined,
     filial: (d.filiais as Filial | undefined) ?? undefined,
     tipo_frete: d.tipo_frete as TipoFrete,

@@ -53,6 +53,7 @@ import { getPedidosVenda } from '../../services/pedidosVendaService';
 import { getLocaisAtivos } from '../../services/locaisCarregamentoService';
 import { useToast } from '../Toast';
 import SolicitacaoCotacaoIndependente from './SolicitacaoCotacao';
+import { formatCarregamentoId } from '../../utils/formatId';
 
 // ─── Sub-view type ─────────────────────────────────────────────────────────────
 type CarregamentoView =
@@ -102,6 +103,10 @@ function fmtBRL(v: number) {
 function fmtDate(s?: string) {
   if (!s) return '—';
   return new Date(s + 'T00:00:00').toLocaleDateString('pt-BR');
+}
+
+function fmtCarregamentoNum(c: { numero?: number; numero_carregamento: string }): string {
+  return c.numero != null ? formatCarregamentoId(c.numero) : (c.numero_carregamento || '—');
 }
 
 // ─── Badge component ───────────────────────────────────────────────────────────
@@ -593,7 +598,7 @@ function ModalCotacao({ carregamento, transportadoras, onSave, onClose }: ModalC
           </button>
         </div>
         <div className="px-6 py-3 bg-stone-50 border-b border-stone-100 text-sm text-stone-600">
-          <span className="font-bold">{carregamento.numero_carregamento}</span> &mdash;{' '}
+          <span className="font-mono font-bold text-emerald-600">{fmtCarregamentoNum(carregamento)}</span> &mdash;{' '}
           {carregamento.tipo_frete} &mdash; {carregamento.quantidade_total} ton
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
@@ -747,8 +752,8 @@ function ModalSolicitarCotacao({
 
         {/* Carregamento details */}
         <div className="px-6 py-4 bg-blue-50 border-b border-blue-100 flex-shrink-0">
-          <p className="font-mono font-bold text-stone-800 text-sm">
-            {carregamento.numero_carregamento}
+          <p className="font-mono font-bold text-emerald-600 text-sm">
+            {fmtCarregamentoNum(carregamento)}
           </p>
           <div className="flex items-center gap-3 mt-1 flex-wrap">
             <span
@@ -904,7 +909,7 @@ function ModalLiberacao({ carregamento, onSave, onClose }: ModalLiberacaoProps) 
           </button>
         </div>
         <div className="px-6 py-3 bg-stone-50 border-b border-stone-100">
-          <p className="text-sm font-bold text-stone-700">{carregamento.numero_carregamento}</p>
+          <p className="text-sm font-mono font-bold text-emerald-600">{fmtCarregamentoNum(carregamento)}</p>
           <p className="text-xs text-stone-500">
             Total: {carregamento.quantidade_total} ton | Liberado:{' '}
             {carregamento.quantidade_liberada} ton
@@ -1032,7 +1037,7 @@ function TabelaCarregamentos({
           {carregamentos.map((c) => (
             <tr key={c.id} className="hover:bg-stone-50 transition-colors">
               <td className="px-4 py-3 font-mono font-bold text-stone-700 text-xs">
-                {c.numero_carregamento}
+                {fmtCarregamentoNum(c)}
               </td>
               <td className="px-4 py-3">
                 <span
@@ -1339,7 +1344,7 @@ function SolicitacaoCotacao({
                     )}
                     <div className="min-w-0">
                       <p className="font-mono font-bold text-stone-800 text-sm">
-                        {c.numero_carregamento}
+                        {fmtCarregamentoNum(c)}
                       </p>
                       <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                         <span
@@ -1454,7 +1459,7 @@ function SolicitacaoCotacao({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3 flex-wrap">
                       <p className="font-mono font-bold text-stone-800 text-sm">
-                        {c.numero_carregamento}
+                        {fmtCarregamentoNum(c)}
                       </p>
                       <StatusBadge status={c.status} />
                       <span
@@ -1656,7 +1661,7 @@ function PainelLogistica({
                 <div className="flex items-center gap-3">
                   {isUrgent(c) && <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />}
                   <div>
-                    <p className="font-bold text-stone-800 text-sm">{c.numero_carregamento}</p>
+                    <p className="font-mono font-bold text-emerald-600 text-sm">{fmtCarregamentoNum(c)}</p>
                     <p className="text-xs text-stone-500">
                       {c.quantidade_total} ton &mdash; Data prevista:{' '}
                       {fmtDate(c.data_prevista_carregamento)}
@@ -1717,7 +1722,7 @@ function PainelLogistica({
                     <AlertTriangle className="w-4 h-4 text-orange-500 flex-shrink-0" />
                   )}
                   <div>
-                    <p className="font-bold text-stone-800 text-sm">{c.numero_carregamento}</p>
+                    <p className="font-mono font-bold text-emerald-600 text-sm">{fmtCarregamentoNum(c)}</p>
                     <p className="text-xs text-stone-500">
                       {c.quantidade_total} ton &mdash; Data prevista:{' '}
                       <span className={isUrgent(c) ? 'font-bold text-orange-600' : ''}>
@@ -1900,9 +1905,9 @@ function CalendarioCarregamentos({ currentUser }: { currentUser: User }) {
                           key={e.id}
                           onClick={() => setSelected(e)}
                           className={`w-full text-left text-[9px] font-bold ${dotColor} text-white rounded px-1 py-0.5 truncate`}
-                          title={`${e.numero_carregamento} — ${STATUS_LABEL[e.status]}`}
+                          title={`${fmtCarregamentoNum(e)} — ${STATUS_LABEL[e.status]}`}
                         >
-                          {e.numero_carregamento}
+                          {fmtCarregamentoNum(e)}
                         </button>
                       );
                     })}
@@ -1921,7 +1926,7 @@ function CalendarioCarregamentos({ currentUser }: { currentUser: User }) {
       {selected && (
         <div className="bg-white rounded-xl border border-stone-200 shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">
-            <h4 className="font-bold text-stone-800">{selected.numero_carregamento}</h4>
+            <h4 className="font-mono font-bold text-emerald-600">{fmtCarregamentoNum(selected)}</h4>
             <button onClick={() => setSelected(null)} className="p-1 hover:bg-stone-100 rounded">
               <X className="w-4 h-4 text-stone-400" />
             </button>
@@ -2208,7 +2213,7 @@ function ModalInformarTransportador({
           </button>
         </div>
         <div className="px-6 py-3 bg-stone-50 border-b border-stone-100 text-sm text-stone-600">
-          <span className="font-bold">{carregamento.numero_carregamento}</span> &mdash;{' '}
+          <span className="font-mono font-bold text-emerald-600">{fmtCarregamentoNum(carregamento)}</span> &mdash;{' '}
           {carregamento.tipo_frete} &mdash; {carregamento.quantidade_total} ton
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">

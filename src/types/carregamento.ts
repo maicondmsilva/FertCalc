@@ -48,6 +48,7 @@ export interface Carregamento {
   id: string;
   pedido_precificacao_id?: string;
   numero_carregamento: string;
+  numero?: number;
   filial_id?: string;
   filial?: Filial;
   tipo_frete: TipoFrete;
