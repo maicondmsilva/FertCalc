@@ -396,7 +396,7 @@ export default function App() {
           icon: ShieldCheck,
           permission: 'users',
         },
-        { id: 'branches', label: 'Filiais', icon: Building2, permission: 'branches' },
+        { id: 'branches', label: 'Filiais e Locais', icon: Building2, permission: 'branches' },
         { id: 'settings', label: 'Personalização', icon: Settings, permission: 'settings' },
       ];
 
