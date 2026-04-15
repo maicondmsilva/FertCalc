@@ -766,6 +766,7 @@ export default function UserManager({ currentUser }: UserManagerProps) {
                 {[
                   { id: 'carregamento', name: 'Visualizar Carregamentos' },
                   { id: 'carregamento_solicitar_cotacao', name: 'Solicitar Cotação de Frete' },
+                  { id: 'carregamento_tratar_cotacao', name: 'Tratar Cotação (Responsável)' },
                   { id: 'carregamento_liberar', name: 'Liberar Carregamento' },
                   { id: 'carregamento_logistica', name: 'Painel de Logística' },
                   {

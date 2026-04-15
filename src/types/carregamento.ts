@@ -152,3 +152,45 @@ export interface LocalCarregamento {
   criado_em?: string;
   atualizado_em?: string;
 }
+
+// ── Cotação Solicitada (independente) ─────────────────────────
+export type StatusCotacaoSolicitada =
+  | 'aguardando'
+  | 'em_analise'
+  | 'cotado'
+  | 'aprovado'
+  | 'cancelado';
+
+export interface CotacaoSolicitada {
+  id: string;
+  numero_cotacao: string;
+  solicitado_por?: string;
+  solicitante_nome?: string;
+  cliente_id?: string;
+  cliente_nome?: string;
+  filial_id?: string;
+  filial?: Filial;
+  local_carregamento_id?: string;
+  local_carregamento?: LocalCarregamento;
+  endereco_entrega?: string;
+  fazenda?: string;
+  maps_url?: string;
+  pedido_venda_id?: string;
+  produto?: string;
+  quantidade_ton?: number;
+  observacoes?: string;
+  status: StatusCotacaoSolicitada;
+  responsavel_id?: string;
+  transportadora_id?: string;
+  transportadora?: Transportadora;
+  transportadora_nome?: string;
+  valor_frete?: number;
+  valor_frete_unitario?: number;
+  prazo_entrega_dias?: number;
+  obs_responsavel?: string;
+  cotado_em?: string;
+  aprovado_em?: string;
+  precificacao_id?: string;
+  criado_em: string;
+  atualizado_em: string;
+}
