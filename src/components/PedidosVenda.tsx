@@ -43,10 +43,7 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [pedidosData, branchesData] = await Promise.all([
-        getPedidosVenda(),
-        getBranches(),
-      ]);
+      const [pedidosData, branchesData] = await Promise.all([getPedidosVenda(), getBranches()]);
       setPedidos(pedidosData);
       setBranches(branchesData);
     } catch {
@@ -101,17 +98,14 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
             <ClipboardList className="w-7 h-7 text-emerald-600" />
             Pedidos de Venda
           </h1>
-          <p className="text-stone-500 text-sm mt-1">
-            Gerencie seus pedidos de venda
-          </p>
+          <p className="text-stone-500 text-sm mt-1">Gerencie seus pedidos de venda</p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowNovoPedido(true)}
             className="px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-2"
           >
-            <ClipboardList className="w-4 h-4" />
-            + Novo Pedido
+            <ClipboardList className="w-4 h-4" />+ Novo Pedido
           </button>
           <button
             onClick={load}
@@ -179,7 +173,8 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
       ) : (
         <div className="space-y-3">
           <p className="text-xs text-stone-500 font-medium">
-            {filtered.length} pedido{filtered.length !== 1 ? 's' : ''} encontrado{filtered.length !== 1 ? 's' : ''}
+            {filtered.length} pedido{filtered.length !== 1 ? 's' : ''} encontrado
+            {filtered.length !== 1 ? 's' : ''}
           </p>
           {filtered.map((p) => {
             const isExpanded = expandedIds.has(p.id);
@@ -281,6 +276,7 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                               {saldo != null && saldo > 0 && p.status !== 'cancelado' && (
                                 <button
                                   onClick={() =>
+                                    // TODO: Fase 8 — Carregamento via Pedido de Venda
                                     showSuccess('Funcionalidade em desenvolvimento')
                                   }
                                   className="px-3 py-1 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-1"
@@ -312,7 +308,8 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                         <div>
                           <p className="font-bold text-stone-400 uppercase mb-0.5">Preço Unit.</p>
                           <p className="text-stone-700">
-                            R$ {p.preco_unitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            R${' '}
+                            {p.preco_unitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                           </p>
                         </div>
                       )}

@@ -1,6 +1,16 @@
 import { supabase } from './supabase';
 import { PedidoVenda } from '../types';
 
+/** Computes saldo_disponivel: prefers the DB-generated column, falls back to manual calculation. */
+function computeSaldoDisponivel(d: Record<string, unknown>): number | undefined {
+  if (d.saldo_disponivel != null) return Number(d.saldo_disponivel);
+  if (d.quantidade_real != null) {
+    const carregada = d.quantidade_carregada != null ? Number(d.quantidade_carregada) : 0;
+    return Number(d.quantidade_real) - carregada;
+  }
+  return undefined;
+}
+
 function mapPedido(d: Record<string, unknown>): PedidoVenda {
   return {
     id: d.id as string,
@@ -28,20 +38,13 @@ function mapPedido(d: Record<string, unknown>): PedidoVenda {
     produto_nome: d.produto_nome as string | undefined,
     quantidade_carregada:
       d.quantidade_carregada != null ? Number(d.quantidade_carregada) : undefined,
-    saldo_disponivel: d.saldo_disponivel != null ? Number(d.saldo_disponivel) : undefined,
+    saldo_disponivel: computeSaldoDisponivel(d),
     preco_unitario: d.preco_unitario != null ? Number(d.preco_unitario) : undefined,
     condicao_pagamento: d.condicao_pagamento as string | undefined,
     observacoes: d.observacoes as string | undefined,
     filial_id: d.filial_id as string | undefined,
     formulacao_alterada: d.formulacao_alterada as boolean | undefined,
     pedido_pai_id: d.pedido_pai_id as string | undefined,
-    // Computed saldo
-    saldo_disponivel:
-      d.saldo_disponivel != null
-        ? Number(d.saldo_disponivel)
-        : d.quantidade_real != null
-          ? Number(d.quantidade_real) - (d.quantidade_carregada != null ? Number(d.quantidade_carregada) : 0)
-          : undefined,
   };
 }
 
@@ -50,10 +53,7 @@ export async function getPedidosVenda(filtros?: {
   status?: string;
   filialId?: string;
 }): Promise<PedidoVenda[]> {
-  let query = supabase
-    .from('pedidos_venda')
-    .select('*')
-    .order('criado_em', { ascending: false });
+  let query = supabase.from('pedidos_venda').select('*').order('criado_em', { ascending: false });
 
   if (filtros?.clienteNome) {
     query = query.ilike('cliente_nome', `%${filtros.clienteNome}%`);
