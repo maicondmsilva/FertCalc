@@ -2,6 +2,7 @@ import { supabase } from './supabase';
 import { getManagersOfUser } from './db';
 import { PricingRecord, User } from '../types';
 import { NotificationType, NotificationGroup, Notification } from '../types/notification.types';
+import { CotacaoSolicitada } from '../types/carregamento';
 
 interface NotificationPayload {
   user_id: string;
@@ -200,5 +201,37 @@ export const notifyTransferAccepted = async (
     title: 'Transferência Aceita',
     message: `${acceptedByVendorName} aceitou sua transferência de precificação`,
     metadata: { pricingId },
+  });
+};
+
+export const notifyCotacaoSolicitada = async (
+  cotacao: CotacaoSolicitada,
+  solicitanteNome: string,
+  responsavelIds: string[]
+): Promise<void> => {
+  for (const responsavelId of responsavelIds) {
+    await createNotification({
+      user_id: responsavelId,
+      type: NotificationType.COTACAO_SOLICITADA,
+      group_type: NotificationGroup.CARREGAMENTO,
+      title: 'Nova Solicitação de Cotação',
+      message: `${solicitanteNome} solicitou cotação para ${cotacao.cliente_nome || 'cliente'} — ${cotacao.quantidade_ton} ton`,
+      action_url: '/carregamento_solicitacao',
+    });
+  }
+};
+
+export const notifyCotacaoDisponivel = async (
+  cotacao: CotacaoSolicitada,
+  responsavelNome: string
+): Promise<void> => {
+  if (!cotacao.solicitado_por) return;
+  await createNotification({
+    user_id: cotacao.solicitado_por,
+    type: NotificationType.COTACAO_DISPONIVEL,
+    group_type: NotificationGroup.CARREGAMENTO,
+    title: 'Cotação Disponível',
+    message: `Sua solicitação ${cotacao.numero_cotacao} foi respondida por ${responsavelNome}`,
+    action_url: '/carregamento_solicitacao',
   });
 };

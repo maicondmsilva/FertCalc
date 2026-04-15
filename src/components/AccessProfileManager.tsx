@@ -76,6 +76,7 @@ const PERMISSION_GROUPS: PermissionGroup[] = [
     items: [
       { id: 'carregamento', label: 'Carregamento (Visualizar)' },
       { id: 'carregamento_solicitar_cotacao', label: 'Solicitar Cotação' },
+      { id: 'carregamento_tratar_cotacao', label: 'Tratar Cotação (Responsável)' },
       { id: 'carregamento_liberar', label: 'Liberar Carregamento' },
       { id: 'carregamento_logistica', label: 'Painel de Logística' },
       { id: 'carregamento_relatorios', label: 'Relatórios Carregamento' },

@@ -52,6 +52,7 @@ import { getPricingRecords } from '../../services/db';
 import { getPedidosVenda } from '../../services/pedidosVendaService';
 import { getLocaisAtivos } from '../../services/locaisCarregamentoService';
 import { useToast } from '../Toast';
+import SolicitacaoCotacaoIndependente from './SolicitacaoCotacao';
 
 // ─── Sub-view type ─────────────────────────────────────────────────────────────
 type CarregamentoView =
@@ -2836,12 +2837,7 @@ export default function CarregamentoModule({
         />
       )}
       {view === 'solicitacao' && (
-        <SolicitacaoCotacao
-          carregamentos={carregamentos}
-          transportadoras={transportadoras}
-          loading={loading}
-          onSolicitarCotacao={handleSolicitarCotacaoMultipla}
-        />
+        <SolicitacaoCotacaoIndependente currentUser={currentUser} />
       )}
       {view === 'liberacao' && (
         <LiberacaoCarregamento

@@ -2,6 +2,7 @@ export enum NotificationGroup {
   PRICING = 'PRICING',
   TRANSFER = 'TRANSFER',
   SYSTEM = 'SYSTEM',
+  CARREGAMENTO = 'CARREGAMENTO',
 }
 
 export enum NotificationType {
@@ -10,6 +11,8 @@ export enum NotificationType {
   PRICING_DELETED = 'PRICING_DELETED',
   TRANSFER_ACCEPTED = 'TRANSFER_ACCEPTED',
   SYSTEM_INFO = 'SYSTEM_INFO',
+  COTACAO_SOLICITADA = 'COTACAO_SOLICITADA',
+  COTACAO_DISPONIVEL = 'COTACAO_DISPONIVEL',
 }
 
 export interface NotificationPayload {
