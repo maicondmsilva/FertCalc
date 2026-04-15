@@ -88,7 +88,12 @@ function formatCurrency(value?: number) {
 
 function sanitizeUrl(url?: string): string {
   if (!url) return '';
-  return /^https?:\/\//i.test(url.trim()) ? url.trim() : '';
+  try {
+    const parsed = new URL(url.trim());
+    return (parsed.protocol === 'https:' || parsed.protocol === 'http:') ? parsed.href : '';
+  } catch {
+    return '';
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -622,14 +627,21 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
     });
   }, [formFilialId]);
 
+  // Pre-computed lowercase client values for autocomplete performance
+  const clientsLower = useMemo(
+    () => allClients.map((c) => ({ client: c, nameLower: c.name.toLowerCase(), codeLower: c.code.toLowerCase() })),
+    [allClients]
+  );
+
   // Filtered clients for autocomplete
   const filteredClients = useMemo(() => {
-    if (!formClienteSearch.trim()) return [];
-    const q = formClienteSearch.toLowerCase();
-    return allClients
-      .filter((c) => c.name.toLowerCase().includes(q) || c.code.toLowerCase().includes(q))
+    const q = formClienteSearch.trim().toLowerCase();
+    if (!q) return [];
+    return clientsLower
+      .filter((x) => x.nameLower.includes(q) || x.codeLower.includes(q))
+      .map((x) => x.client)
       .slice(0, 10);
-  }, [allClients, formClienteSearch]);
+  }, [clientsLower, formClienteSearch]);
 
   // Client selection helpers
   const clearClienteSelection = () => {
