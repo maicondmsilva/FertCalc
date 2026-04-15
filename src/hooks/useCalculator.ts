@@ -211,6 +211,7 @@ export function useCalculator({
     discount: 0,
     margin: 0,
     freight: 0,
+    tipoFrete: 'CIF',
     taxRate: 0,
     commission: 0,
     monthlyInterestRate: 0,
@@ -547,9 +548,14 @@ export function useCalculator({
     const interestValue = basePrice * (dailyInterest / 100) * days;
     const taxValue = basePrice * ((Number(currentFactors.taxRate) || 0) / 100);
     const commissionValue = basePrice * ((Number(currentFactors.commission) || 0) / 100);
-    const freightValue = Number(currentFactors.freight) || 0;
+    // Explicit CIF/FOB: older records without tipoFrete default to CIF when freight > 0
+    const tipoFrete =
+      currentFactors.tipoFrete ?? (Number(currentFactors.freight) > 0 ? 'CIF' : 'FOB');
+    const freightValue = tipoFrete === 'CIF' ? Number(currentFactors.freight) || 0 : 0;
+    const embalagemValor = Number(currentFactors.embalagem_valor || 0);
 
-    const finalPrice = basePrice + interestValue + taxValue + commissionValue + freightValue;
+    const finalPrice =
+      basePrice + interestValue + taxValue + commissionValue + freightValue + embalagemValor;
     const totalSaleValue = finalPrice * (Number(currentFactors.totalTons) || 0);
 
     return {

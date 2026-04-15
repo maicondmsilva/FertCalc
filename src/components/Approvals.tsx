@@ -418,6 +418,35 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
                     Solicitado por: {p.userName} | Vendedor: @{p.userCode}
                   </p>
                   <p className="text-xs font-bold text-emerald-600 mt-1">Status: {p.status}</p>
+                  <div className="flex flex-wrap gap-3 mt-1">
+                    <p className="text-xs text-stone-500 flex items-center gap-1">
+                      🚚{' '}
+                      {(() => {
+                        const tipoFrete =
+                          p.factors?.tipoFrete ?? ((p.factors?.freight || 0) > 0 ? 'CIF' : 'FOB');
+                        if (tipoFrete === 'FOB') return 'FOB';
+                        const freightStr = `CIF · R$ ${(p.factors?.freight || 0).toFixed(2)}/t`;
+                        if (p.factors?.cotacaoFreteNumero)
+                          return `${freightStr} · ${p.factors.cotacaoFreteNumero}`;
+                        return freightStr;
+                      })()}
+                    </p>
+                    {p.factors?.embalagem_nome && (
+                      <p className="text-xs text-stone-500 flex items-center gap-1">
+                        📦 {p.factors.embalagem_nome}
+                        {p.factors.embalagem_valor != null && p.factors.embalagem_valor !== 0 && (
+                          <span
+                            className={`font-bold ${(p.factors.embalagem_valor || 0) > 0 ? 'text-orange-600' : 'text-blue-600'}`}
+                          >
+                            {' '}
+                            {(p.factors.embalagem_valor || 0) > 0
+                              ? `+R$ ${(p.factors.embalagem_valor || 0).toFixed(2)}/t`
+                              : `-R$ ${Math.abs(p.factors.embalagem_valor || 0).toFixed(2)}/t`}
+                          </span>
+                        )}
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <div className="flex gap-2">
                   <button
