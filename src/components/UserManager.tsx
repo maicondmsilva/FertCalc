@@ -51,6 +51,8 @@ export default function UserManager({ currentUser }: UserManagerProps) {
       managementReports: true,
       calculator_profitabilityCheck: false,
       creditCard: 'none',
+      carregamento_all_filiais: false,
+      carregamento_filial_ids: [] as string[],
     },
   });
 
