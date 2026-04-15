@@ -51,6 +51,8 @@ export default function UserManager({ currentUser }: UserManagerProps) {
       managementReports: true,
       calculator_profitabilityCheck: false,
       creditCard: 'none',
+      carregamento_all_filiais: false,
+      carregamento_filial_ids: [] as string[],
     },
   });
 
@@ -296,6 +298,11 @@ export default function UserManager({ currentUser }: UserManagerProps) {
     }
     setEditingId(user.id);
     setAppliedProfileId('');
+    const basePerms = user.permissions || getDefaultPermissions(user.role);
+    const carregamentoFilialIds = (basePerms as any)?.carregamento_filial_ids;
+    const autoAllFiliais =
+      (basePerms as any)?.carregamento_all_filiais ??
+      !(Array.isArray(carregamentoFilialIds) && carregamentoFilialIds.length > 0);
     setFormData({
       name: user.name,
       email: user.email,
@@ -306,7 +313,10 @@ export default function UserManager({ currentUser }: UserManagerProps) {
       role: user.role as any,
       managedUserIds: user.managedUserIds || [],
       filiais_permitidas: user.filiais_permitidas || [],
-      permissions: (user.permissions || getDefaultPermissions(user.role)) as any,
+      permissions: {
+        ...(basePerms as object),
+        carregamento_all_filiais: autoAllFiliais,
+      } as any,
     });
   };
 
@@ -766,7 +776,8 @@ export default function UserManager({ currentUser }: UserManagerProps) {
                 {[
                   { id: 'carregamento', name: 'Visualizar Carregamentos' },
                   { id: 'carregamento_solicitar_cotacao', name: 'Solicitar Cotação de Frete' },
-                  { id: 'carregamento_tratar_cotacao', name: 'Tratar Cotação (Responsável)' },
+                  { id: 'carregamento_tratar_cotacao', name: 'Tratar / Responder Cotações' },
+                  { id: 'carregamento_aprovar_cotacao', name: 'Aprovar Cotações de Frete' },
                   { id: 'carregamento_liberar', name: 'Liberar Carregamento' },
                   { id: 'carregamento_logistica', name: 'Painel de Logística' },
                   {
@@ -810,6 +821,95 @@ export default function UserManager({ currentUser }: UserManagerProps) {
                 A permissão <strong>"Visualizar Carregamentos"</strong> é necessária para acessar o
                 módulo.
               </p>
+
+              {/* Acesso por Filial — Módulo Carregamento */}
+              {(formData.permissions as any)?.carregamento && (
+                <div className="border-t border-amber-200 mx-3 mb-3">
+                  <div className="pt-3 pb-2">
+                    <h4 className="font-bold text-stone-700 text-sm flex items-center gap-2">
+                      🏭 Acesso por Filial — Módulo Carregamento
+                    </h4>
+                  </div>
+                  <label className="flex items-center gap-2 mb-3 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={!!(formData.permissions as any)?.carregamento_all_filiais}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          permissions: {
+                            ...formData.permissions,
+                            carregamento_all_filiais: e.target.checked,
+                            ...(e.target.checked ? { carregamento_filial_ids: [] } : {}),
+                          },
+                        })
+                      }
+                      className="rounded"
+                    />
+                    <span className="text-xs font-semibold text-stone-700">
+                      Acesso a todas as filiais
+                    </span>
+                  </label>
+                  {branches.length > 0 && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <p className="col-span-2 text-xs text-stone-400 mb-1">
+                        — ou selecione as filiais permitidas —
+                      </p>
+                      {branches.map((b) => {
+                        const isAllFiliais = !!(formData.permissions as any)?.carregamento_all_filiais;
+                        const selectedIds: string[] =
+                          (formData.permissions as any)?.carregamento_filial_ids ?? [];
+                        const isSelected = selectedIds.includes(b.id);
+                        return (
+                          <label
+                            key={b.id}
+                            className={`flex items-center gap-2 p-2 rounded-lg border text-sm transition-colors ${
+                              isAllFiliais
+                                ? 'opacity-40 cursor-not-allowed border-stone-100 bg-stone-50'
+                                : isSelected
+                                  ? 'cursor-pointer border-amber-400 bg-amber-50'
+                                  : 'cursor-pointer border-stone-200 hover:border-stone-300 hover:bg-stone-50'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              disabled={isAllFiliais}
+                              checked={isSelected}
+                              onChange={() => {
+                                if (isAllFiliais) return;
+                                const current: string[] =
+                                  (formData.permissions as any)?.carregamento_filial_ids ?? [];
+                                const updated = isSelected
+                                  ? current.filter((id) => id !== b.id)
+                                  : [...current, b.id];
+                                setFormData({
+                                  ...formData,
+                                  permissions: {
+                                    ...formData.permissions,
+                                    carregamento_filial_ids: updated,
+                                  },
+                                });
+                              }}
+                              className="rounded"
+                            />
+                            <span>
+                              {b.id_numeric && (
+                                <span className="text-stone-400 text-xs font-mono mr-1">
+                                  #{b.id_numeric}
+                                </span>
+                              )}
+                              {b.name}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {branches.length === 0 && (
+                    <p className="text-xs text-stone-400">Nenhuma filial cadastrada.</p>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

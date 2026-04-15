@@ -154,6 +154,7 @@ export interface User {
     carregamento_cancelar?: boolean;
     carregamento_configurar_filiais?: boolean;
     carregamento_tratar_cotacao?: boolean;
+    carregamento_aprovar_cotacao?: boolean;
     carregamento_filial_ids?: string[];
   };
 }
