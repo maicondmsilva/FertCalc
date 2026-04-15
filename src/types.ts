@@ -540,6 +540,18 @@ export interface PedidoVenda {
   importado_por?: string;
   criado_em?: string;
   atualizado_em?: string;
+  // Extended fields
+  cliente_id?: string;
+  cliente_nome?: string;
+  produto_nome?: string;
+  quantidade_carregada?: number;
+  saldo_disponivel?: number;
+  preco_unitario?: number;
+  condicao_pagamento?: string;
+  observacoes?: string;
+  filial_id?: string;
+  formulacao_alterada?: boolean;
+  pedido_pai_id?: string;
   // Joined fields
   precificacao?: PricingRecord;
 }

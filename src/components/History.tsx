@@ -17,6 +17,7 @@ import {
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import PricingDetailModal from './PricingDetailModal';
+import NovoPedidoVendaModal from './NovoPedidoVendaModal';
 import { generatePricingPDF } from '../utils/pdfGenerator';
 import {
   getPricingRecords,
@@ -49,6 +50,8 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
     companyLogo: '',
   });
   const [loading, setLoading] = useState(false);
+  const [showNovoPedido, setShowNovoPedido] = useState(false);
+  const [novoPedidoPricing, setNovoPedidoPricing] = useState<PricingRecord | null>(null);
 
   useEffect(() => {
     loadData();
@@ -749,6 +752,19 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                   >
                     <FileText className="w-5 h-5" />
                   </button>
+                  {p.status !== 'Excluída' && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setNovoPedidoPricing(p);
+                        setShowNovoPedido(true);
+                      }}
+                      className="p-2.5 hover:bg-emerald-100 text-emerald-600 rounded-full transition-all active:scale-95 bg-emerald-50/50"
+                      title="Novo Pedido de Venda"
+                    >
+                      📋
+                    </button>
+                  )}
                   {p.status !== 'Excluída' &&
                     (currentUser.role === 'master' ||
                       currentUser.role === 'admin' ||
@@ -858,6 +874,18 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
             </div>
           </div>
         </div>
+      )}
+
+      {showNovoPedido && novoPedidoPricing && (
+        <NovoPedidoVendaModal
+          pricing={novoPedidoPricing}
+          currentUser={currentUser}
+          onClose={() => {
+            setShowNovoPedido(false);
+            setNovoPedidoPricing(null);
+          }}
+          onSuccess={() => {}}
+        />
       )}
     </div>
   );
