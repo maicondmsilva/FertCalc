@@ -2,9 +2,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { User, PedidoVenda, Branch } from '../types';
 import { ClipboardList, RefreshCw, Search, ChevronDown, ChevronUp } from 'lucide-react';
 import { getPedidosVenda, updatePedidoVenda } from '../services/pedidosVendaService';
+import { createCarregamento, gerarNumeroCarregamento } from '../services/carregamentoService';
 import { getBranches } from '../services/db';
 import { useToast } from './Toast';
 import NovoPedidoVendaModal from './NovoPedidoVendaModal';
+import { ModalNovoCarregamento, CarregamentoFormData } from './Carregamento';
 
 const STATUS_LABEL: Record<PedidoVenda['status'], string> = {
   pendente: 'Ativo',
@@ -39,6 +41,8 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [showNovoPedido, setShowNovoPedido] = useState(false);
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [pedidoParaCarregamento, setPedidoParaCarregamento] = useState<PedidoVenda | null>(null);
+  const [modalCarregamentoAberto, setModalCarregamentoAberto] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -76,6 +80,40 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
       setPedidos((prev) => prev.map((p) => (p.id === id ? { ...p, status } : p)));
     } catch {
       showError('Erro ao atualizar status.');
+    }
+  };
+
+  const handleSolicitarCarregamento = async (form: CarregamentoFormData) => {
+    try {
+      const numero = await gerarNumeroCarregamento();
+      await createCarregamento({
+        numero_carregamento: numero,
+        tipo_frete: form.tipo_frete,
+        quantidade_total: parseFloat(form.quantidade_total),
+        quantidade_liberada: 0,
+        quantidade_carregada: 0,
+        filial_id: form.filial_id || undefined,
+        local_carregamento_id: form.local_carregamento_id || undefined,
+        pedido_precificacao_id: form.precificacao_id || undefined,
+        pedido_venda_id: form.pedido_venda_id || undefined,
+        pedido_venda_numero: form.pedido_venda_numero || undefined,
+        data_prevista_carregamento: form.data_prevista_carregamento || undefined,
+        observacoes: form.observacoes || undefined,
+        valor_frete: form.valor_frete ? parseFloat(form.valor_frete) : undefined,
+        status: 'aguardando_cotacao',
+        criado_por: currentUser.id,
+      });
+      showSuccess('Carregamento criado com sucesso!');
+      setModalCarregamentoAberto(false);
+      setPedidoParaCarregamento(null);
+      await load();
+    } catch (err: unknown) {
+      const msg =
+        err && typeof err === 'object' && 'message' in err
+          ? (err as { message: string }).message
+          : 'Erro ao criar carregamento. Verifique os dados e tente novamente.';
+      showError(msg);
+      throw err;
     }
   };
 
@@ -275,10 +313,10 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                             <td className="py-2">
                               {saldo != null && saldo > 0 && p.status !== 'cancelado' && (
                                 <button
-                                  onClick={() =>
-                                    // TODO: Fase 8 — Carregamento via Pedido de Venda
-                                    showSuccess('Funcionalidade em desenvolvimento')
-                                  }
+                                  onClick={() => {
+                                    setPedidoParaCarregamento(p);
+                                    setModalCarregamentoAberto(true);
+                                  }}
                                   className="px-3 py-1 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-1"
                                 >
                                   🚛 Solicitar Carregamento
@@ -351,6 +389,18 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
           currentUser={currentUser}
           onClose={() => setShowNovoPedido(false)}
           onSuccess={load}
+        />
+      )}
+
+      {modalCarregamentoAberto && (
+        <ModalNovoCarregamento
+          filiais={[]}
+          pedidoVinculado={pedidoParaCarregamento ?? undefined}
+          onSave={handleSolicitarCarregamento}
+          onClose={() => {
+            setModalCarregamentoAberto(false);
+            setPedidoParaCarregamento(null);
+          }}
         />
       )}
     </div>

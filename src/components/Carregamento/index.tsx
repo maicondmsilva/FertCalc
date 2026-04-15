@@ -106,7 +106,7 @@ function fmtDate(s?: string) {
 }
 
 function fmtCarregamentoNum(c: { numero?: number; numero_carregamento: string }): string {
-  return c.numero != null ? formatCarregamentoId(c.numero) : (c.numero_carregamento || '—');
+  return c.numero != null ? formatCarregamentoId(c.numero) : c.numero_carregamento || '—';
 }
 
 // ─── Badge component ───────────────────────────────────────────────────────────
@@ -131,12 +131,13 @@ interface EnrichedPedido {
   barra_pedido?: string | null;
   quantidade_real?: number | null;
   tipo_frete?: string | null;
+  saldo_disponivel?: number | null;
   pricing?: PricingRecord;
   clientName?: string;
   _source: string;
 }
 
-interface CarregamentoFormData {
+export interface CarregamentoFormData {
   tipo_frete: 'CIF' | 'FOB';
   quantidade_total: string;
   filial_id: string;
@@ -144,6 +145,7 @@ interface CarregamentoFormData {
   data_prevista_carregamento: string;
   observacoes: string;
   pedido_venda_id: string;
+  pedido_venda_numero: string;
   precificacao_id: string;
   cliente_nome: string;
   valor_frete: string;
@@ -158,10 +160,11 @@ interface CotacaoFormData {
   observacoes: string;
 }
 
-interface ModalNovoCarregamentoProps {
+export interface ModalNovoCarregamentoProps {
   filiais: Filial[];
   onSave: (data: CarregamentoFormData) => Promise<void>;
   onClose: () => void;
+  pedidoVinculado?: PedidoVenda;
 }
 
 // Bug 2 fix — determina o tipo de frete em ordem de prioridade
@@ -178,28 +181,43 @@ function derivarTipoFrete(pedido: EnrichedPedido, pricing?: PricingRecord): 'CIF
   return 'FOB';
 }
 
-function ModalNovoCarregamento({ filiais, onSave, onClose }: ModalNovoCarregamentoProps) {
+export function ModalNovoCarregamento({
+  filiais,
+  onSave,
+  onClose,
+  pedidoVinculado,
+}: ModalNovoCarregamentoProps) {
   const { showError } = useToast();
-  const [form, setForm] = useState<CarregamentoFormData>({
-    tipo_frete: 'FOB' as 'CIF' | 'FOB',
-    quantidade_total: '',
+  const [form, setForm] = useState<CarregamentoFormData>(() => ({
+    tipo_frete: (pedidoVinculado?.tipo_frete as 'CIF' | 'FOB') || ('FOB' as 'CIF' | 'FOB'),
+    quantidade_total: pedidoVinculado?.saldo_disponivel
+      ? String(pedidoVinculado.saldo_disponivel)
+      : '',
     filial_id: '',
     local_carregamento_id: '',
     data_prevista_carregamento: '',
     observacoes: '',
-    pedido_venda_id: '',
-    precificacao_id: '',
-    cliente_nome: '',
-    valor_frete: '',
-    _freteAutoDetectado: false,
-  });
+    pedido_venda_id: pedidoVinculado?.id || '',
+    pedido_venda_numero: pedidoVinculado?.numero_pedido || '',
+    precificacao_id: pedidoVinculado?.precificacao_id || '',
+    cliente_nome: pedidoVinculado?.cliente_nome || '',
+    valor_frete:
+      pedidoVinculado?.tipo_frete === 'CIF' && pedidoVinculado?.valor_frete
+        ? String(pedidoVinculado.valor_frete)
+        : '',
+    _freteAutoDetectado: !!pedidoVinculado,
+  }));
   const [saving, setSaving] = useState(false);
-  const [pedidoSearch, setPedidoSearch] = useState('');
+  const [pedidoSearch, setPedidoSearch] = useState(pedidoVinculado?.numero_pedido || '');
   const [allPedidos, setAllPedidos] = useState<EnrichedPedido[]>([]);
   const [pedidoResults, setPedidoResults] = useState<EnrichedPedido[]>([]);
   const [locais, setLocais] = useState<LocalCarregamento[]>([]);
   // Bug 3 fix — fallback para filiais da prop (vindas de branches/Configurações)
   const [localFiliais, setLocalFiliais] = useState<Filial[]>([]);
+  // Track selected pedido de venda for saldo validation
+  const [selectedPedidoVenda, setSelectedPedidoVenda] = useState<PedidoVenda | null>(
+    pedidoVinculado ?? null
+  );
 
   useEffect(() => {
     if (filiais.length === 0) {
@@ -299,9 +317,11 @@ function ModalNovoCarregamento({ filiais, onSave, onClose }: ModalNovoCarregamen
     const pricing = p.pricing;
     const tipoFrete = derivarTipoFrete(p, pricing);
     const freteVal = Number(pricing?.factors?.freight ?? 0);
+    const numeroPedido = p._source === 'pedido' ? p.numero_pedido || '' : '';
     setForm((prev) => ({
       ...prev,
       pedido_venda_id: p.id || '',
+      pedido_venda_numero: numeroPedido,
       precificacao_id: p.precificacao_id || pricing?.id || '',
       quantidade_total: p.quantidade_real
         ? String(p.quantidade_real)
@@ -313,6 +333,19 @@ function ModalNovoCarregamento({ filiais, onSave, onClose }: ModalNovoCarregamen
       cliente_nome: p.clientName || pricing?.factors?.client?.name || '',
       _freteAutoDetectado: true,
     }));
+    // Track selected pedido de venda for saldo validation
+    if (p._source === 'pedido' && p.id) {
+      setSelectedPedidoVenda({
+        id: p.id,
+        precificacao_id: p.precificacao_id ?? '',
+        numero_pedido: p.numero_pedido ?? undefined,
+        quantidade_real: p.quantidade_real ?? undefined,
+        saldo_disponivel: p.saldo_disponivel ?? undefined,
+        status: 'pendente',
+      } as PedidoVenda);
+    } else {
+      setSelectedPedidoVenda(null);
+    }
     // Bug 1 fix — label correto dependendo da origem
     if (p._source === 'pricing') {
       setPedidoSearch(`Precificação #${pricing?.formattedCod || pricing?.cod || ''}`);
@@ -401,9 +434,38 @@ function ModalNovoCarregamento({ filiais, onSave, onClose }: ModalNovoCarregamen
               </div>
             )}
             {form.cliente_nome && (
-              <p className="text-xs text-emerald-600 font-medium mt-1">
-                ✓ Vinculado: {form.cliente_nome}
-              </p>
+              <div className="flex items-center justify-between mt-1">
+                <p className="text-xs text-emerald-600 font-medium">
+                  ✓ Vinculado: {form.cliente_nome}
+                  {form.pedido_venda_numero && (
+                    <span className="ml-1 text-stone-500">({form.pedido_venda_numero})</span>
+                  )}
+                  {selectedPedidoVenda?.saldo_disponivel != null && (
+                    <span className="ml-1 text-stone-500">
+                      · {selectedPedidoVenda.saldo_disponivel.toLocaleString('pt-BR')} ton
+                      disponíveis
+                    </span>
+                  )}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForm((prev) => ({
+                      ...prev,
+                      pedido_venda_id: '',
+                      pedido_venda_numero: '',
+                      precificacao_id: '',
+                      cliente_nome: '',
+                      _freteAutoDetectado: false,
+                    }));
+                    setSelectedPedidoVenda(null);
+                    setPedidoSearch('');
+                  }}
+                  className="text-xs text-stone-400 hover:text-red-500 transition-colors"
+                >
+                  ✕ Desvincular
+                </button>
+              </div>
             )}
           </div>
 
@@ -443,11 +505,27 @@ function ModalNovoCarregamento({ filiais, onSave, onClose }: ModalNovoCarregamen
                 step="0.001"
                 value={form.quantidade_total}
                 onChange={(e) => setForm({ ...form, quantidade_total: e.target.value })}
-                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm ${
+                  selectedPedidoVenda?.saldo_disponivel != null &&
+                  parseFloat(form.quantidade_total || '0') > selectedPedidoVenda.saldo_disponivel
+                    ? 'border-amber-400 bg-amber-50'
+                    : 'border-stone-300'
+                }`}
                 required
               />
             </div>
           </div>
+
+          {/* Saldo warning */}
+          {selectedPedidoVenda?.saldo_disponivel != null &&
+            form.quantidade_total &&
+            parseFloat(form.quantidade_total) > selectedPedidoVenda.saldo_disponivel && (
+              <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
+                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                ⚠️ Quantidade excede o saldo disponível do pedido (
+                {selectedPedidoVenda.saldo_disponivel.toLocaleString('pt-BR')} ton).
+              </div>
+            )}
 
           <div>
             <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Filial</label>
@@ -598,8 +676,10 @@ function ModalCotacao({ carregamento, transportadoras, onSave, onClose }: ModalC
           </button>
         </div>
         <div className="px-6 py-3 bg-stone-50 border-b border-stone-100 text-sm text-stone-600">
-          <span className="font-mono font-bold text-emerald-600">{fmtCarregamentoNum(carregamento)}</span> &mdash;{' '}
-          {carregamento.tipo_frete} &mdash; {carregamento.quantidade_total} ton
+          <span className="font-mono font-bold text-emerald-600">
+            {fmtCarregamentoNum(carregamento)}
+          </span>{' '}
+          &mdash; {carregamento.tipo_frete} &mdash; {carregamento.quantidade_total} ton
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
@@ -909,7 +989,9 @@ function ModalLiberacao({ carregamento, onSave, onClose }: ModalLiberacaoProps) 
           </button>
         </div>
         <div className="px-6 py-3 bg-stone-50 border-b border-stone-100">
-          <p className="text-sm font-mono font-bold text-emerald-600">{fmtCarregamentoNum(carregamento)}</p>
+          <p className="text-sm font-mono font-bold text-emerald-600">
+            {fmtCarregamentoNum(carregamento)}
+          </p>
           <p className="text-xs text-stone-500">
             Total: {carregamento.quantidade_total} ton | Liberado:{' '}
             {carregamento.quantidade_liberada} ton
@@ -1025,6 +1107,7 @@ function TabelaCarregamentos({
             <th className="px-4 py-3">Número</th>
             <th className="px-4 py-3">Tipo</th>
             <th className="px-4 py-3">Status</th>
+            <th className="px-4 py-3">Pedido de Venda</th>
             <th className="px-4 py-3">Filial</th>
             <th className="px-4 py-3">Local</th>
             <th className="px-4 py-3">Qtd (ton)</th>
@@ -1052,6 +1135,15 @@ function TabelaCarregamentos({
               </td>
               <td className="px-4 py-3">
                 <StatusBadge status={c.status} />
+              </td>
+              <td className="px-4 py-3">
+                {c.pedido_venda_numero ? (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-blue-50 text-blue-700 border border-blue-100">
+                    {c.pedido_venda_numero}
+                  </span>
+                ) : (
+                  <span className="text-stone-400 text-xs">—</span>
+                )}
               </td>
               <td className="px-4 py-3 text-stone-600 text-xs">{c.filial?.nome ?? '—'}</td>
               <td className="px-4 py-3 text-stone-600 text-xs">
@@ -1661,7 +1753,9 @@ function PainelLogistica({
                 <div className="flex items-center gap-3">
                   {isUrgent(c) && <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />}
                   <div>
-                    <p className="font-mono font-bold text-emerald-600 text-sm">{fmtCarregamentoNum(c)}</p>
+                    <p className="font-mono font-bold text-emerald-600 text-sm">
+                      {fmtCarregamentoNum(c)}
+                    </p>
                     <p className="text-xs text-stone-500">
                       {c.quantidade_total} ton &mdash; Data prevista:{' '}
                       {fmtDate(c.data_prevista_carregamento)}
@@ -1722,7 +1816,9 @@ function PainelLogistica({
                     <AlertTriangle className="w-4 h-4 text-orange-500 flex-shrink-0" />
                   )}
                   <div>
-                    <p className="font-mono font-bold text-emerald-600 text-sm">{fmtCarregamentoNum(c)}</p>
+                    <p className="font-mono font-bold text-emerald-600 text-sm">
+                      {fmtCarregamentoNum(c)}
+                    </p>
                     <p className="text-xs text-stone-500">
                       {c.quantidade_total} ton &mdash; Data prevista:{' '}
                       <span className={isUrgent(c) ? 'font-bold text-orange-600' : ''}>
@@ -2213,8 +2309,10 @@ function ModalInformarTransportador({
           </button>
         </div>
         <div className="px-6 py-3 bg-stone-50 border-b border-stone-100 text-sm text-stone-600">
-          <span className="font-mono font-bold text-emerald-600">{fmtCarregamentoNum(carregamento)}</span> &mdash;{' '}
-          {carregamento.tipo_frete} &mdash; {carregamento.quantidade_total} ton
+          <span className="font-mono font-bold text-emerald-600">
+            {fmtCarregamentoNum(carregamento)}
+          </span>{' '}
+          &mdash; {carregamento.tipo_frete} &mdash; {carregamento.quantidade_total} ton
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
@@ -2674,6 +2772,8 @@ export default function CarregamentoModule({
         filial_id: form.filial_id || undefined,
         local_carregamento_id: form.local_carregamento_id || undefined,
         pedido_precificacao_id: form.precificacao_id || undefined,
+        pedido_venda_id: form.pedido_venda_id || undefined,
+        pedido_venda_numero: form.pedido_venda_numero || undefined,
         data_prevista_carregamento: form.data_prevista_carregamento || undefined,
         observacoes: form.observacoes || undefined,
         valor_frete: form.valor_frete ? parseFloat(form.valor_frete) : undefined,
@@ -2841,9 +2941,7 @@ export default function CarregamentoModule({
           onAction={handleAction}
         />
       )}
-      {view === 'solicitacao' && (
-        <SolicitacaoCotacaoIndependente currentUser={currentUser} />
-      )}
+      {view === 'solicitacao' && <SolicitacaoCotacaoIndependente currentUser={currentUser} />}
       {view === 'liberacao' && (
         <LiberacaoCarregamento
           carregamentos={carregamentos}

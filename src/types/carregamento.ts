@@ -77,6 +77,9 @@ export interface Carregamento {
   vendedor_nome?: string;
   local_carregamento_id?: string;
   local_carregamento?: LocalCarregamento;
+  // pedido de venda link
+  pedido_venda_id?: string;
+  pedido_venda_numero?: string;
 }
 
 // ── Cotação de Frete ──────────────────────────────────────────
