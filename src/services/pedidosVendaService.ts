@@ -171,3 +171,20 @@ export async function searchPedidosVenda(query: string): Promise<PedidoVenda[]> 
   if (error || !data) return [];
   return data.map(mapPedido);
 }
+
+export async function getPedidosPendentes(filialIds?: string[]): Promise<PedidoVenda[]> {
+  let query = supabase
+    .from('pedidos_venda')
+    .select('*')
+    .eq('status', 'pendente')
+    .gt('saldo_disponivel', 0)
+    .order('criado_em', { ascending: false });
+
+  if (filialIds && filialIds.length > 0) {
+    query = query.in('filial_id', filialIds);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data || []).map(mapPedido);
+}

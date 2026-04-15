@@ -49,6 +49,8 @@ function mapCarregamento(d: Record<string, unknown>): Carregamento {
     atualizado_em: d.atualizado_em as string,
     local_carregamento_id: d.local_carregamento_id as string | undefined,
     local_carregamento: undefined,
+    pedido_venda_id: d.pedido_venda_id as string | undefined,
+    pedido_venda_numero: d.pedido_venda_numero as string | undefined,
   };
 }
 
