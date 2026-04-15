@@ -622,11 +622,35 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                     <Truck className="w-4 h-4 mr-2 text-stone-400" />
                     Frete:{' '}
                     <span className="ml-1 font-medium">
-                      {(p.factors?.freight || 0) > 0
-                        ? `CIF (R$ ${p.factors?.freight?.toFixed(2)})`
-                        : 'FOB'}
+                      {(() => {
+                        const tipoFrete =
+                          p.factors?.tipoFrete ?? ((p.factors?.freight || 0) > 0 ? 'CIF' : 'FOB');
+                        if (tipoFrete === 'FOB') return 'FOB';
+                        const freightStr = `CIF (R$ ${(p.factors?.freight || 0).toFixed(2)}/t)`;
+                        if (p.factors?.cotacaoFreteNumero)
+                          return `${freightStr} · ${p.factors.cotacaoFreteNumero}`;
+                        return freightStr;
+                      })()}
                     </span>
                   </div>
+                  {p.factors?.embalagem_nome && (
+                    <div className="flex items-center">
+                      <span className="mr-2 text-stone-400">📦</span>
+                      Embalagem:{' '}
+                      <span className="ml-1 font-medium">
+                        {p.factors.embalagem_nome}
+                        {p.factors.embalagem_valor != null && p.factors.embalagem_valor !== 0 && (
+                          <span
+                            className={`ml-1 text-xs font-bold ${(p.factors.embalagem_valor || 0) > 0 ? 'text-orange-600' : 'text-blue-600'}`}
+                          >
+                            {(p.factors.embalagem_valor || 0) > 0
+                              ? `+R$ ${(p.factors.embalagem_valor || 0).toFixed(2)}/t`
+                              : `-R$ ${Math.abs(p.factors.embalagem_valor || 0).toFixed(2)}/t`}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex items-center">
                     <Tag className="w-4 h-4 mr-2 text-stone-400" />
                     Aprovação:{' '}

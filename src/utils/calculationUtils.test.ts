@@ -32,6 +32,7 @@ function makeFactors(overrides: Partial<PricingFactors> = {}): PricingFactors {
     discount: 0,
     margin: 0,
     freight: 0,
+    tipoFrete: 'CIF',
     taxRate: 0,
     commission: 0,
     monthlyInterestRate: 0,

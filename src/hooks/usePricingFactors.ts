@@ -7,6 +7,7 @@ const defaultFactors: PricingFactors = {
   discount: 0,
   margin: 0,
   freight: 0,
+  tipoFrete: 'CIF',
   taxRate: 0,
   commission: 0,
   monthlyInterestRate: 0,
@@ -22,7 +23,10 @@ const defaultFactors: PricingFactors = {
 const usePricingFactors = (initial?: Partial<PricingFactors>) => {
   const [factors, setFactors] = useState<PricingFactors>({ ...defaultFactors, ...(initial || {}) });
 
-  const updateFactor = useCallback((patch: Partial<PricingFactors>) => setFactors((prev) => ({ ...prev, ...patch })), []);
+  const updateFactor = useCallback(
+    (patch: Partial<PricingFactors>) => setFactors((prev) => ({ ...prev, ...patch })),
+    []
+  );
   const setClient = useCallback((c: Client) => setFactors((prev) => ({ ...prev, client: c })), []);
   const setAgent = useCallback((a: Agent) => setFactors((prev) => ({ ...prev, agent: a })), []);
   const resetFactors = useCallback(() => setFactors({ ...defaultFactors }), []);

@@ -54,7 +54,10 @@ export function calculateSummary(
   // Tax, commission and freight
   const taxValue = basePrice * Number(factors?.taxRate || 0);
   const commissionValue = basePrice * Number(factors?.commission || 0);
-  const freightValue = Number(factors?.freight || 0);
+  // Explicit CIF/FOB: older records without tipoFrete default to CIF when freight > 0
+  const tipoFrete = factors?.tipoFrete ?? (Number(factors?.freight || 0) > 0 ? 'CIF' : 'FOB');
+  const freightValue = tipoFrete === 'CIF' ? Number(factors?.freight || 0) : 0;
+  const embalagemValor = Number(factors?.embalagem_valor || 0);
 
   // Discount and margin (applied to basePrice)
   const discount = Number(factors?.discount || 0);
@@ -65,7 +68,13 @@ export function calculateSummary(
 
   // Final price and sale value (using totalTons as multiplier when present)
   const finalPrice =
-    priceAfterDiscount + interestValue + taxValue + commissionValue + freightValue + marginValue;
+    priceAfterDiscount +
+    interestValue +
+    taxValue +
+    commissionValue +
+    freightValue +
+    marginValue +
+    embalagemValor;
   const totalSaleValue = finalPrice * Number(factors?.totalTons || 0);
 
   // Resulting guarantees (%). If totalWeight is zero avoid division by zero.

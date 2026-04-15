@@ -12,6 +12,9 @@ import {
   FlaskConical,
   Box,
   Settings,
+  ShoppingBag,
+  ToggleLeft,
+  ToggleRight,
 } from 'lucide-react';
 import {
   UnifiedProduct,
@@ -19,6 +22,7 @@ import {
   MicroGuarantee,
   NutrientType,
   CompatibilityCategory,
+  Embalagem,
 } from '../types';
 import {
   getUnifiedProducts,
@@ -27,12 +31,18 @@ import {
   getBrands,
   getCompatibilityCategories,
 } from '../services/db';
+import {
+  getEmbalagens,
+  createEmbalagem,
+  updateEmbalagem,
+  deleteEmbalagem,
+} from '../services/embalagensService';
 import { useToast } from './Toast';
 import { useConfirm } from '../hooks/useConfirm';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import CompatibilityCategoryManager from './CompatibilityCategoryManager';
 
-type Tab = NutrientType;
+type Tab = NutrientType | 'embalagem';
 
 function nextCode(items: { code: string }[]): string {
   if (items.length === 0) return '1';
@@ -76,34 +86,66 @@ export default function ProductManager() {
   const [form, setForm] = useState<Partial<UnifiedProduct>>(emptyProduct('macro'));
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  // ─── Embalagem state ─────────────────────────────────────────
+  const [embalagens, setEmbalagens] = useState<Embalagem[]>([]);
+  const [isEmbalagemModalOpen, setIsEmbalagemModalOpen] = useState(false);
+  const [embalagemForm, setEmbalagemForm] = useState<Partial<Embalagem>>({
+    nome: '',
+    cobrar: false,
+    desconto: false,
+    valor: 0,
+    tipo_valor: 'por_tonelada',
+    ativo: true,
+  });
+  const [editingEmbalagemId, setEditingEmbalagemId] = useState<string | null>(null);
+  const [savingEmbalagem, setSavingEmbalagem] = useState(false);
+
   useEffect(() => {
     loadAll();
   }, []);
 
   const loadAll = async () => {
     setTableLoading(true);
-    const [p, b, c] = await Promise.all([
+    const [p, b, c, embs] = await Promise.all([
       getUnifiedProducts(),
       getBrands(),
       getCompatibilityCategories(),
+      getEmbalagens(),
     ]);
     setProducts(p);
     setBrands(b);
     setCategories(c);
+    setEmbalagens(embs);
     setTableLoading(false);
   };
 
-  const currentItems = products.filter((p) => p.type === tab);
+  const currentItems = products.filter((p) => p.type === (tab as NutrientType));
   const filtered = currentItems.filter(
     (p) =>
       p.name.toLowerCase().includes(search.toLowerCase()) ||
       p.code.toLowerCase().includes(search.toLowerCase())
   );
+  const filteredEmbalagens = embalagens.filter((e) =>
+    e.nome.toLowerCase().includes(search.toLowerCase())
+  );
 
   const openCreate = () => {
+    if (tab === 'embalagem') {
+      setEditingEmbalagemId(null);
+      setEmbalagemForm({
+        nome: '',
+        cobrar: false,
+        desconto: false,
+        valor: 0,
+        tipo_valor: 'por_tonelada',
+        ativo: true,
+      });
+      setIsEmbalagemModalOpen(true);
+      return;
+    }
     setEditingId(null);
     setViewMode(false);
-    setForm(emptyProduct(tab));
+    setForm(emptyProduct(tab as NutrientType));
     setIsModalOpen(true);
   };
 
@@ -116,6 +158,69 @@ export default function ProductManager() {
       categories: item.categories || [],
     });
     setIsModalOpen(true);
+  };
+
+  const openEmbalagemEdit = (emb: Embalagem) => {
+    setEditingEmbalagemId(emb.id);
+    setEmbalagemForm({ ...emb });
+    setIsEmbalagemModalOpen(true);
+  };
+
+  const handleSaveEmbalagem = async () => {
+    if (!embalagemForm.nome?.trim()) {
+      showError('Nome é obrigatório.');
+      return;
+    }
+    setSavingEmbalagem(true);
+    try {
+      const payload: Partial<Embalagem> = {
+        nome: embalagemForm.nome,
+        cobrar: embalagemForm.cobrar ?? false,
+        desconto: embalagemForm.desconto ?? false,
+        valor: embalagemForm.valor ?? 0,
+        tipo_valor: embalagemForm.tipo_valor ?? 'por_tonelada',
+        ativo: embalagemForm.ativo ?? true,
+      };
+      if (editingEmbalagemId) {
+        await updateEmbalagem(editingEmbalagemId, payload);
+      } else {
+        await createEmbalagem(payload);
+      }
+      showSuccess('Embalagem salva com sucesso!');
+      const embs = await getEmbalagens();
+      setEmbalagens(embs);
+      setIsEmbalagemModalOpen(false);
+    } catch (err) {
+      showError(`Erro ao salvar: ${err instanceof Error ? err.message : 'Tente novamente.'}`);
+    } finally {
+      setSavingEmbalagem(false);
+    }
+  };
+
+  const handleToggleEmbalagemAtivo = async (emb: Embalagem) => {
+    try {
+      await updateEmbalagem(emb.id, { ativo: !emb.ativo });
+      setEmbalagens((prev) => prev.map((e) => (e.id === emb.id ? { ...e, ativo: !e.ativo } : e)));
+      showSuccess(`Embalagem ${!emb.ativo ? 'ativada' : 'desativada'} com sucesso!`);
+    } catch {
+      showError('Erro ao alterar status da embalagem.');
+    }
+  };
+
+  const handleDeleteEmbalagem = async (id: string) => {
+    const ok = await confirm({
+      title: 'Excluir Embalagem',
+      message: 'Tem certeza que deseja excluir esta embalagem?',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await deleteEmbalagem(id);
+      setEmbalagens((prev) => prev.filter((e) => e.id !== id));
+      showSuccess('Embalagem excluída com sucesso!');
+    } catch {
+      showError('Erro ao excluir embalagem.');
+    }
   };
 
   const handleSave = async () => {
@@ -184,6 +289,7 @@ export default function ProductManager() {
     { key: 'macro', label: 'Macronutrientes', icon: <Database className="w-4 h-4" /> },
     { key: 'micro', label: 'Micronutrientes', icon: <FlaskConical className="w-4 h-4" /> },
     { key: 'finished', label: 'Produto Acabado (PA)', icon: <Box className="w-4 h-4" /> },
+    { key: 'embalagem', label: 'Embalagem', icon: <ShoppingBag className="w-4 h-4" /> },
   ];
 
   return (
@@ -194,17 +300,19 @@ export default function ProductManager() {
           Gerenciador de Produtos
         </h1>
         <div className="flex gap-2">
-          <button
-            onClick={() => setIsCategoryModalOpen(true)}
-            className="bg-stone-200 hover:bg-stone-300 text-stone-700 px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors shadow-sm"
-          >
-            <Settings className="w-4 h-4" /> Categorias
-          </button>
+          {tab !== 'embalagem' && (
+            <button
+              onClick={() => setIsCategoryModalOpen(true)}
+              className="bg-stone-200 hover:bg-stone-300 text-stone-700 px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors shadow-sm"
+            >
+              <Settings className="w-4 h-4" /> Categorias
+            </button>
+          )}
           <button
             onClick={openCreate}
             className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors shadow-sm"
           >
-            <Plus className="w-4 h-4" /> Novo Produto
+            <Plus className="w-4 h-4" /> {tab === 'embalagem' ? 'Nova Embalagem' : 'Novo Produto'}
           </button>
         </div>
       </div>
@@ -236,115 +344,215 @@ export default function ProductManager() {
         />
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden">
-        <table className="w-full text-sm text-left">
-          <thead className="bg-stone-50 text-stone-500 uppercase font-bold text-xs border-b border-stone-100">
-            <tr>
-              <th className="px-5 py-3 w-20">Cód.</th>
-              <th className="px-5 py-3">Nome</th>
-              <th className="px-5 py-3">Categorias</th>
-              {tab === 'macro' && (
-                <>
-                  <th className="px-5 py-3">Marca</th>
-                  <th className="px-5 py-3 text-center">N-P-K</th>
-                </>
-              )}
-              {tab === 'micro' && <th className="px-5 py-3">Garantias</th>}
-              {tab === 'finished' && <th className="px-5 py-3">Descrição</th>}
-              <th className="px-5 py-3 text-right">Ações</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-stone-100">
-            {tableLoading && (
+      {tab !== 'embalagem' ? (
+        <div className="bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden">
+          <table className="w-full text-sm text-left">
+            <thead className="bg-stone-50 text-stone-500 uppercase font-bold text-xs border-b border-stone-100">
               <tr>
-                <td colSpan={7} className="px-6 py-10 text-center text-stone-400">
-                  Carregando...
-                </td>
+                <th className="px-5 py-3 w-20">Cód.</th>
+                <th className="px-5 py-3">Nome</th>
+                <th className="px-5 py-3">Categorias</th>
+                {tab === 'macro' && (
+                  <>
+                    <th className="px-5 py-3">Marca</th>
+                    <th className="px-5 py-3 text-center">N-P-K</th>
+                  </>
+                )}
+                {tab === 'micro' && <th className="px-5 py-3">Garantias</th>}
+                {tab === 'finished' && <th className="px-5 py-3">Descrição</th>}
+                <th className="px-5 py-3 text-right">Ações</th>
               </tr>
-            )}
-            {!tableLoading && filtered.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-6 py-10 text-center text-stone-400 italic">
-                  Nenhum produto encontrado.
-                </td>
-              </tr>
-            )}
-            {!tableLoading &&
-              filtered.map((item) => (
-                <tr key={item.id} className="hover:bg-stone-50 transition-colors">
-                  <td className="px-5 py-3 font-mono font-bold text-emerald-600">{item.code}</td>
-                  <td className="px-5 py-3 font-medium text-stone-800">{item.name}</td>
-                  <td className="px-5 py-3 text-xs text-stone-500">
-                    <div className="flex flex-wrap gap-1">
-                      {(item.categories || []).map((cid) => {
-                        const cName = categories.find((c) => c.id === cid)?.nome || cid;
-                        return (
-                          <span
-                            key={cid}
-                            className="bg-stone-100 px-1.5 py-0.5 rounded border border-stone-200"
-                          >
-                            {cName}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  </td>
-                  {tab === 'macro' && (
-                    <>
-                      <td className="px-5 py-3 text-stone-600">
-                        {brands.find((b) => b.id === item.brandId)?.name || '—'}
-                      </td>
-                      <td className="px-5 py-3 font-mono text-xs text-stone-700">
-                        {item.n}-{item.p}-{item.k}
-                      </td>
-                    </>
-                  )}
-                  {tab === 'micro' && (
-                    <td className="px-5 py-3">
-                      <div className="flex flex-wrap gap-1">
-                        {(item.microGuarantees || []).slice(0, 3).map((g, i) => (
-                          <span
-                            key={i}
-                            className="text-[10px] bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-100"
-                          >
-                            {g.name}: {g.value}%
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                  )}
-                  {tab === 'finished' && (
-                    <td className="px-5 py-3 text-stone-500 truncate max-w-xs">
-                      {item.description || '—'}
-                    </td>
-                  )}
-                  <td className="px-5 py-3 text-right">
-                    <div className="flex justify-end gap-1">
-                      <button
-                        onClick={() => openEdit(item, true)}
-                        className="p-1.5 text-stone-400 hover:text-emerald-600 hover:bg-emerald-50 rounded"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => openEdit(item, false)}
-                        className="p-1.5 text-stone-400 hover:text-blue-600 hover:bg-blue-50 rounded"
-                      >
-                        <Edit3 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(item.id, item.type!)}
-                        className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+            </thead>
+            <tbody className="divide-y divide-stone-100">
+              {tableLoading && (
+                <tr>
+                  <td colSpan={7} className="px-6 py-10 text-center text-stone-400">
+                    Carregando...
                   </td>
                 </tr>
-              ))}
-          </tbody>
-        </table>
-      </div>
+              )}
+              {!tableLoading && filtered.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-6 py-10 text-center text-stone-400 italic">
+                    Nenhum produto encontrado.
+                  </td>
+                </tr>
+              )}
+              {!tableLoading &&
+                filtered.map((item) => (
+                  <tr key={item.id} className="hover:bg-stone-50 transition-colors">
+                    <td className="px-5 py-3 font-mono font-bold text-emerald-600">{item.code}</td>
+                    <td className="px-5 py-3 font-medium text-stone-800">{item.name}</td>
+                    <td className="px-5 py-3 text-xs text-stone-500">
+                      <div className="flex flex-wrap gap-1">
+                        {(item.categories || []).map((cid) => {
+                          const cName = categories.find((c) => c.id === cid)?.nome || cid;
+                          return (
+                            <span
+                              key={cid}
+                              className="bg-stone-100 px-1.5 py-0.5 rounded border border-stone-200"
+                            >
+                              {cName}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </td>
+                    {tab === 'macro' && (
+                      <>
+                        <td className="px-5 py-3 text-stone-600">
+                          {brands.find((b) => b.id === item.brandId)?.name || '—'}
+                        </td>
+                        <td className="px-5 py-3 font-mono text-xs text-stone-700">
+                          {item.n}-{item.p}-{item.k}
+                        </td>
+                      </>
+                    )}
+                    {tab === 'micro' && (
+                      <td className="px-5 py-3">
+                        <div className="flex flex-wrap gap-1">
+                          {(item.microGuarantees || []).slice(0, 3).map((g, i) => (
+                            <span
+                              key={i}
+                              className="text-[10px] bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-100"
+                            >
+                              {g.name}: {g.value}%
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                    )}
+                    {tab === 'finished' && (
+                      <td className="px-5 py-3 text-stone-500 truncate max-w-xs">
+                        {item.description || '—'}
+                      </td>
+                    )}
+                    <td className="px-5 py-3 text-right">
+                      <div className="flex justify-end gap-1">
+                        <button
+                          onClick={() => openEdit(item, true)}
+                          className="p-1.5 text-stone-400 hover:text-emerald-600 hover:bg-emerald-50 rounded"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => openEdit(item, false)}
+                          className="p-1.5 text-stone-400 hover:text-blue-600 hover:bg-blue-50 rounded"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(item.id, item.type!)}
+                          className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        /* Embalagem table */
+        <div className="bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden">
+          <table className="w-full text-sm text-left">
+            <thead className="bg-stone-50 text-stone-500 uppercase font-bold text-xs border-b border-stone-100">
+              <tr>
+                <th className="px-5 py-3 w-16">ID</th>
+                <th className="px-5 py-3">Nome</th>
+                <th className="px-5 py-3 text-center">Cobrar</th>
+                <th className="px-5 py-3 text-center">Desconto</th>
+                <th className="px-5 py-3 text-right">Valor</th>
+                <th className="px-5 py-3">Tipo</th>
+                <th className="px-5 py-3 text-center">Ativo</th>
+                <th className="px-5 py-3 text-right">Ações</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-stone-100">
+              {tableLoading && (
+                <tr>
+                  <td colSpan={8} className="px-6 py-10 text-center text-stone-400">
+                    Carregando...
+                  </td>
+                </tr>
+              )}
+              {!tableLoading && filteredEmbalagens.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-6 py-10 text-center text-stone-400 italic">
+                    Nenhuma embalagem encontrada.
+                  </td>
+                </tr>
+              )}
+              {!tableLoading &&
+                filteredEmbalagens.map((emb) => (
+                  <tr key={emb.id} className="hover:bg-stone-50 transition-colors">
+                    <td className="px-5 py-3 font-mono text-xs text-stone-500">{emb.id_numeric}</td>
+                    <td className="px-5 py-3 font-medium text-stone-800">{emb.nome}</td>
+                    <td className="px-5 py-3 text-center">
+                      <span
+                        className={`text-xs font-bold px-2 py-0.5 rounded ${emb.cobrar ? 'bg-emerald-100 text-emerald-700' : 'bg-stone-100 text-stone-500'}`}
+                      >
+                        {emb.cobrar ? 'Sim' : 'Não'}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 text-center">
+                      <span
+                        className={`text-xs font-bold px-2 py-0.5 rounded ${emb.desconto ? 'bg-blue-100 text-blue-700' : 'bg-stone-100 text-stone-500'}`}
+                      >
+                        {emb.desconto ? 'Sim' : 'Não'}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 text-right font-mono">
+                      R$ {emb.valor.toFixed(2)}
+                      {emb.tipo_valor === 'por_tonelada' ? '/t' : ' fixo'}
+                    </td>
+                    <td className="px-5 py-3 text-stone-500 text-xs">
+                      {emb.tipo_valor === 'por_tonelada' ? 'Por tonelada' : 'Valor fixo'}
+                    </td>
+                    <td className="px-5 py-3 text-center">
+                      <span
+                        className={`text-xs font-bold px-2 py-0.5 rounded ${emb.ativo ? 'bg-emerald-100 text-emerald-700' : 'bg-stone-100 text-stone-400'}`}
+                      >
+                        {emb.ativo ? 'Ativo' : 'Inativo'}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 text-right">
+                      <div className="flex justify-end gap-1">
+                        <button
+                          onClick={() => openEmbalagemEdit(emb)}
+                          className="p-1.5 text-stone-400 hover:text-blue-600 hover:bg-blue-50 rounded"
+                          title="Editar"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleToggleEmbalagemAtivo(emb)}
+                          className="p-1.5 text-stone-400 hover:text-amber-600 hover:bg-amber-50 rounded"
+                          title={emb.ativo ? 'Desativar' : 'Ativar'}
+                        >
+                          {emb.ativo ? (
+                            <ToggleRight className="w-4 h-4" />
+                          ) : (
+                            <ToggleLeft className="w-4 h-4" />
+                          )}
+                        </button>
+                        <button
+                          onClick={() => handleDeleteEmbalagem(emb.id)}
+                          className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded"
+                          title="Excluir"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -623,6 +831,152 @@ export default function ProductManager() {
           </div>
         </div>
       )}
+
+      {/* Embalagem Modal */}
+      {isEmbalagemModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col">
+            <div className="px-6 py-4 border-b border-stone-100 flex justify-between items-center bg-emerald-600 text-white">
+              <h2 className="text-lg font-bold">
+                {editingEmbalagemId ? 'Editar Embalagem' : 'Nova Embalagem'}
+              </h2>
+              <button
+                onClick={() => setIsEmbalagemModalOpen(false)}
+                className="p-1 hover:bg-white/20 rounded-full"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-stone-600 mb-1">
+                  Nome <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={embalagemForm.nome || ''}
+                  onChange={(e) => setEmbalagemForm((p) => ({ ...p, nome: e.target.value }))}
+                  placeholder="Ex: Saco 50kg, Big Bag 1t"
+                  className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-stone-600 mb-1">Cobrar</label>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setEmbalagemForm((p) => ({
+                        ...p,
+                        cobrar: !p.cobrar,
+                        desconto: p.cobrar ? p.desconto : false,
+                      }))
+                    }
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${embalagemForm.cobrar ? 'bg-emerald-100 text-emerald-700 border border-emerald-300' : 'bg-stone-100 text-stone-500 border border-stone-200'}`}
+                  >
+                    {embalagemForm.cobrar ? (
+                      <ToggleRight className="w-4 h-4" />
+                    ) : (
+                      <ToggleLeft className="w-4 h-4" />
+                    )}
+                    {embalagemForm.cobrar ? 'Sim' : 'Não'}
+                  </button>
+                  <p className="text-xs text-stone-400 mt-1">Acrescenta ao preço</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-stone-600 mb-1">Desconto</label>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setEmbalagemForm((p) => ({
+                        ...p,
+                        desconto: !p.desconto,
+                        cobrar: p.desconto ? p.cobrar : false,
+                      }))
+                    }
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${embalagemForm.desconto ? 'bg-blue-100 text-blue-700 border border-blue-300' : 'bg-stone-100 text-stone-500 border border-stone-200'}`}
+                  >
+                    {embalagemForm.desconto ? (
+                      <ToggleRight className="w-4 h-4" />
+                    ) : (
+                      <ToggleLeft className="w-4 h-4" />
+                    )}
+                    {embalagemForm.desconto ? 'Sim' : 'Não'}
+                  </button>
+                  <p className="text-xs text-stone-400 mt-1">Desconta do preço</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-stone-600 mb-1">
+                    Valor (R$)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={embalagemForm.valor || 0}
+                    onChange={(e) =>
+                      setEmbalagemForm((p) => ({ ...p, valor: Number(e.target.value) }))
+                    }
+                    className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-stone-600 mb-1">
+                    Tipo de Valor
+                  </label>
+                  <select
+                    value={embalagemForm.tipo_valor || 'por_tonelada'}
+                    onChange={(e) =>
+                      setEmbalagemForm((p) => ({
+                        ...p,
+                        tipo_valor: e.target.value as 'por_tonelada' | 'fixo',
+                      }))
+                    }
+                    className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="por_tonelada">Por tonelada</option>
+                    <option value="fixo">Valor fixo</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-stone-600 mb-1">Ativo</label>
+                <button
+                  type="button"
+                  onClick={() => setEmbalagemForm((p) => ({ ...p, ativo: !p.ativo }))}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${embalagemForm.ativo !== false ? 'bg-emerald-100 text-emerald-700 border border-emerald-300' : 'bg-stone-100 text-stone-500 border border-stone-200'}`}
+                >
+                  {embalagemForm.ativo !== false ? (
+                    <ToggleRight className="w-4 h-4" />
+                  ) : (
+                    <ToggleLeft className="w-4 h-4" />
+                  )}
+                  {embalagemForm.ativo !== false ? 'Ativo' : 'Inativo'}
+                </button>
+              </div>
+            </div>
+            <div className="px-6 py-4 bg-stone-50 border-t border-stone-100 flex justify-end gap-3">
+              <button
+                onClick={() => setIsEmbalagemModalOpen(false)}
+                className="px-4 py-2 text-stone-600 font-medium hover:bg-stone-200 rounded-lg transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveEmbalagem}
+                disabled={savingEmbalagem}
+                className="px-5 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 disabled:bg-emerald-400 transition-colors flex items-center gap-2"
+              >
+                <Save className="w-4 h-4" />
+                {savingEmbalagem ? 'Salvando...' : 'Salvar Embalagem'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <ConfirmDialog {...confirmState} onConfirm={handleConfirm} onCancel={handleCancel} />
     </div>
   );

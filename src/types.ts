@@ -386,7 +386,9 @@ export interface PricingFactors {
   discount: number;
   margin: number;
   freight: number;
-  tipoFrete?: 'CIF' | 'FOB';
+  tipoFrete: 'CIF' | 'FOB';
+  cotacaoFreteId?: string;
+  cotacaoFreteNumero?: string;
   taxRate: number;
   commission: number;
   monthlyInterestRate: number;
@@ -398,6 +400,21 @@ export interface PricingFactors {
   priceListId: string;
   totalTons: number;
   commercialObservation?: string;
+  embalagem_id?: string;
+  embalagem_nome?: string;
+  embalagem_valor?: number;
+}
+
+export interface Embalagem {
+  id: string;
+  id_numeric: number;
+  nome: string;
+  cobrar: boolean;
+  desconto: boolean;
+  valor: number;
+  tipo_valor: 'por_tonelada' | 'fixo';
+  ativo: boolean;
+  criado_em?: string;
 }
 
 export interface PricingSummary {
