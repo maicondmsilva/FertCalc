@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Plus,
-  ChevronDown,
   ChevronUp,
   Eye,
   X,
@@ -11,13 +10,15 @@ import {
   AlertCircle,
   XCircle,
   Package,
-  MapPin,
   Truck,
+  Search,
+  ExternalLink,
 } from 'lucide-react';
-import { User } from '../../types';
+import { User, Client } from '../../types';
 import { Filial, LocalCarregamento, Transportadora, CotacaoSolicitada, StatusCotacaoSolicitada } from '../../types/carregamento';
 import { getFiliais, getTransportadoras } from '../../services/carregamentoService';
 import { getLocaisAtivos } from '../../services/locaisCarregamentoService';
+import { getClients } from '../../services/db';
 import {
   createCotacaoSolicitada,
   updateCotacaoSolicitada,
@@ -85,6 +86,16 @@ function formatCurrency(value?: number) {
   return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
+function sanitizeUrl(url?: string): string {
+  if (!url) return '';
+  try {
+    const parsed = new URL(url.trim());
+    return (parsed.protocol === 'https:' || parsed.protocol === 'http:') ? parsed.href : '';
+  } catch {
+    return '';
+  }
+}
+
 // ─────────────────────────────────────────────────────────────
 //  Detail Modal (read-only for vendedor)
 // ─────────────────────────────────────────────────────────────
@@ -147,10 +158,10 @@ function DetalheModal({ cotacao, onClose }: { cotacao: CotacaoSolicitada; onClos
               <p className="text-sm text-stone-700">{cotacao.fazenda}</p>
             </div>
           )}
-          {cotacao.maps_url && (
+          {cotacao.maps_url && sanitizeUrl(cotacao.maps_url) && (
             <div>
               <p className="text-xs font-bold text-stone-400 uppercase mb-0.5">Link Maps</p>
-              <a href={cotacao.maps_url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 underline break-all">
+              <a href={sanitizeUrl(cotacao.maps_url)} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 underline break-all">
                 {cotacao.maps_url}
               </a>
             </div>
@@ -353,10 +364,10 @@ function PainelResponsavel({ cotacao, transportadoras, canAprovar, onClose, onUp
                 <p className="text-sm text-stone-700">{cotacao.fazenda}</p>
               </div>
             )}
-            {cotacao.maps_url && (
+            {cotacao.maps_url && sanitizeUrl(cotacao.maps_url) && (
               <div className="mt-2">
                 <p className="text-xs text-stone-400 mb-0.5">Link Maps</p>
-                <a href={cotacao.maps_url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 underline break-all">
+                <a href={sanitizeUrl(cotacao.maps_url)} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 underline break-all">
                   {cotacao.maps_url}
                 </a>
               </div>
@@ -508,6 +519,7 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
   const [filiais, setFiliais] = useState<Filial[]>([]);
   const [transportadoras, setTransportadoras] = useState<Transportadora[]>([]);
   const [locais, setLocais] = useState<LocalCarregamento[]>([]);
+  const [allClients, setAllClients] = useState<Client[]>([]);
 
   // Vendedor state
   const [showForm, setShowForm] = useState(false);
@@ -516,7 +528,11 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
   const [detalheModal, setDetalheModal] = useState<CotacaoSolicitada | null>(null);
 
   // Form state
-  const [formCliente, setFormCliente] = useState('');
+  const [formClienteNome, setFormClienteNome] = useState('');
+  const [formClienteId, setFormClienteId] = useState('');
+  const [formClienteSearch, setFormClienteSearch] = useState('');
+  const [showClienteResults, setShowClienteResults] = useState(false);
+  const clienteSearchRef = useRef<HTMLDivElement>(null);
   const [formFilialId, setFormFilialId] = useState('');
   const [formLocalId, setFormLocalId] = useState('');
   const [formEndereco, setFormEndereco] = useState('');
@@ -548,6 +564,11 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
     setTransportadoras(data);
   }, []);
 
+  const loadClientes = useCallback(async () => {
+    const data = await getClients();
+    setAllClients(data);
+  }, []);
+
   const loadMinhasCotacoes = useCallback(async () => {
     if (!canSolicitar) return;
     setLoadingMinhas(true);
@@ -577,9 +598,21 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
   useEffect(() => {
     loadFiliais();
     loadTransportadoras();
+    loadClientes();
     loadMinhasCotacoes();
     loadCotacoesResponsavel();
-  }, [loadFiliais, loadTransportadoras, loadMinhasCotacoes, loadCotacoesResponsavel]);
+  }, [loadFiliais, loadTransportadoras, loadClientes, loadMinhasCotacoes, loadCotacoesResponsavel]);
+
+  // Close client autocomplete on outside click
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (clienteSearchRef.current && !clienteSearchRef.current.contains(event.target as Node)) {
+        setShowClienteResults(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Load locais when filial changes
   useEffect(() => {
@@ -594,10 +627,43 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
     });
   }, [formFilialId]);
 
+  // Pre-computed lowercase client values for autocomplete performance
+  const clientsLower = useMemo(
+    () => allClients.map((c) => ({ client: c, nameLower: c.name.toLowerCase(), codeLower: c.code.toLowerCase() })),
+    [allClients]
+  );
+
+  // Filtered clients for autocomplete
+  const filteredClients = useMemo(() => {
+    const q = formClienteSearch.trim().toLowerCase();
+    if (!q) return [];
+    return clientsLower
+      .filter((x) => x.nameLower.includes(q) || x.codeLower.includes(q))
+      .map((x) => x.client)
+      .slice(0, 10);
+  }, [clientsLower, formClienteSearch]);
+
+  // Client selection helpers
+  const clearClienteSelection = () => {
+    setFormClienteNome('');
+    setFormClienteId('');
+    setFormClienteSearch('');
+  };
+
+  const selectCliente = (c: Client) => {
+    setFormClienteNome(c.name);
+    setFormClienteId(c.id);
+    setFormClienteSearch(c.name);
+    setShowClienteResults(false);
+  };
+
+  // Safe Maps URL: only allow http/https to prevent XSS
+  const safeMapsUrl = sanitizeUrl(formMaps);
+
   // ── Form submit ──
   const handleSolicitar = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formCliente.trim()) {
+    if (!formClienteNome.trim()) {
       showError('Informe o nome do cliente.');
       return;
     }
@@ -606,7 +672,8 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
       const cotacao = await createCotacaoSolicitada({
         solicitado_por: currentUser.id,
         solicitante_nome: currentUser.name,
-        cliente_nome: formCliente.trim(),
+        cliente_id: formClienteId || undefined,
+        cliente_nome: formClienteNome.trim(),
         filial_id: formFilialId || undefined,
         local_carregamento_id: formLocalId || undefined,
         endereco_entrega: formEndereco.trim() || undefined,
@@ -624,7 +691,9 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
 
       showSuccess('Solicitação de cotação enviada com sucesso!');
       // Reset form
-      setFormCliente('');
+      setFormClienteNome('');
+      setFormClienteId('');
+      setFormClienteSearch('');
       setFormFilialId('');
       setFormLocalId('');
       setFormEndereco('');
@@ -681,17 +750,52 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
               </div>
               <form onSubmit={handleSolicitar} className="p-5 space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
+                  {/* Client autocomplete */}
+                  <div className="relative" ref={clienteSearchRef}>
                     <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
                       Cliente <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="text"
-                      value={formCliente}
-                      onChange={(e) => setFormCliente(e.target.value)}
-                      className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
-                      placeholder="Nome do cliente"
-                    />
+                    {formClienteNome ? (
+                      <div className="flex items-center gap-2 px-3 py-2 border border-amber-400 bg-amber-50 rounded-lg text-sm">
+                        <span className="flex-1 font-medium text-stone-800">{formClienteNome}</span>
+                        <button
+                          type="button"
+                          onClick={clearClienteSelection}
+                          className="text-stone-400 hover:text-red-500 transition-colors"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 w-3.5 h-3.5" />
+                          <input
+                            type="text"
+                            value={formClienteSearch}
+                            onChange={(e) => { setFormClienteSearch(e.target.value); setShowClienteResults(true); }}
+                            onFocus={() => setShowClienteResults(true)}
+                            className="w-full pl-9 pr-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                            placeholder="Digite nome ou código..."
+                          />
+                        </div>
+                        {showClienteResults && filteredClients.length > 0 && (
+                          <div className="absolute z-20 w-full mt-1 bg-white border border-stone-200 rounded-lg shadow-xl max-h-52 overflow-y-auto">
+                            {filteredClients.map((c) => (
+                              <button
+                                key={c.id}
+                                type="button"
+                                onClick={() => selectCliente(c)}
+                                className="w-full text-left px-4 py-2 hover:bg-amber-50 border-b border-stone-100 last:border-0 transition-colors"
+                              >
+                                <p className="text-sm font-bold text-stone-800">{c.name}</p>
+                                <p className="text-[10px] text-stone-500">{c.code}</p>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
 
                   <div>
@@ -746,14 +850,28 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Link Maps</label>
-                    <input
-                      type="url"
-                      value={formMaps}
-                      onChange={(e) => setFormMaps(e.target.value)}
-                      className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
-                      placeholder="https://maps.google.com/..."
-                    />
+                    <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Link Google Maps</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="url"
+                        value={formMaps}
+                        onChange={(e) => setFormMaps(e.target.value)}
+                        className="flex-1 px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                        placeholder="https://maps.google.com/..."
+                      />
+                      {safeMapsUrl && (
+                        <a
+                          href={safeMapsUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 px-3 py-2 bg-stone-100 border border-stone-300 rounded-lg text-xs font-medium text-stone-600 hover:bg-stone-200 transition-colors whitespace-nowrap"
+                          title="Abrir no Maps"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          Abrir
+                        </a>
+                      )}
+                    </div>
                   </div>
 
                   <div>

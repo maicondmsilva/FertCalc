@@ -170,18 +170,14 @@ export async function getCotacoesByFiliais(filialIds: string[]): Promise<Cotacao
   return (data as Record<string, unknown>[]).map(mapCotacaoSolicitada);
 }
 
-export async function getCotacoesAprovadas(filialIds: string[]): Promise<CotacaoSolicitada[]> {
-  let query = supabase
+export async function getCotacoesAprovadas(userId: string): Promise<CotacaoSolicitada[]> {
+  const { data, error } = await supabase
     .from('cotacoes_solicitadas')
     .select(SELECT_FIELDS)
     .eq('status', 'aprovado')
+    .eq('solicitado_por', userId)
     .order('aprovado_em', { ascending: false });
 
-  if (filialIds.length > 0) {
-    query = query.in('filial_id', filialIds);
-  }
-
-  const { data, error } = await query;
   if (error || !data) return [];
   return (data as Record<string, unknown>[]).map(mapCotacaoSolicitada);
 }
