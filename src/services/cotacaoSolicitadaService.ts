@@ -216,3 +216,30 @@ export async function updateCotacaoSolicitada(
 
   if (error) throw error;
 }
+
+// ─────────────────────────────────────────────────────────────
+//  Busca IDs dos responsáveis para uma filial específica
+// ─────────────────────────────────────────────────────────────
+
+export async function getResponsaveisByFilial(filialId?: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('app_users')
+    .select('id, role, permissions')
+    .eq('ativo', true);
+
+  if (error || !data) return [];
+
+  return data
+    .filter((u) => {
+      const role = u.role as string;
+      const perms = u.permissions as Record<string, unknown> | null ?? {};
+      const hasTratarPerm = !!perms.carregamento_tratar_cotacao || role === 'master' || role === 'admin';
+      if (!hasTratarPerm) return false;
+      if (!filialId) return true;
+      if (perms.carregamento_all_filiais) return true;
+      const ids = perms.carregamento_filial_ids as string[] | undefined;
+      if (!ids || ids.length === 0) return true;
+      return ids.includes(filialId);
+    })
+    .map((u) => u.id as string);
+}

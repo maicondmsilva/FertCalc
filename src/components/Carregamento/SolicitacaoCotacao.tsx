@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Plus,
   ChevronDown,
@@ -23,6 +23,7 @@ import {
   updateCotacaoSolicitada,
   getCotacoesByVendedor,
   getCotacoesByFiliais,
+  getResponsaveisByFilial,
 } from '../../services/cotacaoSolicitadaService';
 import { notifyCotacaoSolicitada, notifyCotacaoDisponivel } from '../../services/notificationService';
 import { useToast } from '../Toast';
@@ -497,7 +498,11 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
 
   const canAprovar = role === 'master' || role === 'admin' || !!currentUser.permissions?.carregamento_admin;
 
-  const filialIds: string[] = currentUser.permissions?.carregamento_filial_ids ?? [];
+  const filialIds: string[] = useMemo(
+    () => currentUser.permissions?.carregamento_filial_ids ?? [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [JSON.stringify(currentUser.permissions?.carregamento_filial_ids)]
+  );
 
   // ── State ──
   const [filiais, setFiliais] = useState<Filial[]>([]);
@@ -536,7 +541,7 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
     } else {
       setFiliais(data);
     }
-  }, [filialIds.join(',')]);
+  }, [filialIds]);
 
   const loadTransportadoras = useCallback(async () => {
     const data = await getTransportadoras();
@@ -567,7 +572,7 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
     } finally {
       setLoadingResponsavel(false);
     }
-  }, [canTratar, filialIds.join(',')]);
+  }, [canTratar, filialIds]);
 
   useEffect(() => {
     loadFiliais();
@@ -613,8 +618,8 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
         status: 'aguardando',
       });
 
-      // Notify responsáveis
-      const responsavelIds: string[] = [];
+      // Notify responsáveis for the selected filial
+      const responsavelIds = await getResponsaveisByFilial(formFilialId || undefined);
       await notifyCotacaoSolicitada(cotacao, currentUser.name ?? 'Vendedor', responsavelIds);
 
       showSuccess('Solicitação de cotação enviada com sucesso!');
