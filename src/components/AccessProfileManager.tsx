@@ -75,8 +75,9 @@ const PERMISSION_GROUPS: PermissionGroup[] = [
     headerClass: 'bg-amber-600 text-white',
     items: [
       { id: 'carregamento', label: 'Carregamento (Visualizar)' },
-      { id: 'carregamento_solicitar_cotacao', label: 'Solicitar Cotação' },
-      { id: 'carregamento_tratar_cotacao', label: 'Tratar Cotação (Responsável)' },
+      { id: 'carregamento_solicitar_cotacao', label: 'Solicitar Cotação de Frete' },
+      { id: 'carregamento_tratar_cotacao', label: 'Tratar / Responder Cotações' },
+      { id: 'carregamento_aprovar_cotacao', label: 'Aprovar Cotações de Frete' },
       { id: 'carregamento_liberar', label: 'Liberar Carregamento' },
       { id: 'carregamento_logistica', label: 'Painel de Logística' },
       { id: 'carregamento_relatorios', label: 'Relatórios Carregamento' },
