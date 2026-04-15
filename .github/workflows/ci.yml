@@ -27,6 +27,9 @@ jobs:
       - name: TypeScript check
         run: npm run lint
 
+      - name: ESLint
+        run: npx eslint src --ext .ts,.tsx --max-warnings 0
+
       - name: Run tests
         run: npm run test:run
 
@@ -48,8 +51,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build
-        run: npm run build
+      - name: Set build env defaults
+        run: |
+          echo "VITE_SUPABASE_URL=${VITE_SUPABASE_URL:-https://placeholder.supabase.co}" >> $GITHUB_ENV
+          echo "VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY:-placeholder-key}" >> $GITHUB_ENV
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
+      - name: Build
+        run: npm run build
