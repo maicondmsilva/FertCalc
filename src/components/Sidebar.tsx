@@ -31,7 +31,7 @@ export const menuItems = [
   { id: 'products', label: 'Produtos', icon: Database, permission: 'priceLists' },
   { id: 'clients', label: 'Clientes', icon: Users, permission: 'clients' },
   { id: 'agents', label: 'Representantes', icon: UserCheck, permission: 'agents' },
-  { id: 'branches', label: 'Filiais', icon: Building2, permission: 'branches' },
+  { id: 'branches', label: 'Filiais e Locais', icon: Building2, permission: 'branches' },
   { id: 'users', label: 'Usuários', icon: ShieldCheck, permission: 'users' },
   { id: 'settings', label: 'Configurações', icon: Settings, permission: 'settings' },
   { id: 'expenses', label: 'Gastos Cartão', icon: CreditCard, permission: 'expenses' },
