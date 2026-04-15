@@ -12,6 +12,7 @@ import {
   X,
 } from 'lucide-react';
 import PricingDetailModal from './PricingDetailModal';
+import NovoPedidoVendaModal from './NovoPedidoVendaModal';
 import {
   getPricingRecords,
   getGoals,
@@ -41,6 +42,8 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
     companyName: 'FertCalc Pro',
     companyLogo: '',
   });
+  const [showNovoPedido, setShowNovoPedido] = useState(false);
+  const [novoPedidoPricing, setNovoPedidoPricing] = useState<PricingRecord | null>(null);
 
   // Modal de reprovação de precificação
   const [showRejectionModal, setShowRejectionModal] = useState(false);
@@ -456,6 +459,17 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
                   >
                     <Eye className="w-4 h-4" />
                   </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setNovoPedidoPricing(p);
+                      setShowNovoPedido(true);
+                    }}
+                    className="p-2 text-emerald-600 hover:bg-emerald-100 rounded-full"
+                    title="Novo Pedido de Venda"
+                  >
+                    📋
+                  </button>
                   {canApprove && (
                     <>
                       <button
@@ -688,6 +702,18 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
         </div>
       )}
       <ConfirmDialog {...confirmState} onConfirm={handleConfirm} onCancel={handleCancel} />
+
+      {showNovoPedido && novoPedidoPricing && (
+        <NovoPedidoVendaModal
+          pricing={novoPedidoPricing}
+          currentUser={currentUser}
+          onClose={() => {
+            setShowNovoPedido(false);
+            setNovoPedidoPricing(null);
+          }}
+          onSuccess={() => loadData()}
+        />
+      )}
     </div>
   );
 }
