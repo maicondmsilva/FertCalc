@@ -132,6 +132,7 @@ interface EnrichedPedido {
   quantidade_real?: number | null;
   tipo_frete?: string | null;
   saldo_disponivel?: number | null;
+  status?: PedidoVenda['status'];
   pricing?: PricingRecord;
   clientName?: string;
   _source: string;
@@ -341,7 +342,7 @@ export function ModalNovoCarregamento({
         numero_pedido: p.numero_pedido ?? undefined,
         quantidade_real: p.quantidade_real ?? undefined,
         saldo_disponivel: p.saldo_disponivel ?? undefined,
-        status: 'pendente',
+        status: p.status ?? 'pendente',
       } as PedidoVenda);
     } else {
       setSelectedPedidoVenda(null);

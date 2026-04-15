@@ -2,11 +2,16 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { User, PedidoVenda, Branch } from '../types';
 import { ClipboardList, RefreshCw, Search, ChevronDown, ChevronUp } from 'lucide-react';
 import { getPedidosVenda, updatePedidoVenda } from '../services/pedidosVendaService';
-import { createCarregamento, gerarNumeroCarregamento } from '../services/carregamentoService';
+import {
+  createCarregamento,
+  gerarNumeroCarregamento,
+  getFiliais,
+} from '../services/carregamentoService';
 import { getBranches } from '../services/db';
 import { useToast } from './Toast';
 import NovoPedidoVendaModal from './NovoPedidoVendaModal';
 import { ModalNovoCarregamento, CarregamentoFormData } from './Carregamento';
+import { Filial } from '../types/carregamento';
 
 const STATUS_LABEL: Record<PedidoVenda['status'], string> = {
   pendente: 'Ativo',
@@ -41,6 +46,7 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [showNovoPedido, setShowNovoPedido] = useState(false);
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [filiais, setFiliais] = useState<Filial[]>([]);
   const [pedidoParaCarregamento, setPedidoParaCarregamento] = useState<PedidoVenda | null>(null);
   const [modalCarregamentoAberto, setModalCarregamentoAberto] = useState(false);
 
@@ -56,6 +62,12 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
       setLoading(false);
     }
   }, [showError]);
+
+  useEffect(() => {
+    getFiliais()
+      .then(setFiliais)
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     load();
@@ -394,7 +406,7 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
 
       {modalCarregamentoAberto && (
         <ModalNovoCarregamento
-          filiais={[]}
+          filiais={filiais}
           pedidoVinculado={pedidoParaCarregamento ?? undefined}
           onSave={handleSolicitarCarregamento}
           onClose={() => {
