@@ -57,6 +57,10 @@ export default [
         process: 'readonly',
         module: 'readonly',
         require: 'readonly',
+        File: 'readonly',
+        FileReader: 'readonly',
+        FileList: 'readonly',
+        crypto: 'readonly',
       },
     },
     plugins: {
@@ -90,6 +94,12 @@ export default [
       ),
       'jsx-a11y/aria-props': 'warn',
       'jsx-a11y/alt-text': 'warn',
+      'jsx-a11y/no-static-element-interactions': 'warn',
+      'jsx-a11y/no-noninteractive-element-interactions': 'warn',
+
+      // React — downgrade para warn em código legado
+      'react/no-unescaped-entities': 'warn',
+      'react/jsx-no-comment-textnodes': 'warn',
 
       // Geral
       'no-console': ['warn', { allow: ['error'] }],

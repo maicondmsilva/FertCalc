@@ -264,7 +264,7 @@ Este plano foi atualizado com base em análise técnica completa realizada em 07
 **Problema:** Sem pipeline automatizado, qualquer erro de build ou tipo pode entrar em produção sem detecção.
 
 **Tarefas:**
-- [ ] Criar `.github/workflows/ci.yml`:
+- [x] Criar `.github/workflows/ci.yml`:
   ```yaml
   # Disparado em: push para main + pull requests
   jobs:
@@ -279,11 +279,11 @@ Este plano foi atualizado com base em análise técnica completa realizada em 07
       - npm run build         # Vite build
       needs: [quality]
   ```
-- [ ] Criar `.github/workflows/deploy.yml`:
+- [x] Criar `.github/workflows/deploy.yml`:
   - Disparado apenas em push para `main`
   - Deploy automático para Vercel (via `vercel --prod`) após CI verde
   - Secrets configurados: `VERCEL_TOKEN`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
-- [ ] Adicionar badge de CI no README
+- [x] Adicionar badge de CI no README
 
 **Arquivos afetados:** `.github/workflows/ci.yml` (novo), `.github/workflows/deploy.yml` (novo)
 
@@ -293,7 +293,7 @@ Este plano foi atualizado com base em análise técnica completa realizada em 07
 **Problema:** O README atual tem apenas 3 linhas de instrução, insuficiente para onboarding de novos desenvolvedores.
 
 **Tarefas:**
-- [ ] Reescrever `README.md` com:
+- [x] Reescrever `README.md` com:
   - Descrição do produto e stack
   - Pré-requisitos (Node 20+, conta Supabase)
   - Setup passo a passo (clonar, `.env.local`, `npm install`, `npm run dev`)
@@ -301,12 +301,13 @@ Este plano foi atualizado com base em análise técnica completa realizada em 07
   - Comandos disponíveis (`dev`, `build`, `lint`, `test`, `test:coverage`)
   - Guia de contribuição (branches, commits, PRs)
   - Link para o plano de desenvolvimento
-- [ ] Documentar todas as variáveis de ambiente no `.env.example` com descrição
+- [x] Documentar todas as variáveis de ambiente no `.env.example` com descrição
 - [ ] Criar `supabase/README.md` com instrução para aplicar migrations e configurar RLS
 
 **Arquivos afetados:** `README.md`, `.env.example`, `supabase/README.md` (novo)
 
 ---
+
 
 ### 4.3 Logs de Auditoria para Ações Críticas
 **Problema:** Ações irreversíveis (aprovação de precificação, exclusão, transferência) não geram registro imutável de auditoria além do `history` do próprio registro.
