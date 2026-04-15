@@ -95,7 +95,7 @@ function DetalheModal({ cotacao, onClose }: { cotacao: CotacaoSolicitada; onClos
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-5 border-b border-stone-100">
           <div>
-            <p className="font-mono font-bold text-stone-800 text-base">{cotacao.numero_cotacao}</p>
+            <p className="font-mono font-bold text-blue-600 text-base">{cotacao.numero_cotacao}</p>
             <p className="text-xs text-stone-400 mt-0.5">Detalhes da Solicitação</p>
           </div>
           <div className="flex items-center gap-3">
@@ -296,7 +296,7 @@ function PainelResponsavel({ cotacao, transportadoras, canAprovar, onClose, onUp
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-5 border-b border-stone-100">
           <div>
-            <p className="font-mono font-bold text-stone-800">{cotacao.numero_cotacao}</p>
+            <p className="font-mono font-bold text-blue-600">{cotacao.numero_cotacao}</p>
             <p className="text-xs text-stone-400 mt-0.5">Tratar Solicitação</p>
           </div>
           <div className="flex items-center gap-3">
@@ -848,7 +848,7 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
                   <tbody className="divide-y divide-stone-100">
                     {minhasCotacoes.map((c) => (
                       <tr key={c.id} className="hover:bg-stone-50 transition-colors">
-                        <td className="px-4 py-3 font-mono font-bold text-stone-700 text-xs">{c.numero_cotacao}</td>
+                        <td className="px-4 py-3 font-mono font-bold text-blue-600 text-xs">{c.numero_cotacao}</td>
                         <td className="px-4 py-3 text-stone-700">{c.cliente_nome || '—'}</td>
                         <td className="px-4 py-3 text-stone-500 hidden sm:table-cell">{c.filial?.nome || '—'}</td>
                         <td className="px-4 py-3 text-stone-500 hidden md:table-cell">{c.local_carregamento?.nome || '—'}</td>
@@ -923,7 +923,7 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
                   <tbody className="divide-y divide-stone-100">
                     {cotacoesResponsavel.map((c) => (
                       <tr key={c.id} className="hover:bg-stone-50 transition-colors">
-                        <td className="px-4 py-3 font-mono font-bold text-stone-700 text-xs">{c.numero_cotacao}</td>
+                        <td className="px-4 py-3 font-mono font-bold text-blue-600 text-xs">{c.numero_cotacao}</td>
                         <td className="px-4 py-3 text-stone-700">{c.solicitante_nome || '—'}</td>
                         <td className="px-4 py-3 text-stone-700">{c.cliente_nome || '—'}</td>
                         <td className="px-4 py-3 text-stone-500 hidden sm:table-cell">{c.filial?.nome || '—'}</td>
