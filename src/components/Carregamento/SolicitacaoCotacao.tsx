@@ -86,6 +86,11 @@ function formatCurrency(value?: number) {
   return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
+function sanitizeUrl(url?: string): string {
+  if (!url) return '';
+  return /^https?:\/\//i.test(url.trim()) ? url.trim() : '';
+}
+
 // ─────────────────────────────────────────────────────────────
 //  Detail Modal (read-only for vendedor)
 // ─────────────────────────────────────────────────────────────
@@ -148,10 +153,10 @@ function DetalheModal({ cotacao, onClose }: { cotacao: CotacaoSolicitada; onClos
               <p className="text-sm text-stone-700">{cotacao.fazenda}</p>
             </div>
           )}
-          {cotacao.maps_url && (
+          {cotacao.maps_url && sanitizeUrl(cotacao.maps_url) && (
             <div>
               <p className="text-xs font-bold text-stone-400 uppercase mb-0.5">Link Maps</p>
-              <a href={cotacao.maps_url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 underline break-all">
+              <a href={sanitizeUrl(cotacao.maps_url)} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 underline break-all">
                 {cotacao.maps_url}
               </a>
             </div>
@@ -354,10 +359,10 @@ function PainelResponsavel({ cotacao, transportadoras, canAprovar, onClose, onUp
                 <p className="text-sm text-stone-700">{cotacao.fazenda}</p>
               </div>
             )}
-            {cotacao.maps_url && (
+            {cotacao.maps_url && sanitizeUrl(cotacao.maps_url) && (
               <div className="mt-2">
                 <p className="text-xs text-stone-400 mb-0.5">Link Maps</p>
-                <a href={cotacao.maps_url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 underline break-all">
+                <a href={sanitizeUrl(cotacao.maps_url)} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 underline break-all">
                   {cotacao.maps_url}
                 </a>
               </div>
@@ -626,6 +631,23 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
       .slice(0, 10);
   }, [allClients, formClienteSearch]);
 
+  // Client selection helpers
+  const clearClienteSelection = () => {
+    setFormClienteNome('');
+    setFormClienteId('');
+    setFormClienteSearch('');
+  };
+
+  const selectCliente = (c: Client) => {
+    setFormClienteNome(c.name);
+    setFormClienteId(c.id);
+    setFormClienteSearch(c.name);
+    setShowClienteResults(false);
+  };
+
+  // Safe Maps URL: only allow http/https to prevent XSS
+  const safeMapsUrl = sanitizeUrl(formMaps);
+
   // ── Form submit ──
   const handleSolicitar = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -726,7 +748,7 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
                         <span className="flex-1 font-medium text-stone-800">{formClienteNome}</span>
                         <button
                           type="button"
-                          onClick={() => { setFormClienteNome(''); setFormClienteId(''); setFormClienteSearch(''); }}
+                          onClick={clearClienteSelection}
                           className="text-stone-400 hover:text-red-500 transition-colors"
                         >
                           <X className="w-3.5 h-3.5" />
@@ -751,7 +773,7 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
                               <button
                                 key={c.id}
                                 type="button"
-                                onClick={() => { setFormClienteNome(c.name); setFormClienteId(c.id); setFormClienteSearch(c.name); setShowClienteResults(false); }}
+                                onClick={() => selectCliente(c)}
                                 className="w-full text-left px-4 py-2 hover:bg-amber-50 border-b border-stone-100 last:border-0 transition-colors"
                               >
                                 <p className="text-sm font-bold text-stone-800">{c.name}</p>
@@ -825,9 +847,9 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
                         className="flex-1 px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
                         placeholder="https://maps.google.com/..."
                       />
-                      {formMaps && (
+                      {safeMapsUrl && (
                         <a
-                          href={formMaps}
+                          href={safeMapsUrl}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center gap-1 px-3 py-2 bg-stone-100 border border-stone-300 rounded-lg text-xs font-medium text-stone-600 hover:bg-stone-200 transition-colors whitespace-nowrap"
