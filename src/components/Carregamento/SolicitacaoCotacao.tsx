@@ -13,9 +13,18 @@ import {
   Truck,
   Search,
   ExternalLink,
+  Pencil,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react';
 import { User, Client } from '../../types';
-import { Filial, LocalCarregamento, Transportadora, CotacaoSolicitada, StatusCotacaoSolicitada } from '../../types/carregamento';
+import {
+  Filial,
+  LocalCarregamento,
+  Transportadora,
+  CotacaoSolicitada,
+  StatusCotacaoSolicitada,
+} from '../../types/carregamento';
 import { getFiliais, getTransportadoras } from '../../services/carregamentoService';
 import { getLocaisAtivos } from '../../services/locaisCarregamentoService';
 import { getClients } from '../../services/db';
@@ -26,7 +35,12 @@ import {
   getCotacoesByFiliais,
   getResponsaveisByFilial,
 } from '../../services/cotacaoSolicitadaService';
-import { notifyCotacaoSolicitada, notifyCotacaoDisponivel } from '../../services/notificationService';
+import { registrarAuditLog } from '../../services/auditLogService';
+import {
+  notifyCotacaoSolicitada,
+  notifyCotacaoDisponivel,
+  notifyCotacaoCancelada,
+} from '../../services/notificationService';
 import { useToast } from '../Toast';
 
 // ─────────────────────────────────────────────────────────────
@@ -78,7 +92,11 @@ function StatusBadge({ status }: { status: StatusCotacaoSolicitada }) {
 
 function formatDate(iso?: string) {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return new Date(iso).toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
 }
 
 function formatCurrency(value?: number) {
@@ -90,10 +108,29 @@ function sanitizeUrl(url?: string): string {
   if (!url) return '';
   try {
     const parsed = new URL(url.trim());
-    return (parsed.protocol === 'https:' || parsed.protocol === 'http:') ? parsed.href : '';
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? parsed.href : '';
   } catch {
     return '';
   }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  Permission helper for cotações
+// ─────────────────────────────────────────────────────────────
+function canEditDeleteCotacao(
+  status: StatusCotacaoSolicitada,
+  currentUser: User,
+  solicitadoPor?: string
+): { canEdit: boolean; canDelete: boolean } {
+  const isAdmin = ['admin', 'master'].includes(currentUser.role);
+  const isLogistica =
+    !!(currentUser.permissions as Record<string, unknown>)?.carregamento_aprovar ||
+    !!(currentUser.permissions as Record<string, unknown>)?.carregamento_tratar_cotacao;
+  if (isAdmin || isLogistica) return { canEdit: true, canDelete: true };
+  const isSolicitante = currentUser.id === solicitadoPor;
+  if (status === 'aprovado' || status === 'cancelado') return { canEdit: false, canDelete: false };
+  if (status === 'cotado') return { canEdit: false, canDelete: isSolicitante };
+  return { canEdit: isSolicitante, canDelete: isSolicitante };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -129,7 +166,9 @@ function DetalheModal({ cotacao, onClose }: { cotacao: CotacaoSolicitada; onClos
               <p className="text-stone-700">{cotacao.filial?.nome || '—'}</p>
             </div>
             <div>
-              <p className="text-xs font-bold text-stone-400 uppercase mb-0.5">Local de Carregamento</p>
+              <p className="text-xs font-bold text-stone-400 uppercase mb-0.5">
+                Local de Carregamento
+              </p>
               <p className="text-stone-700">{cotacao.local_carregamento?.nome || '—'}</p>
             </div>
             <div>
@@ -148,7 +187,9 @@ function DetalheModal({ cotacao, onClose }: { cotacao: CotacaoSolicitada; onClos
 
           {cotacao.endereco_entrega && (
             <div>
-              <p className="text-xs font-bold text-stone-400 uppercase mb-0.5">Endereço de Entrega</p>
+              <p className="text-xs font-bold text-stone-400 uppercase mb-0.5">
+                Endereço de Entrega
+              </p>
               <p className="text-sm text-stone-700">{cotacao.endereco_entrega}</p>
             </div>
           )}
@@ -161,7 +202,12 @@ function DetalheModal({ cotacao, onClose }: { cotacao: CotacaoSolicitada; onClos
           {cotacao.maps_url && sanitizeUrl(cotacao.maps_url) && (
             <div>
               <p className="text-xs font-bold text-stone-400 uppercase mb-0.5">Link Maps</p>
-              <a href={sanitizeUrl(cotacao.maps_url)} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 underline break-all">
+              <a
+                href={sanitizeUrl(cotacao.maps_url)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-blue-600 underline break-all"
+              >
                 {cotacao.maps_url}
               </a>
             </div>
@@ -179,12 +225,18 @@ function DetalheModal({ cotacao, onClose }: { cotacao: CotacaoSolicitada; onClos
               <p className="text-xs font-bold text-stone-400 uppercase">Resposta da Logística</p>
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
-                  <p className="text-xs font-bold text-stone-400 uppercase mb-0.5">Transportadora</p>
-                  <p className="text-stone-700">{cotacao.transportadora?.nome || cotacao.transportadora_nome || '—'}</p>
+                  <p className="text-xs font-bold text-stone-400 uppercase mb-0.5">
+                    Transportadora
+                  </p>
+                  <p className="text-stone-700">
+                    {cotacao.transportadora?.nome || cotacao.transportadora_nome || '—'}
+                  </p>
                 </div>
                 <div>
                   <p className="text-xs font-bold text-stone-400 uppercase mb-0.5">Valor Total</p>
-                  <p className="text-stone-700 font-semibold">{formatCurrency(cotacao.valor_frete)}</p>
+                  <p className="text-stone-700 font-semibold">
+                    {formatCurrency(cotacao.valor_frete)}
+                  </p>
                 </div>
                 <div>
                   <p className="text-xs font-bold text-stone-400 uppercase mb-0.5">R$/ton</p>
@@ -197,7 +249,9 @@ function DetalheModal({ cotacao, onClose }: { cotacao: CotacaoSolicitada; onClos
               </div>
               {cotacao.obs_responsavel && (
                 <div>
-                  <p className="text-xs font-bold text-stone-400 uppercase mb-0.5">Obs. Responsável</p>
+                  <p className="text-xs font-bold text-stone-400 uppercase mb-0.5">
+                    Obs. Responsável
+                  </p>
                   <p className="text-sm text-stone-700">{cotacao.obs_responsavel}</p>
                 </div>
               )}
@@ -221,11 +275,21 @@ interface PainelResponsavelProps {
   onUpdate: () => void;
 }
 
-function PainelResponsavel({ cotacao, transportadoras, canAprovar, onClose, onUpdate }: PainelResponsavelProps) {
+function PainelResponsavel({
+  cotacao,
+  transportadoras,
+  canAprovar,
+  onClose,
+  onUpdate,
+}: PainelResponsavelProps) {
   const { showSuccess, showError } = useToast();
   const [transportadoraId, setTransportadoraId] = useState(cotacao.transportadora_id ?? '');
-  const [valorFrete, setValorFrete] = useState(cotacao.valor_frete != null ? String(cotacao.valor_frete) : '');
-  const [prazoDias, setPrazoDias] = useState(cotacao.prazo_entrega_dias != null ? String(cotacao.prazo_entrega_dias) : '');
+  const [valorFrete, setValorFrete] = useState(
+    cotacao.valor_frete != null ? String(cotacao.valor_frete) : ''
+  );
+  const [prazoDias, setPrazoDias] = useState(
+    cotacao.prazo_entrega_dias != null ? String(cotacao.prazo_entrega_dias) : ''
+  );
   const [obsResponsavel, setObsResponsavel] = useState(cotacao.obs_responsavel ?? '');
   const [saving, setSaving] = useState(false);
 
@@ -341,11 +405,15 @@ function PainelResponsavel({ cotacao, transportadoras, canAprovar, onClose, onUp
               </div>
               <div>
                 <p className="text-xs text-stone-400 mb-0.5">Local de Carregamento</p>
-                <p className="font-medium text-stone-700">{cotacao.local_carregamento?.nome || '—'}</p>
+                <p className="font-medium text-stone-700">
+                  {cotacao.local_carregamento?.nome || '—'}
+                </p>
               </div>
               <div>
                 <p className="text-xs text-stone-400 mb-0.5">Quantidade (ton)</p>
-                <p className="font-medium text-stone-700">{cotacao.quantidade_ton?.toFixed(3) ?? '—'}</p>
+                <p className="font-medium text-stone-700">
+                  {cotacao.quantidade_ton?.toFixed(3) ?? '—'}
+                </p>
               </div>
               <div>
                 <p className="text-xs text-stone-400 mb-0.5">Produto/Pedido</p>
@@ -367,7 +435,12 @@ function PainelResponsavel({ cotacao, transportadoras, canAprovar, onClose, onUp
             {cotacao.maps_url && sanitizeUrl(cotacao.maps_url) && (
               <div className="mt-2">
                 <p className="text-xs text-stone-400 mb-0.5">Link Maps</p>
-                <a href={sanitizeUrl(cotacao.maps_url)} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 underline break-all">
+                <a
+                  href={sanitizeUrl(cotacao.maps_url)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-blue-600 underline break-all"
+                >
                   {cotacao.maps_url}
                 </a>
               </div>
@@ -398,7 +471,9 @@ function PainelResponsavel({ cotacao, transportadoras, canAprovar, onClose, onUp
                   >
                     <option value="">Selecione...</option>
                     {transportadoras.map((t) => (
-                      <option key={t.id} value={t.id}>{t.nome}</option>
+                      <option key={t.id} value={t.id}>
+                        {t.nome}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -473,7 +548,9 @@ function PainelResponsavel({ cotacao, transportadoras, canAprovar, onClose, onUp
                 ✓ Aprovar
               </button>
             )}
-            {(cotacao.status === 'aguardando' || cotacao.status === 'em_analise' || cotacao.status === 'cotado') && (
+            {(cotacao.status === 'aguardando' ||
+              cotacao.status === 'em_analise' ||
+              cotacao.status === 'cotado') && (
               <button
                 onClick={handleCancelar}
                 disabled={saving}
@@ -503,11 +580,10 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
     role === 'admin';
 
   const canTratar =
-    currentUser.permissions?.carregamento_tratar_cotacao ||
-    role === 'master' ||
-    role === 'admin';
+    currentUser.permissions?.carregamento_tratar_cotacao || role === 'master' || role === 'admin';
 
-  const canAprovar = role === 'master' || role === 'admin' || !!currentUser.permissions?.carregamento_admin;
+  const canAprovar =
+    role === 'master' || role === 'admin' || !!currentUser.permissions?.carregamento_admin;
 
   const filialIds: string[] = useMemo(
     () => currentUser.permissions?.carregamento_filial_ids ?? [],
@@ -547,6 +623,11 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
   const [cotacoesResponsavel, setCotacoesResponsavel] = useState<CotacaoSolicitada[]>([]);
   const [loadingResponsavel, setLoadingResponsavel] = useState(false);
   const [painelCotacao, setPainelCotacao] = useState<CotacaoSolicitada | null>(null);
+
+  // Delete confirmation state
+  const [excluindoCotacao, setExcluindoCotacao] = useState<CotacaoSolicitada | null>(null);
+  const [motivoExclusaoCotacao, setMotivoExclusaoCotacao] = useState('');
+  const [excluindoLoading, setExcluindoLoading] = useState(false);
 
   // ── Load data ──
   const loadFiliais = useCallback(async () => {
@@ -629,7 +710,12 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
 
   // Pre-computed lowercase client values for autocomplete performance
   const clientsLower = useMemo(
-    () => allClients.map((c) => ({ client: c, nameLower: c.name.toLowerCase(), codeLower: c.code.toLowerCase() })),
+    () =>
+      allClients.map((c) => ({
+        client: c,
+        nameLower: c.name.toLowerCase(),
+        codeLower: c.code.toLowerCase(),
+      })),
     [allClients]
   );
 
@@ -716,6 +802,38 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
     await loadCotacoesResponsavel();
   };
 
+  const handleExcluirCotacao = async () => {
+    if (!excluindoCotacao) return;
+    if (!motivoExclusaoCotacao.trim()) {
+      showError('Informe o motivo da exclusão.');
+      return;
+    }
+    setExcluindoLoading(true);
+    try {
+      const snapshot = excluindoCotacao;
+      await registrarAuditLog({
+        tabela: 'cotacoes_solicitadas',
+        registro_id: snapshot.id,
+        acao: 'DELETE',
+        dados_anteriores: snapshot as unknown as Record<string, unknown>,
+        dados_novos: null,
+        motivo: motivoExclusaoCotacao.trim(),
+        usuario_id: currentUser.id,
+        usuario_nome: currentUser.name ?? currentUser.id,
+      });
+      await updateCotacaoSolicitada(snapshot.id, { status: 'cancelado' });
+      await notifyCotacaoCancelada(snapshot, currentUser.name ?? 'Usuário');
+      showSuccess('Cotação excluída com sucesso.');
+      setExcluindoCotacao(null);
+      setMotivoExclusaoCotacao('');
+      await handleUpdate();
+    } catch {
+      showError('Erro ao excluir cotação.');
+    } finally {
+      setExcluindoLoading(false);
+    }
+  };
+
   // ─────────────────────────────────────────────────────────────
   //  Render
   // ─────────────────────────────────────────────────────────────
@@ -731,7 +849,9 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-base font-bold text-stone-800">Minhas Solicitações de Cotação</h2>
-              <p className="text-xs text-stone-400 mt-0.5">Solicite cotações de frete independentes</p>
+              <p className="text-xs text-stone-400 mt-0.5">
+                Solicite cotações de frete independentes
+              </p>
             </div>
             <button
               onClick={() => setShowForm((v) => !v)}
@@ -773,7 +893,10 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
                           <input
                             type="text"
                             value={formClienteSearch}
-                            onChange={(e) => { setFormClienteSearch(e.target.value); setShowClienteResults(true); }}
+                            onChange={(e) => {
+                              setFormClienteSearch(e.target.value);
+                              setShowClienteResults(true);
+                            }}
                             onFocus={() => setShowClienteResults(true)}
                             className="w-full pl-9 pr-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
                             placeholder="Digite nome ou código..."
@@ -799,7 +922,9 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Filial</label>
+                    <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                      Filial
+                    </label>
                     <select
                       value={formFilialId}
                       onChange={(e) => setFormFilialId(e.target.value)}
@@ -807,13 +932,17 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
                     >
                       <option value="">Selecione...</option>
                       {filiais.map((f) => (
-                        <option key={f.id} value={f.id}>{f.nome}</option>
+                        <option key={f.id} value={f.id}>
+                          {f.nome}
+                        </option>
                       ))}
                     </select>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Local de Carregamento</label>
+                    <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                      Local de Carregamento
+                    </label>
                     <select
                       value={formLocalId}
                       onChange={(e) => setFormLocalId(e.target.value)}
@@ -822,13 +951,17 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
                     >
                       <option value="">Selecione...</option>
                       {locais.map((l) => (
-                        <option key={l.id} value={l.id}>{l.nome}</option>
+                        <option key={l.id} value={l.id}>
+                          {l.nome}
+                        </option>
                       ))}
                     </select>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Endereço de Entrega</label>
+                    <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                      Endereço de Entrega
+                    </label>
                     <input
                       type="text"
                       value={formEndereco}
@@ -839,7 +972,9 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Fazenda</label>
+                    <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                      Fazenda
+                    </label>
                     <input
                       type="text"
                       value={formFazenda}
@@ -850,7 +985,9 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Link Google Maps</label>
+                    <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                      Link Google Maps
+                    </label>
                     <div className="flex gap-2">
                       <input
                         type="url"
@@ -875,7 +1012,9 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Produto/Pedido</label>
+                    <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                      Produto/Pedido
+                    </label>
                     <input
                       type="text"
                       value={formProduto}
@@ -886,7 +1025,9 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Quantidade (ton)</label>
+                    <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                      Quantidade (ton)
+                    </label>
                     <input
                       type="number"
                       min="0"
@@ -900,7 +1041,9 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Observações</label>
+                  <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                    Observações
+                  </label>
                   <textarea
                     rows={2}
                     value={formObs}
@@ -934,7 +1077,10 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
           <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-stone-100">
               <h3 className="font-bold text-stone-700 text-sm">Minhas Cotações</h3>
-              <button onClick={loadMinhasCotacoes} className="text-stone-400 hover:text-stone-600 transition-colors">
+              <button
+                onClick={loadMinhasCotacoes}
+                className="text-stone-400 hover:text-stone-600 transition-colors"
+              >
                 <RefreshCw className="w-4 h-4" />
               </button>
             </div>
@@ -966,10 +1112,16 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
                   <tbody className="divide-y divide-stone-100">
                     {minhasCotacoes.map((c) => (
                       <tr key={c.id} className="hover:bg-stone-50 transition-colors">
-                        <td className="px-4 py-3 font-mono font-bold text-blue-600 text-xs">{c.numero_cotacao}</td>
+                        <td className="px-4 py-3 font-mono font-bold text-blue-600 text-xs">
+                          {c.numero_cotacao}
+                        </td>
                         <td className="px-4 py-3 text-stone-700">{c.cliente_nome || '—'}</td>
-                        <td className="px-4 py-3 text-stone-500 hidden sm:table-cell">{c.filial?.nome || '—'}</td>
-                        <td className="px-4 py-3 text-stone-500 hidden md:table-cell">{c.local_carregamento?.nome || '—'}</td>
+                        <td className="px-4 py-3 text-stone-500 hidden sm:table-cell">
+                          {c.filial?.nome || '—'}
+                        </td>
+                        <td className="px-4 py-3 text-stone-500 hidden md:table-cell">
+                          {c.local_carregamento?.nome || '—'}
+                        </td>
                         <td className="px-4 py-3 text-right text-stone-700 hidden md:table-cell">
                           {c.quantidade_ton?.toFixed(3) ?? '—'}
                         </td>
@@ -980,13 +1132,38 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
                           {formatDate(c.criado_em)}
                         </td>
                         <td className="px-4 py-3 text-center">
-                          <button
-                            onClick={() => setDetalheModal(c)}
-                            className="text-stone-400 hover:text-amber-600 transition-colors"
-                            title="Ver detalhes"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={() => setDetalheModal(c)}
+                              className="text-stone-400 hover:text-amber-600 transition-colors p-1"
+                              title="Ver detalhes"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            {(() => {
+                              const perms = canEditDeleteCotacao(
+                                c.status,
+                                currentUser,
+                                c.solicitado_por
+                              );
+                              return (
+                                <>
+                                  {perms.canDelete && (
+                                    <button
+                                      onClick={() => {
+                                        setExcluindoCotacao(c);
+                                        setMotivoExclusaoCotacao('');
+                                      }}
+                                      className="text-stone-400 hover:text-red-600 transition-colors p-1"
+                                      title="Excluir cotação"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  )}
+                                </>
+                              );
+                            })()}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1005,10 +1182,17 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-base font-bold text-stone-800">Solicitações Pendentes — Logística</h2>
-              <p className="text-xs text-stone-400 mt-0.5">Cotações aguardando resposta ou aprovação</p>
+              <h2 className="text-base font-bold text-stone-800">
+                Solicitações Pendentes — Logística
+              </h2>
+              <p className="text-xs text-stone-400 mt-0.5">
+                Cotações aguardando resposta ou aprovação
+              </p>
             </div>
-            <button onClick={loadCotacoesResponsavel} className="text-stone-400 hover:text-stone-600 transition-colors p-1">
+            <button
+              onClick={loadCotacoesResponsavel}
+              className="text-stone-400 hover:text-stone-600 transition-colors p-1"
+            >
               <RefreshCw className="w-4 h-4" />
             </button>
           </div>
@@ -1041,10 +1225,14 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
                   <tbody className="divide-y divide-stone-100">
                     {cotacoesResponsavel.map((c) => (
                       <tr key={c.id} className="hover:bg-stone-50 transition-colors">
-                        <td className="px-4 py-3 font-mono font-bold text-blue-600 text-xs">{c.numero_cotacao}</td>
+                        <td className="px-4 py-3 font-mono font-bold text-blue-600 text-xs">
+                          {c.numero_cotacao}
+                        </td>
                         <td className="px-4 py-3 text-stone-700">{c.solicitante_nome || '—'}</td>
                         <td className="px-4 py-3 text-stone-700">{c.cliente_nome || '—'}</td>
-                        <td className="px-4 py-3 text-stone-500 hidden sm:table-cell">{c.filial?.nome || '—'}</td>
+                        <td className="px-4 py-3 text-stone-500 hidden sm:table-cell">
+                          {c.filial?.nome || '—'}
+                        </td>
                         <td className="px-4 py-3 text-right text-stone-700 hidden md:table-cell">
                           {c.quantidade_ton?.toFixed(3) ?? '—'}
                         </td>
@@ -1055,13 +1243,38 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
                           {formatDate(c.criado_em)}
                         </td>
                         <td className="px-4 py-3 text-center">
-                          <button
-                            onClick={() => setPainelCotacao(c)}
-                            className="text-stone-400 hover:text-amber-600 transition-colors"
-                            title="Tratar cotação"
-                          >
-                            <Truck className="w-4 h-4" />
-                          </button>
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={() => setPainelCotacao(c)}
+                              className="text-stone-400 hover:text-amber-600 transition-colors p-1"
+                              title="Tratar cotação"
+                            >
+                              <Truck className="w-4 h-4" />
+                            </button>
+                            {(() => {
+                              const perms = canEditDeleteCotacao(
+                                c.status,
+                                currentUser,
+                                c.solicitado_por
+                              );
+                              return (
+                                <>
+                                  {perms.canDelete && (
+                                    <button
+                                      onClick={() => {
+                                        setExcluindoCotacao(c);
+                                        setMotivoExclusaoCotacao('');
+                                      }}
+                                      className="text-stone-400 hover:text-red-600 transition-colors p-1"
+                                      title={perms.canDelete ? 'Excluir cotação' : 'Sem permissão'}
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  )}
+                                </>
+                              );
+                            })()}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1093,6 +1306,59 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
           onClose={() => setPainelCotacao(null)}
           onUpdate={handleUpdate}
         />
+      )}
+      {/* Delete cotação confirmation dialog */}
+      {excluindoCotacao && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center gap-3 p-5 border-b border-stone-100">
+              <div className="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <p className="font-bold text-stone-800">Excluir Cotação</p>
+                <p className="text-xs text-stone-400 mt-0.5">{excluindoCotacao.numero_cotacao}</p>
+              </div>
+            </div>
+            <div className="p-5 space-y-4">
+              <p className="text-sm text-stone-600">
+                Tem certeza que deseja excluir a cotação{' '}
+                <strong>{excluindoCotacao.numero_cotacao}</strong>? Esta ação não pode ser desfeita.
+              </p>
+              <div>
+                <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                  Motivo <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  rows={3}
+                  value={motivoExclusaoCotacao}
+                  onChange={(e) => setMotivoExclusaoCotacao(e.target.value)}
+                  placeholder="Informe o motivo da exclusão..."
+                  className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 outline-none resize-none"
+                />
+              </div>
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => {
+                    setExcluindoCotacao(null);
+                    setMotivoExclusaoCotacao('');
+                  }}
+                  disabled={excluindoLoading}
+                  className="px-5 py-2 border border-stone-300 rounded-lg text-sm font-bold text-stone-600 hover:bg-stone-50 transition-colors disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleExcluirCotacao}
+                  disabled={excluindoLoading || !motivoExclusaoCotacao.trim()}
+                  className="px-5 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white rounded-lg text-sm font-bold transition-colors"
+                >
+                  {excluindoLoading ? 'Excluindo...' : 'Excluir'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

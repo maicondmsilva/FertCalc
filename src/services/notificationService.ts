@@ -235,3 +235,86 @@ export const notifyCotacaoDisponivel = async (
     action_url: '/carregamento_solicitacao',
   });
 };
+
+export const notifyCotacaoCancelada = async (
+  cotacao: CotacaoSolicitada,
+  canceladoPorNome: string
+): Promise<void> => {
+  if (!cotacao.solicitado_por) return;
+  await createNotification({
+    user_id: cotacao.solicitado_por,
+    type: NotificationType.COTACAO_CANCELADA,
+    group_type: NotificationGroup.CARREGAMENTO,
+    title: 'Cotação Cancelada/Excluída',
+    message: `Sua solicitação ${cotacao.numero_cotacao} foi cancelada por ${canceladoPorNome}`,
+    action_url: '/carregamento_solicitacao',
+  });
+};
+
+export const notifyNovoCarregamento = async (
+  numeroCarregamento: string,
+  solicitanteNome: string,
+  aprovadoresIds: string[]
+): Promise<void> => {
+  for (const aprovadorId of aprovadoresIds) {
+    await createNotification({
+      user_id: aprovadorId,
+      type: NotificationType.NOVO_CARREGAMENTO,
+      group_type: NotificationGroup.CARREGAMENTO,
+      title: 'Novo Carregamento',
+      message: `${solicitanteNome} criou o carregamento ${numeroCarregamento}`,
+      action_url: '/carregamento',
+      metadata: { numero: numeroCarregamento },
+    });
+  }
+};
+
+export const notifyCarregamentoAprovado = async (
+  numeroCarregamento: string,
+  aprovadorNome: string,
+  solicitanteId: string
+): Promise<void> => {
+  await createNotification({
+    user_id: solicitanteId,
+    type: NotificationType.CARREGAMENTO_APROVADO,
+    group_type: NotificationGroup.CARREGAMENTO,
+    title: 'Carregamento Aprovado',
+    message: `Seu carregamento ${numeroCarregamento} foi aprovado por ${aprovadorNome}`,
+    action_url: '/carregamento',
+    metadata: { numero: numeroCarregamento },
+  });
+};
+
+export const notifyCarregamentoEditado = async (
+  numeroCarregamento: string,
+  editorNome: string,
+  solicitanteId: string
+): Promise<void> => {
+  await createNotification({
+    user_id: solicitanteId,
+    type: NotificationType.CARREGAMENTO_EDITADO,
+    group_type: NotificationGroup.CARREGAMENTO,
+    title: 'Carregamento Editado',
+    message: `Seu carregamento ${numeroCarregamento} foi editado por ${editorNome}`,
+    action_url: '/carregamento',
+    metadata: { numero: numeroCarregamento },
+  });
+};
+
+export const notifyCarregamentoExcluido = async (
+  numeroCarregamento: string,
+  exclusorNome: string,
+  destinatariosIds: string[]
+): Promise<void> => {
+  for (const destinatarioId of destinatariosIds) {
+    await createNotification({
+      user_id: destinatarioId,
+      type: NotificationType.CARREGAMENTO_EXCLUIDO,
+      group_type: NotificationGroup.CARREGAMENTO,
+      title: 'Carregamento Excluído',
+      message: `O carregamento ${numeroCarregamento} foi excluído por ${exclusorNome}`,
+      action_url: '/carregamento',
+      metadata: { numero: numeroCarregamento },
+    });
+  }
+};

@@ -18,6 +18,9 @@ import {
   FileText,
   Eye,
   Search,
+  Pencil,
+  Trash2,
+  History,
 } from 'lucide-react';
 import {
   Carregamento,
@@ -33,6 +36,7 @@ import {
   getCarregamentos,
   createCarregamento,
   updateCarregamento,
+  deleteCarregamento,
   updateStatusCarregamento,
   gerarNumeroCarregamento,
   getFiliais,
@@ -48,12 +52,37 @@ import {
   getCarregamentosCalendario,
   getAlertasCarregamento,
 } from '../../services/carregamentoService';
+import { registrarAuditLog } from '../../services/auditLogService';
+import {
+  notifyCarregamentoExcluido,
+  notifyCarregamentoEditado,
+} from '../../services/notificationService';
 import { getPricingRecords } from '../../services/db';
 import { getPedidosVenda } from '../../services/pedidosVendaService';
 import { getLocaisAtivos } from '../../services/locaisCarregamentoService';
 import { useToast } from '../Toast';
 import SolicitacaoCotacaoIndependente from './SolicitacaoCotacao';
+import HistoricoModificacoes from '../HistoricoModificacoes';
 import { formatCarregamentoId } from '../../utils/formatId';
+
+// ─── Permission helper ────────────────────────────────────────────────────────
+function canEditDeleteCarregamento(
+  status: StatusCarregamento,
+  currentUser: User
+): { canEdit: boolean; canDelete: boolean } {
+  const isAdmin = ['admin', 'master'].includes(currentUser.role);
+  const isLogistica = !!(currentUser.permissions as Record<string, unknown>)?.carregamento_aprovar;
+  if (isAdmin || isLogistica) return { canEdit: true, canDelete: true };
+  // After liberation / in transit / completed — only logística can edit
+  const statusBloqueado: StatusCarregamento[] = [
+    'liberado_parcial',
+    'liberado_total',
+    'em_carregamento',
+    'carregado',
+  ];
+  if (statusBloqueado.includes(status)) return { canEdit: false, canDelete: false };
+  return { canEdit: true, canDelete: true };
+}
 
 // ─── Sub-view type ─────────────────────────────────────────────────────────────
 type CarregamentoView =
@@ -166,6 +195,7 @@ export interface ModalNovoCarregamentoProps {
   onSave: (data: CarregamentoFormData) => Promise<void>;
   onClose: () => void;
   pedidoVinculado?: PedidoVenda;
+  carregamentoEditando?: Carregamento;
 }
 
 // Bug 2 fix — determina o tipo de frete em ordem de prioridade
@@ -187,27 +217,51 @@ export function ModalNovoCarregamento({
   onSave,
   onClose,
   pedidoVinculado,
+  carregamentoEditando,
 }: ModalNovoCarregamentoProps) {
   const { showError } = useToast();
-  const [form, setForm] = useState<CarregamentoFormData>(() => ({
-    tipo_frete: (pedidoVinculado?.tipo_frete as 'CIF' | 'FOB') || ('FOB' as 'CIF' | 'FOB'),
-    quantidade_total: pedidoVinculado?.saldo_disponivel
-      ? String(pedidoVinculado.saldo_disponivel)
-      : '',
-    filial_id: '',
-    local_carregamento_id: '',
-    data_prevista_carregamento: '',
-    observacoes: '',
-    pedido_venda_id: pedidoVinculado?.id || '',
-    pedido_venda_numero: pedidoVinculado?.numero_pedido || '',
-    precificacao_id: pedidoVinculado?.precificacao_id || '',
-    cliente_nome: pedidoVinculado?.cliente_nome || '',
-    valor_frete:
-      pedidoVinculado?.tipo_frete === 'CIF' && pedidoVinculado?.valor_frete
-        ? String(pedidoVinculado.valor_frete)
+  const isEditMode = !!carregamentoEditando;
+  const [form, setForm] = useState<CarregamentoFormData>(() => {
+    if (carregamentoEditando) {
+      return {
+        tipo_frete: (carregamentoEditando.tipo_frete as 'CIF' | 'FOB') || 'FOB',
+        quantidade_total: carregamentoEditando.quantidade_total
+          ? String(carregamentoEditando.quantidade_total)
+          : '',
+        filial_id: carregamentoEditando.filial_id || '',
+        local_carregamento_id: carregamentoEditando.local_carregamento_id || '',
+        data_prevista_carregamento: carregamentoEditando.data_prevista_carregamento || '',
+        observacoes: carregamentoEditando.observacoes || '',
+        pedido_venda_id: carregamentoEditando.pedido_venda_id || '',
+        pedido_venda_numero: carregamentoEditando.pedido_venda_numero || '',
+        precificacao_id: carregamentoEditando.pedido_precificacao_id || '',
+        cliente_nome: '',
+        valor_frete: carregamentoEditando.valor_frete
+          ? String(carregamentoEditando.valor_frete)
+          : '',
+        _freteAutoDetectado: false,
+      };
+    }
+    return {
+      tipo_frete: (pedidoVinculado?.tipo_frete as 'CIF' | 'FOB') || ('FOB' as 'CIF' | 'FOB'),
+      quantidade_total: pedidoVinculado?.saldo_disponivel
+        ? String(pedidoVinculado.saldo_disponivel)
         : '',
-    _freteAutoDetectado: !!pedidoVinculado,
-  }));
+      filial_id: '',
+      local_carregamento_id: '',
+      data_prevista_carregamento: '',
+      observacoes: '',
+      pedido_venda_id: pedidoVinculado?.id || '',
+      pedido_venda_numero: pedidoVinculado?.numero_pedido || '',
+      precificacao_id: pedidoVinculado?.precificacao_id || '',
+      cliente_nome: pedidoVinculado?.cliente_nome || '',
+      valor_frete:
+        pedidoVinculado?.tipo_frete === 'CIF' && pedidoVinculado?.valor_frete
+          ? String(pedidoVinculado.valor_frete)
+          : '',
+      _freteAutoDetectado: !!pedidoVinculado,
+    };
+  });
   const [saving, setSaving] = useState(false);
   const [pedidoSearch, setPedidoSearch] = useState(pedidoVinculado?.numero_pedido || '');
   const [allPedidos, setAllPedidos] = useState<EnrichedPedido[]>([]);
@@ -377,7 +431,15 @@ export function ModalNovoCarregamento({
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
         <div className="flex items-center justify-between p-6 border-b border-stone-100">
           <h3 className="text-lg font-bold text-stone-800 flex items-center gap-2">
-            <Plus className="w-5 h-5 text-amber-600" /> Novo Carregamento
+            {isEditMode ? (
+              <>
+                <Pencil className="w-5 h-5 text-amber-600" /> Editar Carregamento
+              </>
+            ) : (
+              <>
+                <Plus className="w-5 h-5 text-amber-600" /> Novo Carregamento
+              </>
+            )}
           </h3>
           <button onClick={onClose} className="p-1 hover:bg-stone-100 rounded-lg transition-colors">
             <X className="w-5 h-5 text-stone-400" />
@@ -629,7 +691,7 @@ export function ModalNovoCarregamento({
               disabled={saving}
               className="px-5 py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white rounded-lg text-sm font-bold transition-colors"
             >
-              {saving ? 'Salvando...' : 'Criar Carregamento'}
+              {saving ? 'Salvando...' : isEditMode ? 'Salvar Alterações' : 'Criar Carregamento'}
             </button>
           </div>
         </form>
@@ -1082,15 +1144,24 @@ function ModalLiberacao({ carregamento, onSave, onClose }: ModalLiberacaoProps) 
 // ─────────────────────────────────────────────────────────────────────────────
 interface TabelaCarregamentosProps {
   carregamentos: Carregamento[];
+  currentUser?: User;
   onAction?: (c: Carregamento, action: string) => void;
   showActions?: string[];
+  onEdit?: (c: Carregamento) => void;
+  onDelete?: (c: Carregamento) => void;
+  onHistory?: (c: Carregamento) => void;
 }
 
 function TabelaCarregamentos({
   carregamentos,
+  currentUser,
   onAction,
   showActions = [],
+  onEdit,
+  onDelete,
+  onHistory,
 }: TabelaCarregamentosProps) {
+  const hasEditDelete = !!(onEdit || onDelete || onHistory);
   if (carregamentos.length === 0) {
     return (
       <div className="text-center py-12 text-stone-400">
@@ -1115,6 +1186,9 @@ function TabelaCarregamentos({
             <th className="px-4 py-3">Dt. Prevista</th>
             <th className="px-4 py-3">Transportadora</th>
             {showActions.length > 0 && <th className="px-4 py-3 text-right">Ações</th>}
+            {hasEditDelete && showActions.length === 0 && (
+              <th className="px-4 py-3 text-right">Ações</th>
+            )}
           </tr>
         </thead>
         <tbody className="divide-y divide-stone-100">
@@ -1174,7 +1248,7 @@ function TabelaCarregamentos({
                 {fmtDate(c.data_prevista_carregamento)}
               </td>
               <td className="px-4 py-3 text-stone-600 text-xs">{c.transportadora?.nome ?? '—'}</td>
-              {showActions.length > 0 && (
+              {(showActions.length > 0 || hasEditDelete) && (
                 <td className="px-4 py-3 text-right">
                   <div className="flex justify-end gap-1">
                     {showActions.includes('cotacao') &&
@@ -1218,6 +1292,61 @@ function TabelaCarregamentos({
                           Confirmar Carg.
                         </button>
                       )}
+                    {/* Edit / Delete / History buttons */}
+                    {hasEditDelete &&
+                      currentUser &&
+                      (() => {
+                        const perms = canEditDeleteCarregamento(c.status, currentUser);
+                        return (
+                          <>
+                            {onEdit && (
+                              <button
+                                onClick={() => (perms.canEdit ? onEdit(c) : undefined)}
+                                disabled={!perms.canEdit}
+                                title={
+                                  perms.canEdit
+                                    ? 'Editar carregamento'
+                                    : 'Somente a equipe logística pode editar após aprovação'
+                                }
+                                className={`p-1.5 rounded-lg transition-colors ${
+                                  perms.canEdit
+                                    ? 'text-stone-400 hover:text-amber-600 hover:bg-amber-50'
+                                    : 'text-stone-300 opacity-50 cursor-not-allowed'
+                                }`}
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            {onDelete && (
+                              <button
+                                onClick={() => (perms.canDelete ? onDelete(c) : undefined)}
+                                disabled={!perms.canDelete}
+                                title={
+                                  perms.canDelete
+                                    ? 'Excluir carregamento'
+                                    : 'Somente a equipe logística pode excluir após aprovação'
+                                }
+                                className={`p-1.5 rounded-lg transition-colors ${
+                                  perms.canDelete
+                                    ? 'text-stone-400 hover:text-red-600 hover:bg-red-50'
+                                    : 'text-stone-300 opacity-50 cursor-not-allowed'
+                                }`}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            {onHistory && (
+                              <button
+                                onClick={() => onHistory(c)}
+                                title="Histórico de modificações"
+                                className="p-1.5 rounded-lg transition-colors text-stone-400 hover:text-blue-600 hover:bg-blue-50"
+                              >
+                                <History className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </>
+                        );
+                      })()}
                   </div>
                 </td>
               )}
@@ -1237,11 +1366,19 @@ function VisaoGeral({
   kpi,
   loading,
   onAction,
+  currentUser,
+  onEdit,
+  onDelete,
+  onHistory,
 }: {
   carregamentos: Carregamento[];
   kpi: KPICarregamento;
   loading: boolean;
   onAction: (c: Carregamento, action: string) => void;
+  currentUser?: User;
+  onEdit?: (c: Carregamento) => void;
+  onDelete?: (c: Carregamento) => void;
+  onHistory?: (c: Carregamento) => void;
 }) {
   const pendentes = carregamentos.filter((c) =>
     [
@@ -1317,8 +1454,12 @@ function VisaoGeral({
         ) : (
           <TabelaCarregamentos
             carregamentos={pendentes}
+            currentUser={currentUser}
             onAction={onAction}
             showActions={['cotacao', 'liberar']}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onHistory={onHistory}
           />
         )}
       </div>
@@ -1336,7 +1477,13 @@ function VisaoGeral({
             <RefreshCw className="w-6 h-6 animate-spin text-stone-300" />
           </div>
         ) : (
-          <TabelaCarregamentos carregamentos={carregamentos} />
+          <TabelaCarregamentos
+            carregamentos={carregamentos}
+            currentUser={currentUser}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onHistory={onHistory}
+          />
         )}
       </div>
     </div>
@@ -2695,6 +2842,12 @@ export default function CarregamentoModule({
   const [modalCotacao, setModalCotacao] = useState<Carregamento | null>(null);
   const [modalLiberacao, setModalLiberacao] = useState<Carregamento | null>(null);
   const [modalTransportador, setModalTransportador] = useState<Carregamento | null>(null);
+  // Edit / Delete / History
+  const [editandoCarregamento, setEditandoCarregamento] = useState<Carregamento | null>(null);
+  const [excluindoCarregamento, setExcluindoCarregamento] = useState<Carregamento | null>(null);
+  const [motivoExclusao, setMotivoExclusao] = useState('');
+  const [excluindoLoading, setExcluindoLoading] = useState(false);
+  const [historicoCarregamento, setHistoricoCarregamento] = useState<Carregamento | null>(null);
 
   const canCreate =
     currentUser.role === 'master' ||
@@ -2819,6 +2972,96 @@ export default function CarregamentoModule({
     }
   };
 
+  // ── Edit carregamento ─────────────────────────────────────────────────────
+  const handleEditarCarregamento = async (form: CarregamentoFormData) => {
+    if (!editandoCarregamento) return;
+    const anterior = editandoCarregamento;
+    const updates: Partial<Carregamento> = {
+      tipo_frete: form.tipo_frete,
+      quantidade_total: parseFloat(form.quantidade_total),
+      filial_id: form.filial_id || undefined,
+      local_carregamento_id: form.local_carregamento_id || undefined,
+      pedido_venda_id: form.pedido_venda_id || undefined,
+      pedido_venda_numero: form.pedido_venda_numero || undefined,
+      data_prevista_carregamento: form.data_prevista_carregamento || undefined,
+      observacoes: form.observacoes || undefined,
+      valor_frete: form.valor_frete ? parseFloat(form.valor_frete) : undefined,
+    };
+    try {
+      await updateCarregamento(editandoCarregamento.id, updates);
+      // Register audit log
+      await registrarAuditLog({
+        tabela: 'carregamentos',
+        registro_id: editandoCarregamento.id,
+        acao: 'UPDATE',
+        dados_anteriores: anterior as unknown as Record<string, unknown>,
+        dados_novos: { ...anterior, ...updates } as unknown as Record<string, unknown>,
+        motivo: 'Edição pelo usuário',
+        usuario_id: currentUser.id,
+        usuario_nome: currentUser.name ?? currentUser.id,
+      });
+      // Notify solicitante if different from current user
+      if (anterior.criado_por && anterior.criado_por !== currentUser.id) {
+        await notifyCarregamentoEditado(
+          anterior.numero_carregamento,
+          currentUser.name ?? 'Logística',
+          anterior.criado_por
+        );
+      }
+      showSuccess('Carregamento editado com sucesso!');
+      setEditandoCarregamento(null);
+      await load();
+    } catch (err: unknown) {
+      const msg =
+        err && typeof err === 'object' && 'message' in err
+          ? (err as { message: string }).message
+          : 'Erro ao editar carregamento.';
+      showError(msg);
+      throw err;
+    }
+  };
+
+  // ── Delete carregamento ───────────────────────────────────────────────────
+  const handleConfirmarExclusao = async () => {
+    if (!excluindoCarregamento) return;
+    if (!motivoExclusao.trim()) {
+      showError('Informe o motivo da exclusão.');
+      return;
+    }
+    setExcluindoLoading(true);
+    try {
+      const snapshot = excluindoCarregamento;
+      // Register audit log BEFORE deleting
+      await registrarAuditLog({
+        tabela: 'carregamentos',
+        registro_id: snapshot.id,
+        acao: 'DELETE',
+        dados_anteriores: snapshot as unknown as Record<string, unknown>,
+        dados_novos: null,
+        motivo: motivoExclusao.trim(),
+        usuario_id: currentUser.id,
+        usuario_nome: currentUser.name ?? currentUser.id,
+      });
+      await deleteCarregamento(snapshot.id);
+      // Notify solicitante and current user if different
+      const destinatarios = new Set<string>();
+      if (snapshot.criado_por) destinatarios.add(snapshot.criado_por);
+      await notifyCarregamentoExcluido(
+        snapshot.numero_carregamento,
+        currentUser.name ?? 'Usuário',
+        Array.from(destinatarios).filter((id) => id !== currentUser.id)
+      );
+      showSuccess('Carregamento excluído com sucesso.');
+      setExcluindoCarregamento(null);
+      setMotivoExclusao('');
+      await load();
+    } catch {
+      showError('Erro ao excluir carregamento.');
+    } finally {
+      setExcluindoLoading(false);
+    }
+  };
+
   // ── Solicitar cotação para múltiplas transportadoras (view Solicitação) ───
   const handleSolicitarCotacaoMultipla = async (
     carregamentoId: string,
@@ -2940,6 +3183,13 @@ export default function CarregamentoModule({
           kpi={kpi}
           loading={loading}
           onAction={handleAction}
+          currentUser={currentUser}
+          onEdit={(c) => setEditandoCarregamento(c)}
+          onDelete={(c) => {
+            setExcluindoCarregamento(c);
+            setMotivoExclusao('');
+          }}
+          onHistory={(c) => setHistoricoCarregamento(c)}
         />
       )}
       {view === 'solicitacao' && <SolicitacaoCotacaoIndependente currentUser={currentUser} />}
@@ -2969,6 +3219,81 @@ export default function CarregamentoModule({
           filiais={filiaisVisiveis}
           onSave={handleCreateCarregamento}
           onClose={() => setShowModalNovo(false)}
+        />
+      )}
+      {/* Edit modal */}
+      {editandoCarregamento && (
+        <ModalNovoCarregamento
+          filiais={filiaisVisiveis}
+          onSave={handleEditarCarregamento}
+          onClose={() => setEditandoCarregamento(null)}
+          carregamentoEditando={editandoCarregamento}
+        />
+      )}
+      {/* Delete confirmation dialog */}
+      {excluindoCarregamento && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center gap-3 p-5 border-b border-stone-100">
+              <div className="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <p className="font-bold text-stone-800">Excluir Carregamento</p>
+                <p className="text-xs text-stone-400 mt-0.5">
+                  {fmtCarregamentoNum(excluindoCarregamento)}
+                </p>
+              </div>
+            </div>
+            <div className="p-5 space-y-4">
+              <p className="text-sm text-stone-600">
+                Tem certeza que deseja excluir{' '}
+                <strong>{fmtCarregamentoNum(excluindoCarregamento)}</strong>? Esta ação não pode ser
+                desfeita.
+              </p>
+              <div>
+                <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                  Motivo <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  rows={3}
+                  value={motivoExclusao}
+                  onChange={(e) => setMotivoExclusao(e.target.value)}
+                  placeholder="Informe o motivo da exclusão..."
+                  className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 outline-none resize-none"
+                />
+              </div>
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => {
+                    setExcluindoCarregamento(null);
+                    setMotivoExclusao('');
+                  }}
+                  disabled={excluindoLoading}
+                  className="px-5 py-2 border border-stone-300 rounded-lg text-sm font-bold text-stone-600 hover:bg-stone-50 transition-colors disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleConfirmarExclusao}
+                  disabled={excluindoLoading || !motivoExclusao.trim()}
+                  className="px-5 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white rounded-lg text-sm font-bold transition-colors"
+                >
+                  {excluindoLoading ? 'Excluindo...' : 'Excluir'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* History modal */}
+      {historicoCarregamento && (
+        <HistoricoModificacoes
+          tabela="carregamentos"
+          registroId={historicoCarregamento.id}
+          titulo={fmtCarregamentoNum(historicoCarregamento)}
+          isOpen={!!historicoCarregamento}
+          onClose={() => setHistoricoCarregamento(null)}
         />
       )}
       {modalCotacao && (
