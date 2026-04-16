@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { PedidoVenda } from '../types';
+import { PedidoVenda, PedidoVendaItem } from '../types';
 
 /** Computes saldo_disponivel: prefers the DB-generated column, falls back to manual calculation. */
 function computeSaldoDisponivel(d: Record<string, unknown>): number | undefined {
@@ -45,6 +45,7 @@ function mapPedido(d: Record<string, unknown>): PedidoVenda {
     filial_id: d.filial_id as string | undefined,
     formulacao_alterada: d.formulacao_alterada as boolean | undefined,
     pedido_pai_id: d.pedido_pai_id as string | undefined,
+    data_vencimento: d.data_vencimento as string | undefined,
   };
 }
 
@@ -92,6 +93,7 @@ export async function createPedidoVenda(
       numero_pedido: pedido.numero_pedido,
       barra_pedido: pedido.barra_pedido,
       data_pedido: pedido.data_pedido,
+      data_vencimento: pedido.data_vencimento ?? null,
       quantidade_real: pedido.quantidade_real,
       embalagem: pedido.embalagem,
       valor_unitario_negociado: pedido.valor_unitario_negociado,
@@ -187,4 +189,40 @@ export async function getPedidosPendentes(filialIds?: string[]): Promise<PedidoV
   const { data, error } = await query;
   if (error) throw error;
   return (data || []).map(mapPedido);
+}
+
+export async function createPedidoVendaItens(
+  pedidoVendaId: string,
+  itens: Omit<PedidoVendaItem, 'id' | 'pedido_venda_id' | 'criado_em'>[]
+): Promise<void> {
+  if (!itens || itens.length === 0) return;
+  const rows = itens.map((item) => ({
+    pedido_venda_id: pedidoVendaId,
+    produto_nome: item.produto_nome,
+    formulacao: item.formulacao ?? null,
+    quantidade_ton: item.quantidade_ton,
+    preco_unitario: item.preco_unitario ?? null,
+    precificacao_id: item.precificacao_id ?? null,
+  }));
+  const { error } = await supabase.from('pedidos_venda_itens').insert(rows);
+  if (error) throw error;
+}
+
+export async function getPedidoVendaItens(pedidoVendaId: string): Promise<PedidoVendaItem[]> {
+  const { data, error } = await supabase
+    .from('pedidos_venda_itens')
+    .select('*')
+    .eq('pedido_venda_id', pedidoVendaId)
+    .order('criado_em', { ascending: true });
+  if (error || !data) return [];
+  return (data as Record<string, unknown>[]).map((d) => ({
+    id: d.id as string,
+    pedido_venda_id: d.pedido_venda_id as string,
+    produto_nome: d.produto_nome as string,
+    formulacao: d.formulacao as string | undefined,
+    quantidade_ton: Number(d.quantidade_ton),
+    preco_unitario: d.preco_unitario != null ? Number(d.preco_unitario) : undefined,
+    precificacao_id: d.precificacao_id as string | undefined,
+    criado_em: d.criado_em as string,
+  }));
 }
