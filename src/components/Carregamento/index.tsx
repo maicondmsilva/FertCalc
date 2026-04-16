@@ -1885,15 +1885,18 @@ function PainelLogistica({
 
   const today = new Date().toISOString().slice(0, 10);
   const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const URGENCY_THRESHOLD_DAYS = 7;
 
   const isUrgent = (c: Carregamento) =>
     c.data_prevista_carregamento === today || c.data_prevista_carregamento === tomorrow;
 
+  // pedido_data_vencimento is a PostgreSQL DATE column returned as 'YYYY-MM-DD'.
+  // Appending 'T00:00:00' ensures parsing in local timezone (not UTC midnight).
   const isVencimentoUrgente = (c: Carregamento) => {
     if (!c.pedido_data_vencimento) return false;
     const venc = new Date(c.pedido_data_vencimento + 'T00:00:00');
     const diff = (venc.getTime() - Date.now()) / (1000 * 60 * 60 * 24);
-    return diff <= 7;
+    return diff <= URGENCY_THRESHOLD_DAYS;
   };
 
   const isVencimentoAtrasado = (c: Carregamento) => {
