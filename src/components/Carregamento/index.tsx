@@ -51,6 +51,7 @@ import {
   getCarregamentosRelatorio,
   getCarregamentosCalendario,
   getAlertasCarregamento,
+  getCarregamentosLogistica,
 } from '../../services/carregamentoService';
 import { registrarAuditLog } from '../../services/auditLogService';
 import {
@@ -1884,9 +1885,24 @@ function PainelLogistica({
 
   const today = new Date().toISOString().slice(0, 10);
   const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const URGENCY_THRESHOLD_DAYS = 7;
 
   const isUrgent = (c: Carregamento) =>
     c.data_prevista_carregamento === today || c.data_prevista_carregamento === tomorrow;
+
+  // pedido_data_vencimento is a PostgreSQL DATE column returned as 'YYYY-MM-DD'.
+  // Appending 'T00:00:00' ensures parsing in local timezone (not UTC midnight).
+  const isVencimentoUrgente = (c: Carregamento) => {
+    if (!c.pedido_data_vencimento) return false;
+    const venc = new Date(c.pedido_data_vencimento + 'T00:00:00');
+    const diff = (venc.getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+    return diff <= URGENCY_THRESHOLD_DAYS;
+  };
+
+  const isVencimentoAtrasado = (c: Carregamento) => {
+    if (!c.pedido_data_vencimento) return false;
+    return new Date(c.pedido_data_vencimento + 'T00:00:00') < new Date();
+  };
 
   return (
     <div className="space-y-6">
@@ -1914,21 +1930,77 @@ function PainelLogistica({
             {cif.map((c) => (
               <div
                 key={c.id}
-                className={`p-4 flex items-center justify-between ${isUrgent(c) ? 'bg-red-50' : ''}`}
+                className={`p-4 flex items-center justify-between gap-3 ${
+                  isVencimentoAtrasado(c)
+                    ? 'bg-red-50 border-l-4 border-red-400'
+                    : isVencimentoUrgente(c) || isUrgent(c)
+                    ? 'bg-orange-50 border-l-4 border-orange-400'
+                    : ''
+                }`}
               >
-                <div className="flex items-center gap-3">
-                  {isUrgent(c) && <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />}
-                  <div>
-                    <p className="font-mono font-bold text-emerald-600 text-sm">
-                      {fmtCarregamentoNum(c)}
-                    </p>
-                    <p className="text-xs text-stone-500">
-                      {c.quantidade_total} ton &mdash; Data prevista:{' '}
-                      {fmtDate(c.data_prevista_carregamento)}
-                    </p>
+                <div className="flex items-center gap-3 min-w-0">
+                  {(isUrgent(c) || isVencimentoUrgente(c) || isVencimentoAtrasado(c)) && (
+                    <AlertTriangle
+                      className={`w-4 h-4 flex-shrink-0 ${isVencimentoAtrasado(c) ? 'text-red-500' : 'text-orange-500'}`}
+                    />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    {/* Linha 1: número do carregamento + número do pedido de venda */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-mono font-bold text-emerald-600 text-sm">
+                        {fmtCarregamentoNum(c)}
+                      </p>
+                      {c.pedido_venda_numero && (
+                        <span className="text-xs bg-stone-100 text-stone-600 px-1.5 py-0.5 rounded font-mono">
+                          PV: {c.pedido_venda_numero}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Linha 2: cliente */}
+                    {c.pedido_cliente_nome && (
+                      <p className="text-xs font-medium text-stone-700 mt-0.5 truncate">
+                        👤 {c.pedido_cliente_nome}
+                      </p>
+                    )}
+
+                    {/* Linha 3: produto */}
+                    {c.pedido_produto_nome && (
+                      <p className="text-xs text-stone-500 truncate">
+                        📦 {c.pedido_produto_nome}
+                      </p>
+                    )}
+
+                    {/* Linha 4: quantidade, data prevista, vencimento */}
+                    <div className="flex items-center gap-3 flex-wrap mt-1">
+                      <p className="text-xs text-stone-500">
+                        <span className="font-medium">{c.quantidade_total} ton</span>
+                        {' '}— Previsto: {fmtDate(c.data_prevista_carregamento)}
+                      </p>
+                      {c.pedido_data_vencimento && (
+                        <p className="text-xs text-amber-600 font-medium">
+                          ⏳ Venc: {fmtDate(c.pedido_data_vencimento)}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Linha 5: saldo do pedido */}
+                    {c.pedido_saldo_disponivel != null && c.pedido_quantidade_real != null && (
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <span className="text-xs text-stone-400">Saldo do pedido:</span>
+                        <span
+                          className={`text-xs font-bold ${c.pedido_saldo_disponivel > 0 ? 'text-emerald-600' : 'text-red-600'}`}
+                        >
+                          {c.pedido_saldo_disponivel.toLocaleString('pt-BR')} /{' '}
+                          {c.pedido_quantidade_real.toLocaleString('pt-BR')} ton
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Linha 6: transportadora */}
                     {c.transportadora && (
-                      <p className="text-xs text-blue-600 font-medium">
-                        Transportadora: {c.transportadora.nome}
+                      <p className="text-xs text-blue-600 font-medium mt-0.5">
+                        🚛 {c.transportadora.nome}
                       </p>
                     )}
                   </div>
@@ -1975,22 +2047,75 @@ function PainelLogistica({
             {fob.map((c) => (
               <div
                 key={c.id}
-                className={`p-4 flex items-center justify-between ${isUrgent(c) ? 'bg-orange-50' : ''}`}
+                className={`p-4 flex items-center justify-between gap-3 ${
+                  isVencimentoAtrasado(c)
+                    ? 'bg-red-50 border-l-4 border-red-400'
+                    : isVencimentoUrgente(c) || isUrgent(c)
+                    ? 'bg-orange-50 border-l-4 border-orange-400'
+                    : ''
+                }`}
               >
-                <div className="flex items-center gap-3">
-                  {isUrgent(c) && (
-                    <AlertTriangle className="w-4 h-4 text-orange-500 flex-shrink-0" />
+                <div className="flex items-center gap-3 min-w-0">
+                  {(isUrgent(c) || isVencimentoUrgente(c) || isVencimentoAtrasado(c)) && (
+                    <AlertTriangle
+                      className={`w-4 h-4 flex-shrink-0 ${isVencimentoAtrasado(c) ? 'text-red-500' : 'text-orange-500'}`}
+                    />
                   )}
-                  <div>
-                    <p className="font-mono font-bold text-emerald-600 text-sm">
-                      {fmtCarregamentoNum(c)}
-                    </p>
-                    <p className="text-xs text-stone-500">
-                      {c.quantidade_total} ton &mdash; Data prevista:{' '}
-                      <span className={isUrgent(c) ? 'font-bold text-orange-600' : ''}>
-                        {fmtDate(c.data_prevista_carregamento)}
-                      </span>
-                    </p>
+                  <div className="flex-1 min-w-0">
+                    {/* Linha 1: número do carregamento + número do pedido de venda */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-mono font-bold text-emerald-600 text-sm">
+                        {fmtCarregamentoNum(c)}
+                      </p>
+                      {c.pedido_venda_numero && (
+                        <span className="text-xs bg-stone-100 text-stone-600 px-1.5 py-0.5 rounded font-mono">
+                          PV: {c.pedido_venda_numero}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Linha 2: cliente */}
+                    {c.pedido_cliente_nome && (
+                      <p className="text-xs font-medium text-stone-700 mt-0.5 truncate">
+                        👤 {c.pedido_cliente_nome}
+                      </p>
+                    )}
+
+                    {/* Linha 3: produto */}
+                    {c.pedido_produto_nome && (
+                      <p className="text-xs text-stone-500 truncate">
+                        📦 {c.pedido_produto_nome}
+                      </p>
+                    )}
+
+                    {/* Linha 4: quantidade, data prevista, vencimento */}
+                    <div className="flex items-center gap-3 flex-wrap mt-1">
+                      <p className="text-xs text-stone-500">
+                        <span className="font-medium">{c.quantidade_total} ton</span>
+                        {' '}— Previsto:{' '}
+                        <span className={isUrgent(c) ? 'font-bold text-orange-600' : ''}>
+                          {fmtDate(c.data_prevista_carregamento)}
+                        </span>
+                      </p>
+                      {c.pedido_data_vencimento && (
+                        <p className="text-xs text-amber-600 font-medium">
+                          ⏳ Venc: {fmtDate(c.pedido_data_vencimento)}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Linha 5: saldo do pedido */}
+                    {c.pedido_saldo_disponivel != null && c.pedido_quantidade_real != null && (
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <span className="text-xs text-stone-400">Saldo do pedido:</span>
+                        <span
+                          className={`text-xs font-bold ${c.pedido_saldo_disponivel > 0 ? 'text-emerald-600' : 'text-red-600'}`}
+                        >
+                          {c.pedido_saldo_disponivel.toLocaleString('pt-BR')} /{' '}
+                          {c.pedido_quantidade_real.toLocaleString('pt-BR')} ton
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -3002,6 +3127,7 @@ export default function CarregamentoModule({
 }: CarregamentoModuleProps) {
   const { showSuccess, showError } = useToast();
   const [carregamentos, setCarregamentos] = useState<Carregamento[]>([]);
+  const [carregamentosLogistica, setCarregamentosLogistica] = useState<Carregamento[]>([]);
   const [filiais, setFiliais] = useState<Filial[]>([]);
   const [transportadoras, setTransportadoras] = useState<Transportadora[]>([]);
   const [kpi, setKpi] = useState<KPICarregamento>({
@@ -3051,13 +3177,15 @@ export default function CarregamentoModule({
         currentUser.role === 'admin' ||
         currentUser.permissions?.carregamento_all_filiais;
       const filtroPorFiliais = canSeeAll ? undefined : currentUser.filiais_permitidas;
-      const [cgs, fls, trs, kpiData] = await Promise.all([
+      const [cgs, cgsLogistica, fls, trs, kpiData] = await Promise.all([
         getCarregamentos(undefined, filtroPorFiliais),
+        getCarregamentosLogistica(filtroPorFiliais ?? undefined),
         getFiliais(),
         getTransportadoras(),
         getKPICarregamento(),
       ]);
       setCarregamentos(cgs);
+      setCarregamentosLogistica(cgsLogistica);
       setFiliais(fls);
       setTransportadoras(trs);
       setKpi(kpiData);
@@ -3438,7 +3566,7 @@ export default function CarregamentoModule({
         />
       )}
       {view === 'logistica' && (
-        <PainelLogistica carregamentos={carregamentos} loading={loading} onAction={handleAction} />
+        <PainelLogistica carregamentos={carregamentosLogistica} loading={loading} onAction={handleAction} />
       )}
       {view === 'calendario' && <CalendarioCarregamentos currentUser={currentUser} />}
       {view === 'relatorios' && (

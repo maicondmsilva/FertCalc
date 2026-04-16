@@ -55,6 +55,13 @@ function mapCarregamento(d: Record<string, unknown>): Carregamento {
     cancelado_por_id: d.cancelado_por_id as string | undefined,
     cancelado_por_nome: d.cancelado_por_nome as string | undefined,
     cancelado_em: d.cancelado_em as string | undefined,
+    pedido_cliente_nome: d.pedido_cliente_nome as string | undefined,
+    pedido_produto_nome: d.pedido_produto_nome as string | undefined,
+    pedido_data_vencimento: d.pedido_data_vencimento as string | undefined,
+    pedido_saldo_disponivel:
+      d.pedido_saldo_disponivel != null ? Number(d.pedido_saldo_disponivel) : undefined,
+    pedido_quantidade_real:
+      d.pedido_quantidade_real != null ? Number(d.pedido_quantidade_real) : undefined,
   };
 }
 
@@ -182,7 +189,19 @@ export async function getCarregamentos(
 ): Promise<Carregamento[]> {
   let query = supabase
     .from('carregamentos')
-    .select('*, branches(*), transportadoras(*), locais_carregamento(*)')
+    .select(`
+      *,
+      branches(*),
+      transportadoras(*),
+      locais_carregamento(*),
+      pedidos_venda!pedido_venda_id(
+        cliente_nome,
+        produto_nome,
+        data_vencimento,
+        saldo_disponivel,
+        quantidade_real
+      )
+    `)
     .order('criado_em', { ascending: false });
 
   if (filialId) {
@@ -193,14 +212,24 @@ export async function getCarregamentos(
 
   const { data, error } = await query;
   if (error || !data) return [];
-  return data.map((d) => ({
-    ...mapCarregamento(d),
-    filial: d.branches ? mapBranchToFilial(d.branches as Record<string, unknown>) : undefined,
-    transportadora: d.transportadoras ? mapTransportadora(d.transportadoras) : undefined,
-    local_carregamento: d.locais_carregamento
-      ? mapLocalCarregamento(d.locais_carregamento as Record<string, unknown>)
-      : undefined,
-  }));
+  return data.map((d) => {
+    const pv = d.pedidos_venda as Record<string, unknown> | null;
+    return {
+      ...mapCarregamento(d),
+      filial: d.branches ? mapBranchToFilial(d.branches as Record<string, unknown>) : undefined,
+      transportadora: d.transportadoras ? mapTransportadora(d.transportadoras) : undefined,
+      local_carregamento: d.locais_carregamento
+        ? mapLocalCarregamento(d.locais_carregamento as Record<string, unknown>)
+        : undefined,
+      pedido_cliente_nome: pv?.cliente_nome as string | undefined,
+      pedido_produto_nome: pv?.produto_nome as string | undefined,
+      pedido_data_vencimento: pv?.data_vencimento as string | undefined,
+      pedido_saldo_disponivel:
+        pv?.saldo_disponivel != null ? Number(pv.saldo_disponivel) : undefined,
+      pedido_quantidade_real:
+        pv?.quantidade_real != null ? Number(pv.quantidade_real) : undefined,
+    };
+  });
 }
 
 export async function getCarregamentoById(id: string): Promise<Carregamento | null> {
@@ -436,7 +465,19 @@ export async function getCarregamentosRelatorio(
 ): Promise<Carregamento[]> {
   let query = supabase
     .from('carregamentos')
-    .select('*, branches(*), transportadoras(*), locais_carregamento(*)')
+    .select(`
+      *,
+      branches(*),
+      transportadoras(*),
+      locais_carregamento(*),
+      pedidos_venda!pedido_venda_id(
+        cliente_nome,
+        produto_nome,
+        data_vencimento,
+        saldo_disponivel,
+        quantidade_real
+      )
+    `)
     .order('criado_em', { ascending: false });
 
   if (filtros.filial_id) query = query.eq('filial_id', filtros.filial_id);
@@ -450,14 +491,24 @@ export async function getCarregamentosRelatorio(
 
   const { data, error } = await query;
   if (error || !data) return [];
-  return data.map((d) => ({
-    ...mapCarregamento(d),
-    filial: d.branches ? mapBranchToFilial(d.branches as Record<string, unknown>) : undefined,
-    transportadora: d.transportadoras ? mapTransportadora(d.transportadoras) : undefined,
-    local_carregamento: d.locais_carregamento
-      ? mapLocalCarregamento(d.locais_carregamento as Record<string, unknown>)
-      : undefined,
-  }));
+  return data.map((d) => {
+    const pv = d.pedidos_venda as Record<string, unknown> | null;
+    return {
+      ...mapCarregamento(d),
+      filial: d.branches ? mapBranchToFilial(d.branches as Record<string, unknown>) : undefined,
+      transportadora: d.transportadoras ? mapTransportadora(d.transportadoras) : undefined,
+      local_carregamento: d.locais_carregamento
+        ? mapLocalCarregamento(d.locais_carregamento as Record<string, unknown>)
+        : undefined,
+      pedido_cliente_nome: pv?.cliente_nome as string | undefined,
+      pedido_produto_nome: pv?.produto_nome as string | undefined,
+      pedido_data_vencimento: pv?.data_vencimento as string | undefined,
+      pedido_saldo_disponivel:
+        pv?.saldo_disponivel != null ? Number(pv.saldo_disponivel) : undefined,
+      pedido_quantidade_real:
+        pv?.quantidade_real != null ? Number(pv.quantidade_real) : undefined,
+    };
+  });
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -474,7 +525,19 @@ export async function getCarregamentosCalendario(
 
   let query = supabase
     .from('carregamentos')
-    .select('*, branches(*), transportadoras(*), locais_carregamento(*)')
+    .select(`
+      *,
+      branches(*),
+      transportadoras(*),
+      locais_carregamento(*),
+      pedidos_venda!pedido_venda_id(
+        cliente_nome,
+        produto_nome,
+        data_vencimento,
+        saldo_disponivel,
+        quantidade_real
+      )
+    `)
     .not('data_prevista_carregamento', 'is', null)
     .gte('data_prevista_carregamento', startDate)
     .lte('data_prevista_carregamento', endDate);
@@ -483,12 +546,74 @@ export async function getCarregamentosCalendario(
 
   const { data, error } = await query;
   if (error || !data) return [];
-  return data.map((d) => ({
-    ...mapCarregamento(d),
-    filial: d.branches ? mapBranchToFilial(d.branches as Record<string, unknown>) : undefined,
-    transportadora: d.transportadoras ? mapTransportadora(d.transportadoras) : undefined,
-    local_carregamento: d.locais_carregamento
-      ? mapLocalCarregamento(d.locais_carregamento as Record<string, unknown>)
-      : undefined,
-  }));
+  return data.map((d) => {
+    const pv = d.pedidos_venda as Record<string, unknown> | null;
+    return {
+      ...mapCarregamento(d),
+      filial: d.branches ? mapBranchToFilial(d.branches as Record<string, unknown>) : undefined,
+      transportadora: d.transportadoras ? mapTransportadora(d.transportadoras) : undefined,
+      local_carregamento: d.locais_carregamento
+        ? mapLocalCarregamento(d.locais_carregamento as Record<string, unknown>)
+        : undefined,
+      pedido_cliente_nome: pv?.cliente_nome as string | undefined,
+      pedido_produto_nome: pv?.produto_nome as string | undefined,
+      pedido_data_vencimento: pv?.data_vencimento as string | undefined,
+      pedido_saldo_disponivel:
+        pv?.saldo_disponivel != null ? Number(pv.saldo_disponivel) : undefined,
+      pedido_quantidade_real:
+        pv?.quantidade_real != null ? Number(pv.quantidade_real) : undefined,
+    };
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+//  Logística
+// ─────────────────────────────────────────────────────────────
+
+/** Busca carregamentos para o Painel de Logística com join em pedido_venda */
+export async function getCarregamentosLogistica(
+  filialIds?: string[]
+): Promise<Carregamento[]> {
+  let query = supabase
+    .from('carregamentos')
+    .select(`
+      *,
+      branches(*),
+      transportadoras(*),
+      locais_carregamento(*),
+      pedidos_venda!pedido_venda_id(
+        cliente_nome,
+        produto_nome,
+        data_vencimento,
+        saldo_disponivel,
+        quantidade_real
+      )
+    `)
+    .not('status', 'in', '(cancelado,carregado)')
+    .order('data_prevista_carregamento', { ascending: true, nullsFirst: false });
+
+  if (filialIds && filialIds.length > 0) {
+    query = query.in('filial_id', filialIds);
+  }
+
+  const { data, error } = await query;
+  if (error || !data) return [];
+  return data.map((d) => {
+    const pv = d.pedidos_venda as Record<string, unknown> | null;
+    return {
+      ...mapCarregamento(d),
+      filial: d.branches ? mapBranchToFilial(d.branches as Record<string, unknown>) : undefined,
+      transportadora: d.transportadoras ? mapTransportadora(d.transportadoras) : undefined,
+      local_carregamento: d.locais_carregamento
+        ? mapLocalCarregamento(d.locais_carregamento as Record<string, unknown>)
+        : undefined,
+      pedido_cliente_nome: pv?.cliente_nome as string | undefined,
+      pedido_produto_nome: pv?.produto_nome as string | undefined,
+      pedido_data_vencimento: pv?.data_vencimento as string | undefined,
+      pedido_saldo_disponivel:
+        pv?.saldo_disponivel != null ? Number(pv.saldo_disponivel) : undefined,
+      pedido_quantidade_real:
+        pv?.quantidade_real != null ? Number(pv.quantidade_real) : undefined,
+    };
+  });
 }
