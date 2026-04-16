@@ -82,6 +82,7 @@ import ExpenseCategoryManager from './components/ExpenseManagement/ExpenseCatego
 
 import CarregamentoModule from './components/Carregamento';
 import PedidosVenda from './components/PedidosVenda';
+import Relatorios from './components/Relatorios';
 
 import { getPendingCount, getCheckedCount } from './services/expenseService';
 
@@ -108,6 +109,7 @@ export default function App() {
     | 'managementReports'
     | 'expenses'
     | 'carregamento'
+    | 'relatorios'
     | null = null;
   if (
     [
@@ -167,6 +169,8 @@ export default function App() {
     activeTab === 'carregamento_transportadoras'
   ) {
     activeModule = 'carregamento';
+  } else if (activeTab === 'relatorios') {
+    activeModule = 'relatorios';
   }
 
   const { showInfo } = useToast();
@@ -561,6 +565,12 @@ export default function App() {
       return allItems.filter((item) => hasPermission(item.permission));
     }
 
+    if (activeModule === 'relatorios') {
+      return [
+        { id: 'relatorios', label: '📊 Relatórios', icon: BarChart3, permission: 'relatorios' },
+      ].filter(() => true);
+    }
+
     return [];
   };
 
@@ -633,7 +643,9 @@ export default function App() {
                     ? 'Cartão Corporativo'
                     : activeModule === 'carregamento'
                       ? 'Carregamento'
-                      : 'Configuração'}
+                      : activeModule === 'relatorios'
+                        ? 'Relatórios'
+                        : 'Configuração'}
               </p>
             )}
           </div>
@@ -869,6 +881,7 @@ export default function App() {
                   if (moduleId === 'prd') navigate('/prd');
                   if (moduleId === 'expenses') navigate('/expenses_lancamentos');
                   if (moduleId === 'carregamento') navigate('/carregamento_visao_geral');
+                  if (moduleId === 'relatorios') navigate('/relatorios');
                 }}
               />
             )}
@@ -1040,6 +1053,9 @@ export default function App() {
               hasPermission('carregamento') && (
                 <CarregamentoModule currentUser={currentUser} view="transportadoras" />
               )}
+            {activeModule === 'relatorios' && activeTab === 'relatorios' && (
+              <Relatorios currentUser={currentUser} />
+            )}
           </div>
         </main>
       </div>

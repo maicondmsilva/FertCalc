@@ -1,187 +1,288 @@
 import React from 'react';
 import {
-  LayoutDashboard,
-  Settings,
-  ShieldCheck,
-  Calculator,
-  Database,
-  Target,
-  Users,
-  UserCheck,
-  Building2,
-  BarChart3,
-  CreditCard,
   Truck,
+  ClipboardList,
+  DollarSign,
+  AlertTriangle,
+  Package,
+  Users,
+  CreditCard,
+  RefreshCw,
+  ChevronRight,
+  Activity,
 } from 'lucide-react';
 import { User } from '../types';
+import { useDashboard } from '../hooks/useDashboard';
+import KPICard from './Dashboard/KPICard';
+import GraficoCarregamentosMes from './Dashboard/GraficoCarregamentosMes';
+import GraficoStatusCarregamentos from './Dashboard/GraficoStatusCarregamentos';
+import GraficoFreteTransportadora from './Dashboard/GraficoFreteTransportadora';
 
 interface HomeProps {
   currentUser: User;
   onSelectModule: (
-    moduleId: 'pricing' | 'config' | 'prd' | 'managementReports' | 'expenses' | 'carregamento'
+    moduleId: 'pricing' | 'config' | 'prd' | 'managementReports' | 'expenses' | 'carregamento' | 'relatorios'
   ) => void;
 }
 
+function getGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Bom dia';
+  if (h < 18) return 'Boa tarde';
+  return 'Boa noite';
+}
+
+function formatCurrency(v: number): string {
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+}
+
+function formatDate(iso: string): string {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return iso;
+  }
+}
+
+function acaoLabel(acao: string): string {
+  if (acao === 'INSERT') return 'criou';
+  if (acao === 'UPDATE') return 'editou';
+  if (acao === 'DELETE') return 'excluiu';
+  return acao;
+}
+
 export default function Home({ currentUser, onSelectModule }: HomeProps) {
-  const modules = [
-    {
-      id: 'pricing',
-      label: 'PRECIFICAÇÃO',
-      description: 'Dashboard de vendas, cálculos, tabelas de preços, clientes e metas.',
-      icon: Calculator,
-      color: 'bg-emerald-600',
-      hoverColor: 'hover:bg-emerald-700',
-      textColor: 'text-emerald-600',
-      allowed:
-        currentUser.role === 'master' ||
-        currentUser.role === 'admin' ||
-        currentUser.role === 'manager' ||
-        !!(currentUser.permissions as any)?.dashboard ||
-        !!(currentUser.permissions as any)?.calculator ||
-        !!(currentUser.permissions as any)?.history,
-    },
-    {
-      id: 'carregamento',
-      label: 'CARREGAMENTO',
-      description:
-        'Cotação de frete, liberação de pedidos, painel de logística, calendário e relatórios.',
-      icon: Truck,
-      color: 'bg-amber-600',
-      hoverColor: 'hover:bg-amber-700',
-      textColor: 'text-amber-600',
-      allowed:
-        currentUser.role === 'master' ||
-        currentUser.role === 'admin' ||
-        currentUser.role === 'manager' ||
-        !!(currentUser.permissions as any)?.carregamento ||
-        !!(currentUser.permissions as any)?.carregamento_admin,
-    },
-    {
-      id: 'expenses',
-      label: 'GASTOS CARTÃO',
-      description:
-        'Controle de despesas do cartão de crédito corporativo com aprovações e relatórios.',
-      icon: CreditCard,
-      color: 'bg-purple-600',
-      hoverColor: 'hover:bg-purple-700',
-      textColor: 'text-purple-600',
-      allowed:
-        currentUser.role === 'master' ||
-        currentUser.role === 'admin' ||
-        currentUser.role === 'manager' ||
-        !!(currentUser.permissions as any)?.expenses,
-    },
-    {
-      id: 'managementReports',
-      label: 'RELATÓRIO DIÁRIO',
-      description: 'Acompanhe o desempenho consolidado das unidades de negócio.',
-      icon: BarChart3,
-      color: 'bg-indigo-600',
-      hoverColor: 'hover:bg-indigo-700',
-      textColor: 'text-indigo-600',
-      allowed:
-        currentUser.role === 'master' ||
-        currentUser.role === 'admin' ||
-        currentUser.role === 'manager' ||
-        !!(currentUser.permissions as any)?.managementReports,
-    },
-    {
-      id: 'config',
-      label: 'CONFIGURAÇÃO',
-      description: 'Gerenciamento de usuários, filiais e personalização do sistema.',
-      icon: Settings,
-      color: 'bg-stone-800',
-      hoverColor: 'hover:bg-stone-900',
-      textColor: 'text-stone-800',
-      allowed:
-        currentUser.role === 'master' ||
-        currentUser.role === 'admin' ||
-        !!(currentUser.permissions as any)?.users ||
-        !!(currentUser.permissions as any)?.branches ||
-        !!(currentUser.permissions as any)?.settings,
-    },
-    {
-      id: 'prd',
-      label: 'DOCUMENTAÇÃO PRD',
-      description: 'Acesse o Documento de Requisitos do Produto do sistema.',
-      icon: LayoutDashboard, // Placeholder icon, consider a document-related icon if available
-      color: 'bg-blue-600',
-      hoverColor: 'hover:bg-blue-700',
-      textColor: 'text-blue-600',
-      allowed:
-        currentUser.role === 'master' ||
-        currentUser.role === 'admin' ||
-        currentUser.role === 'manager' ||
-        !!(currentUser.permissions as any)?.prd,
-    },
-  ];
+  const isAdminOrMaster = currentUser.role === 'admin' || currentUser.role === 'master';
+  const isLogistica =
+    isAdminOrMaster ||
+    !!(currentUser.permissions as Record<string, unknown>)?.carregamento_liberar;
+  const hasCarregamento =
+    isAdminOrMaster ||
+    isLogistica ||
+    !!(currentUser.permissions as Record<string, unknown>)?.carregamento;
+
+  const { kpis, graficos, auditRecente, loading, error, refetch } = useDashboard(currentUser);
 
   return (
-    <div className="max-w-4xl mx-auto py-12 px-4">
-      <div className="text-center mb-12">
-        <h1 className="text-4xl font-black text-stone-800 mb-4">Bem-vindo, {currentUser.name}</h1>
-        <p className="text-stone-500 text-lg">Selecione um módulo para começar a trabalhar.</p>
+    <div className="max-w-7xl mx-auto py-6 px-4 space-y-6">
+      {/* ── Cabeçalho ── */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-black text-stone-800">
+            {getGreeting()}, {currentUser.name.split(' ')[0]}! 👋
+          </h1>
+          <p className="text-stone-400 text-sm mt-0.5">FertCalc Pro · Dashboard Executivo</p>
+        </div>
+        <div className="flex items-center gap-3">
+          {(isAdminOrMaster || (currentUser.permissions as Record<string, unknown>)?.relatorios ||
+            currentUser.role === 'manager') && (
+            <button
+              onClick={() => onSelectModule('relatorios')}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium border border-stone-200 rounded-lg hover:bg-stone-50 text-stone-600 transition-colors"
+            >
+              📊 Relatórios
+            </button>
+          )}
+          <button
+            onClick={refetch}
+            className="flex items-center gap-2 text-sm text-stone-500 hover:text-stone-800 transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Atualizar
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        {modules
-          .filter((m) => m.allowed)
-          .map((module) => {
-            const Icon = module.icon;
-            return (
-              <button
-                key={module.id}
-                onClick={() => onSelectModule(module.id as any)}
-                className="group bg-white p-8 rounded-3xl shadow-sm border border-stone-200 hover:shadow-xl hover:border-emerald-200 transition-all duration-300 text-left flex flex-col items-start"
-              >
-                <div
-                  className={`${module.color} p-4 rounded-2xl text-white mb-6 group-hover:scale-110 transition-transform duration-300 shadow-lg`}
-                >
-                  <Icon className="w-8 h-8" />
-                </div>
-                <h2 className={`text-2xl font-black ${module.textColor} mb-2`}>{module.label}</h2>
-                <p className="text-stone-500 leading-relaxed">{module.description}</p>
-                <div className="mt-8 flex items-center text-sm font-bold text-stone-400 group-hover:text-emerald-600 transition-colors">
-                  Acessar módulo
-                  <svg
-                    className="w-4 h-4 ml-2 group-hover:translate-x-2 transition-transform"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M17 8l4 4m0 0l-4 4m4-4H3"
-                    />
-                  </svg>
-                </div>
-              </button>
-            );
-          })}
+      {/* ── Banner de erro ── */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      {/* ── Banner: pendentes de aprovação ── */}
+      {!loading && kpis.pendentesAprovacao > 0 && isLogistica && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 flex items-center gap-3">
+          <AlertTriangle className="w-5 h-5 text-yellow-600 flex-shrink-0" />
+          <span className="text-sm text-yellow-800 font-medium">
+            Há <strong>{kpis.pendentesAprovacao}</strong> carregamento
+            {kpis.pendentesAprovacao !== 1 ? 's' : ''} aguardando sua aprovação.
+          </span>
+          {hasCarregamento && (
+            <button
+              onClick={() => onSelectModule('carregamento')}
+              className="ml-auto flex items-center gap-1 text-sm font-bold text-yellow-700 hover:text-yellow-900 transition-colors"
+            >
+              Ver agora <ChevronRight className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ── KPI Cards ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        <KPICard
+          title={isLogistica ? 'Carregamentos (mês)' : 'Meus Carregamentos'}
+          value={loading ? '—' : kpis.carregamentosMes}
+          icon={<Truck className="w-5 h-5" />}
+          color="blue"
+          loading={loading}
+          onClick={hasCarregamento ? () => onSelectModule('carregamento') : undefined}
+        />
+        <KPICard
+          title="Pedidos de Venda"
+          value={loading ? '—' : kpis.pedidosVendaMes}
+          icon={<ClipboardList className="w-5 h-5" />}
+          color="green"
+          loading={loading}
+          onClick={hasCarregamento ? () => onSelectModule('carregamento') : undefined}
+        />
+        <KPICard
+          title="Frete Médio"
+          value={loading ? '—' : kpis.freteMedia > 0 ? formatCurrency(kpis.freteMedia) : '—'}
+          subtitle="dos carregamentos"
+          icon={<DollarSign className="w-5 h-5" />}
+          color="yellow"
+          loading={loading}
+        />
+        <KPICard
+          title="Pend. Aprovação"
+          value={loading ? '—' : kpis.pendentesAprovacao}
+          icon={<AlertTriangle className="w-5 h-5" />}
+          color="red"
+          loading={loading}
+          onClick={isLogistica && hasCarregamento ? () => onSelectModule('carregamento') : undefined}
+        />
+        <KPICard
+          title="Em Carregamento"
+          value={loading ? '—' : `${kpis.tonelagemTransito.toLocaleString('pt-BR')} ton`}
+          subtitle="tonelagem em trânsito"
+          icon={<Package className="w-5 h-5" />}
+          color="purple"
+          loading={loading}
+        />
       </div>
 
-      <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-emerald-50 p-6 rounded-2xl border border-emerald-100">
-          <div className="text-emerald-600 font-bold text-sm mb-2 uppercase tracking-wider">
-            Status do Sistema
-          </div>
-          <p className="text-emerald-800 text-sm">Todos os serviços estão operando normalmente.</p>
+      {/* ── KPIs extras (admin/master) ── */}
+      {isAdminOrMaster && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+          <KPICard
+            title="Usuários Ativos"
+            value={loading ? '—' : (kpis.usuariosAtivos ?? '—')}
+            icon={<Users className="w-5 h-5" />}
+            color="blue"
+            loading={loading}
+            onClick={() => onSelectModule('config')}
+          />
+          <KPICard
+            title="Cotações Aguardando"
+            value={loading ? '—' : kpis.cotacoesAguardando}
+            icon={<ClipboardList className="w-5 h-5" />}
+            color="orange"
+            loading={loading}
+            onClick={hasCarregamento ? () => onSelectModule('carregamento') : undefined}
+          />
+          <KPICard
+            title="Gastos Cartão (mês)"
+            value={
+              loading
+                ? '—'
+                : kpis.gastosCartaoMes != null
+                  ? formatCurrency(kpis.gastosCartaoMes)
+                  : '—'
+            }
+            icon={<CreditCard className="w-5 h-5" />}
+            color="purple"
+            loading={loading}
+            onClick={() => onSelectModule('expenses')}
+          />
         </div>
-        <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100">
-          <div className="text-blue-600 font-bold text-sm mb-2 uppercase tracking-wider">
-            Suporte Técnico
+      )}
+
+      {/* ── Gráficos ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <GraficoCarregamentosMes data={graficos.carregamentosPorMes} loading={loading} />
+        <GraficoStatusCarregamentos data={graficos.statusCarregamentos} loading={loading} />
+        <GraficoFreteTransportadora data={graficos.freteTransportadora} loading={loading} />
+
+        {/* Tonelagem por filial — apenas admin/master */}
+        {isAdminOrMaster && (
+          <div className="bg-white rounded-2xl border border-stone-200 p-5">
+            <h3 className="text-sm font-bold text-stone-500 uppercase tracking-widest mb-4">
+              Tonelagem por Filial (últimos 3 meses)
+            </h3>
+            {loading ? (
+              <div className="animate-pulse space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="h-8 bg-stone-100 rounded" />
+                ))}
+              </div>
+            ) : graficos.tonelagemFilial.length === 0 ? (
+              <p className="text-center text-stone-400 py-16 text-sm">Sem dados disponíveis</p>
+            ) : (
+              <div className="space-y-3">
+                {graficos.tonelagemFilial.map((f) => {
+                  const max = Math.max(...graficos.tonelagemFilial.map((x) => x.tonelagem), 1);
+                  const pct = (f.tonelagem / max) * 100;
+                  return (
+                    <div key={f.filial}>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="font-medium text-stone-700">{f.filial}</span>
+                        <span className="text-stone-500">
+                          {f.tonelagem.toLocaleString('pt-BR')} ton
+                        </span>
+                      </div>
+                      <div className="h-2 bg-stone-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-amber-500 rounded-full transition-all duration-500"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
-          <p className="text-blue-800 text-sm">Precisa de ajuda? Entre em contato com o suporte.</p>
-        </div>
-        <div className="bg-stone-50 p-6 rounded-2xl border border-stone-100">
-          <div className="text-stone-600 font-bold text-sm mb-2 uppercase tracking-wider">
-            Versão
-          </div>
-          <p className="text-stone-800 text-sm">FertCalc Pro v2.5.0 - Fevereiro 2026</p>
-        </div>
+        )}
       </div>
+
+      {/* ── Atividade Recente (admin/master) ── */}
+      {isAdminOrMaster && (
+        <div className="bg-white rounded-2xl border border-stone-200 p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Activity className="w-4 h-4 text-stone-400" />
+            <h3 className="text-sm font-bold text-stone-500 uppercase tracking-widest">
+              Atividade Recente
+            </h3>
+          </div>
+          {loading ? (
+            <div className="animate-pulse space-y-3">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="h-5 bg-stone-100 rounded w-3/4" />
+              ))}
+            </div>
+          ) : auditRecente.length === 0 ? (
+            <p className="text-sm text-stone-400">Nenhuma atividade recente.</p>
+          ) : (
+            <ul className="divide-y divide-stone-100">
+              {auditRecente.map((entry) => (
+                <li key={entry.id} className="py-2 flex items-start gap-3 text-sm">
+                  <span className="text-stone-400 whitespace-nowrap min-w-[100px]">
+                    {formatDate(entry.criado_em)}
+                  </span>
+                  <span className="text-stone-700">
+                    <span className="font-medium">{entry.usuario_nome}</span>{' '}
+                    {acaoLabel(entry.acao)}{' '}
+                    <span className="text-stone-500">{entry.tabela}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   );
 }
