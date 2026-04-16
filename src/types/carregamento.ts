@@ -85,6 +85,12 @@ export interface Carregamento {
   cancelado_por_id?: string;
   cancelado_por_nome?: string;
   cancelado_em?: string;
+  // Dados do pedido de venda vinculado (populados via join ou lookup)
+  pedido_cliente_nome?: string;
+  pedido_produto_nome?: string;
+  pedido_data_vencimento?: string;
+  pedido_saldo_disponivel?: number;
+  pedido_quantidade_real?: number;
 }
 
 // ── Cotação de Frete ──────────────────────────────────────────
