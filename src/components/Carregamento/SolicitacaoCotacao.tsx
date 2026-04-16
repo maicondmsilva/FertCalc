@@ -273,6 +273,9 @@ interface PainelResponsavelProps {
   cotacao: CotacaoSolicitada;
   transportadoras: Transportadora[];
   canAprovar: boolean;
+  currentUser: User;
+  isLogistica: boolean;
+  isAdmin: boolean;
   onClose: () => void;
   onUpdate: () => void;
 }
@@ -281,33 +284,50 @@ function PainelResponsavel({
   cotacao,
   transportadoras,
   canAprovar,
+  currentUser,
+  isLogistica,
+  isAdmin,
   onClose,
   onUpdate,
 }: PainelResponsavelProps) {
   const { showSuccess, showError } = useToast();
   const [transportadoraId, setTransportadoraId] = useState(cotacao.transportadora_id ?? '');
-  const [valorFrete, setValorFrete] = useState(
-    cotacao.valor_frete != null ? String(cotacao.valor_frete) : ''
+  const [fretePorTon, setFretePorTon] = useState(
+    cotacao.valor_frete_unitario != null ? String(cotacao.valor_frete_unitario) : ''
   );
   const [prazoDias, setPrazoDias] = useState(
     cotacao.prazo_entrega_dias != null ? String(cotacao.prazo_entrega_dias) : ''
   );
   const [obsResponsavel, setObsResponsavel] = useState(cotacao.obs_responsavel ?? '');
   const [saving, setSaving] = useState(false);
+  const [modoEdicao, setModoEdicao] = useState(false);
+  const [showModalRecusa, setShowModalRecusa] = useState(false);
+  const [motivoRecusa, setMotivoRecusa] = useState('');
+  const [historico, setHistorico] = useState<
+    import('../../services/auditLogService').AuditLogCarregamento[]
+  >([]);
 
-  const valorFreteNum = parseFloat(valorFrete) || 0;
+  const fretePorTonNum = parseFloat(fretePorTon) || 0;
   const qtdTon = cotacao.quantidade_ton || 0;
-  const valorUnitario = qtdTon > 0 ? valorFreteNum / qtdTon : 0;
+  const valorTotalFrete = fretePorTonNum * qtdTon;
 
   const canInformar = cotacao.status === 'aguardando' || cotacao.status === 'em_analise';
+  const canEdit = cotacao.status === 'cotado' && (isLogistica || isAdmin);
+
+  useEffect(() => {
+    import('../../services/auditLogService')
+      .then(({ getAuditLog }) => getAuditLog('cotacoes_solicitadas', cotacao.id))
+      .then(setHistorico)
+      .catch(() => {});
+  }, [cotacao.id]);
 
   const handleSalvarCotacao = async () => {
     if (!transportadoraId) {
       showError('Selecione uma transportadora.');
       return;
     }
-    if (!valorFreteNum) {
-      showError('Informe o valor do frete.');
+    if (!fretePorTonNum) {
+      showError('Informe o valor do frete por tonelada.');
       return;
     }
     setSaving(true);
@@ -316,8 +336,8 @@ function PainelResponsavel({
         status: 'cotado',
         transportadora_id: transportadoraId,
         transportadora_nome: transportadoras.find((t) => t.id === transportadoraId)?.nome,
-        valor_frete: valorFreteNum,
-        valor_frete_unitario: valorUnitario,
+        valor_frete: valorTotalFrete,
+        valor_frete_unitario: fretePorTonNum,
         prazo_entrega_dias: prazoDias ? parseInt(prazoDias, 10) : undefined,
         obs_responsavel: obsResponsavel || undefined,
         cotado_em: new Date().toISOString(),
@@ -331,6 +351,44 @@ function PainelResponsavel({
       onClose();
     } catch {
       showError('Erro ao salvar cotação.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleEditarCotacaoResponsavel = async () => {
+    if (!fretePorTonNum) {
+      showError('Informe o valor do frete por tonelada.');
+      return;
+    }
+    setSaving(true);
+    const anterior = { ...cotacao };
+    const updates = {
+      transportadora_id: transportadoraId || undefined,
+      transportadora_nome: transportadoras.find((t) => t.id === transportadoraId)?.nome,
+      valor_frete: valorTotalFrete,
+      valor_frete_unitario: fretePorTonNum,
+      prazo_entrega_dias: prazoDias ? parseInt(prazoDias, 10) : undefined,
+      obs_responsavel: obsResponsavel || undefined,
+    };
+    try {
+      await updateCotacaoSolicitada(cotacao.id, updates);
+      const { registrarAuditLog } = await import('../../services/auditLogService');
+      await registrarAuditLog({
+        tabela: 'cotacoes_solicitadas',
+        registro_id: cotacao.id,
+        acao: 'UPDATE',
+        dados_anteriores: anterior as unknown as Record<string, unknown>,
+        dados_novos: { ...anterior, ...updates } as unknown as Record<string, unknown>,
+        motivo: 'Edição de cotação após envio',
+        usuario_id: currentUser.id,
+        usuario_nome: currentUser.name ?? currentUser.id,
+      });
+      showSuccess('Cotação atualizada com sucesso!');
+      setModoEdicao(false);
+      onUpdate();
+    } catch {
+      showError('Erro ao atualizar cotação.');
     } finally {
       setSaving(false);
     }
@@ -353,16 +411,51 @@ function PainelResponsavel({
     }
   };
 
-  const handleCancelar = async () => {
-    if (!window.confirm('Deseja cancelar esta solicitação de cotação?')) return;
+  const handleRecusarCotacao = async () => {
+    if (!motivoRecusa.trim()) {
+      showError('Informe o motivo da recusa.');
+      return;
+    }
     setSaving(true);
+    const anterior = { ...cotacao };
     try {
-      await updateCotacaoSolicitada(cotacao.id, { status: 'cancelado' });
-      showSuccess('Cotação cancelada.');
+      await updateCotacaoSolicitada(cotacao.id, {
+        status: 'em_analise',
+        motivo_recusa: motivoRecusa.trim(),
+        recusado_por_id: currentUser.id,
+        recusado_por_nome: currentUser.name ?? currentUser.id,
+        recusado_em: new Date().toISOString(),
+        transportadora_id: undefined,
+        transportadora_nome: undefined,
+        valor_frete: undefined,
+        valor_frete_unitario: undefined,
+        cotado_em: undefined,
+      } as unknown as Parameters<typeof updateCotacaoSolicitada>[1]);
+      const { registrarAuditLog } = await import('../../services/auditLogService');
+      await registrarAuditLog({
+        tabela: 'cotacoes_solicitadas',
+        registro_id: cotacao.id,
+        acao: 'UPDATE',
+        dados_anteriores: anterior as unknown as Record<string, unknown>,
+        dados_novos: { status: 'em_analise', motivo_recusa: motivoRecusa.trim() } as Record<
+          string,
+          unknown
+        >,
+        motivo: `Recusado: ${motivoRecusa.trim()}`,
+        usuario_id: currentUser.id,
+        usuario_nome: currentUser.name ?? currentUser.id,
+      });
+      await notifyCotacaoCancelada(
+        { ...cotacao, status: 'em_analise' },
+        `${currentUser.name ?? 'Responsável'} — Motivo: ${motivoRecusa.trim()}`
+      );
+      showSuccess('Cotação devolvida ao solicitante para revisão.');
+      setShowModalRecusa(false);
+      setMotivoRecusa('');
       onUpdate();
       onClose();
     } catch {
-      showError('Erro ao cancelar cotação.');
+      showError('Erro ao recusar cotação.');
     } finally {
       setSaving(false);
     }
@@ -377,6 +470,23 @@ function PainelResponsavel({
             <p className="text-xs text-stone-400 mt-0.5">Tratar Solicitação</p>
           </div>
           <div className="flex items-center gap-3">
+            {cotacao.status === 'cotado' && canEdit && !modoEdicao && (
+              <button
+                onClick={() => setModoEdicao(true)}
+                className="flex items-center gap-1.5 text-xs bg-amber-50 border border-amber-300 text-amber-700 px-3 py-1.5 rounded-lg font-bold hover:bg-amber-100 transition-colors"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+                Editar Cotação
+              </button>
+            )}
+            {modoEdicao && (
+              <button
+                onClick={() => setModoEdicao(false)}
+                className="text-xs text-stone-500 underline"
+              >
+                Cancelar edição
+              </button>
+            )}
             <StatusBadge status={cotacao.status} />
             <button onClick={onClose} className="text-stone-400 hover:text-stone-700">
               <X className="w-5 h-5" />
@@ -456,10 +566,10 @@ function PainelResponsavel({
           </div>
 
           {/* Seção de informar cotação */}
-          {canInformar && (
+          {(canInformar || modoEdicao) && (
             <div className="border border-stone-200 rounded-xl overflow-hidden">
               <div className="bg-stone-100 px-4 py-2 text-xs font-bold uppercase tracking-wider text-stone-600">
-                Informar Cotação
+                {modoEdicao ? 'Editar Cotação' : 'Informar Cotação'}
               </div>
               <div className="p-4 space-y-3">
                 <div>
@@ -469,7 +579,8 @@ function PainelResponsavel({
                   <select
                     value={transportadoraId}
                     onChange={(e) => setTransportadoraId(e.target.value)}
-                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                    disabled={!modoEdicao && cotacao.status === 'cotado'}
+                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none disabled:opacity-60"
                   >
                     <option value="">Selecione...</option>
                     {transportadoras.map((t) => (
@@ -480,39 +591,55 @@ function PainelResponsavel({
                   </select>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
-                      Valor Total do Frete (R$) <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={valorFrete}
-                      onChange={(e) => setValorFrete(e.target.value)}
-                      className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
-                      placeholder="0,00"
-                    />
-                    {valorFreteNum > 0 && qtdTon > 0 && (
-                      <p className="text-[10px] text-emerald-600 mt-1 font-medium">
-                        ≈ {formatCurrency(valorUnitario)}/ton
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold text-stone-500 uppercase">
+                    Frete por Tonelada (R$/ton) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={fretePorTon}
+                    onChange={(e) => setFretePorTon(e.target.value)}
+                    placeholder="Ex: 148.50"
+                    disabled={!modoEdicao && cotacao.status === 'cotado'}
+                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
+                  />
+                  {fretePorTonNum > 0 && qtdTon > 0 && (
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+                      <p className="text-xs text-emerald-600 font-bold uppercase mb-0.5">
+                        Valor Total do Frete
                       </p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
-                      Prazo de Entrega (dias)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={prazoDias}
-                      onChange={(e) => setPrazoDias(e.target.value)}
-                      className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
-                      placeholder="0"
-                    />
-                  </div>
+                      <p className="text-xl font-black text-emerald-700">
+                        {new Intl.NumberFormat('pt-BR', {
+                          style: 'currency',
+                          currency: 'BRL',
+                        }).format(valorTotalFrete)}
+                      </p>
+                      <p className="text-xs text-emerald-500 mt-0.5">
+                        {new Intl.NumberFormat('pt-BR', {
+                          style: 'currency',
+                          currency: 'BRL',
+                        }).format(fretePorTonNum)}
+                        /ton × {qtdTon.toFixed(3)} ton
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                    Prazo de Entrega (dias)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={prazoDias}
+                    onChange={(e) => setPrazoDias(e.target.value)}
+                    disabled={!modoEdicao && cotacao.status === 'cotado'}
+                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none disabled:opacity-60"
+                    placeholder="0"
+                  />
                 </div>
 
                 <div>
@@ -523,18 +650,31 @@ function PainelResponsavel({
                     rows={2}
                     value={obsResponsavel}
                     onChange={(e) => setObsResponsavel(e.target.value)}
-                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none resize-none"
+                    disabled={!modoEdicao && cotacao.status === 'cotado'}
+                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none resize-none disabled:opacity-60"
                     placeholder="Observações opcionais..."
                   />
                 </div>
 
-                <button
-                  onClick={handleSalvarCotacao}
-                  disabled={saving}
-                  className="w-full bg-amber-600 text-white py-2 rounded-lg font-bold text-sm hover:bg-amber-700 disabled:opacity-50 transition-colors"
-                >
-                  {saving ? 'Salvando...' : 'Salvar Cotação'}
-                </button>
+                {modoEdicao ? (
+                  <button
+                    onClick={handleEditarCotacaoResponsavel}
+                    disabled={saving}
+                    className="w-full bg-amber-600 text-white py-2 rounded-lg font-bold text-sm hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                  >
+                    {saving ? 'Salvando...' : 'Salvar Edição'}
+                  </button>
+                ) : (
+                  canInformar && (
+                    <button
+                      onClick={handleSalvarCotacao}
+                      disabled={saving}
+                      className="w-full bg-amber-600 text-white py-2 rounded-lg font-bold text-sm hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                    >
+                      {saving ? 'Salvando...' : 'Salvar Cotação'}
+                    </button>
+                  )
+                )}
               </div>
             </div>
           )}
@@ -554,16 +694,97 @@ function PainelResponsavel({
               cotacao.status === 'em_analise' ||
               cotacao.status === 'cotado') && (
               <button
-                onClick={handleCancelar}
+                onClick={() => setShowModalRecusa(true)}
                 disabled={saving}
-                className="flex-1 border border-red-300 text-red-600 py-2 rounded-lg font-bold text-sm hover:bg-red-50 disabled:opacity-50 transition-colors"
+                className="flex-1 px-4 py-2 text-sm bg-red-50 border border-red-300 text-red-600 rounded-lg font-bold hover:bg-red-100 disabled:opacity-50"
               >
-                Cancelar
+                Recusar / Devolver
               </button>
             )}
           </div>
+
+          {/* Histórico */}
+          {historico.length > 0 && (
+            <div className="border-t border-stone-100 pt-4 mt-4">
+              <p className="text-xs font-bold text-stone-400 uppercase mb-3 flex items-center gap-1.5">
+                <History className="w-3.5 h-3.5" />
+                Histórico de Alterações
+              </p>
+              <div className="space-y-2 max-h-40 overflow-y-auto">
+                {historico.map((entry, i) => (
+                  <div key={entry.id ?? i} className="flex gap-2.5 text-xs">
+                    <div className="w-1.5 h-1.5 rounded-full bg-stone-300 mt-1.5 flex-shrink-0" />
+                    <div>
+                      <span className="font-bold text-stone-600">{entry.usuario_nome}</span>
+                      <span className="text-stone-400 mx-1">·</span>
+                      <span className="text-stone-400">
+                        {entry.criado_em ? new Date(entry.criado_em).toLocaleString('pt-BR') : ''}
+                      </span>
+                      <span className="ml-1 text-stone-500 capitalize">
+                        ({entry.acao.toLowerCase()})
+                      </span>
+                      {entry.motivo && (
+                        <p className="text-stone-500 italic mt-0.5">"{entry.motivo}"</p>
+                      )}
+                      {entry.campos_alterados && entry.campos_alterados.length > 0 && (
+                        <p className="text-stone-400 mt-0.5">
+                          Alterou: {entry.campos_alterados.join(', ')}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Modal de Recusa */}
+      {showModalRecusa && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+            <div className="flex items-center gap-2 text-red-600">
+              <XCircle className="w-5 h-5" />
+              <h3 className="font-bold text-base">Recusar e Devolver para Revisão</h3>
+            </div>
+            <p className="text-sm text-stone-500">
+              A cotação voltará ao status <strong>em análise</strong> e o solicitante receberá uma
+              notificação com o motivo. Ele poderá editar e reenviar.
+            </p>
+            <div>
+              <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                Motivo da Recusa <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                rows={3}
+                value={motivoRecusa}
+                onChange={(e) => setMotivoRecusa(e.target.value)}
+                placeholder="Ex: Prazo incompatível, transportadora sem disponibilidade..."
+                className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm resize-none focus:ring-2 focus:ring-red-400"
+              />
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setShowModalRecusa(false);
+                  setMotivoRecusa('');
+                }}
+                className="px-4 py-2 text-sm text-stone-600 bg-stone-100 rounded-lg font-bold hover:bg-stone-200"
+              >
+                Voltar
+              </button>
+              <button
+                onClick={handleRecusarCotacao}
+                disabled={saving || !motivoRecusa.trim()}
+                className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg font-bold hover:bg-red-700 disabled:opacity-50"
+              >
+                {saving ? 'Salvando...' : 'Confirmar Recusa'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1107,8 +1328,21 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
       quantidade_ton: form.qtd ? parseFloat(form.qtd) : undefined,
       observacoes: form.obs.trim() || undefined,
     };
+    // If the cotação was rejected, reset status to aguardando and clear rejection fields
+    if (editandoCotacao.motivo_recusa) {
+      Object.assign(updates, {
+        status: 'aguardando' as const,
+        motivo_recusa: null,
+        recusado_por_id: null,
+        recusado_por_nome: null,
+        recusado_em: null,
+      });
+    }
     try {
-      await updateCotacaoSolicitada(editandoCotacao.id, updates);
+      await updateCotacaoSolicitada(
+        editandoCotacao.id,
+        updates as Parameters<typeof updateCotacaoSolicitada>[1]
+      );
       await registrarAuditLog({
         tabela: 'cotacoes_solicitadas',
         registro_id: editandoCotacao.id,
@@ -1405,77 +1639,97 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
                   </thead>
                   <tbody className="divide-y divide-stone-100">
                     {minhasCotacoes.map((c) => (
-                      <tr key={c.id} className="hover:bg-stone-50 transition-colors">
-                        <td className="px-4 py-3 font-mono font-bold text-blue-600 text-xs">
-                          {c.numero_cotacao}
-                        </td>
-                        <td className="px-4 py-3 text-stone-700">{c.cliente_nome || '—'}</td>
-                        <td className="px-4 py-3 text-stone-500 hidden sm:table-cell">
-                          {c.filial?.nome || '—'}
-                        </td>
-                        <td className="px-4 py-3 text-stone-500 hidden md:table-cell">
-                          {c.local_carregamento?.nome || '—'}
-                        </td>
-                        <td className="px-4 py-3 text-right text-stone-700 hidden md:table-cell">
-                          {c.quantidade_ton?.toFixed(3) ?? '—'}
-                        </td>
-                        <td className="px-4 py-3">
-                          <StatusBadge status={c.status} />
-                        </td>
-                        <td className="px-4 py-3 text-stone-400 text-xs hidden sm:table-cell">
-                          {formatDate(c.criado_em)}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <button
-                              onClick={() => setDetalheModal(c)}
-                              className="text-stone-400 hover:text-amber-600 transition-colors p-1"
-                              title="Ver detalhes"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                            {(() => {
-                              const perms = canEditDeleteCotacao(
-                                c.status,
-                                currentUser,
-                                c.solicitado_por
-                              );
-                              return (
-                                <>
-                                  {perms.canEdit && (
+                      <React.Fragment key={c.id}>
+                        <tr className="hover:bg-stone-50 transition-colors">
+                          <td className="px-4 py-3 font-mono font-bold text-blue-600 text-xs">
+                            {c.numero_cotacao}
+                          </td>
+                          <td className="px-4 py-3 text-stone-700">{c.cliente_nome || '—'}</td>
+                          <td className="px-4 py-3 text-stone-500 hidden sm:table-cell">
+                            {c.filial?.nome || '—'}
+                          </td>
+                          <td className="px-4 py-3 text-stone-500 hidden md:table-cell">
+                            {c.local_carregamento?.nome || '—'}
+                          </td>
+                          <td className="px-4 py-3 text-right text-stone-700 hidden md:table-cell">
+                            {c.quantidade_ton?.toFixed(3) ?? '—'}
+                          </td>
+                          <td className="px-4 py-3">
+                            <StatusBadge status={c.status} />
+                          </td>
+                          <td className="px-4 py-3 text-stone-400 text-xs hidden sm:table-cell">
+                            {formatDate(c.criado_em)}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                onClick={() => setDetalheModal(c)}
+                                className="text-stone-400 hover:text-amber-600 transition-colors p-1"
+                                title="Ver detalhes"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                              {(() => {
+                                const perms = canEditDeleteCotacao(
+                                  c.status,
+                                  currentUser,
+                                  c.solicitado_por
+                                );
+                                return (
+                                  <>
+                                    {perms.canEdit && (
+                                      <button
+                                        onClick={() => setEditandoCotacao(c)}
+                                        className="text-stone-400 hover:text-amber-600 transition-colors p-1"
+                                        title="Editar cotação"
+                                      >
+                                        <Pencil className="w-4 h-4" />
+                                      </button>
+                                    )}
+                                    {perms.canDelete && (
+                                      <button
+                                        onClick={() => {
+                                          setExcluindoCotacao(c);
+                                          setMotivoExclusaoCotacao('');
+                                        }}
+                                        className="text-stone-400 hover:text-red-600 transition-colors p-1"
+                                        title="Excluir cotação"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </button>
+                                    )}
                                     <button
-                                      onClick={() => setEditandoCotacao(c)}
-                                      className="text-stone-400 hover:text-amber-600 transition-colors p-1"
-                                      title="Editar cotação"
+                                      onClick={() => setHistoricoCotacao(c)}
+                                      className="text-stone-400 hover:text-blue-600 transition-colors p-1"
+                                      title="Histórico de modificações"
                                     >
-                                      <Pencil className="w-4 h-4" />
+                                      <History className="w-4 h-4" />
                                     </button>
-                                  )}
-                                  {perms.canDelete && (
-                                    <button
-                                      onClick={() => {
-                                        setExcluindoCotacao(c);
-                                        setMotivoExclusaoCotacao('');
-                                      }}
-                                      className="text-stone-400 hover:text-red-600 transition-colors p-1"
-                                      title="Excluir cotação"
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                    </button>
-                                  )}
-                                  <button
-                                    onClick={() => setHistoricoCotacao(c)}
-                                    className="text-stone-400 hover:text-blue-600 transition-colors p-1"
-                                    title="Histórico de modificações"
-                                  >
-                                    <History className="w-4 h-4" />
-                                  </button>
-                                </>
-                              );
-                            })()}
-                          </div>
-                        </td>
-                      </tr>
+                                  </>
+                                );
+                              })()}
+                            </div>
+                          </td>
+                        </tr>
+                        {c.status === 'em_analise' && c.motivo_recusa && (
+                          <tr>
+                            <td colSpan={8} className="px-4 pb-3 pt-0">
+                              <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex gap-2.5">
+                                <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                                <div>
+                                  <p className="text-xs font-bold text-red-700">
+                                    Devolvida para revisão
+                                  </p>
+                                  <p className="text-xs text-red-600 mt-0.5">
+                                    <strong>{c.recusado_por_nome ?? 'Logística'}</strong>: "
+                                    {c.motivo_recusa}"
+                                  </p>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     ))}
                   </tbody>
                 </table>
@@ -1620,6 +1874,9 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
           cotacao={painelCotacao}
           transportadoras={transportadoras}
           canAprovar={canAprovar}
+          currentUser={currentUser}
+          isLogistica={canTratar}
+          isAdmin={['admin', 'master'].includes(currentUser.role)}
           onClose={() => setPainelCotacao(null)}
           onUpdate={handleUpdate}
         />

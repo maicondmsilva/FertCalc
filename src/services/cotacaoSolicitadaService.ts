@@ -17,7 +17,10 @@ function mapCotacaoSolicitada(d: Record<string, unknown>): CotacaoSolicitada {
     ? {
         id: branchRaw.id as string,
         nome: branchRaw.name as string,
-        codigo: branchRaw.id_numeric != null ? String(branchRaw.id_numeric) : (branchRaw.id as string).slice(0, 8),
+        codigo:
+          branchRaw.id_numeric != null
+            ? String(branchRaw.id_numeric)
+            : (branchRaw.id as string).slice(0, 8),
         ativo: (branchRaw.ativo ?? true) as boolean,
       }
     : undefined;
@@ -78,7 +81,8 @@ function mapCotacaoSolicitada(d: Record<string, unknown>): CotacaoSolicitada {
     transportadora,
     transportadora_nome: d.transportadora_nome as string | undefined,
     valor_frete: d.valor_frete != null ? Number(d.valor_frete) : undefined,
-    valor_frete_unitario: d.valor_frete_unitario != null ? Number(d.valor_frete_unitario) : undefined,
+    valor_frete_unitario:
+      d.valor_frete_unitario != null ? Number(d.valor_frete_unitario) : undefined,
     prazo_entrega_dias: d.prazo_entrega_dias != null ? Number(d.prazo_entrega_dias) : undefined,
     obs_responsavel: d.obs_responsavel as string | undefined,
     cotado_em: d.cotado_em as string | undefined,
@@ -86,6 +90,10 @@ function mapCotacaoSolicitada(d: Record<string, unknown>): CotacaoSolicitada {
     precificacao_id: d.precificacao_id as string | undefined,
     criado_em: d.criado_em as string,
     atualizado_em: d.atualizado_em as string,
+    motivo_recusa: d.motivo_recusa as string | undefined,
+    recusado_por_id: d.recusado_por_id as string | undefined,
+    recusado_por_nome: d.recusado_por_nome as string | undefined,
+    recusado_em: d.recusado_em as string | undefined,
   };
 }
 
@@ -182,12 +190,41 @@ export async function getCotacoesAprovadas(userId: string): Promise<CotacaoSolic
   return (data as Record<string, unknown>[]).map(mapCotacaoSolicitada);
 }
 
+export async function getCotacoesAprovadasByCliente(
+  userId: string,
+  clienteId?: string
+): Promise<CotacaoSolicitada[]> {
+  let query = supabase
+    .from('cotacoes_solicitadas')
+    .select(SELECT_FIELDS)
+    .eq('status', 'aprovado')
+    .eq('solicitado_por', userId)
+    .order('aprovado_em', { ascending: false });
+
+  if (clienteId) {
+    query = query.eq('cliente_id', clienteId);
+  }
+
+  const { data, error } = await query;
+  if (error || !data) return [];
+  return (data as Record<string, unknown>[]).map(mapCotacaoSolicitada);
+}
+
 // ─────────────────────────────────────────────────────────────
 //  CRUD
 // ─────────────────────────────────────────────────────────────
 
 export async function createCotacaoSolicitada(
-  payload: Omit<CotacaoSolicitada, 'id' | 'numero_cotacao' | 'criado_em' | 'atualizado_em' | 'filial' | 'local_carregamento' | 'transportadora'>
+  payload: Omit<
+    CotacaoSolicitada,
+    | 'id'
+    | 'numero_cotacao'
+    | 'criado_em'
+    | 'atualizado_em'
+    | 'filial'
+    | 'local_carregamento'
+    | 'transportadora'
+  >
 ): Promise<CotacaoSolicitada> {
   const numero_cotacao = await gerarNumeroCotacao();
 
@@ -203,7 +240,12 @@ export async function createCotacaoSolicitada(
 
 export async function updateCotacaoSolicitada(
   id: string,
-  updates: Partial<Omit<CotacaoSolicitada, 'id' | 'numero_cotacao' | 'criado_em' | 'filial' | 'local_carregamento' | 'transportadora'>>
+  updates: Partial<
+    Omit<
+      CotacaoSolicitada,
+      'id' | 'numero_cotacao' | 'criado_em' | 'filial' | 'local_carregamento' | 'transportadora'
+    >
+  >
 ): Promise<void> {
   const { error } = await supabase
     .from('cotacoes_solicitadas')
@@ -228,8 +270,9 @@ export async function getResponsaveisByFilial(filialId?: string): Promise<string
   return data
     .filter((u) => {
       const role = u.role as string;
-      const perms = u.permissions as Record<string, unknown> | null ?? {};
-      const hasTratarPerm = !!perms.carregamento_tratar_cotacao || role === 'master' || role === 'admin';
+      const perms = (u.permissions as Record<string, unknown> | null) ?? {};
+      const hasTratarPerm =
+        !!perms.carregamento_tratar_cotacao || role === 'master' || role === 'admin';
       if (!hasTratarPerm) return false;
       if (!filialId) return true;
       if (perms.carregamento_all_filiais) return true;

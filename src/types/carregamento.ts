@@ -80,6 +80,11 @@ export interface Carregamento {
   // pedido de venda link
   pedido_venda_id?: string;
   pedido_venda_numero?: string;
+  // cancellation fields
+  obs_cancelamento_parcial?: string;
+  cancelado_por_id?: string;
+  cancelado_por_nome?: string;
+  cancelado_em?: string;
 }
 
 // ── Cotação de Frete ──────────────────────────────────────────
@@ -197,4 +202,9 @@ export interface CotacaoSolicitada {
   precificacao_id?: string;
   criado_em: string;
   atualizado_em: string;
+  // rejection fields
+  motivo_recusa?: string;
+  recusado_por_id?: string;
+  recusado_por_nome?: string;
+  recusado_em?: string;
 }
