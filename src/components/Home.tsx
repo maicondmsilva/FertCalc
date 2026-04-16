@@ -61,6 +61,10 @@ export default function Home({ currentUser, onSelectModule }: HomeProps) {
     isAdminOrMaster ||
     isLogistica ||
     !!(currentUser.permissions as Record<string, unknown>)?.carregamento;
+  const hasReportAccess =
+    isAdminOrMaster ||
+    currentUser.role === 'manager' ||
+    !!(currentUser.permissions as Record<string, unknown>)?.relatorios;
 
   const { kpis, graficos, auditRecente, loading, error, refetch } = useDashboard(currentUser);
 
@@ -75,8 +79,7 @@ export default function Home({ currentUser, onSelectModule }: HomeProps) {
           <p className="text-stone-400 text-sm mt-0.5">FertCalc Pro · Dashboard Executivo</p>
         </div>
         <div className="flex items-center gap-3">
-          {(isAdminOrMaster || (currentUser.permissions as Record<string, unknown>)?.relatorios ||
-            currentUser.role === 'manager') && (
+          {hasReportAccess && (
             <button
               onClick={() => onSelectModule('relatorios')}
               className="flex items-center gap-2 px-3 py-2 text-sm font-medium border border-stone-200 rounded-lg hover:bg-stone-50 text-stone-600 transition-colors"

@@ -50,6 +50,7 @@ export default function KPICard({
   return (
     <Tag
       onClick={onClick}
+      aria-label={onClick ? `${title}: ${value}` : undefined}
       className={`rounded-2xl border p-5 ${c.bg} transition-all duration-200 ${
         onClick ? 'cursor-pointer hover:shadow-md hover:scale-[1.02] text-left w-full' : ''
       }`}

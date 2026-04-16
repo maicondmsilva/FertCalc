@@ -351,7 +351,7 @@ export function useDashboard(currentUser: User): DashboardData {
     } finally {
       setLoading(false);
     }
-  }, [currentUser.id, isAdminOrMaster, isLogistica]);
+  }, [currentUser.id, currentUser.role, isAdminOrMaster, isLogistica]);
 
   useEffect(() => {
     fetchData();
