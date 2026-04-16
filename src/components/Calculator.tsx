@@ -740,8 +740,8 @@ export default function Calculator({
                                 type="number"
                                 placeholder={
                                   calc.factors.cotacaoFreteNumero
-                                    ? `🔗 ${calc.factors.cotacaoFreteNumero}`
-                                    : 'R$/t — digite ou vincule cotação'
+                                    ? `🔗 ${calc.factors.cotacaoFreteNumero} — editável`
+                                    : 'R$/ton — digite ou vincule cotação'
                                 }
                                 value={calc.factors.freight === 0 ? '' : calc.factors.freight}
                                 onChange={(e) => {
@@ -1357,7 +1357,9 @@ export default function Calculator({
                 <p className="text-center text-stone-400 py-8">Carregando cotações...</p>
               ) : cotacoesAprovadas.length === 0 ? (
                 <p className="text-center text-stone-400 italic py-8">
-                  Nenhuma cotação aprovada encontrada.
+                  {factors.client?.id
+                    ? 'Nenhuma cotação aprovada encontrada para este cliente.'
+                    : 'Selecione um cliente na precificação para filtrar as cotações.'}
                 </p>
               ) : (
                 <table className="w-full text-sm text-left">

@@ -813,8 +813,8 @@ export function useCalculator({
     field: keyof PricingFactors,
     value: string | number | boolean
   ) => {
-    setCalculations(
-      calculations.map((c) => {
+    setCalculations((prev) =>
+      prev.map((c) => {
         if (c.id === id) {
           const newFactors = { ...c.factors, [field]: value };
           return {
