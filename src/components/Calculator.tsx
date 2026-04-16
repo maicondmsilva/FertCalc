@@ -23,7 +23,7 @@ import ProfitabilityModal from './ProfitabilityModal';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { PromptDialog } from './ui/PromptDialog';
 import { useCalculator } from '../hooks/useCalculator';
-import { getCotacoesAprovadas } from '../services/cotacaoSolicitadaService';
+import { getCotacoesAprovadasByCliente } from '../services/cotacaoSolicitadaService';
 import { CotacaoSolicitada } from '../types/carregamento';
 import { getEmbalagens } from '../services/embalagensService';
 
@@ -133,7 +133,8 @@ export default function Calculator({
     setShowCotacaoModal(true);
     setCotacaoLoading(true);
     try {
-      const data = await getCotacoesAprovadas(currentUser.id);
+      const clienteId = factors.client?.id || undefined;
+      const data = await getCotacoesAprovadasByCliente(currentUser.id, clienteId);
       setCotacoesAprovadas(data);
     } catch {
       setCotacoesAprovadas([]);
@@ -726,7 +727,6 @@ export default function Calculator({
                                 type="button"
                                 onClick={() => {
                                   updateCalculationFactors(calc.id, 'tipoFrete', 'FOB');
-                                  updateCalculationFactors(calc.id, 'freight', 0);
                                   updateCalculationFactors(calc.id, 'cotacaoFreteId', '');
                                   updateCalculationFactors(calc.id, 'cotacaoFreteNumero', '');
                                 }}
@@ -735,31 +735,33 @@ export default function Calculator({
                                 FOB
                               </button>
                             </div>
-                            {(calc.factors.tipoFrete ?? 'CIF') === 'CIF' && (
-                              <div className="flex gap-1 items-center">
-                                <input
-                                  type="number"
-                                  placeholder="R$/t"
-                                  value={calc.factors.freight === 0 ? '' : calc.factors.freight}
-                                  onChange={(e) => {
-                                    const freightVal =
-                                      e.target.value === '' ? 0 : Number(e.target.value);
-                                    updateCalculationFactors(calc.id, 'freight', freightVal);
-                                    updateCalculationFactors(calc.id, 'cotacaoFreteId', '');
-                                    updateCalculationFactors(calc.id, 'cotacaoFreteNumero', '');
-                                  }}
-                                  className="flex-1 px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500"
-                                />
-                                <button
-                                  type="button"
-                                  title="Buscar Cotação Aprovada"
-                                  onClick={() => openCotacaoModal(calc.id)}
-                                  className="p-1.5 text-stone-500 hover:text-emerald-600 hover:bg-emerald-50 rounded border border-stone-300"
-                                >
-                                  <Search className="w-3 h-3" />
-                                </button>
-                              </div>
-                            )}
+                            <div className="flex gap-1 items-center">
+                              <input
+                                type="number"
+                                placeholder={
+                                  calc.factors.cotacaoFreteNumero
+                                    ? `🔗 ${calc.factors.cotacaoFreteNumero}`
+                                    : 'R$/t — digite ou vincule cotação'
+                                }
+                                value={calc.factors.freight === 0 ? '' : calc.factors.freight}
+                                onChange={(e) => {
+                                  const freightVal =
+                                    e.target.value === '' ? 0 : Number(e.target.value);
+                                  updateCalculationFactors(calc.id, 'freight', freightVal);
+                                  updateCalculationFactors(calc.id, 'cotacaoFreteId', '');
+                                  updateCalculationFactors(calc.id, 'cotacaoFreteNumero', '');
+                                }}
+                                className="flex-1 px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500"
+                              />
+                              <button
+                                type="button"
+                                title="Buscar Cotação Aprovada"
+                                onClick={() => openCotacaoModal(calc.id)}
+                                className="p-1.5 text-stone-500 hover:text-emerald-600 hover:bg-emerald-50 rounded border border-stone-300"
+                              >
+                                <Search className="w-3 h-3" />
+                              </button>
+                            </div>
                             {calc.factors.cotacaoFreteNumero && (
                               <div className="flex items-center gap-1 mt-1 text-[10px] text-emerald-700 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">
                                 <Truck className="w-3 h-3 shrink-0" />

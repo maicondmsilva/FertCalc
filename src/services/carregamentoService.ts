@@ -51,6 +51,10 @@ function mapCarregamento(d: Record<string, unknown>): Carregamento {
     local_carregamento: undefined,
     pedido_venda_id: d.pedido_venda_id as string | undefined,
     pedido_venda_numero: d.pedido_venda_numero as string | undefined,
+    obs_cancelamento_parcial: d.obs_cancelamento_parcial as string | undefined,
+    cancelado_por_id: d.cancelado_por_id as string | undefined,
+    cancelado_por_nome: d.cancelado_por_nome as string | undefined,
+    cancelado_em: d.cancelado_em as string | undefined,
   };
 }
 

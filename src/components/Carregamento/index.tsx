@@ -1149,6 +1149,7 @@ interface TabelaCarregamentosProps {
   showActions?: string[];
   onEdit?: (c: Carregamento) => void;
   onDelete?: (c: Carregamento) => void;
+  onCancel?: (c: Carregamento) => void;
   onHistory?: (c: Carregamento) => void;
 }
 
@@ -1159,9 +1160,10 @@ function TabelaCarregamentos({
   showActions = [],
   onEdit,
   onDelete,
+  onCancel,
   onHistory,
 }: TabelaCarregamentosProps) {
-  const hasEditDelete = !!(onEdit || onDelete || onHistory);
+  const hasEditDelete = !!(onEdit || onDelete || onCancel || onHistory);
   if (carregamentos.length === 0) {
     return (
       <div className="text-center py-12 text-stone-400">
@@ -1335,6 +1337,18 @@ function TabelaCarregamentos({
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             )}
+                            {onCancel &&
+                              c.status !== 'cancelado' &&
+                              c.status !== 'carregado' &&
+                              perms.canDelete && (
+                                <button
+                                  onClick={() => onCancel(c)}
+                                  title="Cancelar carregamento"
+                                  className="p-1.5 rounded-lg transition-colors text-stone-400 hover:text-orange-600 hover:bg-orange-50"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                             {onHistory && (
                               <button
                                 onClick={() => onHistory(c)}
@@ -1369,6 +1383,7 @@ function VisaoGeral({
   currentUser,
   onEdit,
   onDelete,
+  onCancel,
   onHistory,
 }: {
   carregamentos: Carregamento[];
@@ -1378,6 +1393,7 @@ function VisaoGeral({
   currentUser?: User;
   onEdit?: (c: Carregamento) => void;
   onDelete?: (c: Carregamento) => void;
+  onCancel?: (c: Carregamento) => void;
   onHistory?: (c: Carregamento) => void;
 }) {
   const pendentes = carregamentos.filter((c) =>
@@ -1459,6 +1475,7 @@ function VisaoGeral({
             showActions={['cotacao', 'liberar']}
             onEdit={onEdit}
             onDelete={onDelete}
+            onCancel={onCancel}
             onHistory={onHistory}
           />
         )}
@@ -1482,6 +1499,7 @@ function VisaoGeral({
             currentUser={currentUser}
             onEdit={onEdit}
             onDelete={onDelete}
+            onCancel={onCancel}
             onHistory={onHistory}
           />
         )}
@@ -2527,6 +2545,164 @@ function ModalInformarTransportador({
 // ─────────────────────────────────────────────────────────────────────────────
 //  COMPONENT: Transportadora Manager
 // ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+//  COMPONENT: Modal Cancelar Carregamento
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface DadosCancelamento {
+  tipo: 'total' | 'parcial';
+  quantidadeCancelada: number;
+  motivo: string;
+}
+
+function ModalCancelarCarregamento({
+  carregamento,
+  onConfirm,
+  onClose,
+}: {
+  carregamento: Carregamento;
+  onConfirm: (dados: DadosCancelamento) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [tipo, setTipo] = useState<'total' | 'parcial'>('total');
+  const [quantidadeCancelada, setQuantidadeCancelada] = useState('');
+  const [motivo, setMotivo] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const qtdTotal = carregamento.quantidade_total ?? 0;
+  const qtdCancelada = parseFloat(quantidadeCancelada) || 0;
+
+  const handleConfirm = async () => {
+    if (!motivo.trim()) return;
+    if (tipo === 'parcial' && (qtdCancelada <= 0 || qtdCancelada >= qtdTotal)) return;
+    setSaving(true);
+    await onConfirm({ tipo, quantidadeCancelada: qtdCancelada, motivo: motivo.trim() });
+    setSaving(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+        <div className="flex items-center gap-2 text-red-600">
+          <X className="w-5 h-5" />
+          <h3 className="font-bold text-base">
+            Cancelar Carregamento{' '}
+            {carregamento.numero
+              ? `CAR-${String(carregamento.numero).padStart(4, '0')}`
+              : carregamento.numero_carregamento}
+          </h3>
+        </div>
+
+        {/* Tipo de cancelamento */}
+        <div>
+          <label className="block text-xs font-bold text-stone-500 uppercase mb-2">
+            Tipo de Cancelamento
+          </label>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => setTipo('total')}
+              className={`flex-1 py-2 text-sm font-bold rounded-lg border transition-colors ${
+                tipo === 'total'
+                  ? 'bg-red-600 text-white border-red-600'
+                  : 'bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100'
+              }`}
+            >
+              Total ({qtdTotal.toFixed(3)} ton)
+            </button>
+            <button
+              type="button"
+              onClick={() => setTipo('parcial')}
+              className={`flex-1 py-2 text-sm font-bold rounded-lg border transition-colors ${
+                tipo === 'parcial'
+                  ? 'bg-amber-600 text-white border-amber-600'
+                  : 'bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100'
+              }`}
+            >
+              Parcial
+            </button>
+          </div>
+        </div>
+
+        {/* Campo de quantidade (só para parcial) */}
+        {tipo === 'parcial' && (
+          <div>
+            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+              Quantidade a Cancelar (ton) <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="number"
+              step="0.001"
+              min="0.001"
+              max={qtdTotal - 0.001}
+              value={quantidadeCancelada}
+              onChange={(e) => setQuantidadeCancelada(e.target.value)}
+              placeholder={`Máx: ${(qtdTotal - 0.001).toFixed(3)} ton`}
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-400"
+            />
+            {qtdCancelada > 0 && qtdCancelada < qtdTotal && (
+              <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-xs">
+                <p className="text-amber-700 font-bold">Impacto no Pedido de Venda:</p>
+                <p className="text-amber-600 mt-0.5">
+                  + {qtdCancelada.toFixed(3)} ton devolvidas ao saldo disponível
+                </p>
+                <p className="text-amber-600">
+                  Saldo restante neste carregamento: {(qtdTotal - qtdCancelada).toFixed(3)} ton
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {tipo === 'total' && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-2.5 text-xs text-red-600">
+            <strong>{qtdTotal.toFixed(3)} ton</strong> serão devolvidas ao saldo do pedido
+            automaticamente.
+          </div>
+        )}
+
+        {/* Motivo */}
+        <div>
+          <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+            Motivo <span className="text-red-500">*</span>
+          </label>
+          <textarea
+            rows={3}
+            value={motivo}
+            onChange={(e) => setMotivo(e.target.value)}
+            placeholder="Descreva o motivo do cancelamento..."
+            className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm resize-none focus:ring-2 focus:ring-red-400"
+          />
+        </div>
+
+        <p className="text-xs text-stone-400">
+          ⚠️ O solicitante será notificado. Esta operação ficará registrada no histórico.
+        </p>
+
+        <div className="flex gap-3 justify-end pt-2">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm text-stone-600 bg-stone-100 rounded-lg font-bold hover:bg-stone-200"
+          >
+            Voltar
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={
+              saving ||
+              !motivo.trim() ||
+              (tipo === 'parcial' && (qtdCancelada <= 0 || qtdCancelada >= qtdTotal))
+            }
+            className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg font-bold hover:bg-red-700 disabled:opacity-50"
+          >
+            {saving ? 'Cancelando...' : 'Confirmar Cancelamento'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TransportadoraManager() {
   const { showSuccess, showError } = useToast();
   const [lista, setLista] = useState<Transportadora[]>([]);
@@ -2848,6 +3024,9 @@ export default function CarregamentoModule({
   const [motivoExclusao, setMotivoExclusao] = useState('');
   const [excluindoLoading, setExcluindoLoading] = useState(false);
   const [historicoCarregamento, setHistoricoCarregamento] = useState<Carregamento | null>(null);
+  const [carregamentoParaCancelar, setCarregamentoParaCancelar] = useState<Carregamento | null>(
+    null
+  );
 
   const canCreate =
     currentUser.role === 'master' ||
@@ -3062,6 +3241,63 @@ export default function CarregamentoModule({
     }
   };
 
+  // ── Cancelar carregamento (total ou parcial) ─────────────────────────────
+  const handleCancelarCarregamento = async (
+    carregamento: Carregamento,
+    dados: DadosCancelamento
+  ) => {
+    const anterior = { ...carregamento };
+    const qtdOriginal = carregamento.quantidade_total ?? 0;
+
+    try {
+      if (dados.tipo === 'total' || dados.quantidadeCancelada >= qtdOriginal) {
+        await updateCarregamento(carregamento.id, {
+          status: 'cancelado',
+          cancelado_por_id: currentUser.id,
+          cancelado_por_nome: currentUser.name,
+          cancelado_em: new Date().toISOString(),
+        } as Parameters<typeof updateCarregamento>[1]);
+      } else {
+        const novaQtd = qtdOriginal - dados.quantidadeCancelada;
+        await updateCarregamento(carregamento.id, {
+          quantidade_total: novaQtd,
+          obs_cancelamento_parcial: `Cancelamento parcial em ${new Date().toLocaleDateString('pt-BR')}: ${dados.quantidadeCancelada.toFixed(3)} ton removidas — ${dados.motivo}`,
+          cancelado_por_id: currentUser.id,
+          cancelado_por_nome: currentUser.name,
+          cancelado_em: new Date().toISOString(),
+        } as Parameters<typeof updateCarregamento>[1]);
+      }
+
+      await registrarAuditLog({
+        tabela: 'carregamentos',
+        registro_id: carregamento.id,
+        acao: dados.tipo === 'total' ? 'DELETE' : 'UPDATE',
+        dados_anteriores: anterior as unknown as Record<string, unknown>,
+        dados_novos: {
+          status: dados.tipo === 'total' ? 'cancelado' : anterior.status,
+          quantidade_total:
+            dados.tipo === 'total' ? qtdOriginal : qtdOriginal - dados.quantidadeCancelada,
+          tipo_cancelamento: dados.tipo,
+          quantidade_cancelada: dados.tipo === 'total' ? qtdOriginal : dados.quantidadeCancelada,
+        } as Record<string, unknown>,
+        motivo: `Cancelamento ${dados.tipo}: ${dados.motivo}`,
+        usuario_id: currentUser.id,
+        usuario_nome: currentUser.name ?? currentUser.id,
+      });
+
+      showSuccess(
+        dados.tipo === 'total'
+          ? 'Carregamento cancelado. Saldo devolvido ao pedido.'
+          : `Cancelamento parcial: ${dados.quantidadeCancelada.toFixed(3)} ton devolvidas ao pedido.`
+      );
+      setCarregamentoParaCancelar(null);
+      await load();
+    } catch (err) {
+      showError('Erro ao cancelar carregamento.');
+      console.error(err);
+    }
+  };
+
   // ── Solicitar cotação para múltiplas transportadoras (view Solicitação) ───
   const handleSolicitarCotacaoMultipla = async (
     carregamentoId: string,
@@ -3189,6 +3425,7 @@ export default function CarregamentoModule({
             setExcluindoCarregamento(c);
             setMotivoExclusao('');
           }}
+          onCancel={(c) => setCarregamentoParaCancelar(c)}
           onHistory={(c) => setHistoricoCarregamento(c)}
         />
       )}
@@ -3285,6 +3522,14 @@ export default function CarregamentoModule({
             </div>
           </div>
         </div>
+      )}
+      {/* Cancel carregamento modal */}
+      {carregamentoParaCancelar && (
+        <ModalCancelarCarregamento
+          carregamento={carregamentoParaCancelar}
+          onConfirm={(dados) => handleCancelarCarregamento(carregamentoParaCancelar, dados)}
+          onClose={() => setCarregamentoParaCancelar(null)}
+        />
       )}
       {/* History modal */}
       {historicoCarregamento && (
