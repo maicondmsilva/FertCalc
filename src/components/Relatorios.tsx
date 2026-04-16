@@ -529,18 +529,18 @@ export default function Relatorios({ currentUser }: RelatoriosProps) {
                         <td className="px-4 py-3">
                           <span
                             className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                              g.status === 'approved'
+                              g.status === 'aprovado'
                                 ? 'bg-green-100 text-green-700'
-                                : g.status === 'rejected'
+                                : g.status === 'rejeitado'
                                   ? 'bg-red-100 text-red-700'
                                   : 'bg-stone-100 text-stone-700'
                             }`}
                           >
-                            {g.status === 'approved'
+                            {g.status === 'aprovado'
                               ? 'Aprovado'
-                              : g.status === 'rejected'
+                              : g.status === 'rejeitado'
                                 ? 'Rejeitado'
-                                : g.status === 'checked'
+                                : g.status === 'conferido'
                                   ? 'Conferido'
                                   : 'Pendente'}
                           </span>
