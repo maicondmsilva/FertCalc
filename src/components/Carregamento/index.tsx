@@ -3274,10 +3274,11 @@ export default function CarregamentoModule({
         acao: dados.tipo === 'total' ? 'DELETE' : 'UPDATE',
         dados_anteriores: anterior as unknown as Record<string, unknown>,
         dados_novos: {
-          status: dados.tipo === 'total' ? 'cancelado' : 'ativo',
-          quantidade_total: dados.tipo === 'total' ? 0 : qtdOriginal - dados.quantidadeCancelada,
+          status: dados.tipo === 'total' ? 'cancelado' : anterior.status,
+          quantidade_total:
+            dados.tipo === 'total' ? qtdOriginal : qtdOriginal - dados.quantidadeCancelada,
           tipo_cancelamento: dados.tipo,
-          quantidade_cancelada: dados.quantidadeCancelada,
+          quantidade_cancelada: dados.tipo === 'total' ? qtdOriginal : dados.quantidadeCancelada,
         } as Record<string, unknown>,
         motivo: `Cancelamento ${dados.tipo}: ${dados.motivo}`,
         usuario_id: currentUser.id,

@@ -425,11 +425,11 @@ function PainelResponsavel({
         recusado_por_id: currentUser.id,
         recusado_por_nome: currentUser.name ?? currentUser.id,
         recusado_em: new Date().toISOString(),
-        transportadora_id: undefined,
-        transportadora_nome: undefined,
-        valor_frete: undefined,
-        valor_frete_unitario: undefined,
-        cotado_em: undefined,
+        transportadora_id: null,
+        transportadora_nome: null,
+        valor_frete: null,
+        valor_frete_unitario: null,
+        cotado_em: null,
       } as unknown as Parameters<typeof updateCotacaoSolicitada>[1]);
       const { registrarAuditLog } = await import('../../services/auditLogService');
       await registrarAuditLog({
