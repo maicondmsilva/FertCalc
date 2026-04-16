@@ -54,8 +54,8 @@ export default function NovoPedidoVendaModal({
   // Multi-product items
   const [itens, setItens] = useState<ItemLocal[]>(() => {
     if (pricing?.calculations && pricing.calculations.length > 0) {
-      return pricing.calculations.map((calc, i) => ({
-        id: `local-${i}`,
+      return pricing.calculations.map((calc) => ({
+        id: crypto.randomUUID(),
         produto_nome: calc.formula ?? '',
         quantidade_ton: '',
         preco_unitario: calc.summary?.finalPrice ?? '',
@@ -63,7 +63,7 @@ export default function NovoPedidoVendaModal({
     }
     return [
       {
-        id: 'local-0',
+        id: crypto.randomUUID(),
         produto_nome: pricing?.calculations?.[0]?.formula ?? (pricing?.factors as any)?.targetFormula ?? '',
         quantidade_ton: '',
         preco_unitario: pricing?.calculations?.[0]?.summary?.finalPrice ?? '',
@@ -101,7 +101,7 @@ export default function NovoPedidoVendaModal({
   const addItem = () => {
     setItens((prev) => [
       ...prev,
-      { id: `local-${Date.now()}`, produto_nome: '', quantidade_ton: '', preco_unitario: '' },
+      { id: crypto.randomUUID(), produto_nome: '', quantidade_ton: '', preco_unitario: '' },
     ]);
   };
 
@@ -136,7 +136,6 @@ export default function NovoPedidoVendaModal({
 
     setSaving(true);
     try {
-      const quantidadeTotal = totalTon;
       const produtoPrincipal = itens[0].produto_nome;
       const precoPrincipal = itens[0].preco_unitario !== '' ? Number(itens[0].preco_unitario) : undefined;
 
@@ -148,7 +147,7 @@ export default function NovoPedidoVendaModal({
         cliente_id: clientId || undefined,
         cliente_nome: clientSearch.trim() || undefined,
         produto_nome: produtoPrincipal,
-        quantidade_real: quantidadeTotal,
+        quantidade_real: totalTon,
         preco_unitario: precoPrincipal,
         tipo_frete: tipoFrete,
         valor_frete: tipoFrete === 'CIF' && valorFrete !== '' ? Number(valorFrete) : undefined,
