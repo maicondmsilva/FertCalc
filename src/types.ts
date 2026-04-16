@@ -522,6 +522,17 @@ export interface FertigranPFormula {
   updated_at?: string;
 }
 
+export interface PedidoVendaItem {
+  id?: string;
+  pedido_venda_id?: string;
+  produto_nome: string;
+  formulacao?: string;
+  quantidade_ton: number;
+  preco_unitario?: number;
+  precificacao_id?: string;
+  criado_em?: string;
+}
+
 export interface PedidoVenda {
   id: string;
   precificacao_id: string;
@@ -552,6 +563,8 @@ export interface PedidoVenda {
   filial_id?: string;
   formulacao_alterada?: boolean;
   pedido_pai_id?: string;
+  data_vencimento?: string;
+  itens?: PedidoVendaItem[];
   // Joined fields
   precificacao?: PricingRecord;
 }

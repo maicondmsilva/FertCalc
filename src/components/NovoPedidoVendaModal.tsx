@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { PricingRecord, Client } from '../types';
-import { X, ClipboardList, Search } from 'lucide-react';
+import { X, ClipboardList, Search, Plus, Trash2 } from 'lucide-react';
 import { getClients } from '../services/db';
-import { createPedidoVenda } from '../services/pedidosVendaService';
+import { createPedidoVenda, createPedidoVendaItens } from '../services/pedidosVendaService';
 import { useToast } from './Toast';
 
 interface NovoPedidoVendaModalProps {
@@ -10,6 +10,13 @@ interface NovoPedidoVendaModalProps {
   currentUser: { id: string; name: string };
   onClose: () => void;
   onSuccess: () => void;
+}
+
+interface ItemLocal {
+  id: string;
+  produto_nome: string;
+  quantidade_ton: number | '';
+  preco_unitario: number | '';
 }
 
 export default function NovoPedidoVendaModal({
@@ -34,13 +41,7 @@ export default function NovoPedidoVendaModal({
   const today = new Date().toISOString().split('T')[0];
   const [numeroPedido, setNumeroPedido] = useState('');
   const [dataPedido, setDataPedido] = useState(today);
-  const [produtoNome, setProdutoNome] = useState(
-    pricing?.calculations?.[0]?.formula ?? (pricing?.factors as any)?.targetFormula ?? ''
-  );
-  const [quantidadeReal, setQuantidadeReal] = useState<number | ''>('');
-  const [precoUnitario, setPrecoUnitario] = useState<number | ''>(
-    pricing?.calculations?.[0]?.summary?.finalPrice ?? ''
-  );
+  const [dataVencimento, setDataVencimento] = useState('');
   const [condicaoPagamento, setCondicaoPagamento] = useState('');
   const [tipoFrete, setTipoFrete] = useState<'CIF' | 'FOB'>(
     (pricing?.factors as any)?.tipoFrete ?? ((pricing?.factors?.freight ?? 0) > 0 ? 'CIF' : 'FOB')
@@ -49,6 +50,26 @@ export default function NovoPedidoVendaModal({
     pricing?.factors?.freight ?? ''
   );
   const [observacoes, setObservacoes] = useState('');
+
+  // Multi-product items
+  const [itens, setItens] = useState<ItemLocal[]>(() => {
+    if (pricing?.calculations && pricing.calculations.length > 0) {
+      return pricing.calculations.map((calc) => ({
+        id: crypto.randomUUID(),
+        produto_nome: calc.formula ?? '',
+        quantidade_ton: '',
+        preco_unitario: calc.summary?.finalPrice ?? '',
+      }));
+    }
+    return [
+      {
+        id: crypto.randomUUID(),
+        produto_nome: pricing?.calculations?.[0]?.formula ?? (pricing?.factors as any)?.targetFormula ?? '',
+        quantidade_ton: '',
+        preco_unitario: pricing?.calculations?.[0]?.summary?.finalPrice ?? '',
+      },
+    ];
+  });
 
   const precificacaoCod = pricing
     ? pricing.formattedCod || `#${pricing.cod}`
@@ -77,35 +98,57 @@ export default function NovoPedidoVendaModal({
     clientInputRef.current?.focus();
   };
 
+  const addItem = () => {
+    setItens((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), produto_nome: '', quantidade_ton: '', preco_unitario: '' },
+    ]);
+  };
+
+  const removeItem = (id: string) => {
+    setItens((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const updateItem = (id: string, field: keyof ItemLocal, value: string | number) => {
+    setItens((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
+    );
+  };
+
+  const totalTon = itens.reduce((sum, item) => sum + (Number(item.quantidade_ton) || 0), 0);
+
   const handleSave = async () => {
     if (!numeroPedido.trim()) {
       showError('Informe o número do pedido.');
       return;
     }
-    if (!produtoNome.trim()) {
-      showError('Informe o produto.');
+    if (itens.length === 0) {
+      showError('Adicione pelo menos um produto.');
       return;
     }
-    if (!quantidadeReal || Number(quantidadeReal) <= 0) {
-      showError('Informe a quantidade.');
-      return;
-    }
-    if (!precoUnitario || Number(precoUnitario) <= 0) {
-      showError('Informe o preço unitário.');
+    const itensInvalidos = itens.filter(
+      (item) => !item.produto_nome.trim() || !item.quantidade_ton || Number(item.quantidade_ton) <= 0
+    );
+    if (itensInvalidos.length > 0) {
+      showError('Preencha o produto e a quantidade de todos os itens.');
       return;
     }
 
     setSaving(true);
     try {
-      await createPedidoVenda({
+      const produtoPrincipal = itens[0].produto_nome;
+      const precoPrincipal = itens[0].preco_unitario !== '' ? Number(itens[0].preco_unitario) : undefined;
+
+      const pedidoCriado = await createPedidoVenda({
         precificacao_id: pricing?.id ?? '',
         numero_pedido: numeroPedido.trim(),
         data_pedido: dataPedido || undefined,
+        data_vencimento: dataVencimento || undefined,
         cliente_id: clientId || undefined,
         cliente_nome: clientSearch.trim() || undefined,
-        produto_nome: produtoNome.trim(),
-        quantidade_real: Number(quantidadeReal),
-        preco_unitario: Number(precoUnitario),
+        produto_nome: produtoPrincipal,
+        quantidade_real: totalTon,
+        preco_unitario: precoPrincipal,
         tipo_frete: tipoFrete,
         valor_frete: tipoFrete === 'CIF' && valorFrete !== '' ? Number(valorFrete) : undefined,
         condicao_pagamento: condicaoPagamento.trim() || undefined,
@@ -113,6 +156,17 @@ export default function NovoPedidoVendaModal({
         status: 'pendente',
         importado_por: currentUser.id,
       });
+
+      await createPedidoVendaItens(
+        pedidoCriado.id,
+        itens.map((item) => ({
+          produto_nome: item.produto_nome.trim(),
+          quantidade_ton: Number(item.quantidade_ton),
+          preco_unitario: item.preco_unitario !== '' ? Number(item.preco_unitario) : undefined,
+          precificacao_id: pricing?.id || undefined,
+        }))
+      );
+
       showSuccess('Pedido de Venda criado com sucesso!');
       onSuccess();
       onClose();
@@ -214,67 +268,30 @@ export default function NovoPedidoVendaModal({
             />
           </div>
 
-          {/* Data */}
-          <div>
-            <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-1">
-              Data do Pedido
-            </label>
-            <input
-              type="date"
-              value={dataPedido}
-              onChange={(e) => setDataPedido(e.target.value)}
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-            />
-          </div>
-
-          {/* Produto */}
-          <div>
-            <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-1">
-              Produto <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={produtoNome}
-              onChange={(e) => setProdutoNome(e.target.value)}
-              placeholder="Nome do produto / fórmula"
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-            />
-          </div>
-
-          {/* Quantidade */}
-          <div>
-            <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-1">
-              Quantidade (ton) <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="number"
-              min="0"
-              step="0.001"
-              value={quantidadeReal}
-              onChange={(e) =>
-                setQuantidadeReal(e.target.value === '' ? '' : Number(e.target.value))
-              }
-              placeholder="0.000"
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-            />
-          </div>
-
-          {/* Preço Unitário */}
-          <div>
-            <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-1">
-              Preço Unitário (R$/ton) <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={precoUnitario}
-              onChange={(e) =>
-                setPrecoUnitario(e.target.value === '' ? '' : Number(e.target.value))
-              }
-              placeholder="0.00"
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-            />
+          {/* Data do Pedido + Vencimento */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-1">
+                Data do Pedido
+              </label>
+              <input
+                type="date"
+                value={dataPedido}
+                onChange={(e) => setDataPedido(e.target.value)}
+                className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-1">
+                Vencimento
+              </label>
+              <input
+                type="date"
+                value={dataVencimento}
+                onChange={(e) => setDataVencimento(e.target.value)}
+                className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+              />
+            </div>
           </div>
 
           {/* Condição de pagamento */}
@@ -291,40 +308,123 @@ export default function NovoPedidoVendaModal({
             />
           </div>
 
-          {/* Tipo frete */}
-          <div>
-            <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-1">
-              Tipo de Frete <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={tipoFrete}
-              onChange={(e) => setTipoFrete(e.target.value as 'CIF' | 'FOB')}
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-            >
-              <option value="CIF">CIF</option>
-              <option value="FOB">FOB</option>
-            </select>
-          </div>
-
-          {/* Valor frete (CIF only) */}
-          {tipoFrete === 'CIF' && (
+          {/* Tipo frete + valor frete */}
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-1">
-                Valor do Frete (R$/ton)
+                Tipo de Frete <span className="text-red-500">*</span>
               </label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={valorFrete}
-                onChange={(e) =>
-                  setValorFrete(e.target.value === '' ? '' : Number(e.target.value))
-                }
-                placeholder="0.00"
+              <select
+                value={tipoFrete}
+                onChange={(e) => setTipoFrete(e.target.value as 'CIF' | 'FOB')}
                 className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-              />
+              >
+                <option value="CIF">CIF</option>
+                <option value="FOB">FOB</option>
+              </select>
             </div>
-          )}
+            {tipoFrete === 'CIF' && (
+              <div>
+                <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-1">
+                  Valor Frete R$/ton
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={valorFrete}
+                  onChange={(e) =>
+                    setValorFrete(e.target.value === '' ? '' : Number(e.target.value))
+                  }
+                  placeholder="0.00"
+                  className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Produtos do Pedido */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-bold text-stone-500 uppercase tracking-wider">
+                Produtos do Pedido <span className="text-red-500">*</span>
+              </label>
+              <span className="text-xs text-stone-400">
+                Total: <strong>{totalTon.toFixed(3)} ton</strong>
+              </span>
+            </div>
+
+            <div className="space-y-2">
+              {itens.map((item, index) => (
+                <div
+                  key={item.id}
+                  className="flex gap-2 items-start p-3 bg-stone-50 rounded-lg border border-stone-200"
+                >
+                  <div className="flex-1 min-w-0">
+                    <input
+                      type="text"
+                      value={item.produto_nome}
+                      onChange={(e) => updateItem(item.id, 'produto_nome', e.target.value)}
+                      placeholder={`Produto ${index + 1} / Formulação`}
+                      className="w-full px-2 py-1.5 border border-stone-300 rounded text-sm focus:ring-1 focus:ring-emerald-500 outline-none"
+                    />
+                  </div>
+                  <div className="w-28 flex-shrink-0">
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.001"
+                      value={item.quantidade_ton}
+                      onChange={(e) =>
+                        updateItem(
+                          item.id,
+                          'quantidade_ton',
+                          e.target.value === '' ? '' : Number(e.target.value)
+                        )
+                      }
+                      placeholder="Qtd (ton)"
+                      className="w-full px-2 py-1.5 border border-stone-300 rounded text-sm focus:ring-1 focus:ring-emerald-500 outline-none"
+                    />
+                  </div>
+                  <div className="w-28 flex-shrink-0">
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={item.preco_unitario}
+                      onChange={(e) =>
+                        updateItem(
+                          item.id,
+                          'preco_unitario',
+                          e.target.value === '' ? '' : Number(e.target.value)
+                        )
+                      }
+                      placeholder="R$/ton"
+                      className="w-full px-2 py-1.5 border border-stone-300 rounded text-sm focus:ring-1 focus:ring-emerald-500 outline-none"
+                    />
+                  </div>
+                  {itens.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeItem(item.id)}
+                      className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors flex-shrink-0"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={addItem}
+              className="mt-2 flex items-center gap-1.5 text-sm text-emerald-600 font-bold hover:text-emerald-800 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Adicionar Produto
+            </button>
+          </div>
 
           {/* Observações */}
           <div>
