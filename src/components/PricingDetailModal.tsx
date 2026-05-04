@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { PricingRecord, User, AppSettings, PedidoVenda } from '../types';
 import {
   X,
@@ -9,7 +9,6 @@ import {
   Download,
   FileSpreadsheet,
   Tag,
-  Upload,
   FileText,
   CheckCircle as CheckCircleIcon,
 } from 'lucide-react';
@@ -78,7 +77,6 @@ export default function PricingDetailModal({
   // Pedido de Venda state
   const [pedidoVenda, setPedidoVenda] = useState<PedidoVenda | null>(null);
   const [showPdfImportModal, setShowPdfImportModal] = useState(false);
-  const [pdfParsing, setPdfParsing] = useState(false);
   const [extractedData, setExtractedData] = useState<{
     numero_pedido: string;
     barra_pedido: string;
@@ -91,7 +89,6 @@ export default function PricingDetailModal({
     valor_frete: string;
   } | null>(null);
   const [savingPedido, setSavingPedido] = useState(false);
-  const pdfInputRef = useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
     if (isTransferring) {
@@ -104,135 +101,31 @@ export default function PricingDetailModal({
     getPedidoVendaByPrecificacao(selectedPricing.id).then(setPedidoVenda);
   }, [selectedPricing.id]);
 
-  // PDF parsing helper
-  const parsePdfText = (text: string) => {
-    const result = {
-      numero_pedido: '',
-      barra_pedido: '',
-      data_pedido: '',
-      quantidade_real: '',
-      embalagem: '',
-      valor_unitario_negociado: '',
-      valor_total_negociado: '',
-      tipo_frete: '',
-      valor_frete: '',
-    };
+  const handleOpenManualPedido = () => {
+    const freight = selectedPricing.factors?.freight ?? 0;
+    const tipoFrete = selectedPricing.factors?.tipoFrete ?? (freight > 0 ? 'CIF' : 'FOB');
 
-    // Normalizar texto: remover espaços duplos, manter quebras de linha
-    const normalized = text.replace(/[ \t]+/g, ' ').trim();
-
-    // ── Nº do Pedido ──
-    // Padrão: "Pedido de Fornecimento 623137/1" — pegar número antes da barra
-    const pedidoComBarraMatch = normalized.match(/\b(\d{5,8})\/(\d{1,3})\b/);
-    if (pedidoComBarraMatch) {
-      result.numero_pedido = pedidoComBarraMatch[1];
-      result.barra_pedido = pedidoComBarraMatch[2];
-    } else {
-      const pedidoMatch = normalized.match(/(?:pedido[^0-9]*|n[º°o]\.?\s*)(\d{5,8})/i);
-      if (pedidoMatch) result.numero_pedido = pedidoMatch[1];
-
-      const barraMatch = normalized.match(/\/(\d{1,3})\b/);
-      if (barraMatch) result.barra_pedido = barraMatch[1];
-    }
-
-    // ── Vencimento ──
-    const vencMatch = normalized.match(/vencimento[:\s]+(\d{2}\/\d{2}\/\d{4})/i);
-    if (vencMatch) {
-      const [d, m, y] = vencMatch[1].split('/');
-      result.data_pedido = `${y}-${m}-${d}`;
-    } else {
-      const dateMatch = normalized.match(/(\d{2}\/\d{2}\/\d{4})/);
-      if (dateMatch) {
-        const [d, m, y] = dateMatch[1].split('/');
-        result.data_pedido = `${y}-${m}-${d}`;
-      }
-    }
-
-    // ── Quantidade ──
-    const qtdMatch = normalized.match(/quantidade[:\s]+([\d.,]+)/i);
-    if (qtdMatch) {
-      result.quantidade_real = qtdMatch[1].replace(/\./g, '').replace(',', '.');
-    } else {
-      const qtdTonMatch = normalized.match(/([\d.,]+)\s*(?:ton|t\b|toneladas?)/i);
-      if (qtdTonMatch) result.quantidade_real = qtdTonMatch[1].replace(/\./g, '').replace(',', '.');
-    }
-
-    // ── Sacaria (Embalagem) ──
-    const sacariaMatch = normalized.match(
-      /sacaria[:\s]+([A-Za-zÀ-ÿ0-9\s.,-]+?)(?=\s{2,}|\n|$|[A-Z]{2,}:)/i
-    );
-    if (sacariaMatch) {
-      result.embalagem = sacariaMatch[1].trim();
-    }
-
-    // ── Transporte (Tipo de Frete) ──
-    const transporteMatch = normalized.match(/transporte[:\s]+(CIF|FOB)/i);
-    if (transporteMatch) {
-      result.tipo_frete = transporteMatch[1].toUpperCase();
-    } else {
-      const freteMatch = normalized.match(/\b(CIF|FOB)\b/i);
-      if (freteMatch) result.tipo_frete = freteMatch[1].toUpperCase();
-    }
-
-    // ── UNITÁRIO (Valor Unitário) ──
-    const unitarioMatch = normalized.match(/unit[aá]rio[:\s]*R?\$?\s*([\d.,]+)/i);
-    if (unitarioMatch) {
-      result.valor_unitario_negociado = unitarioMatch[1].replace(/\./g, '').replace(',', '.');
-    }
-
-    // ── TOTAL (Valor Total) ──
-    const totalMatch = normalized.match(/\bTOTAL\b[:\s]*R?\$?\s*([\d.,]+)/i);
-    if (totalMatch) {
-      result.valor_total_negociado = totalMatch[1].replace(/\./g, '').replace(',', '.');
-    }
-
-    // ── Valor do Frete (quando CIF) ──
-    if (result.tipo_frete === 'CIF') {
-      const freteValorMatch = normalized.match(/(?:valor\s+)?frete[:\s/ton]*R?\$?\s*([\d.,]+)/i);
-      if (freteValorMatch) {
-        result.valor_frete = freteValorMatch[1].replace(/\./g, '').replace(',', '.');
-      }
-    }
-
-    return result;
-  };
-
-  const handlePdfFile = async (file: File) => {
-    if (!file || file.type !== 'application/pdf') {
-      showError('Selecione um arquivo PDF válido.');
-      return;
-    }
-    setPdfParsing(true);
-    try {
-      // Dynamically import pdfjs-dist to avoid SSR issues
-      const pdfjsLib = await import('pdfjs-dist');
-      // Use local worker to avoid CORS issues
-      pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-        'pdfjs-dist/build/pdf.worker.min.mjs',
-        import.meta.url
-      ).toString();
-
-      const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      let fullText = '';
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const content = await page.getTextContent();
-        fullText +=
-          content.items
-            .map((item) => ('str' in item ? (item as { str: string }).str : ''))
-            .join(' ') + '\n';
-      }
-      const parsed = parsePdfText(fullText);
-      setExtractedData(parsed);
-      setShowPdfImportModal(true);
-    } catch (err) {
-      console.error('Erro ao ler PDF:', err);
-      showError('Erro ao processar o PDF. Verifique se o arquivo é válido.');
-    } finally {
-      setPdfParsing(false);
-    }
-  };
+    setExtractedData({
+      numero_pedido: pedidoVenda?.numero_pedido ?? '',
+      barra_pedido: pedidoVenda?.barra_pedido ?? '',
+      data_pedido: pedidoVenda?.data_pedido ?? new Date().toISOString().slice(0, 10),
+      quantidade_real: pedidoVenda?.quantidade_real != null
+        ? String(pedidoVenda.quantidade_real)
+        : '',
+      embalagem: pedidoVenda?.embalagem ?? '',
+      valor_unitario_negociado: pedidoVenda?.valor_unitario_negociado != null
+        ? String(pedidoVenda.valor_unitario_negociado)
+        : '',
+      valor_total_negociado: pedidoVenda?.valor_total_negociado != null
+        ? String(pedidoVenda.valor_total_negociado)
+        : '',
+      tipo_frete: pedidoVenda?.tipo_frete ?? tipoFrete,
+      valor_frete: pedidoVenda?.valor_frete != null
+        ? String(pedidoVenda.valor_frete)
+        : freight > 0 ? String(freight) : '',
+    });
+    setShowPdfImportModal(true);
+};
 
   const handleSavePedido = async () => {
     if (!extractedData) return;
@@ -668,7 +561,7 @@ export default function PricingDetailModal({
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
             <div className="flex items-center justify-between p-6 border-b border-stone-100">
               <h3 className="text-lg font-bold text-stone-800 flex items-center gap-2">
-                <FileText className="w-5 h-5 text-emerald-600" /> Dados Extraídos do PDF
+                <FileText className="w-5 h-5 text-emerald-600" /> Preencher Pedido de Venda
               </h3>
               <button
                 onClick={() => {
@@ -682,7 +575,7 @@ export default function PricingDetailModal({
             </div>
             <div className="p-6 space-y-4">
               <p className="text-sm text-stone-500">
-                Revise os dados extraídos e corrija se necessário:
+                Preencha ou revise os dados do pedido de venda:
               </p>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -856,33 +749,12 @@ export default function PricingDetailModal({
                 {pedidoVenda.barra_pedido && ` / ${pedidoVenda.barra_pedido}`}
               </div>
             )}
-            <input
-              ref={pdfInputRef}
-              type="file"
-              accept=".pdf"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handlePdfFile(file);
-                e.target.value = '';
-              }}
-            />
             <button
-              onClick={() => pdfInputRef.current?.click()}
-              disabled={pdfParsing}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition-all active:scale-95 disabled:bg-emerald-400 text-sm"
-              title="Importar PDF do Pedido de Venda"
+              onClick={handleOpenManualPedido}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition-all active:scale-95 text-sm"
+              title="Preencher Pedido de Venda manualmente"
             >
-              {pdfParsing ? (
-                <>
-                  <span className="animate-spin">⏳</span> Processando...
-                </>
-              ) : (
-                <>
-                  <Upload className="w-4 h-4" />{' '}
-                  {pedidoVenda ? 'Atualizar Pedido' : 'Importar Pedido'}
-                </>
-              )}
+              📋 Preencher Pedido
             </button>
             {selectedPricing.status === 'Em Andamento' && onEdit && (
               <button
