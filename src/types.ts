@@ -277,7 +277,7 @@ export interface Agent {
 export interface PriceList {
   id: string;
   name: string;
-  branchId: string;
+  branchId?: string;
   local_carregamento_id?: string;
   date: string;
   currency?: 'BRL' | 'USD';

@@ -365,14 +365,9 @@ export default function Calculator({
               <select
                 value={factors.branchId}
                 onChange={(e) => {
-                  const newBranch = e.target.value;
-                  const lists = priceLists.filter((l) => l.branchId === newBranch);
-                  const latestListId = lists.length > 0 ? lists[0].id : '';
                   setFactors({
                     ...factors,
-                    branchId: newBranch,
-                    priceListId: latestListId,
-                    local_carregamento_id: undefined,
+                    branchId: e.target.value,
                   });
                 }}
                 className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
@@ -394,7 +389,7 @@ export default function Calculator({
                 onChange={(e) => {
                   const localId = e.target.value;
                   const matchingList = priceLists.find(
-                    (l) => l.branchId === factors.branchId && l.local_carregamento_id === localId
+                    (l) => l.local_carregamento_id === localId
                   );
                   setFactors({
                     ...factors,
@@ -421,16 +416,16 @@ export default function Calculator({
                 value={factors.priceListId}
                 onChange={(e) => handleFactorChange('priceListId', e.target.value)}
                 className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-                disabled={!factors.branchId}
               >
                 <option value="">Selecione uma lista</option>
-                {priceLists
-                  .filter((l) => l.branchId === factors.branchId)
-                  .map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.name}
-                    </option>
-                  ))}
+                {(factors.local_carregamento_id
+                  ? priceLists.filter((l) => l.local_carregamento_id === factors.local_carregamento_id)
+                  : priceLists
+                ).map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
+                ))}
               </select>
             </div>
           </div>

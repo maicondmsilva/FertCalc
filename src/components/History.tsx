@@ -13,6 +13,7 @@ import {
   Truck,
   AlertTriangle,
   XCircle,
+  MapPin,
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -35,6 +36,8 @@ import { useConfirm } from '../hooks/useConfirm';
 import { getPricingTotalTons, getPricingTotalSaleValue } from '../utils/pricingMetrics';
 import { notifyPricingDeleted } from '../services/notificationService';
 import { logAudit } from '../services/auditService';
+import { getLocaisAtivos } from '../services/locaisCarregamentoService';
+import { LocalCarregamento } from '../types/carregamento';
 
 interface HistoryProps {
   onEdit?: (pricing: PricingRecord) => void;
@@ -52,10 +55,15 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
   const [loading, setLoading] = useState(false);
   const [showNovoPedido, setShowNovoPedido] = useState(false);
   const [novoPedidoPricing, setNovoPedidoPricing] = useState<PricingRecord | null>(null);
+  const [locaisCarregamento, setLocaisCarregamento] = useState<LocalCarregamento[]>([]);
 
   useEffect(() => {
     loadData();
   }, [currentUser]);
+
+  useEffect(() => {
+    getLocaisAtivos().then(setLocaisCarregamento).catch(() => setLocaisCarregamento([]));
+  }, []);
 
   const loadData = async () => {
     setLoading(true);
@@ -664,6 +672,14 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                               : `-R$ ${Math.abs(p.factors.embalagem_valor || 0).toFixed(2)}/t`}
                           </span>
                         )}
+                      </span>
+                    </div>
+                  )}
+                  {p.factors?.local_carregamento_id && (
+                    <div className="flex items-center gap-1 text-xs text-stone-500">
+                      <MapPin className="w-3 h-3 text-amber-500" />
+                      <span>
+                        {locaisCarregamento.find((l) => l.id === p.factors?.local_carregamento_id)?.nome ?? '—'}
                       </span>
                     </div>
                   )}
