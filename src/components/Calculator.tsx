@@ -13,6 +13,7 @@ import {
   Beaker,
   Truck,
   Package,
+  MapPin,
 } from 'lucide-react';
 import { PricingRecord, SavedFormula, User as AppUser, Embalagem } from '../types';
 import { useToast } from './Toast';
@@ -75,6 +76,7 @@ export default function Calculator({
     savedPricingId,
     branches,
     priceLists,
+    locaisCarregamento,
     availableClients,
     availableAgents,
     clientSearch,
@@ -355,7 +357,7 @@ export default function Calculator({
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 pt-6 border-t border-stone-100">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 pt-6 border-t border-stone-100">
             <div>
               <label className="block text-sm font-medium text-stone-600 mb-1 flex items-center">
                 <Building2 className="w-4 h-4 mr-1" /> Filial
@@ -366,7 +368,12 @@ export default function Calculator({
                   const newBranch = e.target.value;
                   const lists = priceLists.filter((l) => l.branchId === newBranch);
                   const latestListId = lists.length > 0 ? lists[0].id : '';
-                  setFactors({ ...factors, branchId: newBranch, priceListId: latestListId });
+                  setFactors({
+                    ...factors,
+                    branchId: newBranch,
+                    priceListId: latestListId,
+                    local_carregamento_id: undefined,
+                  });
                 }}
                 className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
               >
@@ -377,6 +384,38 @@ export default function Calculator({
                   </option>
                 ))}
               </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-stone-600 mb-1 flex items-center">
+                <MapPin className="w-4 h-4 mr-1" /> Local de Carregamento
+              </label>
+              <select
+                value={factors.local_carregamento_id || ''}
+                onChange={(e) => {
+                  const localId = e.target.value;
+                  const matchingList = priceLists.find(
+                    (l) => l.branchId === factors.branchId && l.local_carregamento_id === localId
+                  );
+                  setFactors({
+                    ...factors,
+                    local_carregamento_id: localId || undefined,
+                    priceListId: matchingList ? matchingList.id : factors.priceListId,
+                  });
+                }}
+                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                disabled={!factors.branchId}
+              >
+                <option value="">— Selecione o local (opcional) —</option>
+                {locaisCarregamento.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.nome}
+                    {l.cidade ? ` — ${l.cidade}${l.estado ? `/${l.estado}` : ''}` : ''}
+                  </option>
+                ))}
+              </select>
+              {!factors.branchId && (
+                <p className="text-xs text-stone-400 mt-1">Selecione uma filial primeiro</p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-stone-600 mb-1 flex items-center">

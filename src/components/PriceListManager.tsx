@@ -9,6 +9,7 @@ import {
   X,
   ChevronDown,
   Check,
+  MapPin,
 } from 'lucide-react';
 import { RawMaterial, PriceList, Branch, MacroMaterial, MicroMaterial } from '../types';
 import {
@@ -24,6 +25,8 @@ import { useToast } from './Toast';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { useConfirm } from '../hooks/useConfirm';
 import { User } from '../types';
+import { getLocaisAtivos } from '../services/locaisCarregamentoService';
+import { LocalCarregamento } from '../types/carregamento';
 
 interface PriceListManagerProps {
   currentUser: User;
@@ -304,6 +307,8 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
 
   // form state
   const [selectedBranchId, setSelectedBranchId] = useState('');
+  const [selectedLocalId, setSelectedLocalId] = useState<string>('');
+  const [locaisCarregamento, setLocaisCarregamento] = useState<LocalCarregamento[]>([]);
   const [listName, setListName] = useState('');
   const [currency, setCurrency] = useState<'BRL' | 'USD'>('BRL');
   const [exchangeRate, setExchangeRate] = useState<number>(0);
@@ -335,6 +340,16 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
     loadAll();
   }, []);
 
+  useEffect(() => {
+    if (selectedBranchId) {
+      getLocaisAtivos(selectedBranchId)
+        .then(setLocaisCarregamento)
+        .catch(() => setLocaisCarregamento([]));
+    } else {
+      setLocaisCarregamento([]);
+    }
+  }, [selectedBranchId]);
+
   const handleMacroChange = (
     id: string,
     field: keyof RawMaterial,
@@ -365,6 +380,7 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
     setExchangeRate(0);
     setDollarRate(0);
     setEditingListId(null);
+    setSelectedLocalId('');
   };
 
   const savePriceList = async () => {
@@ -391,6 +407,7 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
         await updatePriceList(editingListId, {
           name: listName.trim(),
           branchId: selectedBranchId,
+          local_carregamento_id: selectedLocalId || undefined,
           currency,
           exchangeRate: currency === 'USD' ? exchangeRate : undefined,
           dollarRate: currency === 'BRL' ? dollarRate : undefined,
@@ -404,6 +421,7 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
                   ...p,
                   name: listName.trim(),
                   branchId: selectedBranchId,
+                  local_carregamento_id: selectedLocalId || undefined,
                   currency,
                   exchangeRate: currency === 'USD' ? exchangeRate : undefined,
                   dollarRate: currency === 'BRL' ? dollarRate : undefined,
@@ -419,6 +437,7 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
         const newList = await createPriceList({
           name: listName.trim(),
           branchId: selectedBranchId,
+          local_carregamento_id: selectedLocalId || undefined,
           date: new Date().toISOString(),
           currency,
           exchangeRate: currency === 'USD' ? exchangeRate : undefined,
@@ -502,7 +521,10 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
             <label className="block text-sm font-medium text-stone-600 mb-1">Filial</label>
             <select
               value={selectedBranchId}
-              onChange={(e) => setSelectedBranchId(e.target.value)}
+              onChange={(e) => {
+                setSelectedBranchId(e.target.value);
+                setSelectedLocalId('');
+              }}
               className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
             >
               <option value="">— Selecione —</option>
@@ -515,6 +537,26 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
             {!loading && branches.length === 0 && (
               <p className="text-xs text-amber-600 mt-1">⚠ Nenhuma filial cadastrada.</p>
             )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-stone-600 mb-1 flex items-center">
+              <MapPin className="w-4 h-4 mr-1" /> Local de Carregamento
+            </label>
+            <select
+              value={selectedLocalId}
+              onChange={(e) => setSelectedLocalId(e.target.value)}
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+              disabled={!selectedBranchId}
+            >
+              <option value="">— Nenhum (opcional) —</option>
+              {locaisCarregamento.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.nome}
+                  {l.cidade ? ` — ${l.cidade}${l.estado ? `/${l.estado}` : ''}` : ''}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
@@ -820,6 +862,7 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
                       setMacros(list.macros);
                       setMicros(list.micros);
                       setSelectedBranchId(list.branchId);
+                      setSelectedLocalId(list.local_carregamento_id || '');
                       setCurrency(list.currency || 'BRL');
                       if (list.currency === 'USD') setExchangeRate(list.exchangeRate || 0);
                       if (list.currency === 'BRL') setDollarRate(list.dollarRate || 0);
@@ -836,6 +879,7 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
                       setMacros(list.macros);
                       setMicros(list.micros);
                       setSelectedBranchId(list.branchId);
+                      setSelectedLocalId(list.local_carregamento_id || '');
                       setCurrency(list.currency || 'BRL');
                       if (list.currency === 'USD') setExchangeRate(list.exchangeRate || 0);
                       if (list.currency === 'BRL') setDollarRate(list.dollarRate || 0);

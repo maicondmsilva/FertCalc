@@ -36,6 +36,8 @@ import { formatNPK } from '../utils/formatters';
 import { useCalculatorSettings } from './useCalculatorSettings';
 import { notifyPricingCreated, notifyPricingEdited } from '../services/notificationService';
 import { useConfirm } from './useConfirm';
+import { getLocaisAtivos } from '../services/locaisCarregamentoService';
+import { LocalCarregamento } from '../types/carregamento';
 
 const defaultMacros: RawMaterial[] = [
   {
@@ -190,6 +192,7 @@ export function useCalculator({
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [priceLists, setPriceLists] = useState<PriceList[]>([]);
+  const [locaisCarregamento, setLocaisCarregamento] = useState<LocalCarregamento[]>([]);
   const [availableClients, setAvailableClients] = useState<Client[]>([]);
   const [availableAgents, setAvailableAgents] = useState<Agent[]>([]);
 
@@ -306,6 +309,17 @@ export function useCalculator({
   }, []);
 
   const [currency, setCurrency] = useState<'BRL' | 'USD'>('BRL');
+
+  // Load locais de carregamento when branch changes
+  useEffect(() => {
+    if (factors.branchId) {
+      getLocaisAtivos(factors.branchId)
+        .then(setLocaisCarregamento)
+        .catch(() => setLocaisCarregamento([]));
+    } else {
+      setLocaisCarregamento([]);
+    }
+  }, [factors.branchId]);
 
   // Update prices when list changes
   useEffect(() => {
@@ -1213,6 +1227,7 @@ export function useCalculator({
     // Lookup data
     branches,
     priceLists,
+    locaisCarregamento,
     availableClients,
     availableAgents,
 

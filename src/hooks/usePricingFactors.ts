@@ -17,6 +17,7 @@ const defaultFactors: PricingFactors = {
   agent: { id: '', code: '', name: '', document: '' },
   branchId: '',
   priceListId: '',
+  local_carregamento_id: undefined,
   totalTons: 0,
 };
 
