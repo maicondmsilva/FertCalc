@@ -49,7 +49,7 @@ export const generatePricingPDF = (record: PricingRecord, settings: AppSettings,
       const rowDueDate = rowDueDateStr ? new Date(rowDueDateStr).toLocaleDateString('pt-BR') : '—';
       
       const rowFreightPerTon = fCr?.freight ?? fGl?.freight ?? 0;
-      const rowFreightType = rowFreightPerTon > 0 ? 'CIF' : 'FOB';
+      const rowFreightType = fCr?.tipoFrete ?? fGl?.tipoFrete ?? (rowFreightPerTon > 0 ? 'CIF' : 'FOB');
       
       const qty = fCr?.totalTons || fGl?.totalTons || 0;
       const finalPrice = calc.summary?.finalPrice || 0;

@@ -429,7 +429,8 @@ export default function PricingDetailModal({
       pricing.formattedCod ||
       (pricing.cod ? String(pricing.cod).padStart(4, '0') : pricing.id.slice(-8));
     const freight = pricing.factors?.freight ?? 0;
-    const freightLabel = freight > 0 ? 'CIF' : 'FOB';
+    const tipoFrete = pricing.factors?.tipoFrete ?? (freight > 0 ? 'CIF' : 'FOB');
+    const freightLabel = tipoFrete;
     const dueDate = pricing.factors?.dueDate
       ? new Date(pricing.factors.dueDate).toLocaleDateString('pt-BR')
       : '—';
