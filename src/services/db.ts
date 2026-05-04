@@ -788,7 +788,7 @@ export async function createPriceList(pl: Omit<PriceList, 'id'>): Promise<PriceL
     .from('price_lists')
     .insert({
       name: pl.name,
-      branch_id: pl.branchId,
+      branch_id: pl.branchId ?? null,
       local_carregamento_id: pl.local_carregamento_id ?? null,
       date: pl.date,
       currency: pl.currency,

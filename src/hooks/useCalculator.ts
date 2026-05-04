@@ -293,17 +293,6 @@ export function useCalculator({
       setAvailableAgents(savedAgents);
       setIncompatibilityRules(savedRules);
       setCompCategories(savedCategories);
-
-      if (savedBranches.length > 0 && !factors.branchId) {
-        const firstBranch = savedBranches[0];
-        const branchLists = savedLists.filter((l: PriceList) => l.branchId === firstBranch.id);
-        const lastList = branchLists.length > 0 ? branchLists[0] : null;
-        setFactors((prev) => ({
-          ...prev,
-          branchId: firstBranch.id,
-          priceListId: lastList ? lastList.id : '',
-        }));
-      }
     };
     loadData();
   }, []);

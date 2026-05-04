@@ -4,16 +4,14 @@ import {
   Trash2,
   Save,
   Database,
-  Building2,
   Calendar,
   X,
   ChevronDown,
   Check,
   MapPin,
 } from 'lucide-react';
-import { RawMaterial, PriceList, Branch, MacroMaterial, MicroMaterial } from '../types';
+import { RawMaterial, PriceList, MacroMaterial, MicroMaterial } from '../types';
 import {
-  getBranches,
   getMacroMaterials,
   getMicroMaterials,
   getPriceLists,
@@ -298,7 +296,6 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
   const { showSuccess, showError } = useToast();
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
 
-  const [branches, setBranches] = useState<Branch[]>([]);
   const [allMacros, setAllMacros] = useState<MacroMaterial[]>([]);
   const [allMicros, setAllMicros] = useState<MicroMaterial[]>([]);
   const [priceLists, setPriceLists] = useState<PriceList[]>([]);
@@ -306,7 +303,6 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
   const [saving, setSaving] = useState(false);
 
   // form state
-  const [selectedBranchId, setSelectedBranchId] = useState('');
   const [selectedLocalId, setSelectedLocalId] = useState<string>('');
   const [locaisCarregamento, setLocaisCarregamento] = useState<LocalCarregamento[]>([]);
   const [listName, setListName] = useState('');
@@ -324,17 +320,14 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
   useEffect(() => {
     const loadAll = async () => {
       setLoading(true);
-      const [b, m, mi, pl] = await Promise.all([
-        getBranches(),
+      const [m, mi, pl] = await Promise.all([
         getMacroMaterials(),
         getMicroMaterials(),
         getPriceLists(),
       ]);
-      setBranches(b);
       setAllMacros(m);
       setAllMicros(mi);
       setPriceLists(pl);
-      if (b.length > 0) setSelectedBranchId(b[0].id);
       setLoading(false);
     };
     loadAll();
@@ -391,16 +384,11 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
       showError('Dê um nome para a lista antes de salvar.');
       return;
     }
-    if (!selectedBranchId) {
-      showError('Selecione uma filial.');
-      return;
-    }
     setSaving(true);
     try {
       if (editingListId) {
         await updatePriceList(editingListId, {
           name: listName.trim(),
-          branchId: selectedBranchId,
           local_carregamento_id: selectedLocalId || undefined,
           currency,
           exchangeRate: currency === 'USD' ? exchangeRate : undefined,
@@ -414,7 +402,6 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
               ? {
                   ...p,
                   name: listName.trim(),
-                  branchId: selectedBranchId,
                   local_carregamento_id: selectedLocalId || undefined,
                   currency,
                   exchangeRate: currency === 'USD' ? exchangeRate : undefined,
@@ -430,7 +417,6 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
       } else {
         const newList = await createPriceList({
           name: listName.trim(),
-          branchId: selectedBranchId,
           local_carregamento_id: selectedLocalId || undefined,
           date: new Date().toISOString(),
           currency,
@@ -510,29 +496,7 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
         </h2>
 
         {/* Form header */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div>
-            <label className="block text-sm font-medium text-stone-600 mb-1">Filial</label>
-            <select
-              value={selectedBranchId}
-              onChange={(e) => {
-                setSelectedBranchId(e.target.value);
-                setSelectedLocalId('');
-              }}
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-            >
-              <option value="">— Selecione —</option>
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
-            {!loading && branches.length === 0 && (
-              <p className="text-xs text-amber-600 mt-1">⚠ Nenhuma filial cadastrada.</p>
-            )}
-          </div>
-
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div>
             <label className="block text-sm font-medium text-stone-600 mb-1 flex items-center">
               <MapPin className="w-4 h-4 mr-1" /> Local de Carregamento
@@ -837,8 +801,10 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
                 </div>
                 <div className="space-y-1 text-xs text-stone-500">
                   <div className="flex items-center gap-1">
-                    <Building2 className="w-3 h-3" />
-                    {branches.find((b) => b.id === list.branchId)?.name || 'N/A'}
+                    <MapPin className="w-3 h-3 text-amber-500" />
+                    <span>
+                      {locaisCarregamento.find((l) => l.id === list.local_carregamento_id)?.nome ?? 'Sem local vinculado'}
+                    </span>
                   </div>
                   <div className="flex items-center gap-1">
                     <Calendar className="w-3 h-3" />
@@ -854,7 +820,6 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
                     onClick={() => {
                       setMacros(list.macros);
                       setMicros(list.micros);
-                      setSelectedBranchId(list.branchId);
                       setSelectedLocalId(list.local_carregamento_id || '');
                       setCurrency(list.currency || 'BRL');
                       if (list.currency === 'USD') setExchangeRate(list.exchangeRate || 0);
@@ -871,7 +836,6 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
                     onClick={() => {
                       setMacros(list.macros);
                       setMicros(list.micros);
-                      setSelectedBranchId(list.branchId);
                       setSelectedLocalId(list.local_carregamento_id || '');
                       setCurrency(list.currency || 'BRL');
                       if (list.currency === 'USD') setExchangeRate(list.exchangeRate || 0);
