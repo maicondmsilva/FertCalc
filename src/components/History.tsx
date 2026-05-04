@@ -621,20 +621,33 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                         : '---'}
                     </span>
                   </div>
-                  <div className="flex items-center">
-                    <Truck className="w-4 h-4 mr-2 text-stone-400" />
-                    Frete:{' '}
-                    <span className="ml-1 font-medium">
-                      {(() => {
-                        const tipoFrete =
-                          p.factors?.tipoFrete ?? ((p.factors?.freight || 0) > 0 ? 'CIF' : 'FOB');
-                        if (tipoFrete === 'FOB') return 'FOB';
-                        const freightStr = `CIF (R$ ${(p.factors?.freight || 0).toFixed(2)}/t)`;
-                        if (p.factors?.cotacaoFreteNumero)
-                          return `${freightStr} · ${p.factors.cotacaoFreteNumero}`;
-                        return freightStr;
-                      })()}
-                    </span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Truck className="w-4 h-4 text-stone-400" />
+                    {(() => {
+                      const tipoFrete =
+                        p.factors?.tipoFrete ?? ((p.factors?.freight || 0) > 0 ? 'CIF' : 'FOB');
+                      if (tipoFrete === 'FOB') {
+                        return (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-green-100 text-green-700">
+                            FOB
+                          </span>
+                        );
+                      }
+                      const freightVal = p.factors?.freight || 0;
+                      return (
+                        <span className="flex items-center gap-1 flex-wrap">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-700">
+                            CIF
+                          </span>
+                          <span className="text-sm font-medium text-stone-700">
+                            R$ {freightVal.toFixed(2)}/t
+                          </span>
+                          {p.factors?.cotacaoFreteNumero && (
+                            <span className="text-xs text-stone-400">· {p.factors.cotacaoFreteNumero}</span>
+                          )}
+                        </span>
+                      );
+                    })()}
                   </div>
                   {p.factors?.embalagem_nome && (
                     <div className="flex items-center">
