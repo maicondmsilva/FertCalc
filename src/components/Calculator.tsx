@@ -403,7 +403,6 @@ export default function Calculator({
                   });
                 }}
                 className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-                disabled={!factors.branchId}
               >
                 <option value="">— Selecione o local (opcional) —</option>
                 {locaisCarregamento.map((l) => (
@@ -413,9 +412,6 @@ export default function Calculator({
                   </option>
                 ))}
               </select>
-              {!factors.branchId && (
-                <p className="text-xs text-stone-400 mt-1">Selecione uma filial primeiro</p>
-              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-stone-600 mb-1 flex items-center">

@@ -246,10 +246,6 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
       showError('Nome é obrigatório.');
       return;
     }
-    if (!formLocal.filial_id) {
-      showError('Filial é obrigatória.');
-      return;
-    }
     setSavingLocal(true);
     try {
       if (editingLocal) {
@@ -649,7 +645,7 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
               </div>
               <div>
                 <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
-                  Filial <span className="text-red-500">*</span>
+                  Filial (opcional)
                 </label>
                 <select
                   value={formLocal.filial_id}
