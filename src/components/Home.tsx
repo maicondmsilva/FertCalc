@@ -18,7 +18,7 @@ import { User } from '../types';
 interface HomeProps {
   currentUser: User;
   onSelectModule: (
-    moduleId: 'pricing' | 'config' | 'prd' | 'managementReports' | 'expenses' | 'carregamento'
+    moduleId: 'pricing' | 'config' | 'prd' | 'managementReports' | 'expenses' | 'carregamento' | 'relatorios'
   ) => void;
 }
 
