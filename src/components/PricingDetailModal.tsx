@@ -754,7 +754,7 @@ export default function PricingDetailModal({
               className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition-all active:scale-95 text-sm"
               title="Preencher Pedido de Venda manualmente"
             >
-              📋 Preencher Pedido
+              <FileText className="w-4 h-4" /> Preencher Pedido
             </button>
             {selectedPricing.status === 'Em Andamento' && onEdit && (
               <button
