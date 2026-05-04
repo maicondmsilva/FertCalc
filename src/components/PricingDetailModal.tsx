@@ -724,7 +724,7 @@ export default function PricingDetailModal({
                 disabled={savingPedido}
                 className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white rounded-lg text-sm font-bold transition-colors"
               >
-                {savingPedido ? 'Salvando...' : 'Confirmar e Vincular'}
+                {savingPedido ? 'Salvando...' : pedidoVenda ? 'Atualizar' : 'Salvar'}
               </button>
             </div>
           </div>
