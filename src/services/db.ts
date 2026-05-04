@@ -771,6 +771,7 @@ export async function getPriceLists(): Promise<PriceList[]> {
     id: d.id,
     name: d.name,
     branchId: d.branch_id,
+    local_carregamento_id: d.local_carregamento_id ?? undefined,
     date: d.date,
     currency: d.currency,
     exchangeRate:
@@ -788,6 +789,7 @@ export async function createPriceList(pl: Omit<PriceList, 'id'>): Promise<PriceL
     .insert({
       name: pl.name,
       branch_id: pl.branchId,
+      local_carregamento_id: pl.local_carregamento_id ?? null,
       date: pl.date,
       currency: pl.currency,
       exchange_rate: pl.currency === 'USD' ? pl.exchangeRate : pl.dollarRate,
@@ -801,6 +803,7 @@ export async function createPriceList(pl: Omit<PriceList, 'id'>): Promise<PriceL
     id: data.id,
     name: data.name,
     branchId: data.branch_id,
+    local_carregamento_id: data.local_carregamento_id ?? undefined,
     date: data.date,
     currency: data.currency,
     exchangeRate:
@@ -831,6 +834,8 @@ export async function updatePriceList(id: string, pl: Partial<PriceList>): Promi
   if (pl.dollarRate !== undefined && pl.currency === 'BRL') payload.exchange_rate = pl.dollarRate;
   if (pl.macros !== undefined) payload.macros = pl.macros;
   if (pl.micros !== undefined) payload.micros = pl.micros;
+  if ('local_carregamento_id' in pl)
+    payload.local_carregamento_id = pl.local_carregamento_id ?? null;
   const { error } = await supabase.from('price_lists').update(payload).eq('id', id);
   if (error) throw error;
 }

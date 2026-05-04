@@ -278,6 +278,7 @@ export interface PriceList {
   id: string;
   name: string;
   branchId: string;
+  local_carregamento_id?: string;
   date: string;
   currency?: 'BRL' | 'USD';
   exchangeRate?: number;
@@ -398,6 +399,7 @@ export interface PricingFactors {
   agent: Agent;
   branchId: string;
   priceListId: string;
+  local_carregamento_id?: string;
   totalTons: number;
   commercialObservation?: string;
   embalagem_id?: string;
