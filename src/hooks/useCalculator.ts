@@ -313,7 +313,9 @@ export function useCalculator({
   // Load locais de carregamento when branch changes
   useEffect(() => {
     if (factors.branchId) {
-      getLocaisAtivos(factors.branchId).then(setLocaisCarregamento);
+      getLocaisAtivos(factors.branchId)
+        .then(setLocaisCarregamento)
+        .catch(() => setLocaisCarregamento([]));
     } else {
       setLocaisCarregamento([]);
     }

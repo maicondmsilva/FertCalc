@@ -342,7 +342,9 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
 
   useEffect(() => {
     if (selectedBranchId) {
-      getLocaisAtivos(selectedBranchId).then(setLocaisCarregamento);
+      getLocaisAtivos(selectedBranchId)
+        .then(setLocaisCarregamento)
+        .catch(() => setLocaisCarregamento([]));
     } else {
       setLocaisCarregamento([]);
     }
