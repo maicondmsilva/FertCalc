@@ -310,16 +310,10 @@ export function useCalculator({
 
   const [currency, setCurrency] = useState<'BRL' | 'USD'>('BRL');
 
-  // Load locais de carregamento when branch changes
+  // Load locais de carregamento (all active, independent of branch)
   useEffect(() => {
-    if (factors.branchId) {
-      getLocaisAtivos(factors.branchId)
-        .then(setLocaisCarregamento)
-        .catch(() => setLocaisCarregamento([]));
-    } else {
-      setLocaisCarregamento([]);
-    }
-  }, [factors.branchId]);
+    getLocaisAtivos().then(setLocaisCarregamento).catch(() => setLocaisCarregamento([]));
+  }, []);
 
   // Update prices when list changes
   useEffect(() => {

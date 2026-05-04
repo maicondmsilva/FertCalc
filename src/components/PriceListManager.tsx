@@ -341,14 +341,8 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
   }, []);
 
   useEffect(() => {
-    if (selectedBranchId) {
-      getLocaisAtivos(selectedBranchId)
-        .then(setLocaisCarregamento)
-        .catch(() => setLocaisCarregamento([]));
-    } else {
-      setLocaisCarregamento([]);
-    }
-  }, [selectedBranchId]);
+    getLocaisAtivos().then(setLocaisCarregamento).catch(() => setLocaisCarregamento([]));
+  }, []);
 
   const handleMacroChange = (
     id: string,
@@ -547,7 +541,6 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
               value={selectedLocalId}
               onChange={(e) => setSelectedLocalId(e.target.value)}
               className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-              disabled={!selectedBranchId}
             >
               <option value="">— Nenhum (opcional) —</option>
               {locaisCarregamento.map((l) => (
