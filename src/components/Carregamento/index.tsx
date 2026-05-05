@@ -2140,7 +2140,7 @@ function PainelLogistica({
     currentUser &&
     (currentUser.role === 'master' ||
       currentUser.role === 'admin' ||
-      (currentUser.permissions as any)?.carregamento_logistica)
+      currentUser.permissions?.carregamento_logistica)
   );
   const cif = carregamentos.filter(
     (c) => c.tipo_frete === 'CIF' && c.status !== 'cancelado' && c.status !== 'carregado'
