@@ -9,6 +9,7 @@ import {
   ChevronDown,
   Check,
   MapPin,
+  GripVertical,
 } from 'lucide-react';
 import { RawMaterial, PriceList, MacroMaterial, MicroMaterial } from '../types';
 import {
@@ -242,10 +243,36 @@ interface MacroRowProps {
   onChange: (id: string, field: keyof RawMaterial, value: string | number | boolean) => void;
   onRemove: (id: string) => void;
   premium?: boolean;
+  onDragStart: () => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onDrop: () => void;
+  onDragEnd: () => void;
+  isDragOver: boolean;
 }
-function MacroRow({ m, currency, onChange, onRemove, premium }: MacroRowProps) {
+function MacroRow({
+  m,
+  currency,
+  onChange,
+  onRemove,
+  premium,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
+  isDragOver,
+}: MacroRowProps) {
   return (
-    <tr className={premium ? 'bg-amber-50/60' : 'hover:bg-stone-50/50'}>
+    <tr
+      draggable={true}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onDragEnd={onDragEnd}
+      className={`${premium ? 'bg-amber-50/60' : 'hover:bg-stone-50/50'} ${isDragOver ? 'border-t-2 border-emerald-500' : ''}`}
+    >
+      <td className="px-2 py-1 cursor-grab active:cursor-grabbing">
+        <GripVertical className="w-4 h-4 text-stone-300" />
+      </td>
       <td
         className={`px-2 py-2 font-mono text-xs font-bold ${premium ? 'text-amber-600' : 'text-blue-600'}`}
       >
@@ -317,6 +344,56 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
   const [showMacroModal, setShowMacroModal] = useState(false);
   const [showMicroModal, setShowMicroModal] = useState(false);
 
+  // drag state
+  const [dragIndex, setDragIndex] = useState<{ type: 'macro' | 'micro'; index: number } | null>(
+    null
+  );
+  const [dragOverIndex, setDragOverIndex] = useState<{
+    type: 'macro' | 'micro';
+    index: number;
+  } | null>(null);
+
+  const handleDragStart = (type: 'macro' | 'micro', index: number) => {
+    setDragIndex({ type, index });
+  };
+
+  const handleDragOver = (e: React.DragEvent, type: 'macro' | 'micro', index: number) => {
+    e.preventDefault();
+    setDragOverIndex({ type, index });
+  };
+
+  const handleDrop = (type: 'macro' | 'micro', toIndex: number) => {
+    if (!dragIndex || dragIndex.type !== type) return;
+    const fromIndex = dragIndex.index;
+    if (fromIndex === toIndex) {
+      setDragIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+    if (type === 'macro') {
+      setMacros((prev) => {
+        const arr = [...prev];
+        const [item] = arr.splice(fromIndex, 1);
+        arr.splice(toIndex, 0, item);
+        return arr;
+      });
+    } else {
+      setMicros((prev) => {
+        const arr = [...prev];
+        const [item] = arr.splice(fromIndex, 1);
+        arr.splice(toIndex, 0, item);
+        return arr;
+      });
+    }
+    setDragIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDragIndex(null);
+    setDragOverIndex(null);
+  };
+
   useEffect(() => {
     const loadAll = async () => {
       setLoading(true);
@@ -334,7 +411,9 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
   }, []);
 
   useEffect(() => {
-    getLocaisAtivos().then(setLocaisCarregamento).catch(() => setLocaisCarregamento([]));
+    getLocaisAtivos()
+      .then(setLocaisCarregamento)
+      .catch(() => setLocaisCarregamento([]));
   }, []);
 
   const handleMacroChange = (
@@ -614,6 +693,7 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
               <table className="w-full text-xs">
                 <thead className="bg-stone-50 text-stone-500 uppercase text-[10px] font-bold border-b border-stone-200">
                   <tr>
+                    <th className="px-2 py-2 w-6"></th>
                     <th className="px-2 py-2 text-left">Cód</th>
                     <th className="px-2 py-2 text-left">Matéria Prima</th>
                     <th className="px-2 py-2 text-left">
@@ -630,25 +710,33 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
                 <tbody className="divide-y divide-stone-100">
                   {normalMacros.length === 0 && premiumMacros.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="px-3 py-8 text-center text-stone-300 italic">
+                      <td colSpan={10} className="px-3 py-8 text-center text-stone-300 italic">
                         Clique em "Selecionar Macros" para adicionar itens
                       </td>
                     </tr>
                   )}
-                  {normalMacros.map((m) => (
-                    <MacroRow
-                      key={m.id}
-                      m={m}
-                      currency={currency}
-                      onChange={handleMacroChange}
-                      onRemove={(id) => setMacros((prev) => prev.filter((x) => x.id !== id))}
-                    />
-                  ))}
+                  {normalMacros.map((m) => {
+                    const idx = macros.findIndex((x) => x.id === m.id);
+                    return (
+                      <MacroRow
+                        key={m.id}
+                        m={m}
+                        currency={currency}
+                        onChange={handleMacroChange}
+                        onRemove={(id) => setMacros((prev) => prev.filter((x) => x.id !== id))}
+                        onDragStart={() => handleDragStart('macro', idx)}
+                        onDragOver={(e) => handleDragOver(e, 'macro', idx)}
+                        onDrop={() => handleDrop('macro', idx)}
+                        onDragEnd={handleDragEnd}
+                        isDragOver={dragOverIndex?.type === 'macro' && dragOverIndex?.index === idx}
+                      />
+                    );
+                  })}
                   {premiumMacros.length > 0 && (
                     <>
                       <tr>
                         <td
-                          colSpan={9}
+                          colSpan={10}
                           className="px-3 py-1.5 bg-amber-50 border-t-2 border-amber-200"
                         >
                           <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">
@@ -656,16 +744,26 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
                           </span>
                         </td>
                       </tr>
-                      {premiumMacros.map((m) => (
-                        <MacroRow
-                          key={m.id}
-                          m={m}
-                          currency={currency}
-                          premium
-                          onChange={handleMacroChange}
-                          onRemove={(id) => setMacros((prev) => prev.filter((x) => x.id !== id))}
-                        />
-                      ))}
+                      {premiumMacros.map((m) => {
+                        const idx = macros.findIndex((x) => x.id === m.id);
+                        return (
+                          <MacroRow
+                            key={m.id}
+                            m={m}
+                            currency={currency}
+                            premium
+                            onChange={handleMacroChange}
+                            onRemove={(id) => setMacros((prev) => prev.filter((x) => x.id !== id))}
+                            onDragStart={() => handleDragStart('macro', idx)}
+                            onDragOver={(e) => handleDragOver(e, 'macro', idx)}
+                            onDrop={() => handleDrop('macro', idx)}
+                            onDragEnd={handleDragEnd}
+                            isDragOver={
+                              dragOverIndex?.type === 'macro' && dragOverIndex?.index === idx
+                            }
+                          />
+                        );
+                      })}
                     </>
                   )}
                 </tbody>
@@ -691,6 +789,7 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
               <table className="w-full text-xs">
                 <thead className="bg-stone-50 text-stone-500 uppercase text-[10px] font-bold border-b border-stone-200">
                   <tr>
+                    <th className="px-2 py-2 w-6"></th>
                     <th className="px-2 py-2 text-left">Cód</th>
                     <th className="px-2 py-2 text-left">Micronutriente</th>
                     <th className="px-2 py-2 text-left">
@@ -703,13 +802,24 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
                 <tbody className="divide-y divide-stone-100">
                   {micros.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="px-3 py-8 text-center text-stone-300 italic">
+                      <td colSpan={6} className="px-3 py-8 text-center text-stone-300 italic">
                         Clique em "Selecionar Micros" para adicionar itens
                       </td>
                     </tr>
                   )}
-                  {micros.map((m) => (
-                    <tr key={m.id} className="hover:bg-stone-50/50">
+                  {micros.map((m, idx) => (
+                    <tr
+                      key={m.id}
+                      draggable={true}
+                      onDragStart={() => handleDragStart('micro', idx)}
+                      onDragOver={(e) => handleDragOver(e, 'micro', idx)}
+                      onDrop={() => handleDrop('micro', idx)}
+                      onDragEnd={handleDragEnd}
+                      className={`hover:bg-stone-50/50 ${dragOverIndex?.type === 'micro' && dragOverIndex?.index === idx ? 'border-t-2 border-emerald-500' : ''}`}
+                    >
+                      <td className="px-2 py-1 cursor-grab active:cursor-grabbing">
+                        <GripVertical className="w-4 h-4 text-stone-300" />
+                      </td>
                       <td className="px-2 py-2 font-mono text-emerald-600 font-bold">{m.code}</td>
                       <td className="px-2 py-2 text-stone-700 font-medium max-w-[140px] truncate">
                         {m.name}
@@ -803,7 +913,8 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
                   <div className="flex items-center gap-1">
                     <MapPin className="w-3 h-3 text-amber-500" />
                     <span>
-                      {locaisCarregamento.find((l) => l.id === list.local_carregamento_id)?.nome ?? 'Sem local vinculado'}
+                      {locaisCarregamento.find((l) => l.id === list.local_carregamento_id)?.nome ??
+                        'Sem local vinculado'}
                     </span>
                   </div>
                   <div className="flex items-center gap-1">
