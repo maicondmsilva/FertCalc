@@ -331,6 +331,11 @@ interface FactorsFormProps {
   onChange: (field: keyof ReportFactors, value: string | number) => void;
 }
 
+function parseNumericInput(value: string, defaultValue: number): number {
+  const parsed = parseFloat(value);
+  return isNaN(parsed) ? defaultValue : parsed;
+}
+
 function FactorsForm({ factors, onChange }: FactorsFormProps) {
   return (
     <div className="grid grid-cols-2 gap-3">
@@ -339,9 +344,9 @@ function FactorsForm({ factors, onChange }: FactorsFormProps) {
         <input
           type="number"
           step="0.01"
-          min="0"
+          min="0.01"
           value={factors.fator}
-          onChange={(e) => onChange('fator', parseFloat(e.target.value) || 1)}
+          onChange={(e) => onChange('fator', parseNumericInput(e.target.value, 1))}
           className="w-full border border-stone-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
         />
       </div>
@@ -352,7 +357,7 @@ function FactorsForm({ factors, onChange }: FactorsFormProps) {
           step="0.01"
           min="0"
           value={factors.desconto}
-          onChange={(e) => onChange('desconto', parseFloat(e.target.value) || 0)}
+          onChange={(e) => onChange('desconto', parseNumericInput(e.target.value, 0))}
           className="w-full border border-stone-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
         />
       </div>
@@ -363,7 +368,7 @@ function FactorsForm({ factors, onChange }: FactorsFormProps) {
           step="0.01"
           min="0"
           value={factors.frete}
-          onChange={(e) => onChange('frete', parseFloat(e.target.value) || 0)}
+          onChange={(e) => onChange('frete', parseNumericInput(e.target.value, 0))}
           className="w-full border border-stone-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
         />
       </div>
@@ -374,7 +379,7 @@ function FactorsForm({ factors, onChange }: FactorsFormProps) {
           step="0.01"
           min="0"
           value={factors.aliquota}
-          onChange={(e) => onChange('aliquota', parseFloat(e.target.value) || 0)}
+          onChange={(e) => onChange('aliquota', parseNumericInput(e.target.value, 0))}
           className="w-full border border-stone-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
         />
       </div>
@@ -385,7 +390,7 @@ function FactorsForm({ factors, onChange }: FactorsFormProps) {
           step="0.01"
           min="0"
           value={factors.comissao}
-          onChange={(e) => onChange('comissao', parseFloat(e.target.value) || 0)}
+          onChange={(e) => onChange('comissao', parseNumericInput(e.target.value, 0))}
           className="w-full border border-stone-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
         />
       </div>

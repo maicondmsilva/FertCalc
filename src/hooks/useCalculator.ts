@@ -1169,6 +1169,7 @@ export function useCalculator({
             });
           } catch (pfError) {
             console.warn('[saveToFormulasList] Failed to create produto_formulado:', pfError);
+            showError('Batida salva, mas houve um erro ao registrar em Produtos Formulados.');
           }
           showSuccess('Batida salva com sucesso nas suas Fórmulas!');
         } catch (error: unknown) {
