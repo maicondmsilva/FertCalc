@@ -398,7 +398,11 @@ export async function getHistoricoCarregamento(
     .select('*')
     .eq('carregamento_id', carregamentoId)
     .order('criado_em', { ascending: false });
-  if (error || !data) return [];
+  if (error) {
+    console.error('[carregamentoService] getHistoricoCarregamento error:', error);
+    return [];
+  }
+  if (!data) return [];
   return data as HistoricoCarregamento[];
 }
 
@@ -523,9 +527,7 @@ export async function getCarregamentosCalendario(
   const startDate = new Date(ano, mes - 1, 1).toISOString().slice(0, 10);
   const endDate = new Date(ano, mes, 0).toISOString().slice(0, 10);
 
-  let query = supabase
-    .from('carregamentos')
-    .select(`
+  const selectFields = `
       *,
       branches(*),
       transportadoras(*),
@@ -537,21 +539,46 @@ export async function getCarregamentosCalendario(
         saldo_disponivel,
         quantidade_real
       )
-    `)
+    `;
+
+  // Query 1: carregamentos with data_prevista_carregamento in range
+  let q1 = supabase
+    .from('carregamentos')
+    .select(selectFields)
     .not('data_prevista_carregamento', 'is', null)
     .gte('data_prevista_carregamento', startDate)
     .lte('data_prevista_carregamento', endDate);
 
-  if (filialId) query = query.eq('filial_id', filialId);
+  if (filialId) q1 = q1.eq('filial_id', filialId);
 
-  const { data, error } = await query;
-  if (error || !data) return [];
-  return data.map((d) => {
+  // Query 2: carregamentos without data_prevista but with data_real_carregamento in range
+  let q2 = supabase
+    .from('carregamentos')
+    .select(selectFields)
+    .is('data_prevista_carregamento', null)
+    .not('data_real_carregamento', 'is', null)
+    .gte('data_real_carregamento', startDate)
+    .lte('data_real_carregamento', endDate);
+
+  if (filialId) q2 = q2.eq('filial_id', filialId);
+
+  const [r1, r2] = await Promise.all([q1, q2]);
+
+  if (r1.error) {
+    console.error('[carregamentoService] getCarregamentosCalendario (prevista) error:', r1.error);
+  }
+  if (r2.error) {
+    console.error('[carregamentoService] getCarregamentosCalendario (real) error:', r2.error);
+  }
+
+  const rows = [...(r1.data ?? []), ...(r2.data ?? [])];
+
+  const mapRow = (d: Record<string, unknown>): Carregamento => {
     const pv = d.pedidos_venda as Record<string, unknown> | null;
     return {
       ...mapCarregamento(d),
       filial: d.branches ? mapBranchToFilial(d.branches as Record<string, unknown>) : undefined,
-      transportadora: d.transportadoras ? mapTransportadora(d.transportadoras) : undefined,
+      transportadora: d.transportadoras ? mapTransportadora(d.transportadoras as Record<string, unknown>) : undefined,
       local_carregamento: d.locais_carregamento
         ? mapLocalCarregamento(d.locais_carregamento as Record<string, unknown>)
         : undefined,
@@ -563,7 +590,9 @@ export async function getCarregamentosCalendario(
       pedido_quantidade_real:
         pv?.quantidade_real != null ? Number(pv.quantidade_real) : undefined,
     };
-  });
+  };
+
+  return rows.map(mapRow);
 }
 
 // ─────────────────────────────────────────────────────────────

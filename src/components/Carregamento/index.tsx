@@ -27,6 +27,7 @@ import {
   Filial,
   Transportadora,
   CotacaoFrete,
+  HistoricoCarregamento,
   KPICarregamento,
   StatusCarregamento,
   FiltrosRelatorioCarregamento,
@@ -52,6 +53,7 @@ import {
   getCarregamentosCalendario,
   getAlertasCarregamento,
   getCarregamentosLogistica,
+  getHistoricoCarregamento,
 } from '../../services/carregamentoService';
 import { registrarAuditLog } from '../../services/auditLogService';
 import {
@@ -861,6 +863,18 @@ function ModalSolicitarCotacao({
   const [prazo, setPrazo] = useState('');
   const [observacoes, setObservacoes] = useState('');
   const [saving, setSaving] = useState(false);
+  const [historico, setHistorico] = useState<HistoricoCarregamento[]>([]);
+  const [loadingHistorico, setLoadingHistorico] = useState(false);
+
+  useEffect(() => {
+    setLoadingHistorico(true);
+    getHistoricoCarregamento(carregamento.id)
+      .then(setHistorico)
+      .catch((err) => {
+        console.error('[ModalSolicitarCotacao] failed to load historico:', err);
+      })
+      .finally(() => setLoadingHistorico(false));
+  }, [carregamento.id]);
 
   const toggleTransportadora = (id: string) => {
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -1015,6 +1029,39 @@ function ModalSolicitarCotacao({
             </button>
           </div>
         </form>
+
+        {/* Histórico do Carregamento */}
+        <div className="px-6 pb-6 border-t border-stone-100">
+          <div className="flex items-center gap-2 mt-4 mb-3">
+            <Clock className="w-4 h-4 text-stone-400" />
+            <h4 className="text-xs font-bold text-stone-500 uppercase">Histórico</h4>
+          </div>
+          {loadingHistorico ? (
+            <div className="flex justify-center py-4">
+              <RefreshCw className="w-4 h-4 animate-spin text-stone-300" />
+            </div>
+          ) : historico.length === 0 ? (
+            <p className="text-xs text-stone-400">Nenhum histórico disponível.</p>
+          ) : (
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {historico.map((h) => (
+                <div key={h.id} className="flex gap-3 text-xs">
+                  <span className="text-stone-400 flex-shrink-0 font-mono">
+                    {new Date(h.criado_em).toLocaleString('pt-BR')}
+                  </span>
+                  <div className="flex-1">
+                    <span className="text-stone-600">{h.descricao}</span>
+                    {h.status_anterior && h.status_novo && (
+                      <span className="ml-1 text-stone-400">
+                        ({h.status_anterior} → {h.status_novo})
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -2197,7 +2244,11 @@ function CalendarioCarregamentos({ currentUser }: { currentUser: User }) {
 
   const eventsForDay = (day: number) => {
     const dateStr = `${ano}-${String(mes).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    return eventos.filter((e) => e.data_prevista_carregamento === dateStr);
+    return eventos.filter(
+      (e) =>
+        e.data_prevista_carregamento === dateStr ||
+        (!e.data_prevista_carregamento && e.data_real_carregamento === dateStr)
+    );
   };
 
   const today = new Date();

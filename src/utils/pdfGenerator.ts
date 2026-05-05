@@ -155,8 +155,10 @@ export const generatePricingPDF = (record: PricingRecord, settings: AppSettings,
     <div style="margin-top:15px;display:grid;grid-template-columns:1fr 1fr;gap:50px;padding:0 30px;">
       <div style="text-align:center;">
         <div style="border-top:1.5px solid #000;width:90%;margin:0 auto;padding-top:6px;"> </div>
-        <div style="font-size:11px;font-weight:800;text-transform:uppercase;">${agentName}</div>
-        <div style="font-size:10px;color:#888;">Assinatura do Vendedor</div>
+        ${showAgent && agentName && agentName !== '—'
+          ? `<div style="font-size:11px;font-weight:800;text-transform:uppercase;">Rep.: ${agentName}</div>
+             <div style="font-size:10px;color:#888;">Representante Comercial</div>`
+          : `<div style="font-size:10px;color:#888;">Assinatura do Vendedor</div>`}
       </div>
       <div style="text-align:center;">
         <div style="border-top:1.5px solid #000;width:90%;margin:0 auto;padding-top:6px;"> </div>

@@ -46,7 +46,13 @@ export async function createAccessProfile(profile: NewAccessProfile): Promise<Ac
     })
     .select()
     .single();
-  if (error || !data) throw new Error(error?.message ?? 'Erro ao criar perfil de acesso');
+  if (error || !data) {
+    console.error('[accessProfileService] createAccessProfile error:', error);
+    const msg = error?.message ?? 'Erro ao criar perfil de acesso';
+    const errCode = (error as Record<string, unknown>)?.code;
+    const detail = errCode ? ` (código: ${errCode})` : '';
+    throw new Error(msg + detail);
+  }
   return mapProfile(data as Record<string, unknown>);
 }
 
@@ -65,7 +71,13 @@ export async function updateAccessProfile(
     .eq('id', id)
     .select()
     .single();
-  if (error || !data) throw new Error(error?.message ?? 'Erro ao atualizar perfil de acesso');
+  if (error || !data) {
+    console.error('[accessProfileService] updateAccessProfile error:', error);
+    const msg = error?.message ?? 'Erro ao atualizar perfil de acesso';
+    const errCode = (error as Record<string, unknown>)?.code;
+    const detail = errCode ? ` (código: ${errCode})` : '';
+    throw new Error(msg + detail);
+  }
   return mapProfile(data as Record<string, unknown>);
 }
 
