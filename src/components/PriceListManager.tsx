@@ -544,6 +544,7 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
 
   const normalMacros = macros.filter((m) => !m.isPremiumLine);
   const premiumMacros = macros.filter((m) => m.isPremiumLine);
+  const macroIndexMap = new Map(macros.map((m, i) => [m.id, i]));
 
   return (
     <div className="space-y-6">
@@ -716,7 +717,8 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
                     </tr>
                   )}
                   {normalMacros.map((m) => {
-                    const idx = macros.findIndex((x) => x.id === m.id);
+                    const idx = macroIndexMap.get(m.id);
+                    if (idx === undefined) return null;
                     return (
                       <MacroRow
                         key={m.id}
@@ -745,7 +747,8 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
                         </td>
                       </tr>
                       {premiumMacros.map((m) => {
-                        const idx = macros.findIndex((x) => x.id === m.id);
+                        const idx = macroIndexMap.get(m.id);
+                        if (idx === undefined) return null;
                         return (
                           <MacroRow
                             key={m.id}
