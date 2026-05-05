@@ -49,8 +49,7 @@ export async function createAccessProfile(profile: NewAccessProfile): Promise<Ac
   if (error || !data) {
     console.error('[accessProfileService] createAccessProfile error:', error);
     const msg = error?.message ?? 'Erro ao criar perfil de acesso';
-    const errCode = (error as Record<string, unknown>)?.code;
-    const detail = errCode ? ` (código: ${errCode})` : '';
+    const detail = error?.code ? ` (código: ${error.code})` : '';
     throw new Error(msg + detail);
   }
   return mapProfile(data as Record<string, unknown>);
@@ -74,8 +73,7 @@ export async function updateAccessProfile(
   if (error || !data) {
     console.error('[accessProfileService] updateAccessProfile error:', error);
     const msg = error?.message ?? 'Erro ao atualizar perfil de acesso';
-    const errCode = (error as Record<string, unknown>)?.code;
-    const detail = errCode ? ` (código: ${errCode})` : '';
+    const detail = error?.code ? ` (código: ${error.code})` : '';
     throw new Error(msg + detail);
   }
   return mapProfile(data as Record<string, unknown>);
