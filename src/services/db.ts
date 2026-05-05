@@ -1057,10 +1057,11 @@ export async function getSavedFormulas(): Promise<SavedFormula[]> {
   const { data, error } = await supabase
     .from('saved_formulas')
     .select('*')
-    .order('created_at', { ascending: false });
+    .order('id_numeric', { ascending: true, nullsFirst: false });
   if (error || !data) return [];
   return data.map((d) => ({
     id: d.id,
+    id_numeric: d.id_numeric != null ? Number(d.id_numeric) : undefined,
     userId: d.user_id,
     userName: d.user_name,
     name: d.name,
@@ -1068,6 +1069,7 @@ export async function getSavedFormulas(): Promise<SavedFormula[]> {
     targetFormula: d.target_formula,
     macros: d.macros || [],
     micros: d.micros || [],
+    local_carregamento_id: d.local_carregamento_id as string | undefined,
   }));
 }
 
@@ -1095,6 +1097,7 @@ export async function createSavedFormula(formula: Omit<SavedFormula, 'id'>): Pro
   }
   return {
     id: data.id,
+    id_numeric: data.id_numeric != null ? Number(data.id_numeric) : undefined,
     userId: data.user_id,
     userName: data.user_name,
     name: data.name,
@@ -1102,6 +1105,7 @@ export async function createSavedFormula(formula: Omit<SavedFormula, 'id'>): Pro
     targetFormula: data.target_formula,
     macros: data.macros || [],
     micros: data.micros || [],
+    local_carregamento_id: data.local_carregamento_id as string | undefined,
   };
 }
 

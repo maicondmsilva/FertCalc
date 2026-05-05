@@ -108,6 +108,7 @@ export interface User {
     commissionReport?: boolean;
     prd?: boolean;
     pricingBySeller?: boolean;
+    produtosFormulados?: boolean;
     // Sub-permissões da Calculadora
     calculator_savePricing?: boolean;
     calculator_generatePDF?: boolean;
@@ -372,6 +373,7 @@ export interface TargetFormula {
 
 export interface SavedFormula {
   id: string;
+  id_numeric?: number;
   userId: string;
   userName: string;
   name: string;
@@ -379,6 +381,7 @@ export interface SavedFormula {
   targetFormula: string;
   macros: RawMaterial[];
   micros: RawMaterial[];
+  local_carregamento_id?: string;
 }
 
 export interface PricingFactors {
