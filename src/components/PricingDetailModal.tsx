@@ -34,6 +34,10 @@ import { ConfirmDialog } from './ui/ConfirmDialog';
 import { useConfirm } from '../hooks/useConfirm';
 import { Send, UserCheck, CheckCircle2, CheckCircle, XCircle } from 'lucide-react';
 import { notifyTransferInitiated, notifyTransferAccepted } from '../services/notificationService';
+import {
+  getPricingHistory,
+  PricingHistoryEntry as DBPricingHistoryEntry,
+} from '../services/pricingHistoryService';
 
 interface PricingDetailModalProps {
   selectedPricing: PricingRecord;
@@ -89,6 +93,13 @@ export default function PricingDetailModal({
     valor_frete: string;
   } | null>(null);
   const [savingPedido, setSavingPedido] = useState(false);
+  const [dbHistory, setDbHistory] = useState<DBPricingHistoryEntry[]>([]);
+
+  React.useEffect(() => {
+    getPricingHistory(selectedPricing.id)
+      .then(setDbHistory)
+      .catch(() => setDbHistory([]));
+  }, [selectedPricing.id]);
 
   React.useEffect(() => {
     if (isTransferring) {
@@ -109,23 +120,25 @@ export default function PricingDetailModal({
       numero_pedido: pedidoVenda?.numero_pedido ?? '',
       barra_pedido: pedidoVenda?.barra_pedido ?? '',
       data_pedido: pedidoVenda?.data_pedido ?? new Date().toISOString().slice(0, 10),
-      quantidade_real: pedidoVenda?.quantidade_real != null
-        ? String(pedidoVenda.quantidade_real)
-        : '',
+      quantidade_real:
+        pedidoVenda?.quantidade_real != null ? String(pedidoVenda.quantidade_real) : '',
       embalagem: pedidoVenda?.embalagem ?? '',
-      valor_unitario_negociado: pedidoVenda?.valor_unitario_negociado != null
-        ? String(pedidoVenda.valor_unitario_negociado)
-        : '',
-      valor_total_negociado: pedidoVenda?.valor_total_negociado != null
-        ? String(pedidoVenda.valor_total_negociado)
-        : '',
+      valor_unitario_negociado:
+        pedidoVenda?.valor_unitario_negociado != null
+          ? String(pedidoVenda.valor_unitario_negociado)
+          : '',
+      valor_total_negociado:
+        pedidoVenda?.valor_total_negociado != null ? String(pedidoVenda.valor_total_negociado) : '',
       tipo_frete: pedidoVenda?.tipo_frete ?? tipoFrete,
-      valor_frete: pedidoVenda?.valor_frete != null
-        ? String(pedidoVenda.valor_frete)
-        : freight > 0 ? String(freight) : '',
+      valor_frete:
+        pedidoVenda?.valor_frete != null
+          ? String(pedidoVenda.valor_frete)
+          : freight > 0
+            ? String(freight)
+            : '',
     });
     setShowPdfImportModal(true);
-};
+  };
 
   const handleSavePedido = async () => {
     if (!extractedData) return;
@@ -1474,6 +1487,48 @@ export default function PricingDetailModal({
                       <p className="text-stone-800 font-medium">{entry.action}</p>
                       <p className="text-[10px] text-stone-500">
                         Por: {entry.userName} em {new Date(entry.date).toLocaleString('pt-BR')}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* DB-backed Pricing History Timeline */}
+          {dbHistory.length > 0 && (
+            <div className="bg-blue-50 p-6 rounded-2xl border border-blue-200">
+              <h3 className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-4">
+                Histórico de Alterações de Status
+              </h3>
+              <div className="space-y-3">
+                {dbHistory.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="flex gap-4 text-sm border-l-2 border-blue-200 pl-4 py-1"
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-stone-700 capitalize">
+                          {entry.campo}
+                        </span>
+                        {entry.valor_anterior && (
+                          <>
+                            <span className="bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded">
+                              {entry.valor_anterior}
+                            </span>
+                            <span className="text-stone-400">→</span>
+                          </>
+                        )}
+                        {entry.valor_novo && (
+                          <span className="bg-emerald-100 text-emerald-700 text-xs font-bold px-2 py-0.5 rounded">
+                            {entry.valor_novo}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-stone-500 mt-1">
+                        Por: {entry.alterado_por} em{' '}
+                        {new Date(entry.alterado_em).toLocaleString('pt-BR')}
                       </p>
                     </div>
                   </div>
