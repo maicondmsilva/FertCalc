@@ -24,6 +24,7 @@ import Dashboard from './components/Dashboard';
 import SavedFormulas from './components/SavedFormulas';
 import AccessProfileManager from './components/AccessProfileManager';
 import ProdutosFormulados from './components/ProdutosFormulados';
+import AlertCenter from './components/AlertCenter';
 import {
   LayoutDashboard,
   History as HistoryIcon,
@@ -138,7 +139,9 @@ export default function App() {
     ].includes(activeTab)
   ) {
     activeModule = 'pricing';
-  } else if (['branches', 'settings', 'users', 'access_profiles'].includes(activeTab)) {
+  } else if (
+    ['branches', 'settings', 'users', 'access_profiles', 'alert_center'].includes(activeTab)
+  ) {
     activeModule = 'config';
   } else if (activeTab === 'prd') {
     activeModule = 'prd';
@@ -410,6 +413,7 @@ export default function App() {
         },
         { id: 'branches', label: 'Filiais e Locais', icon: Building2, permission: 'branches' },
         { id: 'settings', label: 'Personalização', icon: Settings, permission: 'settings' },
+        { id: 'alert_center', label: 'Central de Alertas', icon: Bell, permission: 'alertas' },
       ];
 
       return allItems.filter((item) => hasPermission(item.permission));
@@ -984,6 +988,11 @@ export default function App() {
             {activeModule === 'config' &&
               activeTab === 'access_profiles' &&
               hasPermission('users') && <AccessProfileManager />}
+            {activeModule === 'config' &&
+              activeTab === 'alert_center' &&
+              (hasPermission('alertas') ||
+                currentUser.role === 'admin' ||
+                currentUser.role === 'master') && <AlertCenter />}
             {activeModule === 'prd' && activeTab === 'prd' && hasPermission('prd') && (
               <PrdModule currentUser={currentUser} />
             )}
