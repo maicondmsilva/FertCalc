@@ -38,6 +38,7 @@ import { notifyPricingCreated, notifyPricingEdited } from '../services/notificat
 import { useConfirm } from './useConfirm';
 import { getLocaisAtivos } from '../services/locaisCarregamentoService';
 import { LocalCarregamento } from '../types/carregamento';
+import { createProdutoFormulado } from '../services/produtosFormuladosService';
 
 const defaultMacros: RawMaterial[] = [
   {
@@ -1147,7 +1148,7 @@ export function useCalculator({
             return;
           }
 
-          await createSavedFormula({
+          const savedFormula = await createSavedFormula({
             userId: currentUser.id,
             userName: currentUser.name,
             name: name.trim(),
@@ -1156,6 +1157,19 @@ export function useCalculator({
             macros: selectedCalc.macros || macros,
             micros: selectedCalc.micros || micros,
           });
+          // Also save to produtos_formulados
+          try {
+            await createProdutoFormulado({
+              nome: name.trim(),
+              formula_npk: selectedCalc.formula,
+              saved_formula_id: savedFormula.id,
+              linha_diferenciada: false,
+              ativo: true,
+              criado_por: currentUser.id,
+            });
+          } catch (pfError) {
+            console.warn('[saveToFormulasList] Failed to create produto_formulado:', pfError);
+          }
           showSuccess('Batida salva com sucesso nas suas Fórmulas!');
         } catch (error: unknown) {
           const e = error as { message?: string; error_description?: string };

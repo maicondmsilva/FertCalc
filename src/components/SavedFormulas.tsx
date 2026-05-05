@@ -1,6 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { getSavedFormulas, deleteSavedFormula, getPriceLists, getBranches } from '../services/db';
-import { SavedFormula, User, PriceList, Branch } from '../types';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import {
+  getSavedFormulas,
+  deleteSavedFormula,
+  getPriceLists,
+  getAppSettings,
+} from '../services/db';
+import { getLocaisAtivos } from '../services/locaisCarregamentoService';
+import { getProdutoFormuladoBySavedFormulaId } from '../services/produtosFormuladosService';
+import { SavedFormula, User, PriceList, AppSettings } from '../types';
+import { LocalCarregamento } from '../types/carregamento';
+import { formatId } from '../utils/formatId';
 import {
   Beaker,
   Trash2,
@@ -9,10 +20,14 @@ import {
   Calendar,
   Database,
   User as UserIcon,
-  Building2,
+  MapPin,
   Package,
   Zap,
   AlertTriangle,
+  CheckSquare,
+  Square,
+  FileText,
+  Star,
 } from 'lucide-react';
 import { useToast } from './Toast';
 import { useConfirm } from '../hooks/useConfirm';
@@ -23,14 +38,382 @@ interface SavedFormulasProps {
   onSendToCalculator: (formula: SavedFormula, branchId: string, priceListId: string) => void;
 }
 
+interface ReportFactors {
+  fator: number;
+  desconto: number;
+  frete: number;
+  aliquota: number;
+  comissao: number;
+  vencimento: string;
+}
+
+interface ModalGerarRelatorioProps {
+  isOpen: boolean;
+  formulas: SavedFormula[];
+  selectedIds: string[];
+  selectedList: PriceList | undefined;
+  getFormulaCost: (f: SavedFormula, list: PriceList | undefined) => { total: number; missingItems: string[] };
+  companyName: string;
+  onClose: () => void;
+}
+
+function ModalGerarRelatorio({
+  isOpen,
+  formulas,
+  selectedIds,
+  selectedList,
+  getFormulaCost,
+  companyName,
+  onClose,
+}: ModalGerarRelatorioProps) {
+  const selectedFormulas = formulas.filter((f) => selectedIds.includes(f.id));
+  const [applyToAll, setApplyToAll] = useState(true);
+  const [includeComposicao, setIncludeComposicao] = useState(false);
+  const [globalFactors, setGlobalFactors] = useState<ReportFactors>({
+    fator: 1,
+    desconto: 0,
+    frete: 0,
+    aliquota: 0,
+    comissao: 0,
+    vencimento: '',
+  });
+  const [perFormulaFactors, setPerFormulaFactors] = useState<Record<string, ReportFactors>>(() => {
+    const initial: Record<string, ReportFactors> = {};
+    selectedFormulas.forEach((f) => {
+      initial[f.id] = { fator: 1, desconto: 0, frete: 0, aliquota: 0, comissao: 0, vencimento: '' };
+    });
+    return initial;
+  });
+
+  if (!isOpen) return null;
+
+  const getFactors = (id: string): ReportFactors =>
+    applyToAll ? globalFactors : (perFormulaFactors[id] || globalFactors);
+
+  const calcPrecoFinal = (formula: SavedFormula): number => {
+    const { total } = getFormulaCost(formula, selectedList);
+    const f = getFactors(formula.id);
+    let preco = total * f.fator;
+    preco -= f.desconto;
+    preco += f.frete;
+    preco *= 1 + f.aliquota / 100;
+    preco *= 1 + f.comissao / 100;
+    return preco;
+  };
+
+  const handleGeneratePDF = () => {
+    const doc = new jsPDF();
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('pt-BR');
+
+    // Header
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text(companyName, 14, 18);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Relatório de Preços para Clientes — ${dateStr}`, 14, 25);
+
+    // Main table
+    const tableBody: (string | number)[][] = selectedFormulas.map((formula) => {
+      const idFormatado = formatId(formula.id_numeric, 'BAT-');
+      const precoFinal = calcPrecoFinal(formula);
+      return [
+        idFormatado,
+        formula.name,
+        formula.targetFormula,
+        precoFinal > 0
+          ? precoFinal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+          : '—',
+      ];
+    });
+
+    autoTable(doc, {
+      startY: 32,
+      head: [['ID', 'Nome da Fórmula', 'NPK', 'Preço Final R$/t']],
+      body: tableBody,
+      styles: { fontSize: 9, cellPadding: 3 },
+      headStyles: { fillColor: [52, 168, 83], textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [245, 245, 245] },
+    });
+
+    // If include composition
+    if (includeComposicao) {
+      selectedFormulas.forEach((formula) => {
+        const activeMacros = formula.macros.filter((m) => m.quantity > 0);
+        const activeMicros = formula.micros.filter((m) => m.quantity > 0);
+        if (activeMacros.length === 0 && activeMicros.length === 0) return;
+
+        const lastY = (doc as any).lastAutoTable?.finalY ?? 30;
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text(
+          `Composição: ${formula.name} (${formula.targetFormula})`,
+          14,
+          lastY + 10
+        );
+
+        const composicaoBody = [
+          ...activeMacros.map((m) => [m.name, `${m.quantity.toFixed(0)} kg`, 'Macro']),
+          ...activeMicros.map((m) => [m.name, `${m.quantity.toFixed(0)} kg`, 'Micro']),
+        ];
+
+        autoTable(doc, {
+          startY: lastY + 14,
+          head: [['Matéria-Prima', 'Quantidade', 'Tipo']],
+          body: composicaoBody,
+          styles: { fontSize: 8, cellPadding: 2 },
+          headStyles: { fillColor: [80, 80, 80], textColor: 255 },
+        });
+      });
+    }
+
+    // Footer
+    const pageCount = (doc as any).internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      const pageHeight = doc.internal.pageSize.height;
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'italic');
+      doc.setTextColor(120);
+      const venc = globalFactors.vencimento
+        ? `Válido até: ${new Date(globalFactors.vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}`
+        : '';
+      doc.text(venc, 14, pageHeight - 10);
+      doc.text('Este relatório é confidencial.', doc.internal.pageSize.width / 2, pageHeight - 10, {
+        align: 'center',
+      });
+      doc.text(`Pág. ${i}/${pageCount}`, doc.internal.pageSize.width - 14, pageHeight - 10, {
+        align: 'right',
+      });
+    }
+
+    doc.save(`relatorio-precos-${dateStr.replace(/\//g, '-')}.pdf`);
+    onClose();
+  };
+
+  const updateGlobal = (field: keyof ReportFactors, value: string | number) => {
+    setGlobalFactors((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const updatePerFormula = (id: string, field: keyof ReportFactors, value: string | number) => {
+    setPerFormulaFactors((prev) => ({
+      ...prev,
+      [id]: { ...(prev[id] || globalFactors), [field]: value },
+    }));
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-stone-100 flex justify-between items-center">
+          <div>
+            <h2 className="text-xl font-bold text-stone-800">Gerar Relatório de Preços</h2>
+            <p className="text-sm text-stone-500 mt-1">
+              {selectedFormulas.length} fórmula(s) selecionada(s)
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-stone-400 hover:text-stone-600 transition-colors text-xl font-bold"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="p-6 space-y-6">
+          {/* Options */}
+          <div className="flex flex-col gap-3">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={applyToAll}
+                onChange={(e) => setApplyToAll(e.target.checked)}
+                className="w-4 h-4 accent-emerald-600"
+              />
+              <span className="text-sm font-medium text-stone-700">
+                Aplicar fatores iguais para todas as fórmulas
+              </span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={includeComposicao}
+                onChange={(e) => setIncludeComposicao(e.target.checked)}
+                className="w-4 h-4 accent-emerald-600"
+              />
+              <span className="text-sm font-medium text-stone-700">
+                Incluir composição de matérias-primas no relatório
+              </span>
+            </label>
+          </div>
+
+          {/* Global factors */}
+          {applyToAll && (
+            <div className="bg-stone-50 rounded-xl p-4 border border-stone-200">
+              <h3 className="text-sm font-bold text-stone-700 mb-3 uppercase tracking-wider">
+                Fatores Comerciais
+              </h3>
+              <FactorsForm factors={globalFactors} onChange={updateGlobal} />
+            </div>
+          )}
+
+          {/* Per-formula factors */}
+          {!applyToAll && (
+            <div className="space-y-4">
+              {selectedFormulas.map((formula) => (
+                <div
+                  key={formula.id}
+                  className="bg-stone-50 rounded-xl p-4 border border-stone-200"
+                >
+                  <h3 className="text-sm font-bold text-stone-700 mb-3">
+                    {formatId(formula.id_numeric, 'BAT-')} — {formula.name}
+                  </h3>
+                  <FactorsForm
+                    factors={perFormulaFactors[formula.id] || globalFactors}
+                    onChange={(field, val) => updatePerFormula(formula.id, field, val)}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Preview */}
+          <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-200">
+            <h3 className="text-sm font-bold text-emerald-700 mb-2 uppercase tracking-wider">
+              Prévia de Preços
+            </h3>
+            <div className="space-y-1">
+              {selectedFormulas.map((formula) => {
+                const precoFinal = calcPrecoFinal(formula);
+                return (
+                  <div key={formula.id} className="flex justify-between text-sm">
+                    <span className="text-stone-700">
+                      {formatId(formula.id_numeric, 'BAT-')} — {formula.name}
+                    </span>
+                    <span className="font-bold text-emerald-700">
+                      {precoFinal > 0
+                        ? precoFinal.toLocaleString('pt-BR', {
+                            style: 'currency',
+                            currency: 'BRL',
+                          })
+                        : '—'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6 border-t border-stone-100 flex justify-end gap-3">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-stone-600 hover:text-stone-800 transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleGeneratePDF}
+            className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg flex items-center gap-2 transition-colors"
+          >
+            <FileText className="w-4 h-4" />
+            Gerar PDF
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface FactorsFormProps {
+  factors: ReportFactors;
+  onChange: (field: keyof ReportFactors, value: string | number) => void;
+}
+
+function FactorsForm({ factors, onChange }: FactorsFormProps) {
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      <div>
+        <label className="text-xs font-medium text-stone-500 block mb-1">Fator Multiplicador</label>
+        <input
+          type="number"
+          step="0.01"
+          min="0"
+          value={factors.fator}
+          onChange={(e) => onChange('fator', parseFloat(e.target.value) || 1)}
+          className="w-full border border-stone-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+        />
+      </div>
+      <div>
+        <label className="text-xs font-medium text-stone-500 block mb-1">Desconto R$/t</label>
+        <input
+          type="number"
+          step="0.01"
+          min="0"
+          value={factors.desconto}
+          onChange={(e) => onChange('desconto', parseFloat(e.target.value) || 0)}
+          className="w-full border border-stone-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+        />
+      </div>
+      <div>
+        <label className="text-xs font-medium text-stone-500 block mb-1">Frete R$/t</label>
+        <input
+          type="number"
+          step="0.01"
+          min="0"
+          value={factors.frete}
+          onChange={(e) => onChange('frete', parseFloat(e.target.value) || 0)}
+          className="w-full border border-stone-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+        />
+      </div>
+      <div>
+        <label className="text-xs font-medium text-stone-500 block mb-1">Alíquota %</label>
+        <input
+          type="number"
+          step="0.01"
+          min="0"
+          value={factors.aliquota}
+          onChange={(e) => onChange('aliquota', parseFloat(e.target.value) || 0)}
+          className="w-full border border-stone-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+        />
+      </div>
+      <div>
+        <label className="text-xs font-medium text-stone-500 block mb-1">Comissão %</label>
+        <input
+          type="number"
+          step="0.01"
+          min="0"
+          value={factors.comissao}
+          onChange={(e) => onChange('comissao', parseFloat(e.target.value) || 0)}
+          className="w-full border border-stone-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+        />
+      </div>
+      <div>
+        <label className="text-xs font-medium text-stone-500 block mb-1">Vencimento</label>
+        <input
+          type="date"
+          value={factors.vencimento}
+          onChange={(e) => onChange('vencimento', e.target.value)}
+          className="w-full border border-stone-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+        />
+      </div>
+    </div>
+  );
+}
+
 export default function SavedFormulas({ currentUser, onSendToCalculator }: SavedFormulasProps) {
   const { showSuccess, showError } = useToast();
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
   const [formulas, setFormulas] = useState<SavedFormula[]>([]);
   const [priceLists, setPriceLists] = useState<PriceList[]>([]);
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [selectedBranchId, setSelectedBranchId] = useState<string>('');
+  const [locais, setLocais] = useState<LocalCarregamento[]>([]);
+  const [selectedLocalId, setSelectedLocalId] = useState<string>('');
   const [selectedPriceListId, setSelectedPriceListId] = useState<string>('');
+  const [selectedFormulas, setSelectedFormulas] = useState<string[]>([]);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [linhasDiferenciadas, setLinhasDiferenciadas] = useState<Record<string, boolean>>({});
+  const [appSettings, setAppSettings] = useState<AppSettings>({ companyName: 'FertCalc Pro', companyLogo: '' });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -40,31 +423,36 @@ export default function SavedFormulas({ currentUser, onSendToCalculator }: Saved
   const loadData = async () => {
     setLoading(true);
     try {
-      const [allFormulas, allLists, allBranches] = await Promise.all([
+      const [allFormulas, allLists, allLocais, settings] = await Promise.all([
         getSavedFormulas(),
         getPriceLists(),
-        getBranches(),
+        getLocaisAtivos(),
+        getAppSettings(),
       ]);
 
-      let filtered = allFormulas;
-      if (
-        currentUser.role !== 'master' &&
-        currentUser.role !== 'admin' &&
-        currentUser.role !== 'manager'
-      ) {
-        filtered = allFormulas.filter((f) => f.userId === currentUser.id);
-      }
-      setFormulas(filtered);
+      // All users with permission see all batidas (remove userId restriction)
+      setFormulas(allFormulas);
       setPriceLists(allLists);
-      setBranches(allBranches);
+      setLocais(allLocais);
+      if (settings) setAppSettings(settings);
 
-      if (allBranches.length > 0) {
-        setSelectedBranchId(allBranches[0].id);
-        const listsForBranch = allLists.filter((l) => l.branchId === allBranches[0].id);
-        if (listsForBranch.length > 0) {
-          setSelectedPriceListId(listsForBranch[0].id);
-        }
+      if (allLists.length > 0) {
+        setSelectedPriceListId(allLists[0].id);
       }
+
+      // Load linha_diferenciada for each formula
+      const ldMap: Record<string, boolean> = {};
+      await Promise.all(
+        allFormulas.map(async (f) => {
+          try {
+            const produto = await getProdutoFormuladoBySavedFormulaId(f.id);
+            if (produto) ldMap[f.id] = produto.linha_diferenciada;
+          } catch {
+            // ignore
+          }
+        })
+      );
+      setLinhasDiferenciadas(ldMap);
     } catch (error) {
       console.error('Error loading formulas data:', error);
       showError('Erro ao carregar fórmulas salvas');
@@ -84,8 +472,9 @@ export default function SavedFormulas({ currentUser, onSendToCalculator }: Saved
     try {
       await deleteSavedFormula(id);
       showSuccess('Fórmula excluída com sucesso!');
+      setSelectedFormulas((prev) => prev.filter((sid) => sid !== id));
       await loadData();
-    } catch (error) {
+    } catch {
       showError('Erro ao excluir fórmula');
     }
   };
@@ -98,7 +487,6 @@ export default function SavedFormulas({ currentUser, onSendToCalculator }: Saved
 
     formula.macros.forEach((macro) => {
       if (!macro.quantity || macro.quantity <= 0) return;
-      // Tenta vincular por ID primeiro, depois por nome (fallback para tabelas diferentes)
       const priceListItem = priceList.macros.find(
         (m) => m.id === macro.id || m.name.trim().toLowerCase() === macro.name.trim().toLowerCase()
       );
@@ -124,6 +512,20 @@ export default function SavedFormulas({ currentUser, onSendToCalculator }: Saved
     return { total: totalCustoMat, missingItems };
   };
 
+  const toggleSelectFormula = (id: string) => {
+    setSelectedFormulas((prev) =>
+      prev.includes(id) ? prev.filter((sid) => sid !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedFormulas.length === filteredFormulas.length) {
+      setSelectedFormulas([]);
+    } else {
+      setSelectedFormulas(filteredFormulas.map((f) => f.id));
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -132,8 +534,15 @@ export default function SavedFormulas({ currentUser, onSendToCalculator }: Saved
     );
   }
 
-  const availableLists = priceLists.filter((l) => l.branchId === selectedBranchId);
-  const selectedList = availableLists.find((l) => l.id === selectedPriceListId);
+  const selectedList = priceLists.find((l) => l.id === selectedPriceListId);
+
+  // Filter by local de carregamento if selected
+  const filteredFormulas = selectedLocalId
+    ? formulas.filter((f) => f.local_carregamento_id === selectedLocalId)
+    : formulas;
+
+  const allSelected =
+    filteredFormulas.length > 0 && selectedFormulas.length === filteredFormulas.length;
 
   return (
     <React.Fragment>
@@ -145,210 +554,278 @@ export default function SavedFormulas({ currentUser, onSendToCalculator }: Saved
               Fórmulas Salvas (Batidas)
             </h2>
             <p className="text-stone-500">
-              Gerencie suas configurações e simule custos rapidamente alterando tabelas de preço.
+              Gerencie suas batidas e gere relatórios de preços para clientes.
             </p>
           </div>
 
-          {branches.length > 0 && (
-            <div className="flex gap-2">
-              <div className="bg-white px-4 py-2 rounded-xl shadow-sm border border-stone-200 flex items-center gap-2">
-                <Building2 className="w-5 h-5 text-stone-400" />
-                <div className="flex flex-col">
-                  <span className="text-xs font-bold text-stone-400 uppercase tracking-wider">
-                    Filial
-                  </span>
-                  <select
-                    value={selectedBranchId}
-                    onChange={(e) => {
-                      const newBranchId = e.target.value;
-                      setSelectedBranchId(newBranchId);
-                      const branchLists = priceLists.filter((l) => l.branchId === newBranchId);
-                      if (branchLists.length > 0) {
-                        setSelectedPriceListId(branchLists[0].id);
-                      } else {
-                        setSelectedPriceListId('');
-                      }
-                    }}
-                    className="bg-transparent text-stone-700 font-medium outline-none text-sm cursor-pointer max-w-[120px]"
-                  >
-                    {branches.map((branch) => (
-                      <option key={branch.id} value={branch.id}>
-                        {branch.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="bg-white px-4 py-2 rounded-xl shadow-sm border border-stone-200 flex items-center gap-2">
-                <Database className="w-5 h-5 text-stone-400" />
-                <div className="flex flex-col">
-                  <span className="text-xs font-bold text-stone-400 uppercase tracking-wider">
-                    Tabela de Preços
-                  </span>
-                  <select
-                    value={selectedPriceListId}
-                    onChange={(e) => setSelectedPriceListId(e.target.value)}
-                    className="bg-transparent text-stone-700 font-medium outline-none text-sm cursor-pointer"
-                  >
-                    {availableLists.length > 0 ? (
-                      availableLists.map((list) => (
-                        <option key={list.id} value={list.id}>
-                          {list.name}
-                        </option>
-                      ))
-                    ) : (
-                      <option value="">Sem tabela na filial</option>
-                    )}
-                  </select>
-                </div>
+          <div className="flex flex-wrap gap-2 items-center">
+            {/* Local de Carregamento filter */}
+            <div className="bg-white px-4 py-2 rounded-xl shadow-sm border border-stone-200 flex items-center gap-2">
+              <MapPin className="w-5 h-5 text-stone-400" />
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-stone-400 uppercase tracking-wider">
+                  Local de Carregamento
+                </span>
+                <select
+                  value={selectedLocalId}
+                  onChange={(e) => setSelectedLocalId(e.target.value)}
+                  className="bg-transparent text-stone-700 font-medium outline-none text-sm cursor-pointer max-w-[160px]"
+                >
+                  <option value="">Todos os locais</option>
+                  {locais.map((local) => (
+                    <option key={local.id} value={local.id}>
+                      {local.nome}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
-          )}
+
+            {/* Price List filter */}
+            <div className="bg-white px-4 py-2 rounded-xl shadow-sm border border-stone-200 flex items-center gap-2">
+              <Database className="w-5 h-5 text-stone-400" />
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-stone-400 uppercase tracking-wider">
+                  Tabela de Preços
+                </span>
+                <select
+                  value={selectedPriceListId}
+                  onChange={(e) => setSelectedPriceListId(e.target.value)}
+                  className="bg-transparent text-stone-700 font-medium outline-none text-sm cursor-pointer max-w-[160px]"
+                >
+                  {priceLists.length > 0 ? (
+                    priceLists.map((list) => (
+                      <option key={list.id} value={list.id}>
+                        {list.name}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="">Sem tabelas cadastradas</option>
+                  )}
+                </select>
+              </div>
+            </div>
+
+            {/* Generate report button */}
+            {selectedFormulas.length > 0 && (
+              <button
+                onClick={() => setIsReportModalOpen(true)}
+                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm"
+              >
+                <FileText className="w-4 h-4" />
+                Gerar Relatório de Preços ({selectedFormulas.length})
+              </button>
+            )}
+          </div>
         </div>
 
-        {formulas.length === 0 ? (
+        {filteredFormulas.length === 0 ? (
           <div className="bg-white rounded-xl shadow-sm border border-stone-200 p-12 text-center">
             <div className="w-16 h-16 bg-stone-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Save className="w-8 h-8 text-stone-400" />
             </div>
             <h3 className="text-lg font-bold text-stone-800 mb-2">Nenhuma fórmula salva</h3>
             <p className="text-stone-500 max-w-md mx-auto">
-              Você ainda não possui fórmulas salvas. Para criar uma predefinição, acesse a
-              Calculadora, faça uma batida e clique em "Salvar Batida".
+              {selectedLocalId
+                ? 'Nenhuma batida encontrada para este local de carregamento.'
+                : 'Acesse a Calculadora, faça uma batida e clique em "Salvar Batida".'}
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {formulas.map((formula) => {
-              const results = getFormulaCost(formula, selectedList);
-              return (
-                <div
-                  key={formula.id}
-                  className="bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden hover:shadow-md transition-shadow flex flex-col"
-                >
-                  <div className="p-5 border-b border-stone-100 flex-1">
-                    <div className="flex justify-between items-start mb-3">
-                      <h3 className="font-bold text-lg text-stone-800">{formula.name}</h3>
-                      <button
-                        onClick={() => handleDelete(formula.id, formula.name)}
-                        className="text-stone-400 hover:text-red-500 transition-colors p-1"
-                        title="Excluir fórmula"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+          <>
+            {/* Select all row */}
+            <div className="flex items-center gap-3 px-1">
+              <button
+                onClick={toggleSelectAll}
+                className="flex items-center gap-2 text-sm text-stone-600 hover:text-emerald-600 transition-colors"
+              >
+                {allSelected ? (
+                  <CheckSquare className="w-4 h-4 text-emerald-600" />
+                ) : (
+                  <Square className="w-4 h-4" />
+                )}
+                {allSelected ? 'Desmarcar todos' : 'Selecionar todos'}
+              </button>
+              {selectedFormulas.length > 0 && (
+                <span className="text-xs text-stone-400">
+                  {selectedFormulas.length} selecionada(s)
+                </span>
+              )}
+            </div>
 
-                    <div className="flex items-center text-xs text-stone-500 mb-4 gap-2">
-                      <span className="flex items-center gap-1">
-                        <UserIcon className="w-3 h-3" /> {formula.userName}
-                      </span>
-                      <span>•</span>
-                      <span className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3" />{' '}
-                        {new Date(formula.date).toLocaleDateString('pt-BR')}
-                      </span>
-                    </div>
-
-                    <div className="bg-stone-50 p-3 rounded-lg border border-stone-100 mb-4">
-                      <div className="flex justify-between items-center mb-1">
-                        <p className="text-xs font-bold text-stone-500 uppercase tracking-widest">
-                          Fórmula Alvo
-                        </p>
-                        <p className="text-[10px] text-stone-400 font-mono">
-                          #{formula.id.slice(-4)}
-                        </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredFormulas.map((formula) => {
+                const results = getFormulaCost(formula, selectedList);
+                const isSelected = selectedFormulas.includes(formula.id);
+                const isLinhaDiferenciada = linhasDiferenciadas[formula.id] === true;
+                return (
+                  <div
+                    key={formula.id}
+                    className={`bg-white rounded-xl shadow-sm border overflow-hidden hover:shadow-md transition-all flex flex-col ${
+                      isSelected ? 'border-emerald-500 ring-2 ring-emerald-200' : 'border-stone-200'
+                    }`}
+                  >
+                    <div className="p-5 border-b border-stone-100 flex-1">
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          {/* Checkbox */}
+                          <button
+                            onClick={() => toggleSelectFormula(formula.id)}
+                            className="flex-shrink-0 text-stone-400 hover:text-emerald-600 transition-colors"
+                          >
+                            {isSelected ? (
+                              <CheckSquare className="w-5 h-5 text-emerald-600" />
+                            ) : (
+                              <Square className="w-5 h-5" />
+                            )}
+                          </button>
+                          <div className="min-w-0">
+                            <h3 className="font-bold text-lg text-stone-800 truncate">
+                              {formula.name}
+                            </h3>
+                            {formula.id_numeric != null && (
+                              <span className="text-xs font-mono text-emerald-600 font-bold">
+                                {formatId(formula.id_numeric, 'BAT-')}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+                          {isLinhaDiferenciada && (
+                            <span className="flex items-center gap-1 bg-amber-100 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                              <Star className="w-3 h-3" />
+                              Linha Dif.
+                            </span>
+                          )}
+                          <button
+                            onClick={() => handleDelete(formula.id, formula.name)}
+                            className="text-stone-400 hover:text-red-500 transition-colors p-1"
+                            title="Excluir fórmula"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
-                      <p className="font-mono text-emerald-700 font-bold text-lg mb-3">
-                        {formula.targetFormula}
-                      </p>
 
-                      <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-1 border-t border-stone-200 pt-2">
-                        Composição (kg)
-                      </p>
-                      <div className="grid grid-cols-1 gap-1 max-h-32 overflow-y-auto pr-1 custom-scrollbar">
-                        {formula.macros
-                          .filter((m) => m.quantity > 0)
-                          .map((m) => (
-                            <div
-                              key={m.id}
-                              className="flex justify-between items-center text-[11px]"
-                            >
-                              <span className="text-stone-600 flex items-center gap-1 truncate pr-2">
-                                <Package className="w-3 h-3 text-stone-400 flex-shrink-0" />
-                                {m.name}
-                              </span>
-                              <span className="font-mono font-bold text-stone-800">
-                                {m.quantity.toFixed(0)}
-                              </span>
-                            </div>
-                          ))}
-                        {formula.micros
-                          .filter((m) => m.quantity > 0)
-                          .map((m) => (
-                            <div
-                              key={m.id}
-                              className="flex justify-between items-center text-[11px]"
-                            >
-                              <span className="text-emerald-700 flex items-center gap-1 truncate pr-2">
-                                <Zap className="w-3 h-3 text-emerald-400 flex-shrink-0" />
-                                {m.name}
-                              </span>
-                              <span className="font-mono font-bold text-emerald-800">
-                                {m.quantity.toFixed(0)}
-                              </span>
-                            </div>
-                          ))}
+                      <div className="flex items-center text-xs text-stone-500 mb-4 gap-2">
+                        <span className="flex items-center gap-1">
+                          <UserIcon className="w-3 h-3" /> {formula.userName}
+                        </span>
+                        <span>•</span>
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3" />{' '}
+                          {new Date(formula.date).toLocaleDateString('pt-BR')}
+                        </span>
                       </div>
-                    </div>
 
-                    {results.missingItems.length > 0 && selectedList && (
-                      <div className="mb-4 p-2 bg-red-50 border border-red-100 rounded-lg flex items-start gap-2">
-                        <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-                        <div className="flex flex-col">
-                          <p className="text-[10px] font-bold text-red-600 uppercase tracking-tighter">
-                            Itens Não Disponíveis
+                      <div className="bg-stone-50 p-3 rounded-lg border border-stone-100 mb-4">
+                        <div className="flex justify-between items-center mb-1">
+                          <p className="text-xs font-bold text-stone-500 uppercase tracking-widest">
+                            Fórmula Alvo
                           </p>
-                          <p className="text-[10px] text-red-500 leading-tight">
-                            {results.missingItems.join(', ')} não encontrado(s) nesta tabela.
+                        </div>
+                        <p className="font-mono text-emerald-700 font-bold text-lg mb-3">
+                          {formula.targetFormula}
+                        </p>
+
+                        <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-1 border-t border-stone-200 pt-2">
+                          Composição (kg)
+                        </p>
+                        <div className="grid grid-cols-1 gap-1 max-h-32 overflow-y-auto pr-1 custom-scrollbar">
+                          {formula.macros
+                            .filter((m) => m.quantity > 0)
+                            .map((m) => (
+                              <div
+                                key={m.id}
+                                className="flex justify-between items-center text-[11px]"
+                              >
+                                <span className="text-stone-600 flex items-center gap-1 truncate pr-2">
+                                  <Package className="w-3 h-3 text-stone-400 flex-shrink-0" />
+                                  {m.name}
+                                </span>
+                                <span className="font-mono font-bold text-stone-800">
+                                  {m.quantity.toFixed(0)}
+                                </span>
+                              </div>
+                            ))}
+                          {formula.micros
+                            .filter((m) => m.quantity > 0)
+                            .map((m) => (
+                              <div
+                                key={m.id}
+                                className="flex justify-between items-center text-[11px]"
+                              >
+                                <span className="text-emerald-700 flex items-center gap-1 truncate pr-2">
+                                  <Zap className="w-3 h-3 text-emerald-400 flex-shrink-0" />
+                                  {m.name}
+                                </span>
+                                <span className="font-mono font-bold text-emerald-800">
+                                  {m.quantity.toFixed(0)}
+                                </span>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+
+                      {results.missingItems.length > 0 && selectedList && (
+                        <div className="mb-4 p-2 bg-red-50 border border-red-100 rounded-lg flex items-start gap-2">
+                          <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                          <div className="flex flex-col">
+                            <p className="text-[10px] font-bold text-red-600 uppercase tracking-tighter">
+                              Itens Não Disponíveis
+                            </p>
+                            <p className="text-[10px] text-red-500 leading-tight">
+                              {results.missingItems.join(', ')} não encontrado(s) nesta tabela.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex justify-between items-end mt-4">
+                        <div>
+                          <p className="text-xs text-stone-500">Custo Total (por Ton)</p>
+                          <p className="text-lg font-black text-stone-800">
+                            {selectedList
+                              ? results.total.toLocaleString('pt-BR', {
+                                  style: 'currency',
+                                  currency: 'BRL',
+                                })
+                              : 'Selecione uma tabela'}
                           </p>
                         </div>
                       </div>
-                    )}
+                    </div>
 
-                    <div className="flex justify-between items-end mt-4">
-                      <div>
-                        <p className="text-xs text-stone-500">Custo Total (por Ton)</p>
-                        <p className="text-lg font-black text-stone-800">
-                          {selectedList
-                            ? results.total.toLocaleString('pt-BR', {
-                                style: 'currency',
-                                currency: 'BRL',
-                              })
-                            : 'Selecione uma tabela'}
-                        </p>
-                      </div>
+                    <div className="bg-stone-50 p-3 border-t border-stone-100">
+                      <button
+                        onClick={() =>
+                          onSendToCalculator(formula, '', selectedPriceListId)
+                        }
+                        className="w-full flex justify-center items-center gap-2 bg-white border border-stone-200 hover:border-emerald-500 hover:text-emerald-600 text-stone-700 font-medium py-2 rounded-lg transition-colors text-sm shadow-sm"
+                      >
+                        Usar na Calculadora
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
-
-                  <div className="bg-stone-50 p-3 border-t border-stone-100">
-                    <button
-                      onClick={() =>
-                        onSendToCalculator(formula, selectedBranchId, selectedPriceListId)
-                      }
-                      className="w-full flex justify-center items-center gap-2 bg-white border border-stone-200 hover:border-emerald-500 hover:text-emerald-600 text-stone-700 font-medium py-2 rounded-lg transition-colors text-sm shadow-sm"
-                    >
-                      Usar na Calculadora
-                      <ArrowRight className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          </>
         )}
       </div>
+
       <ConfirmDialog {...confirmState} onConfirm={handleConfirm} onCancel={handleCancel} />
+
+      <ModalGerarRelatorio
+        isOpen={isReportModalOpen}
+        formulas={formulas}
+        selectedIds={selectedFormulas}
+        selectedList={selectedList}
+        getFormulaCost={getFormulaCost}
+        companyName={appSettings.companyName}
+        onClose={() => setIsReportModalOpen(false)}
+      />
     </React.Fragment>
   );
 }

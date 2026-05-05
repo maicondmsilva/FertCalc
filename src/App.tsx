@@ -23,6 +23,7 @@ import Home from './components/Home';
 import Dashboard from './components/Dashboard';
 import SavedFormulas from './components/SavedFormulas';
 import AccessProfileManager from './components/AccessProfileManager';
+import ProdutosFormulados from './components/ProdutosFormulados';
 import {
   LayoutDashboard,
   History as HistoryIcon,
@@ -117,6 +118,7 @@ export default function App() {
       'calculator',
       'simplified_calculator',
       'saved_formulas',
+      'produtos_formulados',
       'history',
       'goals',
       'approvals',
@@ -330,6 +332,12 @@ export default function App() {
           permission: 'calculator',
         },
         { id: 'saved_formulas', label: 'Batidas Salvas', icon: Beaker, permission: 'calculator' },
+        {
+          id: 'produtos_formulados',
+          label: 'Produtos Formulados',
+          icon: Package,
+          permission: 'produtosFormulados',
+        },
         {
           id: 'materials_group',
           label: 'Cadastro de Matérias',
@@ -919,6 +927,9 @@ export default function App() {
                   }}
                 />
               )}
+            {activeModule === 'pricing' &&
+              activeTab === 'produtos_formulados' &&
+              hasPermission('produtosFormulados') && <ProdutosFormulados />}
             {activeModule === 'pricing' && activeTab === 'history' && hasPermission('history') && (
               <History onEdit={handleEditPricing} currentUser={currentUser} />
             )}

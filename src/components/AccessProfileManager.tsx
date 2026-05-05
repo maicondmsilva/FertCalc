@@ -45,6 +45,7 @@ const PERMISSION_GROUPS: PermissionGroup[] = [
       { id: 'calculator', label: 'Calculadora' },
       { id: 'history', label: 'Situação / Precificações' },
       { id: 'savedFormulas', label: 'Fórmulas Salvas' },
+      { id: 'produtosFormulados', label: 'Produtos Formulados' },
       { id: 'pricingBySeller', label: 'Precificação por Vendedor' },
       { id: 'calculator_savePricing', label: 'Salvar Precificação' },
       { id: 'calculator_generatePDF', label: 'Gerar PDF' },
