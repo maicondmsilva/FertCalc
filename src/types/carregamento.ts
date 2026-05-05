@@ -109,6 +109,10 @@ export interface CotacaoFrete {
   respondido_por?: string;
   criado_em: string;
   atualizado_em: string;
+  // soft delete
+  arquivada?: boolean;
+  arquivada_em?: string;
+  arquivada_por?: string;
 }
 
 // ── Alerta de Carregamento ────────────────────────────────────
