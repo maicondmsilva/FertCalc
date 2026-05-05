@@ -3812,7 +3812,12 @@ export default function CarregamentoModule({
         />
       )}
       {view === 'logistica' && (
-        <PainelLogistica carregamentos={carregamentosLogistica} loading={loading} onAction={handleAction} canAceitar={canAceitarCarregamento} />
+        <PainelLogistica
+          carregamentos={carregamentosLogistica}
+          loading={loading}
+          onAction={handleAction}
+          canAceitar={canAceitarCarregamento}
+        />
       )}
       {view === 'calendario' && <CalendarioCarregamentos currentUser={currentUser} />}
       {view === 'relatorios' && (
