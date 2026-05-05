@@ -54,6 +54,8 @@ const PERMISSION_GROUPS: PermissionGroup[] = [
       { id: 'calculator_profitabilityCheck', label: 'Análise de Rentabilidade' },
       { id: 'history_changeStatus', label: 'Alterar Status' },
       { id: 'history_editPricing', label: 'Editar Precificação Existente' },
+      { id: 'savedFormulas_delete', label: 'Excluir Batidas Salvas' },
+      { id: 'savedFormulas_report', label: 'Gerar Relatório de Preços' },
     ],
   },
   {
@@ -130,6 +132,8 @@ const PERMISSION_GROUPS: PermissionGroup[] = [
       { id: 'micro_edit', label: 'Micro — Editar' },
       { id: 'micro_delete', label: 'Micro — Excluir' },
       { id: 'prd', label: 'Documentação PRD' },
+      { id: 'produtosFormulados', label: 'Produtos Formulados' },
+      { id: 'produtosFormulados_edit', label: 'Produtos Formulados — Editar' },
     ],
   },
   {
@@ -143,6 +147,8 @@ const PERMISSION_GROUPS: PermissionGroup[] = [
       { id: 'branches_delete', label: 'Filiais — Excluir' },
       { id: 'settings', label: 'Personalização' },
       { id: 'users', label: 'Usuários' },
+      { id: 'accessProfiles', label: 'Perfis de Acesso' },
+      { id: 'alertas', label: 'Central de Alertas' },
     ],
   },
 ];
