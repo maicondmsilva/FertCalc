@@ -46,6 +46,8 @@ import {
   createTransportadora,
   updateTransportadora,
   getCotacoesCarregamento,
+  getCotacoesArquivadas,
+  arquivarCotacao,
   createCotacao,
   updateCotacao,
   getKPICarregamento,
@@ -288,15 +290,10 @@ export function ModalNovoCarregamento({
   }, [filiais]);
 
   useEffect(() => {
-    if (form.filial_id) {
-      setForm((prev) => ({ ...prev, local_carregamento_id: '' }));
-      getLocaisAtivos(form.filial_id)
-        .then(setLocais)
-        .catch(() => setLocais([]));
-    } else {
-      setLocais([]);
-    }
-  }, [form.filial_id]);
+    getLocaisAtivos()
+      .then(setLocais)
+      .catch(() => setLocais([]));
+  }, []);
 
   const filiaisDisponiveis = filiais.length > 0 ? filiais : localFiliais;
 
@@ -618,7 +615,6 @@ export function ModalNovoCarregamento({
               value={form.local_carregamento_id}
               onChange={(e) => setForm({ ...form, local_carregamento_id: e.target.value })}
               className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
-              disabled={!form.filial_id}
             >
               <option value="">— Selecione o local (opcional) —</option>
               {locais.map((l) => (
@@ -628,11 +624,6 @@ export function ModalNovoCarregamento({
                 </option>
               ))}
             </select>
-            {!form.filial_id && (
-              <p className="text-xs text-stone-400 mt-1">
-                Selecione uma filial para ver os locais disponíveis
-              </p>
-            )}
           </div>
 
           <div>
@@ -1199,6 +1190,8 @@ interface TabelaCarregamentosProps {
   onDelete?: (c: Carregamento) => void;
   onCancel?: (c: Carregamento) => void;
   onHistory?: (c: Carregamento) => void;
+  canLiberar?: boolean;
+  canAceitar?: boolean;
 }
 
 function TabelaCarregamentos({
@@ -1210,6 +1203,8 @@ function TabelaCarregamentos({
   onDelete,
   onCancel,
   onHistory,
+  canLiberar = true,
+  canAceitar = true,
 }: TabelaCarregamentosProps) {
   const hasEditDelete = !!(onEdit || onDelete || onCancel || onHistory);
   if (carregamentos.length === 0) {
@@ -1311,6 +1306,7 @@ function TabelaCarregamentos({
                         </button>
                       )}
                     {showActions.includes('liberar') &&
+                      canLiberar &&
                       ['cotacao_recebida', 'aguardando_liberacao'].includes(c.status) && (
                         <button
                           onClick={() => onAction?.(c, 'liberar')}
@@ -1332,6 +1328,7 @@ function TabelaCarregamentos({
                         </button>
                       )}
                     {showActions.includes('confirmar') &&
+                      canAceitar &&
                       ['liberado_total', 'liberado_parcial', 'em_carregamento'].includes(
                         c.status
                       ) && (
@@ -1433,6 +1430,8 @@ function VisaoGeral({
   onDelete,
   onCancel,
   onHistory,
+  canLiberar,
+  canAceitar,
 }: {
   carregamentos: Carregamento[];
   kpi: KPICarregamento;
@@ -1443,6 +1442,8 @@ function VisaoGeral({
   onDelete?: (c: Carregamento) => void;
   onCancel?: (c: Carregamento) => void;
   onHistory?: (c: Carregamento) => void;
+  canLiberar?: boolean;
+  canAceitar?: boolean;
 }) {
   const pendentes = carregamentos.filter((c) =>
     [
@@ -1525,6 +1526,8 @@ function VisaoGeral({
             onDelete={onDelete}
             onCancel={onCancel}
             onHistory={onHistory}
+            canLiberar={canLiberar}
+            canAceitar={canAceitar}
           />
         )}
       </div>
@@ -1564,6 +1567,8 @@ function SolicitacaoCotacao({
   transportadoras,
   loading,
   onSolicitarCotacao,
+  currentUser,
+  canVerArquivadas,
 }: {
   carregamentos: Carregamento[];
   transportadoras: Transportadora[];
@@ -1574,7 +1579,10 @@ function SolicitacaoCotacao({
     prazo_dias?: number,
     observacoes?: string
   ) => Promise<void>;
+  currentUser?: User;
+  canVerArquivadas?: boolean;
 }) {
+  const { showSuccess, showError } = useToast();
   const elegiveis = carregamentos.filter((c) => c.status === 'aguardando_cotacao');
   const emAndamento = carregamentos.filter((c) =>
     ['cotacao_solicitada', 'cotacao_recebida'].includes(c.status)
@@ -1586,6 +1594,14 @@ function SolicitacaoCotacao({
     Record<string, CotacaoFrete[]>
   >({});
   const [loadingCotacoes, setLoadingCotacoes] = useState<Record<string, boolean>>({});
+  const [showArquivadas, setShowArquivadas] = useState<Record<string, boolean>>({});
+  const [cotacoesArquivadas, setCotacoesArquivadas] = useState<Record<string, CotacaoFrete[]>>({});
+  const [loadingArquivadas, setLoadingArquivadas] = useState<Record<string, boolean>>({});
+  const [confirmArquivar, setConfirmArquivar] = useState<{
+    cotacao: CotacaoFrete;
+    carregamentoId: string;
+  } | null>(null);
+  const [arquivando, setArquivando] = useState(false);
 
   const toggleExpand = async (c: Carregamento) => {
     if (expandedId === c.id) {
@@ -1598,6 +1614,44 @@ function SolicitacaoCotacao({
       const cotacoes = await getCotacoesCarregamento(c.id);
       setCotacoesPorCarregamento((prev) => ({ ...prev, [c.id]: cotacoes }));
       setLoadingCotacoes((prev) => ({ ...prev, [c.id]: false }));
+    }
+  };
+
+  const toggleArquivadas = async (carregamentoId: string) => {
+    const nowShowing = !showArquivadas[carregamentoId];
+    setShowArquivadas((prev) => ({ ...prev, [carregamentoId]: nowShowing }));
+    if (nowShowing && !cotacoesArquivadas[carregamentoId]) {
+      setLoadingArquivadas((prev) => ({ ...prev, [carregamentoId]: true }));
+      const data = await getCotacoesArquivadas(carregamentoId);
+      setCotacoesArquivadas((prev) => ({ ...prev, [carregamentoId]: data }));
+      setLoadingArquivadas((prev) => ({ ...prev, [carregamentoId]: false }));
+    }
+  };
+
+  const handleArquivar = async () => {
+    if (!confirmArquivar || !currentUser) return;
+    setArquivando(true);
+    try {
+      await arquivarCotacao(confirmArquivar.cotacao.id, currentUser.id);
+      // Refresh active cotações list
+      const updated = await getCotacoesCarregamento(confirmArquivar.carregamentoId);
+      setCotacoesPorCarregamento((prev) => ({
+        ...prev,
+        [confirmArquivar.carregamentoId]: updated,
+      }));
+      // Invalidate archived cache so it reloads next time
+      setCotacoesArquivadas((prev) => {
+        const next = { ...prev };
+        delete next[confirmArquivar.carregamentoId];
+        return next;
+      });
+      setShowArquivadas((prev) => ({ ...prev, [confirmArquivar.carregamentoId]: false }));
+      showSuccess('Cotação arquivada com sucesso.');
+    } catch {
+      showError('Erro ao arquivar cotação.');
+    } finally {
+      setArquivando(false);
+      setConfirmArquivar(null);
     }
   };
 
@@ -1823,15 +1877,84 @@ function SolicitacaoCotacao({
                                 <p className="text-[10px] text-stone-400">{cot.observacoes}</p>
                               )}
                             </div>
-                            <span
-                              className={`text-[10px] font-bold px-2 py-0.5 rounded capitalize ${
-                                STATUS_COTACAO_COLOR[cot.status] ?? 'bg-stone-100 text-stone-500'
-                              }`}
-                            >
-                              {cot.status}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded capitalize ${
+                                  STATUS_COTACAO_COLOR[cot.status] ?? 'bg-stone-100 text-stone-500'
+                                }`}
+                              >
+                                {cot.status}
+                              </span>
+                              <button
+                                onClick={() => setConfirmArquivar({ cotacao: cot, carregamentoId: c.id })}
+                                title="Arquivar cotação"
+                                className="p-1 text-stone-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors"
+                              >
+                                <History className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </div>
                         ))}
+
+                        {/* Cotações Arquivadas */}
+                        {canVerArquivadas && (
+                          <div className="mt-3">
+                            <button
+                              onClick={() => toggleArquivadas(c.id)}
+                              className="flex items-center gap-1.5 text-xs text-stone-500 hover:text-stone-700 font-medium"
+                            >
+                              {showArquivadas[c.id] ? (
+                                <ChevronDown className="w-3.5 h-3.5" />
+                              ) : (
+                                <ChevronRight className="w-3.5 h-3.5" />
+                              )}
+                              Cotações Arquivadas
+                              {cotacoesArquivadas[c.id]?.length
+                                ? ` (${cotacoesArquivadas[c.id].length})`
+                                : ''}
+                            </button>
+                            {showArquivadas[c.id] && (
+                              <div className="mt-2 space-y-1 pl-2 border-l-2 border-stone-200">
+                                {loadingArquivadas[c.id] ? (
+                                  <div className="flex justify-center py-2">
+                                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-stone-300" />
+                                  </div>
+                                ) : (cotacoesArquivadas[c.id] ?? []).length === 0 ? (
+                                  <p className="text-[10px] text-stone-400">
+                                    Nenhuma cotação arquivada.
+                                  </p>
+                                ) : (
+                                  (cotacoesArquivadas[c.id] ?? []).map((cot) => (
+                                    <div
+                                      key={cot.id}
+                                      className="flex items-center justify-between p-2 bg-stone-50 border border-stone-100 rounded-lg opacity-70"
+                                    >
+                                      <div>
+                                        <p className="text-xs font-bold text-stone-600">
+                                          {cot.transportadora?.nome ?? '—'}
+                                        </p>
+                                        {cot.arquivada_em && (
+                                          <p className="text-[10px] text-stone-400">
+                                            Arquivada em:{' '}
+                                            {new Date(cot.arquivada_em).toLocaleDateString('pt-BR')}
+                                          </p>
+                                        )}
+                                      </div>
+                                      <span
+                                        className={`text-[10px] font-bold px-2 py-0.5 rounded capitalize ${
+                                          STATUS_COTACAO_COLOR[cot.status] ??
+                                          'bg-stone-100 text-stone-500'
+                                        }`}
+                                      >
+                                        {cot.status}
+                                      </span>
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1854,6 +1977,44 @@ function SolicitacaoCotacao({
           onClose={() => setModalCarregamento(null)}
         />
       )}
+
+      {/* Confirmation: archive cotação */}
+      {confirmArquivar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="p-5 border-b border-stone-100 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                <History className="w-5 h-5 text-amber-600" />
+              </div>
+              <p className="font-bold text-stone-800">Arquivar Cotação</p>
+            </div>
+            <div className="p-5">
+              <p className="text-sm text-stone-600">
+                Arquivar esta cotação?{' '}
+                <span className="text-stone-500">
+                  Ela ficará disponível em &quot;Cotações Arquivadas&quot;.
+                </span>
+              </p>
+              <div className="flex gap-3 justify-end mt-4">
+                <button
+                  onClick={() => setConfirmArquivar(null)}
+                  disabled={arquivando}
+                  className="px-4 py-2 border border-stone-300 rounded-lg text-sm font-bold text-stone-600 hover:bg-stone-50 transition-colors disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleArquivar}
+                  disabled={arquivando}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white rounded-lg text-sm font-bold transition-colors"
+                >
+                  {arquivando ? 'Arquivando...' : 'Arquivar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1865,10 +2026,12 @@ function LiberacaoCarregamento({
   carregamentos,
   loading,
   onAction,
+  canLiberar,
 }: {
   carregamentos: Carregamento[];
   loading: boolean;
   onAction: (c: Carregamento, action: string) => void;
+  canLiberar?: boolean;
 }) {
   const prontos = carregamentos.filter((c) =>
     ['cotacao_recebida', 'aguardando_liberacao'].includes(c.status)
@@ -1897,6 +2060,7 @@ function LiberacaoCarregamento({
             carregamentos={prontos}
             onAction={onAction}
             showActions={['liberar']}
+            canLiberar={canLiberar}
           />
         )}
       </div>
@@ -1918,10 +2082,12 @@ function PainelLogistica({
   carregamentos,
   loading,
   onAction,
+  canAceitar,
 }: {
   carregamentos: Carregamento[];
   loading: boolean;
   onAction: (c: Carregamento, action: string) => void;
+  canAceitar?: boolean;
 }) {
   const cif = carregamentos.filter(
     (c) => c.tipo_frete === 'CIF' && c.status !== 'cancelado' && c.status !== 'carregado'
@@ -2060,12 +2226,14 @@ function PainelLogistica({
                   >
                     {c.transportadora ? 'Atualizar' : 'Informar'}
                   </button>
+                  {canAceitar !== false && (
                   <button
                     onClick={() => onAction(c, 'confirmar')}
                     className="px-3 py-1.5 text-xs font-bold bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                   >
                     Confirmar
                   </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -2167,12 +2335,14 @@ function PainelLogistica({
                 </div>
                 <div className="flex items-center gap-2">
                   <StatusBadge status={c.status} />
+                  {canAceitar !== false && (
                   <button
                     onClick={() => onAction(c, 'confirmar')}
                     className="px-3 py-1.5 text-xs font-bold bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
                   >
                     Confirmar Carg.
                   </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -3215,6 +3385,28 @@ export default function CarregamentoModule({
     currentUser.role === 'admin' ||
     currentUser.permissions?.carregamento_all_filiais;
 
+  const canAceitarCotacao =
+    currentUser.role === 'master' ||
+    currentUser.role === 'admin' ||
+    !!(currentUser.permissions as any)?.carregamento_aceitar_cotacao;
+
+  const canAceitarCarregamento =
+    currentUser.role === 'master' ||
+    currentUser.role === 'admin' ||
+    !!(currentUser.permissions as any)?.carregamento_aceitar_carregamento;
+
+  const canLiberarCarregamento =
+    currentUser.role === 'master' ||
+    currentUser.role === 'admin' ||
+    currentUser.role === 'manager' ||
+    !!(currentUser.permissions as any)?.carregamento_liberacao;
+
+  const canVerArquivadas =
+    currentUser.role === 'master' ||
+    currentUser.role === 'admin' ||
+    !!(currentUser.permissions as any)?.carregamento_ver_arquivadas ||
+    !!(currentUser.permissions as any)?.carregamento_admin;
+
   const filiaisVisiveis = podeVerTodas
     ? filiais
     : filiais.filter((f) => currentUser.filiais_permitidas?.includes(f.id));
@@ -3606,6 +3798,8 @@ export default function CarregamentoModule({
           }}
           onCancel={(c) => setCarregamentoParaCancelar(c)}
           onHistory={(c) => setHistoricoCarregamento(c)}
+          canLiberar={canLiberarCarregamento}
+          canAceitar={canAceitarCarregamento}
         />
       )}
       {view === 'solicitacao' && <SolicitacaoCotacaoIndependente currentUser={currentUser} />}
@@ -3614,10 +3808,16 @@ export default function CarregamentoModule({
           carregamentos={carregamentos}
           loading={loading}
           onAction={handleAction}
+          canLiberar={canLiberarCarregamento}
         />
       )}
       {view === 'logistica' && (
-        <PainelLogistica carregamentos={carregamentosLogistica} loading={loading} onAction={handleAction} />
+        <PainelLogistica
+          carregamentos={carregamentosLogistica}
+          loading={loading}
+          onAction={handleAction}
+          canAceitar={canAceitarCarregamento}
+        />
       )}
       {view === 'calendario' && <CalendarioCarregamentos currentUser={currentUser} />}
       {view === 'relatorios' && (

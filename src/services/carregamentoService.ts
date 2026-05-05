@@ -81,6 +81,9 @@ function mapCotacao(d: Record<string, unknown>): CotacaoFrete {
     respondido_por: d.respondido_por as string | undefined,
     criado_em: d.criado_em as string,
     atualizado_em: d.atualizado_em as string,
+    arquivada: (d.arquivada as boolean | undefined) ?? false,
+    arquivada_em: d.arquivada_em as string | undefined,
+    arquivada_por: d.arquivada_por as string | undefined,
   };
 }
 
@@ -339,12 +342,40 @@ export async function getCotacoesCarregamento(carregamentoId: string): Promise<C
     .from('cotacoes_frete')
     .select('*, transportadoras(*)')
     .eq('carregamento_id', carregamentoId)
+    .eq('arquivada', false)
     .order('criado_em', { ascending: false });
   if (error || !data) return [];
   return data.map((d) => ({
     ...mapCotacao(d),
     transportadora: d.transportadoras ? mapTransportadora(d.transportadoras) : undefined,
   }));
+}
+
+export async function getCotacoesArquivadas(carregamentoId: string): Promise<CotacaoFrete[]> {
+  const { data, error } = await supabase
+    .from('cotacoes_frete')
+    .select('*, transportadoras(*)')
+    .eq('carregamento_id', carregamentoId)
+    .eq('arquivada', true)
+    .order('arquivada_em', { ascending: false });
+  if (error || !data) return [];
+  return data.map((d) => ({
+    ...mapCotacao(d),
+    transportadora: d.transportadoras ? mapTransportadora(d.transportadoras) : undefined,
+  }));
+}
+
+export async function arquivarCotacao(id: string, userId: string): Promise<void> {
+  const { error } = await supabase
+    .from('cotacoes_frete')
+    .update({
+      arquivada: true,
+      arquivada_em: new Date().toISOString(),
+      arquivada_por: userId,
+      atualizado_em: new Date().toISOString(),
+    })
+    .eq('id', id);
+  if (error) throw error;
 }
 
 export async function createCotacao(

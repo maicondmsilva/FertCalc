@@ -459,15 +459,21 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
       {/* ── SEÇÃO 2: Locais de Carregamento ──────────────────── */}
       <div className="bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden">
         <div className="p-4 border-b border-stone-100 bg-stone-50/50 flex items-center justify-between gap-3">
-          <h3 className="font-bold text-stone-800 text-sm flex items-center gap-2">
-            <MapPin className="w-4 h-4 text-stone-500" />
-            Locais de Carregamento
-          </h3>
+          <div>
+            <h3 className="font-bold text-stone-800 text-sm flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-stone-500" />
+              Locais de Carregamento
+            </h3>
+            <p className="text-[10px] text-stone-400 mt-0.5">
+              Locais independentes de filial — filtro abaixo é apenas para organização visual
+            </p>
+          </div>
           <div className="flex items-center gap-2 ml-auto">
             <select
               value={filtroFilialLocais}
               onChange={(e) => setFiltroFilialLocais(e.target.value)}
               className="text-xs border border-stone-200 rounded-lg px-3 py-1.5 text-stone-600 bg-white outline-none focus:ring-2 focus:ring-emerald-500"
+              title="Filtro de exibição (não restringe o uso do local)"
             >
               <option value="">Todas as filiais</option>
               {branches
