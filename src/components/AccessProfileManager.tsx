@@ -352,6 +352,7 @@ export default function AccessProfileManager() {
       setEditing(null);
       await loadProfiles();
     } catch (err: unknown) {
+      console.error('[AccessProfileManager] handleSave error:', err);
       const msg = err instanceof Error ? err.message : 'Erro desconhecido';
       showError(`Erro ao salvar perfil: ${msg}`);
     } finally {

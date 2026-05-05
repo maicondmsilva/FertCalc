@@ -65,7 +65,7 @@ export default function PricingDetailModal({
   const [commercialObservation, setCommercialObservation] = useState(
     selectedPricing.factors?.commercialObservation || ''
   );
-  const [showAgentInPDF, setShowAgentInPDF] = useState(true);
+  const [showAgentInPDF, setShowAgentInPDF] = useState(false);
   const [isTransferring, setIsTransferring] = useState(false);
   const [availableSellers, setAvailableSellers] = useState<User[]>([]);
   const [selectedSellerId, setSelectedSellerId] = useState('');
