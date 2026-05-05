@@ -245,34 +245,31 @@ export default function UserManager({ currentUser }: UserManagerProps) {
       calculator_profitabilityCheck: false,
     };
     if (role === 'master' || role === 'admin') {
-      const allCrud = ['clients', 'agents', 'priceLists', 'branches', 'macro', 'micro'].reduce(
-        (acc, resource) => ({
-          ...acc,
-          [`${resource}_create`]: true,
-          [`${resource}_edit`]: true,
-          [`${resource}_delete`]: true,
-          [resource]: true,
-        }),
-        {}
-      );
-      return Object.keys(base).reduce((acc, key) => ({ ...acc, [key]: true }), {
+      const allCrud: Record<string, boolean> = {};
+      ['clients', 'agents', 'priceLists', 'branches', 'macro', 'micro'].forEach((resource) => {
+        allCrud[resource] = true;
+        allCrud[`${resource}_create`] = true;
+        allCrud[`${resource}_edit`] = true;
+        allCrud[`${resource}_delete`] = true;
+      });
+      const all: Record<string, boolean> = {
         approvals_canApprove: true,
         calculator_profitabilityCheck: true,
-        creditCard: 'admin',
         ...allCrud,
+      };
+      Object.keys(base).forEach((key) => {
+        all[key] = true;
       });
+      return { ...all, creditCard: 'admin' };
     }
     if (role === 'manager') {
-      const allCrud = ['clients', 'agents', 'priceLists', 'branches', 'macro', 'micro'].reduce(
-        (acc, resource) => ({
-          ...acc,
-          [`${resource}_create`]: true,
-          [`${resource}_edit`]: true,
-          [`${resource}_delete`]: true,
-          [resource]: true,
-        }),
-        {}
-      );
+      const allCrud: Record<string, boolean> = {};
+      ['clients', 'agents', 'priceLists', 'branches', 'macro', 'micro'].forEach((resource) => {
+        allCrud[resource] = true;
+        allCrud[`${resource}_create`] = true;
+        allCrud[`${resource}_edit`] = true;
+        allCrud[`${resource}_delete`] = true;
+      });
       return {
         ...base,
         approvals: true,
