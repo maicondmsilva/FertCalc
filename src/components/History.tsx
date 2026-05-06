@@ -653,7 +653,7 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                           </span>
                         );
                       }
-                      const freightVal = p.factors?.freight || 0;
+                      const freightVal = p.summary?.freightValue ?? p.factors?.freight ?? 0;
                       return (
                         <span className="flex items-center gap-1 flex-wrap">
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-700">
