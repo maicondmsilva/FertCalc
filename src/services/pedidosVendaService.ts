@@ -306,6 +306,7 @@ export interface GetCancelamentosFilters {
   dataFim?: string;
   numeroPedido?: string;
   clienteNome?: string;
+  usuarioNome?: string;
 }
 
 export async function getCancelamentos(
@@ -328,10 +329,30 @@ export async function getCancelamentos(
   if (filters?.dataFim) {
     query = query.lte('criado_em', filters.dataFim + 'T23:59:59');
   }
+  if (filters?.usuarioNome) {
+    query = query.ilike('usuario_nome', `%${filters.usuarioNome}%`);
+  }
 
   const { data, error } = await query;
   if (error || !data) return [];
   return (data as Record<string, unknown>[]).map(mapCancelamento);
+}
+
+export interface CancelamentosStats {
+  totalOperacoes: number;
+  totalQtdDesmembrada: number;
+  totalCancelamentosDefinitivos: number;
+}
+
+export async function getCancelamentosStats(
+  filters?: GetCancelamentosFilters
+): Promise<CancelamentosStats> {
+  const all = await getCancelamentos(filters);
+  return {
+    totalOperacoes: all.length,
+    totalQtdDesmembrada: all.reduce((sum, c) => sum + c.quantidade, 0),
+    totalCancelamentosDefinitivos: all.filter((c) => c.tipo === 'definitivo').length,
+  };
 }
 
 /**
