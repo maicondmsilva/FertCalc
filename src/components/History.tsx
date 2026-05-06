@@ -70,6 +70,7 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
   }, []);
 
   const loadData = async () => {
+    setPricings([]);
     setLoading(true);
     const [data, savedSettings] = await Promise.all([getPricingRecords(), getAppSettings()]);
     // Filter by user unless master/admin/manager
