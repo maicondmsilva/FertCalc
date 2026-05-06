@@ -569,6 +569,7 @@ export interface PedidoVenda {
   formulacao_alterada?: boolean;
   pedido_pai_id?: string;
   data_vencimento?: string;
+  emitente?: number;
   itens?: PedidoVendaItem[];
   // Joined fields
   precificacao?: PricingRecord;
