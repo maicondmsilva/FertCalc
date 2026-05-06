@@ -303,6 +303,11 @@ export default function App() {
     setEditingPricing(null);
   }, []);
 
+  const handleClearEditingAndFormula = React.useCallback(() => {
+    setEditingPricing(null);
+    setInitialFormulaContext({ formula: null, branchId: '', priceListId: '' });
+  }, []);
+
   // Rota de redefinição de senha (acessível sem autenticação)
   if (location.pathname === '/reset-password') {
     return <ResetPassword />;
@@ -915,10 +920,7 @@ export default function App() {
                     navigate('/history');
                     handleClearEditing();
                   }}
-                  onClearEditing={() => {
-                    handleClearEditing();
-                    setInitialFormulaContext({ formula: null, branchId: '', priceListId: '' });
-                  }}
+                  onClearEditing={handleClearEditingAndFormula}
                 />
               )}
             {activeModule === 'pricing' &&

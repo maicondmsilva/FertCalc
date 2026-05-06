@@ -120,8 +120,7 @@ export default function Calculator({
     return () => {
       onClearEditing?.();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [onClearEditing]);
 
   // ─── Quote search modal state ────────────────────────────────
   const [showCotacaoModal, setShowCotacaoModal] = useState(false);
