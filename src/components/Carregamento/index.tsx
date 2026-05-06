@@ -343,9 +343,10 @@ export function ModalNovoCarregamento({
 
         // Bug 1 fix — pedidos de venda enriquecidos com dados da precificação
         const pedidosEnriched: EnrichedPedido[] = pedidos.map((p) => {
-          const pricing = pricingsMap.get(p.precificacao_id);
+          const pricing = p.precificacao_id ? pricingsMap.get(p.precificacao_id) : undefined;
           return {
             ...p,
+            precificacao_id: p.precificacao_id ?? null,
             pricing,
             clientName: pricing?.factors?.client?.name,
             _source: 'pedido' as const,
