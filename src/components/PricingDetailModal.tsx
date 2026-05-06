@@ -10,8 +10,10 @@ import {
   FileSpreadsheet,
   Tag,
   FileText,
+  ClipboardList,
   CheckCircle as CheckCircleIcon,
 } from 'lucide-react';
+import NovoPedidoVendaModal from './NovoPedidoVendaModal';
 import { generatePricingPDF } from '../utils/pdfGenerator';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -81,6 +83,7 @@ export default function PricingDetailModal({
   // Pedido de Venda state
   const [pedidoVenda, setPedidoVenda] = useState<PedidoVenda | null>(null);
   const [showPdfImportModal, setShowPdfImportModal] = useState(false);
+  const [showNovoPedidoModal, setShowNovoPedidoModal] = useState(false);
   const [extractedData, setExtractedData] = useState<{
     numero_pedido: string;
     barra_pedido: string;
@@ -763,11 +766,11 @@ export default function PricingDetailModal({
               </div>
             )}
             <button
-              onClick={handleOpenManualPedido}
+              onClick={() => setShowNovoPedidoModal(true)}
               className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition-all active:scale-95 text-sm"
-              title="Preencher Pedido de Venda manualmente"
+              title="Novo Pedido de Venda"
             >
-              <FileText className="w-4 h-4" /> Preencher Pedido
+              <ClipboardList className="w-4 h-4" /> Novo Pedido de Venda
             </button>
             {selectedPricing.status === 'Em Andamento' && onEdit && (
               <button
@@ -1587,6 +1590,22 @@ export default function PricingDetailModal({
           </button>
         </div>
       </div>
+      {showNovoPedidoModal && (
+        <NovoPedidoVendaModal
+          pricing={selectedPricing}
+          currentUser={currentUser}
+          onClose={() => setShowNovoPedidoModal(false)}
+          onSuccess={async () => {
+            setShowNovoPedidoModal(false);
+            try {
+              const updated = await getPedidoVendaByPrecificacao(selectedPricing.id);
+              setPedidoVenda(updated);
+            } catch {
+              // Silently ignore; the modal already shows success
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
