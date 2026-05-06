@@ -27,6 +27,7 @@ import { useCalculator } from '../hooks/useCalculator';
 import { getCotacoesAprovadasByCliente } from '../services/cotacaoSolicitadaService';
 import { CotacaoSolicitada } from '../types/carregamento';
 import { getEmbalagens } from '../services/embalagensService';
+import ProdutoPuroMode from './ProdutoPuroMode';
 
 interface CalculatorProps {
   initialData?: PricingRecord | null;
@@ -131,6 +132,11 @@ export default function Calculator({
   // ─── Embalagem state ─────────────────────────────────────────
   const [embalagens, setEmbalagens] = useState<Embalagem[]>([]);
 
+  // ─── Calculator mode toggle ──────────────────────────────────
+  const [calculatorMode, setCalculatorMode] = useState<'formulacao' | 'produto_puro'>(
+    'formulacao'
+  );
+
   useEffect(() => {
     getEmbalagens(true)
       .then(setEmbalagens)
@@ -154,6 +160,50 @@ export default function Calculator({
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* ─── Mode Toggle ──────────────────────────────────────── */}
+      <div className="lg:col-span-3">
+        <div className="flex items-center gap-1 bg-stone-100 rounded-xl p-1 w-fit">
+          <button
+            onClick={() => setCalculatorMode('formulacao')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+              calculatorMode === 'formulacao'
+                ? 'bg-white text-emerald-700 shadow-sm border border-stone-200'
+                : 'text-stone-500 hover:text-stone-700'
+            }`}
+          >
+            <CalculatorIcon className="w-4 h-4" />
+            Formulação
+          </button>
+          <button
+            onClick={() => setCalculatorMode('produto_puro')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+              calculatorMode === 'produto_puro'
+                ? 'bg-white text-emerald-700 shadow-sm border border-stone-200'
+                : 'text-stone-500 hover:text-stone-700'
+            }`}
+          >
+            <Package className="w-4 h-4" />
+            Produto Puro
+          </button>
+        </div>
+      </div>
+
+      {/* ─── Produto Puro Mode ────────────────────────────────── */}
+      {calculatorMode === 'produto_puro' && (
+        <div className="lg:col-span-3">
+          <ProdutoPuroMode
+            macros={macros}
+            micros={micros}
+            currentUser={currentUser}
+            initialFreight={factors?.freight}
+            initialTipoFrete={factors?.tipoFrete}
+          />
+        </div>
+      )}
+
+      {/* ─── Formulação Mode ──────────────────────────────────── */}
+      {calculatorMode === 'formulacao' && (
+      <>
       <div className="lg:col-span-2 space-y-6">
         {/* Header Info */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
@@ -1310,6 +1360,8 @@ export default function Calculator({
           </div>
         </div>
       </div>
+      </>
+      )}
 
       {currentComparisonFormula && (
         <FertigranPComparisonModal

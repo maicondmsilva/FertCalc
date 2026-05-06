@@ -103,7 +103,7 @@ export async function createPedidoVenda(
   const { data, error } = await supabase
     .from('pedidos_venda')
     .insert({
-      precificacao_id: pedido.precificacao_id,
+      precificacao_id: pedido.precificacao_id || null,
       numero_pedido: pedido.numero_pedido,
       barra_pedido: pedido.barra_pedido,
       data_pedido: pedido.data_pedido,

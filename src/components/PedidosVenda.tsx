@@ -324,6 +324,11 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                             >
                               {STATUS_LABEL[p.status]}
                             </span>
+                            {p.embalagem && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-600">
+                                📦 {p.embalagem}
+                              </span>
+                            )}
                             {saldo != null && (
                               <span className="text-xs text-stone-500">
                                 Saldo:{' '}
@@ -452,6 +457,7 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                                 R${' '}
                                 {p.preco_unitario.toLocaleString('pt-BR', {
                                   minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
                                 })}
                               </p>
                             </div>

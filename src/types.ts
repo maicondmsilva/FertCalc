@@ -540,7 +540,7 @@ export interface PedidoVendaItem {
 
 export interface PedidoVenda {
   id: string;
-  precificacao_id: string;
+  precificacao_id?: string;
   numero_pedido?: string;
   barra_pedido?: string;
   data_pedido?: string; // Vencimento
