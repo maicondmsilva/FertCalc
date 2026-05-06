@@ -4,17 +4,17 @@ import { PedidoVenda, PedidoVendaItem, CancelamentoPedido } from '../types';
 /** Computes saldo_disponivel: prefers the DB-generated column, falls back to manual calculation. */
 function computeSaldoDisponivel(d: Record<string, unknown>): number | undefined {
   if (d.saldo_disponivel != null) return Number(d.saldo_disponivel);
-  if (d.quantidade_original != null || d.quantidade_real != null) {
-    const original =
-      d.quantidade_original != null ? Number(d.quantidade_original) : Number(d.quantidade_real);
+  const original =
+    d.quantidade_original != null
+      ? Number(d.quantidade_original)
+      : d.quantidade_real != null
+        ? Number(d.quantidade_real)
+        : null;
+  if (original != null) {
     const desmembrada = d.quantidade_desmembrada != null ? Number(d.quantidade_desmembrada) : 0;
     const cancelada =
       d.quantidade_cancelada_definitiva != null ? Number(d.quantidade_cancelada_definitiva) : 0;
     return original - desmembrada - cancelada;
-  }
-  if (d.quantidade_real != null) {
-    const carregada = d.quantidade_carregada != null ? Number(d.quantidade_carregada) : 0;
-    return Number(d.quantidade_real) - carregada;
   }
   return undefined;
 }

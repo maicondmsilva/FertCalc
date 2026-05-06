@@ -125,7 +125,7 @@ export default function RelatorioCancSubstitui({ currentUser }: RelatorioCancSub
           'Cliente',
           'Produto',
           'Qtd Original',
-          'Qtd Canc/Subst',
+          'Qtd Canc/Desm.',
           'Novo Emitente',
           'Data',
           'Usuário',
@@ -158,7 +158,7 @@ export default function RelatorioCancSubstitui({ currentUser }: RelatorioCancSub
       Cliente: c.pedidoOrigemCliente ?? '—',
       Produto: c.pedidoOrigemProduto ?? '—',
       'Qtd Original': c.pedidoOrigemQtd != null ? c.pedidoOrigemQtd : '',
-      'Qtd Canc/Subst': c.quantidade,
+      'Qtd Canc/Desm.': c.quantidade,
       'Novo Emitente': c.pedidoDestinoNome ?? '—',
       Data: fmtDate(c.criado_em),
       Usuário: c.usuario_nome ?? '—',
@@ -291,7 +291,7 @@ export default function RelatorioCancSubstitui({ currentUser }: RelatorioCancSub
                 <th className="px-4 py-3">Cliente</th>
                 <th className="px-4 py-3">Produto</th>
                 <th className="px-4 py-3">Qtd Original</th>
-                <th className="px-4 py-3">Qtd Desmembrada</th>
+                <th className="px-4 py-3">Qtd Canc/Desm.</th>
                 <th className="px-4 py-3">Novo Emitente</th>
                 <th className="px-4 py-3">Data</th>
                 <th className="px-4 py-3">Usuário</th>
