@@ -83,6 +83,25 @@ export default function NovoPedidoVendaModal({
 
   const [observacoes, setObservacoes] = useState('');
 
+  // Embalagem — pre-fill from pricing if available
+  const pricingEmbalagem = (pricing?.factors as any)?.embalagem_nome ?? (pricing?.factors as any)?.embalagem ?? '';
+  const [embalagem, setEmbalagem] = useState<string>(pricingEmbalagem);
+  const [embalagemOutro, setEmbalagemOutro] = useState('');
+  const autoEmbalagem = !!pricing && !!pricingEmbalagem;
+
+  const EMBALAGEM_OPTIONS = ['Granel', 'Big Bag', 'Saco 50kg', 'Saco 25kg', 'Outro'];
+
+  const getEmbalagemValue = (): string | undefined => {
+    if (embalagem === 'Outro') return embalagemOutro.trim() || undefined;
+    return embalagem || undefined;
+  };
+
+  /** Round price to 2 decimal places when initializing from pricing */
+  const roundPrice = (v: number | undefined): number | '' => {
+    if (v == null) return '';
+    return Math.round(v * 100) / 100;
+  };
+
   // Multi-product items — initialize immediately with formula text, then match products
   const [itens, setItens] = useState<ItemLocal[]>(() => {
     if (pricing?.calculations && pricing.calculations.length > 0) {
@@ -92,7 +111,7 @@ export default function NovoPedidoVendaModal({
         produto_id: undefined,
         quantidade_ton:
           (calc.factors?.totalTons ?? 0) > 0 ? (calc.factors?.totalTons as number) : '',
-        preco_unitario: calc.summary?.finalPrice ?? '',
+        preco_unitario: roundPrice(calc.summary?.finalPrice),
         autoFilled: true,
       }));
     }
@@ -105,7 +124,7 @@ export default function NovoPedidoVendaModal({
         produto_nome: formulaNpk,
         produto_id: undefined,
         quantidade_ton: qtd,
-        preco_unitario: pricing?.calculations?.[0]?.summary?.finalPrice ?? '',
+        preco_unitario: roundPrice(pricing?.calculations?.[0]?.summary?.finalPrice),
         autoFilled: !!pricing,
       },
     ];
@@ -236,7 +255,7 @@ export default function NovoPedidoVendaModal({
         itens[0].preco_unitario !== '' ? Number(itens[0].preco_unitario) : undefined;
 
       const pedidoCriado = await createPedidoVenda({
-        precificacao_id: pricing?.id ?? '',
+        precificacao_id: pricing?.id ?? undefined,
         numero_pedido: numeroPedido.trim(),
         barra_pedido: barraPedido,
         emitente: emitenteNum,
@@ -251,6 +270,7 @@ export default function NovoPedidoVendaModal({
         valor_frete: tipoFrete === 'CIF' && valorFrete !== '' ? Number(valorFrete) : undefined,
         condicao_pagamento: condicaoPagamento.trim() || undefined,
         observacoes: observacoes.trim() || undefined,
+        embalagem: getEmbalagemValue(),
         status: 'pendente',
         importado_por: currentUser.id,
       });
@@ -268,8 +288,12 @@ export default function NovoPedidoVendaModal({
       showSuccess('Pedido de Venda criado com sucesso!');
       onSuccess();
       onClose();
-    } catch {
-      showError('Erro ao criar pedido de venda.');
+    } catch (err: unknown) {
+      const msg =
+        err && typeof err === 'object' && 'message' in err
+          ? (err as { message: string }).message
+          : 'Erro ao criar pedido de venda.';
+      showError(msg);
     } finally {
       setSaving(false);
     }
@@ -606,6 +630,35 @@ export default function NovoPedidoVendaModal({
               <Plus className="w-4 h-4" />
               Adicionar Produto
             </button>
+          </div>
+
+          {/* Embalagem */}
+          <div>
+            <label className="flex items-center gap-1 text-xs font-bold text-stone-500 uppercase tracking-wider mb-1">
+              Tipo de Embalagem
+              {autoEmbalagem && <Zap className="w-3 h-3 text-emerald-500" />}
+            </label>
+            <select
+              value={embalagem}
+              onChange={(e) => setEmbalagem(e.target.value)}
+              className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 outline-none ${autoEmbalagem ? autoClass : normalClass}`}
+            >
+              <option value="">— Selecionar embalagem —</option>
+              {EMBALAGEM_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+            {embalagem === 'Outro' && (
+              <input
+                type="text"
+                value={embalagemOutro}
+                onChange={(e) => setEmbalagemOutro(e.target.value)}
+                placeholder="Descreva a embalagem..."
+                className="mt-1 w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+              />
+            )}
           </div>
 
           {/* Observações */}

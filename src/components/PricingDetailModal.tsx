@@ -651,14 +651,37 @@ export default function PricingDetailModal({
                   <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
                     Embalagem
                   </label>
-                  <input
-                    type="text"
-                    value={extractedData.embalagem}
-                    onChange={(e) =>
-                      setExtractedData({ ...extractedData, embalagem: e.target.value })
-                    }
+                  <select
+                    value={['Granel', 'Big Bag', 'Saco 50kg', 'Saco 25kg'].includes(extractedData.embalagem)
+                      ? extractedData.embalagem
+                      : extractedData.embalagem ? 'Outro' : ''}
+                    onChange={(e) => {
+                      if (e.target.value !== 'Outro') {
+                        setExtractedData({ ...extractedData, embalagem: e.target.value });
+                      } else {
+                        setExtractedData({ ...extractedData, embalagem: '' });
+                      }
+                    }}
                     className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-                  />
+                  >
+                    <option value="">— Selecionar —</option>
+                    <option value="Granel">Granel</option>
+                    <option value="Big Bag">Big Bag</option>
+                    <option value="Saco 50kg">Saco 50kg</option>
+                    <option value="Saco 25kg">Saco 25kg</option>
+                    <option value="Outro">Outro</option>
+                  </select>
+                  {!['Granel', 'Big Bag', 'Saco 50kg', 'Saco 25kg', ''].includes(extractedData.embalagem) && (
+                    <input
+                      type="text"
+                      value={extractedData.embalagem}
+                      onChange={(e) =>
+                        setExtractedData({ ...extractedData, embalagem: e.target.value })
+                      }
+                      placeholder="Descreva a embalagem..."
+                      className="mt-1 w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                    />
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
@@ -666,7 +689,7 @@ export default function PricingDetailModal({
                   </label>
                   <input
                     type="number"
-                    step="0.0001"
+                    step="0.01"
                     value={extractedData.valor_unitario_negociado}
                     onChange={(e) =>
                       setExtractedData({
