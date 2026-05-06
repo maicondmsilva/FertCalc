@@ -38,7 +38,11 @@ import { notifyPricingCreated, notifyPricingEdited } from '../services/notificat
 import { useConfirm } from './useConfirm';
 import { getLocaisAtivos } from '../services/locaisCarregamentoService';
 import { LocalCarregamento } from '../types/carregamento';
-import { createProdutoFormulado } from '../services/produtosFormuladosService';
+import {
+  createProdutoFormulado,
+  getProdutoFormuladoBySavedFormulaId,
+} from '../services/produtosFormuladosService';
+import { addHistoricoPreco } from '../services/historicoPrecoService';
 
 const defaultMacros: RawMaterial[] = [
   {
@@ -302,7 +306,9 @@ export function useCalculator({
 
   // Load locais de carregamento (all active, independent of branch)
   useEffect(() => {
-    getLocaisAtivos().then(setLocaisCarregamento).catch(() => setLocaisCarregamento([]));
+    getLocaisAtivos()
+      .then(setLocaisCarregamento)
+      .catch(() => setLocaisCarregamento([]));
   }, []);
 
   // Update prices when list changes
@@ -1003,6 +1009,26 @@ export function useCalculator({
         savedRecord = await createPricingRecord(record);
 
         await notifyPricingCreated(savedRecord, currentUser);
+
+        // Record price history for linked produto_formulado
+        if (initialFormulaToLoad?.id) {
+          try {
+            const produto = await getProdutoFormuladoBySavedFormulaId(initialFormulaToLoad.id);
+            if (produto) {
+              const finalPrice = savedRecord.summary?.finalPrice;
+              if (finalPrice != null && finalPrice > 0) {
+                await addHistoricoPreco({
+                  produto_formulado_id: produto.id,
+                  preco_final: finalPrice,
+                  pricing_id: savedRecord.id,
+                  registrado_por: currentUser.name,
+                });
+              }
+            }
+          } catch (histErr) {
+            console.warn('[useCalculator] Failed to record historico_preco:', histErr);
+          }
+        }
 
         const managersList = await getManagersOfUser(currentUser.id);
         const approversList = await getUsers();

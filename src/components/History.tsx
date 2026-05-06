@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   XCircle,
   MapPin,
+  Copy,
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -38,6 +39,7 @@ import { notifyPricingDeleted } from '../services/notificationService';
 import { logAudit } from '../services/auditService';
 import { getLocaisAtivos } from '../services/locaisCarregamentoService';
 import { LocalCarregamento } from '../types/carregamento';
+import { addPricingHistory } from '../services/pricingHistoryService';
 
 interface HistoryProps {
   onEdit?: (pricing: PricingRecord) => void;
@@ -62,7 +64,9 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
   }, [currentUser]);
 
   useEffect(() => {
-    getLocaisAtivos().then(setLocaisCarregamento).catch(() => setLocaisCarregamento([]));
+    getLocaisAtivos()
+      .then(setLocaisCarregamento)
+      .catch(() => setLocaisCarregamento([]));
   }, []);
 
   const loadData = async () => {
@@ -265,7 +269,7 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
         };
 
         const created = await createPricingRecord(newPricing as PricingRecord);
-        showSuccess('Cópia gerada com sucesso!');
+        showSuccess('Precificação duplicada com sucesso!');
         await loadData(); // Reload to get the proper ID and formattedCod
       } catch (err: unknown) {
         console.error('Erro ao duplicar:', err);
@@ -375,6 +379,14 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
       await updatePricingRecord(id, {
         status: newStatus,
         history: [...(record?.history || []), historyEntry],
+      });
+      // Record to pricing_history table
+      await addPricingHistory({
+        pricing_id: id,
+        campo: 'status',
+        valor_anterior: record?.status,
+        valor_novo: newStatus,
+        alterado_por: currentUser.name,
       });
       await loadData();
       if (selectedPricing?.id === id) {
@@ -651,7 +663,9 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                             R$ {freightVal.toFixed(2)}/t
                           </span>
                           {p.factors?.cotacaoFreteNumero && (
-                            <span className="text-xs text-stone-400">· {p.factors.cotacaoFreteNumero}</span>
+                            <span className="text-xs text-stone-400">
+                              · {p.factors.cotacaoFreteNumero}
+                            </span>
                           )}
                         </span>
                       );
@@ -679,7 +693,8 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                     <div className="flex items-center gap-1 text-xs text-stone-500">
                       <MapPin className="w-3 h-3 text-amber-500" />
                       <span>
-                        {locaisCarregamento.find((l) => l.id === p.factors?.local_carregamento_id)?.nome ?? '—'}
+                        {locaisCarregamento.find((l) => l.id === p.factors?.local_carregamento_id)
+                          ?.nome ?? '—'}
                       </span>
                     </div>
                   )}
@@ -777,9 +792,9 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                       handleDuplicate(p);
                     }}
                     className="p-2.5 hover:bg-emerald-100 text-emerald-600 rounded-full transition-all active:scale-95 bg-emerald-50/50"
-                    title="Gerar Cópia"
+                    title="Duplicar"
                   >
-                    <FileText className="w-5 h-5" />
+                    <Copy className="w-5 h-5" />
                   </button>
                   {p.status !== 'Excluída' && (
                     <button
