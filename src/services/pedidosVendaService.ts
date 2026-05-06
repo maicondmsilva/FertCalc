@@ -1,9 +1,17 @@
 import { supabase } from './supabase';
-import { PedidoVenda, PedidoVendaItem } from '../types';
+import { PedidoVenda, PedidoVendaItem, CancelamentoPedido } from '../types';
 
 /** Computes saldo_disponivel: prefers the DB-generated column, falls back to manual calculation. */
 function computeSaldoDisponivel(d: Record<string, unknown>): number | undefined {
   if (d.saldo_disponivel != null) return Number(d.saldo_disponivel);
+  if (d.quantidade_original != null || d.quantidade_real != null) {
+    const original =
+      d.quantidade_original != null ? Number(d.quantidade_original) : Number(d.quantidade_real);
+    const desmembrada = d.quantidade_desmembrada != null ? Number(d.quantidade_desmembrada) : 0;
+    const cancelada =
+      d.quantidade_cancelada_definitiva != null ? Number(d.quantidade_cancelada_definitiva) : 0;
+    return original - desmembrada - cancelada;
+  }
   if (d.quantidade_real != null) {
     const carregada = d.quantidade_carregada != null ? Number(d.quantidade_carregada) : 0;
     return Number(d.quantidade_real) - carregada;
@@ -27,6 +35,7 @@ function mapPedido(d: Record<string, unknown>): PedidoVenda {
     tipo_frete: d.tipo_frete as string | undefined,
     valor_frete: d.valor_frete != null ? Number(d.valor_frete) : undefined,
     status: (d.status ?? 'pendente') as PedidoVenda['status'],
+    status_pedido: (d.status_pedido as string | undefined) ?? 'ativo',
     pdf_url: d.pdf_url as string | undefined,
     dados_extraidos: d.dados_extraidos as Record<string, unknown> | undefined,
     importado_por: d.importado_por as string | undefined,
@@ -38,6 +47,10 @@ function mapPedido(d: Record<string, unknown>): PedidoVenda {
     produto_nome: d.produto_nome as string | undefined,
     quantidade_carregada:
       d.quantidade_carregada != null ? Number(d.quantidade_carregada) : undefined,
+    quantidade_original: d.quantidade_original != null ? Number(d.quantidade_original) : undefined,
+    quantidade_desmembrada: d.quantidade_desmembrada != null ? Number(d.quantidade_desmembrada) : 0,
+    quantidade_cancelada_definitiva:
+      d.quantidade_cancelada_definitiva != null ? Number(d.quantidade_cancelada_definitiva) : 0,
     saldo_disponivel: computeSaldoDisponivel(d),
     preco_unitario: d.preco_unitario != null ? Number(d.preco_unitario) : undefined,
     condicao_pagamento: d.condicao_pagamento as string | undefined,
@@ -96,12 +109,16 @@ export async function createPedidoVenda(
       data_pedido: pedido.data_pedido,
       data_vencimento: pedido.data_vencimento ?? null,
       quantidade_real: pedido.quantidade_real,
+      quantidade_original: pedido.quantidade_original ?? pedido.quantidade_real,
+      quantidade_desmembrada: pedido.quantidade_desmembrada ?? 0,
+      quantidade_cancelada_definitiva: pedido.quantidade_cancelada_definitiva ?? 0,
       embalagem: pedido.embalagem,
       valor_unitario_negociado: pedido.valor_unitario_negociado,
       valor_total_negociado: pedido.valor_total_negociado,
       tipo_frete: pedido.tipo_frete,
       valor_frete: pedido.valor_frete,
       status: pedido.status ?? 'pendente',
+      status_pedido: pedido.status_pedido ?? 'ativo',
       pdf_url: pedido.pdf_url,
       dados_extraidos: pedido.dados_extraidos,
       importado_por: pedido.importado_por,
@@ -131,12 +148,16 @@ export async function updatePedidoVenda(id: string, updates: Partial<PedidoVenda
       barra_pedido: updates.barra_pedido,
       data_pedido: updates.data_pedido,
       quantidade_real: updates.quantidade_real,
+      quantidade_original: updates.quantidade_original,
+      quantidade_desmembrada: updates.quantidade_desmembrada,
+      quantidade_cancelada_definitiva: updates.quantidade_cancelada_definitiva,
       embalagem: updates.embalagem,
       valor_unitario_negociado: updates.valor_unitario_negociado,
       valor_total_negociado: updates.valor_total_negociado,
       tipo_frete: updates.tipo_frete,
       valor_frete: updates.valor_frete,
       status: updates.status,
+      status_pedido: updates.status_pedido,
       pdf_url: updates.pdf_url,
       dados_extraidos: updates.dados_extraidos,
       // Extended fields
@@ -228,4 +249,202 @@ export async function getPedidoVendaItens(pedidoVendaId: string): Promise<Pedido
     precificacao_id: d.precificacao_id as string | undefined,
     criado_em: d.criado_em as string,
   }));
+}
+
+// ---------------------------------------------------------------------------
+// Cancelamentos
+// ---------------------------------------------------------------------------
+
+function mapCancelamento(d: Record<string, unknown>): CancelamentoPedido {
+  return {
+    id: d.id as string,
+    pedido_origem_id: d.pedido_origem_id as string,
+    pedido_destino_id: d.pedido_destino_id as string | undefined,
+    tipo: d.tipo as 'canc_substitui' | 'definitivo',
+    quantidade: Number(d.quantidade),
+    motivo: d.motivo as string | undefined,
+    usuario_id: d.usuario_id as string | undefined,
+    usuario_nome: d.usuario_nome as string | undefined,
+    criado_em: d.criado_em as string,
+  };
+}
+
+export interface CreateCancelamentoPayload {
+  pedido_origem_id: string;
+  pedido_destino_id?: string;
+  tipo: 'canc_substitui' | 'definitivo';
+  quantidade: number;
+  motivo?: string;
+  usuario_id?: string;
+  usuario_nome?: string;
+}
+
+export async function createCancelamento(
+  payload: CreateCancelamentoPayload
+): Promise<CancelamentoPedido> {
+  const { data, error } = await supabase
+    .from('cancelamentos_pedido')
+    .insert({
+      pedido_origem_id: payload.pedido_origem_id,
+      pedido_destino_id: payload.pedido_destino_id ?? null,
+      tipo: payload.tipo,
+      quantidade: payload.quantidade,
+      motivo: payload.motivo ?? null,
+      usuario_id: payload.usuario_id ?? null,
+      usuario_nome: payload.usuario_nome ?? null,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return mapCancelamento(data);
+}
+
+export interface GetCancelamentosFilters {
+  pedidoOrigemId?: string;
+  tipo?: 'canc_substitui' | 'definitivo';
+  dataInicio?: string;
+  dataFim?: string;
+  numeroPedido?: string;
+  clienteNome?: string;
+}
+
+export async function getCancelamentos(
+  filters?: GetCancelamentosFilters
+): Promise<CancelamentoPedido[]> {
+  let query = supabase
+    .from('cancelamentos_pedido')
+    .select('*')
+    .order('criado_em', { ascending: false });
+
+  if (filters?.pedidoOrigemId) {
+    query = query.eq('pedido_origem_id', filters.pedidoOrigemId);
+  }
+  if (filters?.tipo) {
+    query = query.eq('tipo', filters.tipo);
+  }
+  if (filters?.dataInicio) {
+    query = query.gte('criado_em', filters.dataInicio);
+  }
+  if (filters?.dataFim) {
+    query = query.lte('criado_em', filters.dataFim + 'T23:59:59');
+  }
+
+  const { data, error } = await query;
+  if (error || !data) return [];
+  return (data as Record<string, unknown>[]).map(mapCancelamento);
+}
+
+/**
+ * Execute Canc/Substitui:
+ * 1. Create child pedido
+ * 2. Log cancelamento
+ * 3. Update parent's quantidade_desmembrada
+ */
+export interface CancSubstituiPayload {
+  pedidoPai: PedidoVenda;
+  filho: Omit<PedidoVenda, 'id' | 'criado_em' | 'atualizado_em'>;
+  motivo: string;
+  usuarioId: string;
+  usuarioNome: string;
+}
+
+export async function executarCancSubstitui(payload: CancSubstituiPayload): Promise<PedidoVenda> {
+  const { pedidoPai, filho, motivo, usuarioId, usuarioNome } = payload;
+  const qtdFilho = filho.quantidade_real ?? 0;
+
+  // Validate saldo
+  const saldoPai =
+    pedidoPai.saldo_disponivel ??
+    (pedidoPai.quantidade_original ?? pedidoPai.quantidade_real ?? 0) -
+      (pedidoPai.quantidade_desmembrada ?? 0) -
+      (pedidoPai.quantidade_cancelada_definitiva ?? 0);
+
+  if (qtdFilho > saldoPai) {
+    throw new Error('Quantidade desmembrada maior que o saldo disponível.');
+  }
+
+  // 1. Create child pedido
+  const pedidoFilho = await createPedidoVenda({
+    ...filho,
+    pedido_pai_id: pedidoPai.id,
+    status: 'pendente',
+    status_pedido: 'ativo',
+    quantidade_original: qtdFilho,
+    quantidade_desmembrada: 0,
+    quantidade_cancelada_definitiva: 0,
+  });
+
+  // 2. Update parent's quantidade_desmembrada
+  const novaDesmembrada = (pedidoPai.quantidade_desmembrada ?? 0) + qtdFilho;
+  await updatePedidoVenda(pedidoPai.id, {
+    quantidade_desmembrada: novaDesmembrada,
+  });
+
+  // 3. Log cancelamento
+  await createCancelamento({
+    pedido_origem_id: pedidoPai.id,
+    pedido_destino_id: pedidoFilho.id,
+    tipo: 'canc_substitui',
+    quantidade: qtdFilho,
+    motivo,
+    usuario_id: usuarioId,
+    usuario_nome: usuarioNome,
+  });
+
+  return pedidoFilho;
+}
+
+/**
+ * Execute Cancelamento Definitivo (total or partial)
+ */
+export interface CancelamentoDefinitivoPayload {
+  pedido: PedidoVenda;
+  quantidade?: number; // undefined = total
+  motivo: string;
+  usuarioId: string;
+  usuarioNome: string;
+}
+
+export async function executarCancelamentoDefinitivo(
+  payload: CancelamentoDefinitivoPayload
+): Promise<void> {
+  const { pedido, motivo, usuarioId, usuarioNome } = payload;
+  const saldo =
+    pedido.saldo_disponivel ??
+    (pedido.quantidade_original ?? pedido.quantidade_real ?? 0) -
+      (pedido.quantidade_desmembrada ?? 0) -
+      (pedido.quantidade_cancelada_definitiva ?? 0);
+
+  const isTotal = payload.quantidade == null;
+  const qtdCancelar = isTotal ? saldo : payload.quantidade!;
+
+  if (qtdCancelar <= 0) {
+    throw new Error('Quantidade a cancelar deve ser maior que zero.');
+  }
+  if (qtdCancelar > saldo) {
+    throw new Error('Quantidade a cancelar maior que o saldo disponível.');
+  }
+
+  const novaCancelada = (pedido.quantidade_cancelada_definitiva ?? 0) + qtdCancelar;
+
+  const updates: Partial<PedidoVenda> = {
+    quantidade_cancelada_definitiva: novaCancelada,
+  };
+
+  // If total cancellation (or all remaining saldo), mark as cancelled
+  if (isTotal || qtdCancelar >= saldo) {
+    updates.status = 'cancelado';
+    updates.status_pedido = 'cancelado';
+  }
+
+  await updatePedidoVenda(pedido.id, updates);
+
+  await createCancelamento({
+    pedido_origem_id: pedido.id,
+    tipo: 'definitivo',
+    quantidade: qtdCancelar,
+    motivo,
+    usuario_id: usuarioId,
+    usuario_nome: usuarioNome,
+  });
 }

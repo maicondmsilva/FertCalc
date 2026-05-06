@@ -551,6 +551,7 @@ export interface PedidoVenda {
   tipo_frete?: string; // CIF ou FOB
   valor_frete?: number; // valor do frete quando CIF
   status: 'pendente' | 'em_carregamento' | 'concluido' | 'cancelado';
+  status_pedido?: string; // 'ativo' | 'cancelado' — campo banco
   pdf_url?: string;
   dados_extraidos?: Record<string, any>;
   importado_por?: string;
@@ -561,6 +562,9 @@ export interface PedidoVenda {
   cliente_nome?: string;
   produto_nome?: string;
   quantidade_carregada?: number;
+  quantidade_original?: number;
+  quantidade_desmembrada?: number;
+  quantidade_cancelada_definitiva?: number;
   saldo_disponivel?: number;
   preco_unitario?: number;
   condicao_pagamento?: string;
@@ -573,6 +577,21 @@ export interface PedidoVenda {
   itens?: PedidoVendaItem[];
   // Joined fields
   precificacao?: PricingRecord;
+}
+
+export interface CancelamentoPedido {
+  id: string;
+  pedido_origem_id: string;
+  pedido_destino_id?: string;
+  tipo: 'canc_substitui' | 'definitivo';
+  quantidade: number;
+  motivo?: string;
+  usuario_id?: string;
+  usuario_nome?: string;
+  criado_em: string;
+  // Joined
+  pedido_origem?: Partial<PedidoVenda>;
+  pedido_destino?: Partial<PedidoVenda>;
 }
 
 export interface ComparisonHistory {
