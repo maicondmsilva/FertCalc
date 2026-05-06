@@ -106,7 +106,9 @@ export default function ProdutoPuroMode({
     setSaving(true);
     try {
       // Build a "batida" with just one product
-      const formulaName = `${selectedProduct.name} (${npkString})`;
+      const formulaName = npkString
+        ? `${selectedProduct.name} (${npkString})`
+        : selectedProduct.name;
       const existing = await getSavedFormulas();
       const duplicate = existing.find(
         (f) =>
