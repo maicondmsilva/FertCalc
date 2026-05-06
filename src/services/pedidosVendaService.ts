@@ -46,6 +46,7 @@ function mapPedido(d: Record<string, unknown>): PedidoVenda {
     formulacao_alterada: d.formulacao_alterada as boolean | undefined,
     pedido_pai_id: d.pedido_pai_id as string | undefined,
     data_vencimento: d.data_vencimento as string | undefined,
+    emitente: d.emitente != null ? Number(d.emitente) : 1,
   };
 }
 
@@ -114,6 +115,7 @@ export async function createPedidoVenda(
       filial_id: pedido.filial_id,
       formulacao_alterada: pedido.formulacao_alterada,
       pedido_pai_id: pedido.pedido_pai_id,
+      emitente: pedido.emitente ?? 1,
     })
     .select()
     .single();
@@ -147,6 +149,7 @@ export async function updatePedidoVenda(id: string, updates: Partial<PedidoVenda
       filial_id: updates.filial_id,
       formulacao_alterada: updates.formulacao_alterada,
       atualizado_em: new Date().toISOString(),
+      emitente: updates.emitente,
     })
     .eq('id', id);
   if (error) throw error;

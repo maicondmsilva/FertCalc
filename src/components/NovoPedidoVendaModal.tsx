@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { PricingRecord, Client } from '../types';
-import { X, ClipboardList, Search, Plus, Trash2 } from 'lucide-react';
+import { X, ClipboardList, Search, Plus, Trash2, Zap } from 'lucide-react';
 import { getClients } from '../services/db';
 import { createPedidoVenda, createPedidoVendaItens } from '../services/pedidosVendaService';
+import { getProdutosFormulados, ProdutoFormulado } from '../services/produtosFormuladosService';
 import { useToast } from './Toast';
 
 interface NovoPedidoVendaModalProps {
@@ -15,9 +16,35 @@ interface NovoPedidoVendaModalProps {
 interface ItemLocal {
   id: string;
   produto_nome: string;
+  produto_id?: string;
   quantidade_ton: number | '';
   preco_unitario: number | '';
+  autoFilled?: boolean;
 }
+
+/** Derive initial tipoFrete from pricing */
+function getInitialTipoFrete(pricing?: PricingRecord | null): 'CIF' | 'FOB' {
+  if (pricing?.factors?.tipoFrete) return pricing.factors.tipoFrete;
+  if ((pricing?.factors?.freight ?? 0) > 0) return 'CIF';
+  return 'FOB';
+}
+
+/** Derive initial valorFrete from pricing (only when CIF) */
+function getInitialValorFrete(pricing?: PricingRecord | null): number | '' {
+  const tipo = getInitialTipoFrete(pricing);
+  if (tipo === 'CIF' && pricing?.factors?.freight) return pricing.factors.freight;
+  return '';
+}
+
+/** Derive initial dataVencimento from pricing */
+function getInitialVencimento(pricing?: PricingRecord | null): string {
+  const due = pricing?.factors?.dueDate;
+  if (!due) return '';
+  // Accept ISO date strings (YYYY-MM-DD) directly; otherwise return as-is
+  return due;
+}
+
+const EMITENTE_OPTIONS = Array.from({ length: 200 }, (_, i) => i + 1);
 
 export default function NovoPedidoVendaModal({
   pricing,
@@ -27,12 +54,11 @@ export default function NovoPedidoVendaModal({
 }: NovoPedidoVendaModalProps) {
   const { showSuccess, showError } = useToast();
   const [clients, setClients] = useState<Client[]>([]);
+  const [produtosFormulados, setProdutosFormulados] = useState<ProdutoFormulado[]>([]);
   const [saving, setSaving] = useState(false);
 
   // Client autocomplete
-  const [clientSearch, setClientSearch] = useState(
-    pricing?.factors?.client?.name ?? ''
-  );
+  const [clientSearch, setClientSearch] = useState(pricing?.factors?.client?.name ?? '');
   const [clientId, setClientId] = useState<string>('');
   const [showClientDropdown, setShowClientDropdown] = useState(false);
   const clientInputRef = useRef<HTMLInputElement>(null);
@@ -40,50 +66,90 @@ export default function NovoPedidoVendaModal({
   // Form fields
   const today = new Date().toISOString().split('T')[0];
   const [numeroPedido, setNumeroPedido] = useState('');
+  const [emitente, setEmitente] = useState<number | 'custom'>(1);
+  const [emitenteCustom, setEmitenteCustom] = useState('');
   const [dataPedido, setDataPedido] = useState(today);
-  const [dataVencimento, setDataVencimento] = useState('');
+
+  const autoVencimento = !!pricing && !!getInitialVencimento(pricing);
+  const [dataVencimento, setDataVencimento] = useState(getInitialVencimento(pricing));
+
   const [condicaoPagamento, setCondicaoPagamento] = useState('');
-  const [tipoFrete, setTipoFrete] = useState<'CIF' | 'FOB'>(
-    (pricing?.factors as any)?.tipoFrete ?? ((pricing?.factors?.freight ?? 0) > 0 ? 'CIF' : 'FOB')
-  );
-  const [valorFrete, setValorFrete] = useState<number | ''>(
-    pricing?.factors?.freight ?? ''
-  );
+
+  const autoTipoFrete = !!pricing;
+  const [tipoFrete, setTipoFrete] = useState<'CIF' | 'FOB'>(getInitialTipoFrete(pricing));
+
+  const autoValorFrete = !!pricing && getInitialTipoFrete(pricing) === 'CIF';
+  const [valorFrete, setValorFrete] = useState<number | ''>(getInitialValorFrete(pricing));
+
   const [observacoes, setObservacoes] = useState('');
 
-  // Multi-product items
+  // Multi-product items — initialize immediately with formula text, then match products
   const [itens, setItens] = useState<ItemLocal[]>(() => {
     if (pricing?.calculations && pricing.calculations.length > 0) {
       return pricing.calculations.map((calc) => ({
         id: crypto.randomUUID(),
         produto_nome: calc.formula ?? '',
-        quantidade_ton: '',
+        produto_id: undefined,
+        quantidade_ton:
+          (calc.factors?.totalTons ?? 0) > 0 ? (calc.factors?.totalTons as number) : '',
         preco_unitario: calc.summary?.finalPrice ?? '',
+        autoFilled: true,
       }));
     }
+    const formulaNpk = (pricing?.factors as any)?.targetFormula ?? '';
+    const qtd =
+      (pricing?.factors?.totalTons ?? 0) > 0 ? (pricing?.factors?.totalTons as number) : '';
     return [
       {
         id: crypto.randomUUID(),
-        produto_nome: pricing?.calculations?.[0]?.formula ?? (pricing?.factors as any)?.targetFormula ?? '',
-        quantidade_ton: '',
+        produto_nome: formulaNpk,
+        produto_id: undefined,
+        quantidade_ton: qtd,
         preco_unitario: pricing?.calculations?.[0]?.summary?.finalPrice ?? '',
+        autoFilled: !!pricing,
       },
     ];
   });
 
-  const precificacaoCod = pricing
-    ? pricing.formattedCod || `#${pricing.cod}`
-    : null;
+  const precificacaoCod = pricing ? pricing.formattedCod || `#${pricing.cod}` : null;
 
   useEffect(() => {
-    getClients().then(setClients).catch(() => {});
+    getClients()
+      .then(setClients)
+      .catch(() => {});
+    getProdutosFormulados()
+      .then(setProdutosFormulados)
+      .catch(() => {});
   }, []);
+
+  // When produtosFormulados loads, match unmatched items to products
+  useEffect(() => {
+    if (produtosFormulados.length === 0) return;
+    setItens((prev) =>
+      prev.map((item) => {
+        if (item.produto_id) return item; // already matched
+        const formulaNpk = (item.produto_nome ?? '').trim();
+        if (!formulaNpk) return item;
+        const matched = produtosFormulados.find(
+          (p) =>
+            (p.formula_npk && p.formula_npk.trim() === formulaNpk) ||
+            (p.nome && p.nome.trim() === formulaNpk)
+        );
+        if (!matched) return item;
+        return {
+          ...item,
+          produto_id: matched.id,
+          produto_nome: matched.formula_npk
+            ? `${matched.nome} (${matched.formula_npk})`
+            : matched.nome,
+        };
+      })
+    );
+  }, [produtosFormulados]);
 
   const filteredClients =
     clientSearch.length >= 2
-      ? clients.filter((c) =>
-          c.name.toLowerCase().includes(clientSearch.toLowerCase())
-        )
+      ? clients.filter((c) => c.name.toLowerCase().includes(clientSearch.toLowerCase()))
       : [];
 
   const handleSelectClient = (c: Client) => {
@@ -109,10 +175,31 @@ export default function NovoPedidoVendaModal({
     setItens((prev) => prev.filter((item) => item.id !== id));
   };
 
-  const updateItem = (id: string, field: keyof ItemLocal, value: string | number) => {
+  const updateItem = (id: string, field: keyof ItemLocal, value: string | number | boolean) => {
     setItens((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
+      prev.map((item) => (item.id === id ? { ...item, [field]: value, autoFilled: false } : item))
     );
+  };
+
+  /** Limit preco_unitario to max 2 decimal places */
+  const handlePrecoUnitarioChange = (id: string, raw: string) => {
+    if (raw === '') {
+      updateItem(id, 'preco_unitario', '');
+      return;
+    }
+    // Only allow at most 2 decimal places
+    const match = raw.match(/^(\d+)([.,](\d{0,2})?)?$/);
+    if (!match) return;
+    const num = Number(raw.replace(',', '.'));
+    if (!isNaN(num)) updateItem(id, 'preco_unitario', num);
+  };
+
+  const getEmitenteValue = (): number => {
+    if (emitente === 'custom') {
+      const n = parseInt(emitenteCustom, 10);
+      return isNaN(n) || n < 1 ? 1 : n;
+    }
+    return emitente;
   };
 
   const totalTon = itens.reduce((sum, item) => sum + (Number(item.quantidade_ton) || 0), 0);
@@ -122,26 +209,37 @@ export default function NovoPedidoVendaModal({
       showError('Informe o número do pedido.');
       return;
     }
+    if (emitente === 'custom' && (!emitenteCustom || parseInt(emitenteCustom, 10) < 1)) {
+      showError('Informe um emitente válido.');
+      return;
+    }
     if (itens.length === 0) {
       showError('Adicione pelo menos um produto.');
       return;
     }
     const itensInvalidos = itens.filter(
-      (item) => !item.produto_nome.trim() || !item.quantidade_ton || Number(item.quantidade_ton) <= 0
+      (item) =>
+        !item.produto_nome.trim() || !item.quantidade_ton || Number(item.quantidade_ton) <= 0
     );
     if (itensInvalidos.length > 0) {
       showError('Preencha o produto e a quantidade de todos os itens.');
       return;
     }
 
+    const emitenteNum = getEmitenteValue();
+    const barraPedido = `${numeroPedido.trim()}/${emitenteNum}`;
+
     setSaving(true);
     try {
       const produtoPrincipal = itens[0].produto_nome;
-      const precoPrincipal = itens[0].preco_unitario !== '' ? Number(itens[0].preco_unitario) : undefined;
+      const precoPrincipal =
+        itens[0].preco_unitario !== '' ? Number(itens[0].preco_unitario) : undefined;
 
       const pedidoCriado = await createPedidoVenda({
         precificacao_id: pricing?.id ?? '',
         numero_pedido: numeroPedido.trim(),
+        barra_pedido: barraPedido,
+        emitente: emitenteNum,
         data_pedido: dataPedido || undefined,
         data_vencimento: dataVencimento || undefined,
         cliente_id: clientId || undefined,
@@ -176,6 +274,18 @@ export default function NovoPedidoVendaModal({
       setSaving(false);
     }
   };
+
+  /** CSS classes for auto-filled fields */
+  const autoClass = 'border-emerald-400 bg-emerald-50 focus:ring-emerald-500';
+  const normalClass = 'border-stone-300 bg-white focus:ring-emerald-500';
+
+  /** Product display options for dropdown (with "other" as free text) */
+  const produtoOptions = produtosFormulados
+    .filter((p) => p.ativo)
+    .map((p) => ({
+      value: p.id,
+      label: p.formula_npk ? `${p.nome} (${p.formula_npk})` : p.nome,
+    }));
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -254,18 +364,57 @@ export default function NovoPedidoVendaModal({
             )}
           </div>
 
-          {/* Nº Pedido */}
-          <div>
-            <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-1">
-              Nº Pedido <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={numeroPedido}
-              onChange={(e) => setNumeroPedido(e.target.value)}
-              placeholder="PV-2026-001"
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-            />
+          {/* Nº Pedido + Emitente */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-1">
+                Nº Pedido <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={numeroPedido}
+                onChange={(e) => setNumeroPedido(e.target.value)}
+                placeholder="600500"
+                className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-1">
+                Emitente
+              </label>
+              <div className="flex gap-1">
+                <select
+                  value={emitente}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setEmitente(v === 'custom' ? 'custom' : Number(v));
+                  }}
+                  className="flex-1 px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                >
+                  {EMITENTE_OPTIONS.map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                  <option value="custom">Outro...</option>
+                </select>
+                {emitente === 'custom' && (
+                  <input
+                    type="number"
+                    min="1"
+                    value={emitenteCustom}
+                    onChange={(e) => setEmitenteCustom(e.target.value)}
+                    placeholder="Nº"
+                    className="w-20 px-2 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                  />
+                )}
+              </div>
+              {numeroPedido && (
+                <p className="text-xs text-emerald-600 mt-1 font-mono">
+                  Pedido: {numeroPedido}/{getEmitenteValue()}
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Data do Pedido + Vencimento */}
@@ -282,14 +431,15 @@ export default function NovoPedidoVendaModal({
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-1">
+              <label className="flex items-center gap-1 text-xs font-bold text-stone-500 uppercase tracking-wider mb-1">
                 Vencimento
+                {autoVencimento && <Zap className="w-3 h-3 text-emerald-500" />}
               </label>
               <input
                 type="date"
                 value={dataVencimento}
                 onChange={(e) => setDataVencimento(e.target.value)}
-                className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 outline-none ${autoVencimento ? autoClass : normalClass}`}
               />
             </div>
           </div>
@@ -311,13 +461,14 @@ export default function NovoPedidoVendaModal({
           {/* Tipo frete + valor frete */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-1">
+              <label className="flex items-center gap-1 text-xs font-bold text-stone-500 uppercase tracking-wider mb-1">
                 Tipo de Frete <span className="text-red-500">*</span>
+                {autoTipoFrete && <Zap className="w-3 h-3 text-emerald-500" />}
               </label>
               <select
                 value={tipoFrete}
                 onChange={(e) => setTipoFrete(e.target.value as 'CIF' | 'FOB')}
-                className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 outline-none ${autoTipoFrete ? autoClass : normalClass}`}
               >
                 <option value="CIF">CIF</option>
                 <option value="FOB">FOB</option>
@@ -325,8 +476,9 @@ export default function NovoPedidoVendaModal({
             </div>
             {tipoFrete === 'CIF' && (
               <div>
-                <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-1">
+                <label className="flex items-center gap-1 text-xs font-bold text-stone-500 uppercase tracking-wider mb-1">
                   Valor Frete R$/ton
+                  {autoValorFrete && <Zap className="w-3 h-3 text-emerald-500" />}
                 </label>
                 <input
                   type="number"
@@ -337,7 +489,7 @@ export default function NovoPedidoVendaModal({
                     setValorFrete(e.target.value === '' ? '' : Number(e.target.value))
                   }
                   placeholder="0.00"
-                  className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                  className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 outline-none ${autoValorFrete ? autoClass : normalClass}`}
                 />
               </div>
             )}
@@ -358,16 +510,53 @@ export default function NovoPedidoVendaModal({
               {itens.map((item, index) => (
                 <div
                   key={item.id}
-                  className="flex gap-2 items-start p-3 bg-stone-50 rounded-lg border border-stone-200"
+                  className={`flex gap-2 items-start p-3 rounded-lg border ${item.autoFilled ? 'bg-emerald-50 border-emerald-200' : 'bg-stone-50 border-stone-200'}`}
                 >
                   <div className="flex-1 min-w-0">
-                    <input
-                      type="text"
-                      value={item.produto_nome}
-                      onChange={(e) => updateItem(item.id, 'produto_nome', e.target.value)}
-                      placeholder={`Produto ${index + 1} / Formulação`}
-                      className="w-full px-2 py-1.5 border border-stone-300 rounded text-sm focus:ring-1 focus:ring-emerald-500 outline-none"
-                    />
+                    {produtoOptions.length > 0 ? (
+                      <select
+                        value={item.produto_id ?? ''}
+                        onChange={(e) => {
+                          const selected = produtosFormulados.find((p) => p.id === e.target.value);
+                          updateItem(item.id, 'produto_id', e.target.value);
+                          updateItem(
+                            item.id,
+                            'produto_nome',
+                            selected
+                              ? selected.formula_npk
+                                ? `${selected.nome} (${selected.formula_npk})`
+                                : selected.nome
+                              : ''
+                          );
+                        }}
+                        className={`w-full px-2 py-1.5 border rounded text-sm focus:ring-1 focus:ring-emerald-500 outline-none ${item.autoFilled ? 'border-emerald-300 bg-emerald-50' : 'border-stone-300 bg-white'}`}
+                      >
+                        <option value="">— Selecionar produto —</option>
+                        {produtoOptions.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                        <option value="__outro__">Outro (digitar manualmente)</option>
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        value={item.produto_nome}
+                        onChange={(e) => updateItem(item.id, 'produto_nome', e.target.value)}
+                        placeholder={`Produto ${index + 1} / Formulação`}
+                        className="w-full px-2 py-1.5 border border-stone-300 rounded text-sm focus:ring-1 focus:ring-emerald-500 outline-none"
+                      />
+                    )}
+                    {item.produto_id === '__outro__' && (
+                      <input
+                        type="text"
+                        value={item.produto_nome}
+                        onChange={(e) => updateItem(item.id, 'produto_nome', e.target.value)}
+                        placeholder="Nome do produto"
+                        className="w-full mt-1 px-2 py-1.5 border border-stone-300 rounded text-sm focus:ring-1 focus:ring-emerald-500 outline-none"
+                      />
+                    )}
                   </div>
                   <div className="w-28 flex-shrink-0">
                     <input
@@ -383,24 +572,17 @@ export default function NovoPedidoVendaModal({
                         )
                       }
                       placeholder="Qtd (ton)"
-                      className="w-full px-2 py-1.5 border border-stone-300 rounded text-sm focus:ring-1 focus:ring-emerald-500 outline-none"
+                      className={`w-full px-2 py-1.5 border rounded text-sm focus:ring-1 focus:ring-emerald-500 outline-none ${item.autoFilled ? 'border-emerald-300 bg-emerald-50' : 'border-stone-300 bg-white'}`}
                     />
                   </div>
                   <div className="w-28 flex-shrink-0">
                     <input
-                      type="number"
-                      min="0"
-                      step="0.01"
+                      type="text"
+                      inputMode="decimal"
                       value={item.preco_unitario}
-                      onChange={(e) =>
-                        updateItem(
-                          item.id,
-                          'preco_unitario',
-                          e.target.value === '' ? '' : Number(e.target.value)
-                        )
-                      }
+                      onChange={(e) => handlePrecoUnitarioChange(item.id, e.target.value)}
                       placeholder="R$/ton"
-                      className="w-full px-2 py-1.5 border border-stone-300 rounded text-sm focus:ring-1 focus:ring-emerald-500 outline-none"
+                      className={`w-full px-2 py-1.5 border rounded text-sm focus:ring-1 focus:ring-emerald-500 outline-none ${item.autoFilled ? 'border-emerald-300 bg-emerald-50' : 'border-stone-300 bg-white'}`}
                     />
                   </div>
                   {itens.length > 1 && (

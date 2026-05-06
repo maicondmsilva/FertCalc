@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { User, PedidoVenda, Branch, PedidoVendaItem } from '../types';
 import { ClipboardList, RefreshCw, Search, ChevronDown, ChevronUp } from 'lucide-react';
-import { getPedidosVenda, updatePedidoVenda, getPedidoVendaItens } from '../services/pedidosVendaService';
+import {
+  getPedidosVenda,
+  updatePedidoVenda,
+  getPedidoVendaItens,
+} from '../services/pedidosVendaService';
 import {
   createCarregamento,
   gerarNumeroCarregamento,
@@ -253,7 +257,10 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-mono font-bold text-stone-800 text-sm">
-                          {p.numero_pedido || '—'}
+                          {p.barra_pedido ||
+                            (p.numero_pedido
+                              ? `${p.numero_pedido}${p.emitente != null ? `/${p.emitente}` : ''}`
+                              : '—')}
                         </span>
                         {p.cliente_nome && (
                           <span className="text-stone-500 text-sm truncate">
@@ -351,14 +358,21 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                     {/* Itens do pedido (multi-produto) */}
                     {itensPorPedido[p.id] && itensPorPedido[p.id].length > 0 && (
                       <div className="mt-3 border-t border-stone-100 pt-3">
-                        <p className="text-xs font-bold text-stone-400 uppercase mb-2">Produtos do Pedido</p>
+                        <p className="text-xs font-bold text-stone-400 uppercase mb-2">
+                          Produtos do Pedido
+                        </p>
                         <div className="space-y-1">
                           {itensPorPedido[p.id].map((item, i) => (
-                            <div key={item.id ?? i} className="flex justify-between items-center text-sm">
+                            <div
+                              key={item.id ?? i}
+                              className="flex justify-between items-center text-sm"
+                            >
                               <span className="text-stone-700">{item.produto_nome}</span>
                               <span className="text-stone-500 font-mono text-xs">
                                 {item.quantidade_ton.toFixed(3)} ton
-                                {item.preco_unitario ? ` · R$ ${item.preco_unitario.toFixed(2)}/ton` : ''}
+                                {item.preco_unitario
+                                  ? ` · R$ ${item.preco_unitario.toFixed(2)}/ton`
+                                  : ''}
                               </span>
                             </div>
                           ))}
