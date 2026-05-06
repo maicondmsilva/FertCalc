@@ -565,8 +565,8 @@ export default function RelatorioCancSubstitui({ currentUser }: RelatorioCancSub
             {/* Totalizadores */}
             <div className="flex flex-wrap items-center gap-4 text-xs text-stone-600">
               <span>
-                <span className="font-bold text-stone-700">{totalOperacoes}</span> operaç
-                {totalOperacoes !== 1 ? 'ões' : 'ão'}
+                <span className="font-bold text-stone-700">{totalOperacoes}</span>{' '}
+                {totalOperacoes !== 1 ? 'operações' : 'operação'}
               </span>
               <span>
                 Qtd total desmembrada:{' '}
