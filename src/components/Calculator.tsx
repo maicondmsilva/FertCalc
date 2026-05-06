@@ -115,6 +115,14 @@ export default function Calculator({
     currentUser,
   });
 
+  // ─── Clear editing state on unmount so Calculator always starts fresh ──────
+  useEffect(() => {
+    return () => {
+      onClearEditing?.();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ─── Quote search modal state ────────────────────────────────
   const [showCotacaoModal, setShowCotacaoModal] = useState(false);
   const [cotacaoModalCalcId, setCotacaoModalCalcId] = useState<string | null>(null);
@@ -388,9 +396,7 @@ export default function Calculator({
                 value={factors.local_carregamento_id || ''}
                 onChange={(e) => {
                   const localId = e.target.value;
-                  const matchingList = priceLists.find(
-                    (l) => l.local_carregamento_id === localId
-                  );
+                  const matchingList = priceLists.find((l) => l.local_carregamento_id === localId);
                   setFactors({
                     ...factors,
                     local_carregamento_id: localId || undefined,
@@ -419,7 +425,9 @@ export default function Calculator({
               >
                 <option value="">Selecione uma lista</option>
                 {(factors.local_carregamento_id
-                  ? priceLists.filter((l) => l.local_carregamento_id === factors.local_carregamento_id)
+                  ? priceLists.filter(
+                      (l) => l.local_carregamento_id === factors.local_carregamento_id
+                    )
                   : priceLists
                 ).map((l) => (
                   <option key={l.id} value={l.id}>

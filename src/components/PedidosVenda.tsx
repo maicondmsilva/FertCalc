@@ -74,6 +74,7 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
   const [activeTab, setActiveTab] = useState<ActiveTab>('pedidos');
 
   const load = useCallback(async () => {
+    setPedidos([]);
     setLoading(true);
     try {
       const [pedidosData, branchesData] = await Promise.all([getPedidosVenda(), getBranches()]);

@@ -52,7 +52,10 @@ interface ModalGerarRelatorioProps {
   formulas: SavedFormula[];
   selectedIds: string[];
   selectedList: PriceList | undefined;
-  getFormulaCost: (f: SavedFormula, list: PriceList | undefined) => { total: number; missingItems: string[] };
+  getFormulaCost: (
+    f: SavedFormula,
+    list: PriceList | undefined
+  ) => { total: number; missingItems: string[] };
   companyName: string;
   onClose: () => void;
 }
@@ -88,7 +91,7 @@ function ModalGerarRelatorio({
   if (!isOpen) return null;
 
   const getFactors = (id: string): ReportFactors =>
-    applyToAll ? globalFactors : (perFormulaFactors[id] || globalFactors);
+    applyToAll ? globalFactors : perFormulaFactors[id] || globalFactors;
 
   const calcPrecoFinal = (formula: SavedFormula): number => {
     const { total } = getFormulaCost(formula, selectedList);
@@ -147,11 +150,7 @@ function ModalGerarRelatorio({
         const lastY = (doc as any).lastAutoTable?.finalY ?? 30;
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
-        doc.text(
-          `Composição: ${formula.name} (${formula.targetFormula})`,
-          14,
-          lastY + 10
-        );
+        doc.text(`Composição: ${formula.name} (${formula.targetFormula})`, 14, lastY + 10);
 
         const composicaoBody = [
           ...activeMacros.map((m) => [m.name, `${m.quantity.toFixed(0)} kg`, 'Macro']),
@@ -418,7 +417,10 @@ export default function SavedFormulas({ currentUser, onSendToCalculator }: Saved
   const [selectedFormulas, setSelectedFormulas] = useState<string[]>([]);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [linhasDiferenciadas, setLinhasDiferenciadas] = useState<Record<string, boolean>>({});
-  const [appSettings, setAppSettings] = useState<AppSettings>({ companyName: 'FertCalc Pro', companyLogo: '' });
+  const [appSettings, setAppSettings] = useState<AppSettings>({
+    companyName: 'FertCalc Pro',
+    companyLogo: '',
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -426,6 +428,7 @@ export default function SavedFormulas({ currentUser, onSendToCalculator }: Saved
   }, [currentUser]);
 
   const loadData = async () => {
+    setFormulas([]);
     setLoading(true);
     try {
       const [allFormulas, allLists, allLocais, settings] = await Promise.all([
@@ -803,9 +806,7 @@ export default function SavedFormulas({ currentUser, onSendToCalculator }: Saved
 
                     <div className="bg-stone-50 p-3 border-t border-stone-100">
                       <button
-                        onClick={() =>
-                          onSendToCalculator(formula, '', selectedPriceListId)
-                        }
+                        onClick={() => onSendToCalculator(formula, '', selectedPriceListId)}
                         className="w-full flex justify-center items-center gap-2 bg-white border border-stone-200 hover:border-emerald-500 hover:text-emerald-600 text-stone-700 font-medium py-2 rounded-lg transition-colors text-sm shadow-sm"
                       >
                         Usar na Calculadora

@@ -903,6 +903,7 @@ export default function App() {
             {(activeTab === 'calculator' || activeTab === 'simplified_calculator') &&
               hasPermission('calculator') && (
                 <Calculator
+                  key={activeTab}
                   currentUser={currentUser}
                   isSimplified={activeTab === 'simplified_calculator'}
                   initialData={editingPricing}
@@ -924,6 +925,7 @@ export default function App() {
               activeTab === 'saved_formulas' &&
               hasPermission('calculator') && (
                 <SavedFormulas
+                  key="saved_formulas"
                   currentUser={currentUser}
                   onSendToCalculator={(f, bId, plId) => {
                     setInitialFormulaContext({ formula: f, branchId: bId, priceListId: plId });
@@ -933,19 +935,23 @@ export default function App() {
               )}
             {activeModule === 'pricing' &&
               activeTab === 'produtos_formulados' &&
-              hasPermission('produtosFormulados') && <ProdutosFormulados />}
+              hasPermission('produtosFormulados') && (
+                <ProdutosFormulados key="produtos_formulados" />
+              )}
             {activeModule === 'pricing' && activeTab === 'history' && hasPermission('history') && (
-              <History onEdit={handleEditPricing} currentUser={currentUser} />
+              <History key="history" onEdit={handleEditPricing} currentUser={currentUser} />
             )}
             {activeModule === 'pricing' &&
               activeTab === 'pedidos_venda' &&
-              hasPermission('history') && <PedidosVenda currentUser={currentUser} />}
+              hasPermission('history') && (
+                <PedidosVenda key="pedidos_venda" currentUser={currentUser} />
+              )}
             {activeModule === 'pricing' && activeTab === 'goals' && hasPermission('goals') && (
               <Goals currentUser={currentUser} />
             )}
             {activeModule === 'pricing' &&
               activeTab === 'approvals' &&
-              hasPermission('approvals') && <Approvals currentUser={currentUser} />}
+              hasPermission('approvals') && <Approvals key="approvals" currentUser={currentUser} />}
             {activeModule === 'pricing' && activeTab === 'reports' && hasPermission('reports') && (
               <Reports currentUser={currentUser} />
             )}
@@ -1041,37 +1047,65 @@ export default function App() {
             {activeModule === 'carregamento' &&
               activeTab === 'carregamento_visao_geral' &&
               hasPermission('carregamento') && (
-                <CarregamentoModule currentUser={currentUser} view="visao_geral" />
+                <CarregamentoModule
+                  key="carregamento_visao_geral"
+                  currentUser={currentUser}
+                  view="visao_geral"
+                />
               )}
             {activeModule === 'carregamento' &&
               activeTab === 'carregamento_solicitacao' &&
               hasPermission('carregamento') && (
-                <CarregamentoModule currentUser={currentUser} view="solicitacao" />
+                <CarregamentoModule
+                  key="carregamento_solicitacao"
+                  currentUser={currentUser}
+                  view="solicitacao"
+                />
               )}
             {activeModule === 'carregamento' &&
               activeTab === 'carregamento_liberacao' &&
               hasPermission('carregamento') && (
-                <CarregamentoModule currentUser={currentUser} view="liberacao" />
+                <CarregamentoModule
+                  key="carregamento_liberacao"
+                  currentUser={currentUser}
+                  view="liberacao"
+                />
               )}
             {activeModule === 'carregamento' &&
               activeTab === 'carregamento_logistica' &&
               hasPermission('carregamento') && (
-                <CarregamentoModule currentUser={currentUser} view="logistica" />
+                <CarregamentoModule
+                  key="carregamento_logistica"
+                  currentUser={currentUser}
+                  view="logistica"
+                />
               )}
             {activeModule === 'carregamento' &&
               activeTab === 'carregamento_calendario' &&
               hasPermission('carregamento') && (
-                <CarregamentoModule currentUser={currentUser} view="calendario" />
+                <CarregamentoModule
+                  key="carregamento_calendario"
+                  currentUser={currentUser}
+                  view="calendario"
+                />
               )}
             {activeModule === 'carregamento' &&
               activeTab === 'carregamento_relatorios' &&
               hasPermission('carregamento') && (
-                <CarregamentoModule currentUser={currentUser} view="relatorios" />
+                <CarregamentoModule
+                  key="carregamento_relatorios"
+                  currentUser={currentUser}
+                  view="relatorios"
+                />
               )}
             {activeModule === 'carregamento' &&
               activeTab === 'carregamento_transportadoras' &&
               hasPermission('carregamento') && (
-                <CarregamentoModule currentUser={currentUser} view="transportadoras" />
+                <CarregamentoModule
+                  key="carregamento_transportadoras"
+                  currentUser={currentUser}
+                  view="transportadoras"
+                />
               )}
             {activeModule === 'relatorios' && activeTab === 'relatorios' && (
               <Relatorios currentUser={currentUser} />

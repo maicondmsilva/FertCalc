@@ -63,6 +63,8 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
   const canApprove = canApproveTotal || currentUser.role === 'manager';
 
   const loadData = async () => {
+    setAllPricings([]);
+    setGoals([]);
     const [fetchedPricings, allGoals, settings] = await Promise.all([
       getPricingRecords(),
       getGoals(),
