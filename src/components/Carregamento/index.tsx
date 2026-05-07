@@ -591,7 +591,7 @@ export function ModalNovoCarregamento({
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between p-6 border-b border-stone-100">
           <h3 className="text-lg font-bold text-stone-800 flex items-center gap-2">
             {isEditMode ? (
@@ -608,7 +608,7 @@ export function ModalNovoCarregamento({
             <X className="w-5 h-5 text-stone-400" />
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
           {/* Pedido de Venda / Precificação search */}
           <div>
             <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
@@ -627,7 +627,7 @@ export function ModalNovoCarregamento({
               />
             </div>
             {pedidoResults.length > 0 && (
-              <div className="absolute z-10 mt-1 bg-white border border-stone-200 rounded-xl shadow-lg max-h-56 overflow-y-auto w-full max-w-lg">
+              <div className="absolute z-10 mt-1 bg-white border border-stone-200 rounded-xl shadow-lg max-h-56 overflow-y-auto w-full">
                 {pedidoResults.map((p) => (
                   <button
                     key={p.id ?? `pricing-${p.precificacao_id}`}
@@ -720,7 +720,13 @@ export function ModalNovoCarregamento({
                 </span>
               </div>
 
-              <div className="space-y-2">
+              <div className="rounded-lg border border-stone-200 bg-white overflow-hidden">
+                <div className="hidden sm:grid sm:grid-cols-12 gap-3 px-3 py-2 bg-stone-100 text-[11px] font-bold uppercase text-stone-500">
+                  <div className="sm:col-span-5">Produto</div>
+                  <div className="sm:col-span-2">Embalagem</div>
+                  <div className="sm:col-span-2">Saldo</div>
+                  <div className="sm:col-span-3">Qtd. a carregar</div>
+                </div>
                 {itensCarregamento.map((entry, idx) => {
                   const saldoDisponivel = Number(
                     (entry.item as PedidoVendaItemComSaldo).saldo_disponivel ??
@@ -733,10 +739,10 @@ export function ModalNovoCarregamento({
                   return (
                     <div
                       key={entry.item.id || `${entry.item.produto_nome}-${idx}`}
-                      className="bg-white border border-stone-200 rounded-lg p-3"
+                      className="border-t first:border-t-0 border-stone-200 p-3"
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <label className="flex items-start gap-2 text-sm text-stone-800 flex-1">
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-start">
+                        <label className="flex items-start gap-2 text-sm text-stone-800 sm:col-span-5">
                           <input
                             type="checkbox"
                             checked={entry.selecionado}
@@ -751,19 +757,30 @@ export function ModalNovoCarregamento({
                           />
                           <span>
                             <span className="font-semibold">{entry.item.produto_nome}</span>
-                            {entry.item.embalagem && (
-                              <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
-                                {entry.item.embalagem}
-                              </span>
-                            )}
-                            {Number.isFinite(saldoDisponivel) && (
-                              <span className="ml-2 text-xs text-stone-500">
-                                Saldo: {saldoDisponivel.toLocaleString('pt-BR')} ton
-                              </span>
-                            )}
                           </span>
                         </label>
-                        <div className="w-36">
+                        <div className="sm:col-span-2">
+                          <span className="sm:hidden block text-[11px] font-bold uppercase text-stone-500 mb-1">
+                            Embalagem
+                          </span>
+                          <span className="text-xs text-stone-600">
+                            {entry.item.embalagem || '—'}
+                          </span>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <span className="sm:hidden block text-[11px] font-bold uppercase text-stone-500 mb-1">
+                            Saldo
+                          </span>
+                          <span className="text-xs text-stone-600">
+                            {Number.isFinite(saldoDisponivel)
+                              ? `${saldoDisponivel.toLocaleString('pt-BR')} ton`
+                              : '—'}
+                          </span>
+                        </div>
+                        <div className="sm:col-span-3">
+                          <span className="sm:hidden block text-[11px] font-bold uppercase text-stone-500 mb-1">
+                            Qtd. a carregar
+                          </span>
                           <input
                             type="number"
                             min="0"
@@ -800,7 +817,87 @@ export function ModalNovoCarregamento({
             </p>
           )}
 
-          <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+              Quantidade Total (ton) *
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="0.001"
+              value={form.quantidade_total}
+              onChange={(e) => setForm({ ...form, quantidade_total: e.target.value })}
+              readOnly={form.pedido_venda_id !== '' && pedidoItens.length > 0}
+              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm ${
+                form.pedido_venda_id !== '' && pedidoItens.length > 0
+                  ? 'bg-stone-100 text-stone-600 cursor-not-allowed'
+                  : ''
+              } ${
+                selectedPedidoVenda?.saldo_disponivel != null &&
+                parseFloat(form.quantidade_total || '0') > selectedPedidoVenda.saldo_disponivel
+                  ? 'border-amber-400 bg-amber-50'
+                  : 'border-stone-300'
+              }`}
+              required
+            />
+            {form.pedido_venda_id && pedidoItens.length > 0 && (
+              <p className="mt-1 text-[11px] text-stone-500">
+                Total calculado automaticamente com base nos itens selecionados.
+              </p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                Filial
+              </label>
+              <select
+                value={form.filial_id}
+                onChange={(e) => setForm({ ...form, filial_id: e.target.value })}
+                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
+              >
+                <option value="">— Selecione —</option>
+                {filiaisDisponiveis.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.nome}
+                    {f.codigo ? ` (${f.codigo})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                Local de Carregamento
+              </label>
+              <select
+                value={form.local_carregamento_id}
+                onChange={(e) => setForm({ ...form, local_carregamento_id: e.target.value })}
+                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
+              >
+                <option value="">— Selecione o local (opcional) —</option>
+                {locais.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.nome}
+                    {l.cidade ? ` — ${l.cidade}${l.estado ? `/${l.estado}` : ''}` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                Data Prevista de Carregamento
+              </label>
+              <input
+                type="date"
+                value={form.data_prevista_carregamento}
+                onChange={(e) => setForm({ ...form, data_prevista_carregamento: e.target.value })}
+                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
+              />
+            </div>
             <div>
               <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
                 Tipo de Frete *
@@ -827,35 +924,36 @@ export function ModalNovoCarregamento({
                 <option value="CIF">CIF</option>
               </select>
             </div>
-            <div>
-              <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
-                Quantidade Total (ton) *
-              </label>
-              <input
-                type="number"
-                min="0"
-                step="0.001"
-                value={form.quantidade_total}
-                onChange={(e) => setForm({ ...form, quantidade_total: e.target.value })}
-                readOnly={form.pedido_venda_id !== '' && pedidoItens.length > 0}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm ${
-                  form.pedido_venda_id !== '' && pedidoItens.length > 0
-                    ? 'bg-stone-100 text-stone-600 cursor-not-allowed'
-                    : ''
-                } ${
-                  selectedPedidoVenda?.saldo_disponivel != null &&
-                  parseFloat(form.quantidade_total || '0') > selectedPedidoVenda.saldo_disponivel
-                    ? 'border-amber-400 bg-amber-50'
-                    : 'border-stone-300'
-                }`}
-                required
-              />
-              {form.pedido_venda_id && pedidoItens.length > 0 && (
-                <p className="mt-1 text-[11px] text-stone-500">
-                  Total calculado automaticamente com base nos itens selecionados.
-                </p>
-              )}
-            </div>
+            {form.tipo_frete === 'CIF' && (
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                  Valor do Frete (R$/t)
+                  {form._freteAutoDetectado && form.valor_frete && (
+                    <span className="ml-2 text-[10px] font-normal text-emerald-600 normal-case">
+                      {form._freteOrigem === 'pedido'
+                        ? '✓ do pedido de venda'
+                        : '✓ da precificação'}
+                    </span>
+                  )}
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.valor_frete}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      valor_frete: e.target.value,
+                      _freteAutoDetectado: false,
+                      _freteOrigem: undefined,
+                    })
+                  }
+                  placeholder="0,00"
+                  className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
+                />
+              </div>
+            )}
           </div>
 
           {/* Saldo warning */}
@@ -872,83 +970,6 @@ export function ModalNovoCarregamento({
                 ton).
               </div>
             )}
-
-          <div>
-            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Filial</label>
-            <select
-              value={form.filial_id}
-              onChange={(e) => setForm({ ...form, filial_id: e.target.value })}
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
-            >
-              <option value="">— Selecione —</option>
-              {filiaisDisponiveis.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.nome}
-                  {f.codigo ? ` (${f.codigo})` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
-              Local de Carregamento
-            </label>
-            <select
-              value={form.local_carregamento_id}
-              onChange={(e) => setForm({ ...form, local_carregamento_id: e.target.value })}
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
-            >
-              <option value="">— Selecione o local (opcional) —</option>
-              {locais.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.nome}
-                  {l.cidade ? ` — ${l.cidade}${l.estado ? `/${l.estado}` : ''}` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
-              Data Prevista de Carregamento
-            </label>
-            <input
-              type="date"
-              value={form.data_prevista_carregamento}
-              onChange={(e) => setForm({ ...form, data_prevista_carregamento: e.target.value })}
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
-            />
-          </div>
-
-          {form.tipo_frete === 'CIF' && (
-            <div>
-              <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
-                Valor do Frete (R$/t)
-                {form._freteAutoDetectado && form.valor_frete && (
-                  <span className="ml-2 text-[10px] font-normal text-emerald-600 normal-case">
-                    {form._freteOrigem === 'pedido' ? '✓ do pedido de venda' : '✓ da precificação'}
-                  </span>
-                )}
-              </label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={form.valor_frete}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    valor_frete: e.target.value,
-                    _freteAutoDetectado: false,
-                    _freteOrigem: undefined,
-                  })
-                }
-                placeholder="0,00"
-                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
-              />
-            </div>
-          )}
 
           <div>
             <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
