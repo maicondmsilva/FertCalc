@@ -107,6 +107,7 @@ export function useCalculator({
   const [macros, setMacros] = useState<RawMaterial[]>([]);
   const [micros, setMicros] = useState<RawMaterial[]>([]);
   const [isMaterialsLoading, setIsMaterialsLoading] = useState<boolean>(true);
+  const [materialsLoadError, setMaterialsLoadError] = useState<boolean>(false);
   const [incompatibilityRules, setIncompatibilityRules] = useState<IncompatibilityRule[]>([]);
   const [compCategories, setCompCategories] = useState<any[]>([]);
 
@@ -183,6 +184,7 @@ export function useCalculator({
   useEffect(() => {
     const loadData = async () => {
       setIsMaterialsLoading(true);
+      setMaterialsLoadError(false);
       try {
         const [savedBranches, savedLists, savedClients, savedAgents, savedRules, savedCategories] =
           await Promise.all([
@@ -199,7 +201,9 @@ export function useCalculator({
         setAvailableAgents(savedAgents);
         setIncompatibilityRules(savedRules);
         setCompCategories(savedCategories);
-      } catch {
+      } catch (error) {
+        console.error('[useCalculator] Falha ao carregar dados da calculadora:', error);
+        setMaterialsLoadError(true);
         setBranches([]);
         setPriceLists([]);
         setAvailableClients([]);
@@ -298,7 +302,9 @@ export function useCalculator({
   const [microsInGear, setMicrosInGear] = useState<boolean>(true);
   const hasNoMaterialsInDatabase =
     !isMaterialsLoading &&
-    priceLists.every((list) => (list.macros?.length || 0) + (list.micros?.length || 0) === 0);
+    !materialsLoadError &&
+    (priceLists.length === 0 ||
+      priceLists.every((list) => (list.macros?.length || 0) + (list.micros?.length || 0) === 0));
 
   const handleMacroChange = (
     id: string,
