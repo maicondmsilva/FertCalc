@@ -282,7 +282,10 @@ export async function createCarregamento(
       const { error: itensError } = await supabase.from('carregamento_itens').insert(rows);
       if (itensError) {
         await supabase.from('carregamentos').delete().eq('id', data.id);
-        throw itensError;
+        const detalhes = itensError.message ?? 'erro desconhecido';
+        throw new Error(
+          `Falha ao inserir itens do carregamento ${data.id}. Rollback aplicado no carregamento criado. Detalhes: ${detalhes}`
+        );
       }
     }
   }

@@ -245,6 +245,8 @@ type ItemCarregamentoState = {
   quantidade: string;
 };
 
+type PedidoVendaItemComSaldo = PedidoVendaItem & { saldo_disponivel?: number };
+
 export interface ModalNovoCarregamentoProps {
   filiais: Filial[];
   onSave: (data: CarregamentoFormData) => Promise<void>;
@@ -496,11 +498,10 @@ export function ModalNovoCarregamento({
   const selectPedido = (p: EnrichedPedido) => {
     const pricing = p.pricing;
     const tipoFrete = derivarTipoFrete(p, pricing);
-    const pedidoFreteVal = p.valor_frete != null ? Number(p.valor_frete) : Number.NaN;
-    const pricingFreteVal =
-      pricing?.factors?.freight != null ? Number(pricing.factors.freight) : Number.NaN;
-    const temFretePedido = p.valor_frete != null && Number.isFinite(pedidoFreteVal);
-    const temFretePricing = pricing?.factors?.freight != null && Number.isFinite(pricingFreteVal);
+    const temFretePedido = p.valor_frete != null;
+    const temFretePricing = pricing?.factors?.freight != null;
+    const pedidoFreteVal = Number(p.valor_frete ?? 0);
+    const pricingFreteVal = Number(pricing?.factors?.freight ?? 0);
     const freteVal = temFretePedido ? pedidoFreteVal : pricingFreteVal;
     const freteOrigem = temFretePedido ? 'pedido' : temFretePricing ? 'precificacao' : undefined;
     const numeroPedido = p._source === 'pedido' ? p.numero_pedido || '' : '';
@@ -547,18 +548,20 @@ export function ModalNovoCarregamento({
     e.preventDefault();
 
     if (form.pedido_venda_id && pedidoItens.length > 0) {
-      const invalido = itensCarregamento.some((entry) => {
-        if (!entry.selecionado) return false;
-        const quantidade = Number(entry.quantidade || 0);
-        const saldoDisponivel = Number(
-          (entry.item as PedidoVendaItem & { saldo_disponivel?: number }).saldo_disponivel ??
-            entry.item.quantidade_ton ??
-            0
-        );
-        return quantidade <= 0 || quantidade > saldoDisponivel;
-      });
-      if (invalido) {
-        showError('Revise as quantidades dos itens selecionados antes de salvar.');
+      const itensInvalidos = itensCarregamento
+        .filter((entry) => entry.selecionado)
+        .filter((entry) => {
+          const quantidade = Number(entry.quantidade || 0);
+          const saldoDisponivel = Number(
+            (entry.item as PedidoVendaItemComSaldo).saldo_disponivel ??
+              entry.item.quantidade_ton ??
+              0
+          );
+          return quantidade <= 0 || quantidade > saldoDisponivel;
+        })
+        .map((entry) => entry.item.produto_nome);
+      if (itensInvalidos.length > 0) {
+        showError(`Itens com quantidade inválida ou acima do saldo: ${itensInvalidos.join(', ')}.`);
         return;
       }
     }
@@ -703,8 +706,7 @@ export function ModalNovoCarregamento({
               <div className="space-y-2">
                 {itensCarregamento.map((entry, idx) => {
                   const saldoDisponivel = Number(
-                    (entry.item as PedidoVendaItem & { saldo_disponivel?: number })
-                      .saldo_disponivel ??
+                    (entry.item as PedidoVendaItemComSaldo).saldo_disponivel ??
                       entry.item.quantidade_ton ??
                       0
                   );
