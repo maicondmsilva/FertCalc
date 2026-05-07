@@ -6,6 +6,11 @@ import { createPedidoVenda, createPedidoVendaItens } from '../services/pedidosVe
 import { getProdutosFormulados, ProdutoFormulado } from '../services/produtosFormuladosService';
 import { getEmbalagens } from '../services/embalagensService';
 import { useToast } from './Toast';
+import {
+  getPricingDueDate,
+  getPricingFreightType,
+  getPricingFreightValue,
+} from '../utils/pricingDisplay';
 
 interface NovoPedidoVendaModalProps {
   pricing?: PricingRecord | null;
@@ -25,24 +30,18 @@ interface ItemLocal {
 
 /** Derive initial tipoFrete from pricing */
 function getInitialTipoFrete(pricing?: PricingRecord | null): 'CIF' | 'FOB' {
-  if (pricing?.factors?.tipoFrete) return pricing.factors.tipoFrete;
-  if ((pricing?.factors?.freight ?? 0) > 0) return 'CIF';
-  return 'FOB';
+  return getPricingFreightType(pricing);
 }
 
 /** Derive initial valorFrete from pricing (only when CIF) */
 function getInitialValorFrete(pricing?: PricingRecord | null): number | '' {
-  const tipo = getInitialTipoFrete(pricing);
-  if (tipo === 'CIF' && pricing?.factors?.freight) return pricing.factors.freight;
-  return '';
+  const freightValue = getPricingFreightValue(pricing);
+  return freightValue > 0 ? freightValue : '';
 }
 
 /** Derive initial dataVencimento from pricing */
 function getInitialVencimento(pricing?: PricingRecord | null): string {
-  const due = pricing?.factors?.dueDate;
-  if (!due) return '';
-  // Accept ISO date strings (YYYY-MM-DD) directly; otherwise return as-is
-  return due;
+  return getPricingDueDate(pricing) || '';
 }
 
 const EMITENTE_OPTIONS = Array.from({ length: 200 }, (_, i) => i + 1);

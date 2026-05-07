@@ -35,6 +35,12 @@ import { useToast } from './Toast';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { useConfirm } from '../hooks/useConfirm';
 import { getPricingTotalTons, getPricingTotalSaleValue } from '../utils/pricingMetrics';
+import {
+  formatDatePtBr,
+  getPricingDueDate,
+  getPricingFreightType,
+  getPricingFreightValue,
+} from '../utils/pricingDisplay';
 import { notifyPricingDeleted } from '../services/notificationService';
 import { logAudit } from '../services/auditService';
 import { getLocaisAtivos } from '../services/locaisCarregamentoService';
@@ -631,22 +637,17 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                 <div className="space-y-2 text-sm text-stone-600 mt-4">
                   <div className="flex items-center">
                     <Calendar className="w-4 h-4 mr-2 text-stone-400" />
-                    Geração: {new Date(p.date).toLocaleDateString('pt-BR')}
+                    Emissão: {formatDatePtBr(p.date)}
                   </div>
                   <div className="flex items-center">
                     <Calendar className="w-4 h-4 mr-2 text-emerald-500" />
                     Vencimento:{' '}
-                    <span className="ml-1 font-medium">
-                      {p.factors?.dueDate
-                        ? new Date(p.factors.dueDate).toLocaleDateString('pt-BR')
-                        : '---'}
-                    </span>
+                    <span className="ml-1 font-medium">{formatDatePtBr(getPricingDueDate(p))}</span>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <Truck className="w-4 h-4 text-stone-400" />
                     {(() => {
-                      const tipoFrete =
-                        p.factors?.tipoFrete ?? ((p.factors?.freight || 0) > 0 ? 'CIF' : 'FOB');
+                      const tipoFrete = getPricingFreightType(p);
                       if (tipoFrete === 'FOB') {
                         return (
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-green-100 text-green-700">
@@ -654,7 +655,7 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                           </span>
                         );
                       }
-                      const freightVal = p.summary?.freightValue ?? p.factors?.freight ?? 0;
+                      const freightVal = getPricingFreightValue(p);
                       return (
                         <span className="flex items-center gap-1 flex-wrap">
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-700">

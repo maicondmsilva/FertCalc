@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import solver from 'javascript-lp-solver';
 import {
   RawMaterial,
@@ -96,6 +96,7 @@ export function useCalculator({
   const [branches, setBranches] = useState<Branch[]>([]);
   const [priceLists, setPriceLists] = useState<PriceList[]>([]);
   const [locaisCarregamento, setLocaisCarregamento] = useState<LocalCarregamento[]>([]);
+  const [locaisLoaded, setLocaisLoaded] = useState(false);
   const [availableClients, setAvailableClients] = useState<Client[]>([]);
   const [availableAgents, setAvailableAgents] = useState<Agent[]>([]);
 
@@ -133,6 +134,31 @@ export function useCalculator({
   });
 
   const [calculations, setCalculations] = useState<TargetFormula[]>([]);
+  const [formulaProductSelections, setFormulaProductSelections] = useState<Record<string, string>>(
+    {}
+  );
+  const [formulaProductSnapshots, setFormulaProductSnapshots] = useState<
+    Record<string, { formula: string; macros: RawMaterial[]; micros: RawMaterial[] }>
+  >({});
+  const hasAppliedInitialDefaults = useRef(false);
+
+  const DEFAULT_BRANCH_NAME = 'FERTIGRAN UBERABA';
+  const DEFAULT_LOCAL_NAME = 'CARREGAMENTO UBERABA';
+  const PURE_PRODUCT_WEIGHT = 1000;
+
+  const getProductFormulaLabel = (material?: RawMaterial | null) => {
+    if (!material) return '';
+
+    if (material.type === 'macro') {
+      return `${Number(material.n || 0)}-${Number(material.p || 0)}-${Number(material.k || 0)}`;
+    }
+
+    const guarantees = (material.microGuarantees || [])
+      .filter((item) => Number(item.value) > 0)
+      .map((item) => `${item.name} ${Number(item.value).toFixed(2)}%`);
+
+    return guarantees.length > 0 ? guarantees.join(' + ') : material.name;
+  };
 
   // ─── Effects ──────────────────────────────────────────────
 
@@ -150,6 +176,9 @@ export function useCalculator({
       setClientSearch(initialData.factors.client.name);
       setAgentSearch(initialData.factors.agent.name);
       setCalculations(initialData.calculations || []);
+      setFormulaProductSelections({});
+      setFormulaProductSnapshots({});
+      hasAppliedInitialDefaults.current = true;
     }
   }, [initialData]);
 
@@ -178,6 +207,8 @@ export function useCalculator({
           micros: initialFormulaToLoad.micros,
         },
       ]);
+      setFormulaProductSelections({});
+      setFormulaProductSnapshots({});
     }
   }, [initialFormulaToLoad, initialBranchId, initialPriceListId]);
 
@@ -203,6 +234,7 @@ export function useCalculator({
         setCompCategories(savedCategories);
       } catch (error) {
         console.error('[useCalculator] Falha ao carregar dados da calculadora:', error);
+        showError('Erro ao carregar dados iniciais da calculadora.');
         setMaterialsLoadError(true);
         setBranches([]);
         setPriceLists([]);
@@ -223,8 +255,43 @@ export function useCalculator({
   useEffect(() => {
     getLocaisAtivos()
       .then(setLocaisCarregamento)
-      .catch(() => setLocaisCarregamento([]));
+      .catch((error) => {
+        console.error('[useCalculator] Falha ao carregar locais de carregamento:', error);
+        setLocaisCarregamento([]);
+        showError('Erro ao carregar locais de carregamento.');
+      })
+      .finally(() => setLocaisLoaded(true));
   }, []);
+
+  useEffect(() => {
+    if (initialData || hasAppliedInitialDefaults.current || isMaterialsLoading || !locaisLoaded) {
+      return;
+    }
+
+    const defaultBranch = branches.find((branch) => branch.name === DEFAULT_BRANCH_NAME);
+    const defaultLocal = locaisCarregamento.find((local) => local.nome === DEFAULT_LOCAL_NAME);
+    const latestPriceList = priceLists[0];
+
+    setFactors((prev) => ({
+      ...prev,
+      branchId: prev.branchId || initialBranchId || defaultBranch?.id || '',
+      local_carregamento_id: prev.local_carregamento_id || defaultLocal?.id || undefined,
+      priceListId: prev.priceListId || initialPriceListId || latestPriceList?.id || '',
+    }));
+
+    hasAppliedInitialDefaults.current = true;
+  }, [
+    DEFAULT_BRANCH_NAME,
+    DEFAULT_LOCAL_NAME,
+    branches,
+    initialBranchId,
+    initialData,
+    initialPriceListId,
+    isMaterialsLoading,
+    locaisCarregamento,
+    locaisLoaded,
+    priceLists,
+  ]);
 
   // Update prices when list changes
   useEffect(() => {
@@ -516,6 +583,44 @@ export function useCalculator({
     formulasToCalculate.forEach((calc) => {
       const currentMacros = calc.macros && calc.macros.length > 0 ? calc.macros : macros;
       const currentMicros = microsInGear ? (calc.micros.length > 0 ? calc.micros : micros) : micros;
+      const selectedProductId = formulaProductSelections[calc.id];
+
+      if (selectedProductId) {
+        const selectedProduct = [...currentMacros, ...currentMicros].find(
+          (material) => material.id === selectedProductId
+        );
+        if (!selectedProduct) {
+          showError('Produto Macro/Micro selecionado não foi encontrado na lista atual.');
+          return;
+        }
+
+        const pureMacros = currentMacros.map((material) => ({
+          ...material,
+          selected: selectedProduct.type === 'macro' && material.id === selectedProduct.id,
+          quantity: material.id === selectedProduct.id ? PURE_PRODUCT_WEIGHT : 0,
+        }));
+        const pureMicros = currentMicros.map((material) => ({
+          ...material,
+          selected: selectedProduct.type === 'micro' && material.id === selectedProduct.id,
+          quantity: material.id === selectedProduct.id ? PURE_PRODUCT_WEIGHT : 0,
+        }));
+        const calcIndex = updatedCalculations.findIndex((item) => item.id === calc.id);
+
+        if (calcIndex !== -1) {
+          updatedCalculations[calcIndex] = {
+            ...updatedCalculations[calcIndex],
+            formula: getProductFormulaLabel(selectedProduct),
+            macros: pureMacros,
+            micros: pureMicros,
+            summary: calculateSummary(
+              pureMacros,
+              pureMicros,
+              updatedCalculations[calcIndex].factors
+            ),
+          };
+        }
+        return;
+      }
 
       const match = calc.formula.match(
         /(\d+(?:[.,]\d+)?)[^\d]+(\d+(?:[.,]\d+)?)[^\d]+(\d+(?:[.,]\d+)?)/
@@ -713,6 +818,92 @@ export function useCalculator({
     );
   };
 
+  const setCalculationProduct = (calcId: string, productId?: string) => {
+    setCalculations((prev) =>
+      prev.map((calc) => {
+        if (calc.id !== calcId) return calc;
+
+        if (!productId) {
+          const snapshot = formulaProductSnapshots[calcId];
+          if (!snapshot) return calc;
+
+          return {
+            ...calc,
+            formula: snapshot.formula,
+            macros: snapshot.macros,
+            micros: snapshot.micros,
+            summary: calculateSummary(snapshot.macros, snapshot.micros, calc.factors),
+          };
+        }
+
+        const availableMacros = calc.macros.length > 0 ? calc.macros : macros;
+        const availableMicros = calc.micros.length > 0 ? calc.micros : micros;
+        const selectedProduct = [...availableMacros, ...availableMicros].find(
+          (material) => material.id === productId
+        );
+
+        if (!selectedProduct) {
+          showError('Produto selecionado não encontrado na lista de preço atual.');
+          return calc;
+        }
+
+        const nextMacros = availableMacros.map((material) => ({
+          ...material,
+          selected: selectedProduct.type === 'macro' && material.id === selectedProduct.id,
+          quantity: material.id === selectedProduct.id ? PURE_PRODUCT_WEIGHT : 0,
+          minQty: material.id === selectedProduct.id ? PURE_PRODUCT_WEIGHT : material.minQty,
+          maxQty: material.id === selectedProduct.id ? PURE_PRODUCT_WEIGHT : material.maxQty,
+        }));
+
+        const nextMicros = availableMicros.map((material) => ({
+          ...material,
+          selected: selectedProduct.type === 'micro' && material.id === selectedProduct.id,
+          quantity: material.id === selectedProduct.id ? PURE_PRODUCT_WEIGHT : 0,
+          minQty: material.id === selectedProduct.id ? PURE_PRODUCT_WEIGHT : material.minQty,
+          maxQty: material.id === selectedProduct.id ? PURE_PRODUCT_WEIGHT : material.maxQty,
+        }));
+
+        return {
+          ...calc,
+          macros: nextMacros,
+          micros: nextMicros,
+          summary: calculateSummary(nextMacros, nextMicros, calc.factors),
+        };
+      })
+    );
+
+    if (productId) {
+      const currentCalc = calculations.find((calc) => calc.id === calcId);
+      if (currentCalc && !formulaProductSelections[calcId]) {
+        setFormulaProductSnapshots((prev) => ({
+          ...prev,
+          [calcId]: {
+            formula: currentCalc.formula,
+            macros: currentCalc.macros.length > 0 ? currentCalc.macros : macros,
+            micros: currentCalc.micros.length > 0 ? currentCalc.micros : micros,
+          },
+        }));
+      }
+
+      setFormulaProductSelections((prev) => ({
+        ...prev,
+        [calcId]: productId,
+      }));
+      return;
+    }
+
+    setFormulaProductSelections((prev) => {
+      const next = { ...prev };
+      delete next[calcId];
+      return next;
+    });
+    setFormulaProductSnapshots((prev) => {
+      const next = { ...prev };
+      delete next[calcId];
+      return next;
+    });
+  };
+
   const handleCalcMicroChange = (
     calcId: string,
     microId: string,
@@ -831,19 +1022,27 @@ export function useCalculator({
       action: initialData ? `Editada - Status: ${status}` : 'Criada',
     };
 
-    const updatedCalculations = calculations.map((c) => ({
-      ...c,
-      formula: getDetailedFormulaName(
-        c.formula,
-        c.macros,
-        c.micros,
-        c.summary?.resultingMicros,
-        c.targetCa,
-        c.targetS,
-        c.summary?.resultingCa,
-        c.summary?.resultingS
-      ),
-    }));
+    const updatedCalculations = calculations.map((c) => {
+      const selectedProduct = formulaProductSelections[c.id]
+        ? [...(c.macros || []), ...(c.micros || [])].find(
+            (material) => material.id === formulaProductSelections[c.id]
+          )
+        : undefined;
+
+      return {
+        ...c,
+        formula: getDetailedFormulaName(
+          selectedProduct ? getProductFormulaLabel(selectedProduct) : c.formula,
+          c.macros,
+          c.micros,
+          c.summary?.resultingMicros,
+          c.targetCa,
+          c.targetS,
+          c.summary?.resultingCa,
+          c.summary?.resultingS
+        ),
+      };
+    });
 
     const record: PricingRecord = {
       id: initialData?.id || '',
@@ -1205,6 +1404,7 @@ export function useCalculator({
     // Calculations
     calculations,
     setCalculations,
+    formulaProductSelections,
 
     // Currency
     currency,
@@ -1228,6 +1428,7 @@ export function useCalculator({
     addTargetFormula,
     removeTargetFormula,
     updateCalculation,
+    setCalculationProduct,
     handleCalcMicroChange,
     updateCalculationFactors,
     getDetailedFormulaName,
