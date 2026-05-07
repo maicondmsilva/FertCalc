@@ -26,6 +26,7 @@ import { logAudit } from '../services/auditService';
 import { useToast } from './Toast';
 import { useConfirm } from '../hooks/useConfirm';
 import { ConfirmDialog } from './ui/ConfirmDialog';
+import { formatDatePtBr, getPricingDueDate } from '../utils/pricingDisplay';
 
 interface ApprovalsProps {
   currentUser: AppUser;
@@ -423,6 +424,11 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
                     Solicitado por: {p.userName} | Vendedor: @{p.userCode}
                   </p>
                   <p className="text-xs font-bold text-emerald-600 mt-1">Status: {p.status}</p>
+                  <p className="text-xs text-stone-500 mt-1">
+                    Emissão: {formatDatePtBr(p.date)}
+                    <br />
+                    Vencimento: {formatDatePtBr(getPricingDueDate(p))}
+                  </p>
                   <div className="flex flex-wrap gap-3 mt-1">
                     <p className="text-xs text-stone-500 flex items-center gap-1">
                       🚚{' '}

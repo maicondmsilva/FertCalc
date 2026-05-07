@@ -538,6 +538,7 @@ export interface PedidoVendaItem {
   formulacao?: string;
   quantidade_ton: number;
   preco_unitario?: number;
+  embalagem?: string;
   precificacao_id?: string;
   criado_em?: string;
 }

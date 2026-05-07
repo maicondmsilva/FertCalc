@@ -387,15 +387,18 @@ export function useCalculator({
     const nextMacros = macros.map((m) => (m.id === id ? { ...m, [field]: value } : m));
     setMacros(nextMacros);
 
-    setCalculations(
-      calculations.map((calc) => {
-        const updatedCalcMacros = (calc.macros.length > 0 ? calc.macros : macros).map((m) =>
+    setCalculations((prev) =>
+      prev.map((calc) => {
+        const updatedCalcMacros = (calc.macros.length > 0 ? calc.macros : nextMacros).map((m) =>
           m.id === id ? { ...m, [field]: value } : m
         );
-        return {
-          ...calc,
-          macros: updatedCalcMacros,
-        };
+        if (hasTargetFormula(calc.formula)) {
+          return {
+            ...calc,
+            macros: updatedCalcMacros,
+          };
+        }
+        return applyFreeCompositionSummary(calc, updatedCalcMacros, calc.micros);
       })
     );
   };
@@ -408,15 +411,18 @@ export function useCalculator({
     const nextMicros = micros.map((m) => (m.id === id ? { ...m, [field]: value } : m));
     setMicros(nextMicros);
 
-    setCalculations(
-      calculations.map((calc) => {
-        const updatedCalcMicros = (calc.micros.length > 0 ? calc.micros : micros).map((m) =>
+    setCalculations((prev) =>
+      prev.map((calc) => {
+        const updatedCalcMicros = (calc.micros.length > 0 ? calc.micros : nextMicros).map((m) =>
           m.id === id ? { ...m, [field]: value } : m
         );
-        return {
-          ...calc,
-          micros: updatedCalcMicros,
-        };
+        if (hasTargetFormula(calc.formula)) {
+          return {
+            ...calc,
+            micros: updatedCalcMicros,
+          };
+        }
+        return applyFreeCompositionSummary(calc, calc.macros, updatedCalcMicros);
       })
     );
   };
@@ -574,6 +580,33 @@ export function useCalculator({
     };
   };
 
+  const targetFormulaPattern = /(\d+(?:[.,]\d+)?)[^\d]+(\d+(?:[.,]\d+)?)[^\d]+(\d+(?:[.,]\d+)?)/;
+
+  const hasTargetFormula = (formula?: string) =>
+    !!formula && targetFormulaPattern.test(formula.trim());
+
+  const applyFreeCompositionSummary = (
+    calc: TargetFormula,
+    currentMacros: RawMaterial[],
+    currentMicros: RawMaterial[]
+  ): TargetFormula => {
+    const nextMacros = currentMacros.map((material) => ({
+      ...material,
+      quantity: material.selected ? Number(material.minQty || material.quantity || 0) : 0,
+    }));
+    const nextMicros = currentMicros.map((material) => ({
+      ...material,
+      quantity: material.selected ? Number(material.minQty || material.quantity || 0) : 0,
+    }));
+
+    return {
+      ...calc,
+      macros: nextMacros,
+      micros: nextMicros,
+      summary: calculateSummary(nextMacros, nextMicros, calc.factors),
+    };
+  };
+
   const calculateFormula = (targetFormulaId?: string) => {
     const formulasToCalculate = targetFormulaId
       ? calculations.filter((c) => c.id === targetFormulaId)
@@ -630,9 +663,19 @@ export function useCalculator({
         return;
       }
 
-      const match = calc.formula.match(
-        /(\d+(?:[.,]\d+)?)[^\d]+(\d+(?:[.,]\d+)?)[^\d]+(\d+(?:[.,]\d+)?)/
-      );
+      if (!hasTargetFormula(calc.formula)) {
+        const calcIndex = updatedCalculations.findIndex((item) => item.id === calc.id);
+        if (calcIndex !== -1) {
+          updatedCalculations[calcIndex] = applyFreeCompositionSummary(
+            updatedCalculations[calcIndex],
+            currentMacros,
+            currentMicros
+          );
+        }
+        return;
+      }
+
+      const match = calc.formula.match(targetFormulaPattern);
       if (!match) return;
 
       const targetN = parseFloat(match[1].replace(',', '.'));
@@ -819,6 +862,14 @@ export function useCalculator({
             setMicros(newMicros);
           }
 
+          if (!hasTargetFormula(updatedFormula.formula)) {
+            return applyFreeCompositionSummary(
+              updatedFormula,
+              updatedFormula.macros.length > 0 ? updatedFormula.macros : macros,
+              updatedFormula.micros.length > 0 ? updatedFormula.micros : micros
+            );
+          }
+
           return updatedFormula;
         }
         return c;
@@ -923,10 +974,14 @@ export function useCalculator({
     setCalculations(
       calculations.map((c) => {
         if (c.id === calcId) {
-          return {
+          const updated = {
             ...c,
             micros: c.micros.map((m) => (m.id === microId ? { ...m, [field]: value } : m)),
           };
+          if (!hasTargetFormula(updated.formula)) {
+            return applyFreeCompositionSummary(updated, updated.macros, updated.micros);
+          }
+          return updated;
         }
         return c;
       })

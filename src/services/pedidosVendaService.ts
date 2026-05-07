@@ -124,8 +124,6 @@ export async function createPedidoVenda(
       importado_por: pedido.importado_por,
       // Extended fields
       cliente_id: pedido.cliente_id,
-      cliente_nome: pedido.cliente_nome,
-      produto_nome: pedido.produto_nome,
       preco_unitario: pedido.preco_unitario,
       condicao_pagamento: pedido.condicao_pagamento,
       observacoes: pedido.observacoes,
@@ -162,8 +160,6 @@ export async function updatePedidoVenda(id: string, updates: Partial<PedidoVenda
       dados_extraidos: updates.dados_extraidos,
       // Extended fields
       cliente_id: updates.cliente_id,
-      cliente_nome: updates.cliente_nome,
-      produto_nome: updates.produto_nome,
       preco_unitario: updates.preco_unitario,
       condicao_pagamento: updates.condicao_pagamento,
       observacoes: updates.observacoes,
@@ -226,6 +222,7 @@ export async function createPedidoVendaItens(
     formulacao: item.formulacao ?? null,
     quantidade_ton: item.quantidade_ton,
     preco_unitario: item.preco_unitario ?? null,
+    embalagem: item.embalagem ?? null,
     precificacao_id: item.precificacao_id ?? null,
   }));
   const { error } = await supabase.from('pedidos_venda_itens').insert(rows);
@@ -246,6 +243,7 @@ export async function getPedidoVendaItens(pedidoVendaId: string): Promise<Pedido
     formulacao: d.formulacao as string | undefined,
     quantidade_ton: Number(d.quantidade_ton),
     preco_unitario: d.preco_unitario != null ? Number(d.preco_unitario) : undefined,
+    embalagem: d.embalagem as string | undefined,
     precificacao_id: d.precificacao_id as string | undefined,
     criado_em: d.criado_em as string,
   }));
