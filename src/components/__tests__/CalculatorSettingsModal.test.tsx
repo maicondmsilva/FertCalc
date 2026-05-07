@@ -74,4 +74,24 @@ describe('CalculatorSettingsModal', () => {
     const ureiaInFormula = updatedFormula.macros.find((m: any) => m.name === 'Ureia');
     expect(ureiaInFormula.selected).toBe(true);
   });
+
+  it('shows friendly message when there are no materials in database', () => {
+    render(
+      <CalculatorSettingsModal
+        isOpen={true}
+        onClose={vi.fn()}
+        formula={mockFormula}
+        globalMacros={[]}
+        globalMicros={[]}
+        hasNoMaterialsInDatabase={true}
+        onConfirm={vi.fn()}
+      />
+    );
+
+    expect(
+      screen.getByText(
+        'Nenhuma matéria-prima cadastrada. Acesse o cadastro de produtos para adicionar.'
+      )
+    ).toBeDefined();
+  });
 });
