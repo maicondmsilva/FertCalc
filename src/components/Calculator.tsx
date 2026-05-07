@@ -178,6 +178,9 @@ export default function Calculator({
     return guarantees.length > 0 ? guarantees.join(' + ') : 'Garantias indisponíveis';
   };
 
+  const shouldShowProductDropdown = (calcId: string, searchTerm: string) =>
+    activeProductSearchCalcId === calcId && searchTerm.trim().length > 0;
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <>
@@ -608,50 +611,50 @@ export default function Calculator({
                           />
                         </div>
 
-                        {activeProductSearchCalcId === calc.id &&
-                          (formulaProductSearch[calc.id] || '').trim() && (
+                        {(() => {
+                          const productSearchTerm = (formulaProductSearch[calc.id] || '').trim();
+                          const filteredProducts = availableFormulaProducts.filter((product) =>
+                            product.name.toLowerCase().includes(productSearchTerm.toLowerCase())
+                          );
+
+                          if (!shouldShowProductDropdown(calc.id, productSearchTerm)) {
+                            return null;
+                          }
+
+                          return (
                             <div className="absolute z-20 mt-1 w-full rounded-lg border border-stone-200 bg-white shadow-xl max-h-56 overflow-y-auto">
-                              {availableFormulaProducts.filter((product) =>
-                                product.name
-                                  .toLowerCase()
-                                  .includes((formulaProductSearch[calc.id] || '').toLowerCase())
-                              ).length > 0 ? (
-                                availableFormulaProducts
-                                  .filter((product) =>
-                                    product.name
-                                      .toLowerCase()
-                                      .includes((formulaProductSearch[calc.id] || '').toLowerCase())
-                                  )
-                                  .map((product) => (
-                                    <button
-                                      key={product.id}
-                                      type="button"
-                                      onClick={() => {
-                                        setCalculationProduct(calc.id, product.id);
-                                        setFormulaProductSearch((prev) => ({
-                                          ...prev,
-                                          [calc.id]: '',
-                                        }));
-                                        setActiveProductSearchCalcId(null);
-                                      }}
-                                      className="w-full px-4 py-2 text-left hover:bg-stone-50 border-b border-stone-100 last:border-b-0"
-                                    >
-                                      <p className="text-sm font-bold text-stone-800">
-                                        {product.name}
-                                      </p>
-                                      <p className="text-[10px] text-stone-500">
-                                        {product.type === 'macro' ? 'Macro' : 'Micro'} ·{' '}
-                                        {formatFormulaProductDetails(product)}
-                                      </p>
-                                    </button>
-                                  ))
+                              {filteredProducts.length > 0 ? (
+                                filteredProducts.map((product) => (
+                                  <button
+                                    key={product.id}
+                                    type="button"
+                                    onClick={() => {
+                                      setCalculationProduct(calc.id, product.id);
+                                      setFormulaProductSearch((prev) => ({
+                                        ...prev,
+                                        [calc.id]: '',
+                                      }));
+                                      setActiveProductSearchCalcId(null);
+                                    }}
+                                    className="w-full px-4 py-2 text-left hover:bg-stone-50 border-b border-stone-100 last:border-b-0"
+                                  >
+                                    <p className="text-sm font-bold text-stone-800">
+                                      {product.name}
+                                    </p>
+                                    <p className="text-[10px] text-stone-500">
+                                      {product.type === 'macro' ? 'Macro' : 'Micro'} ·{' '}
+                                      {formatFormulaProductDetails(product)}
+                                    </p>
+                                  </button>
+                                ))
                               ) : (
                                 <div className="px-4 py-3 text-xs text-stone-500">
                                   Nenhum macro ou micro encontrado.
                                 </div>
                               )}
                             </div>
-                          )}
+                          );
+                        })()}
                       </div>
 
                       {availableFormulaProducts.length === 0 && (

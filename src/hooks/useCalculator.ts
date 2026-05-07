@@ -54,6 +54,10 @@ interface UseCalculatorProps {
   currentUser: AppUser;
 }
 
+const DEFAULT_BRANCH_NAME = 'FERTIGRAN UBERABA';
+const DEFAULT_LOCAL_NAME = 'CARREGAMENTO UBERABA';
+const PURE_PRODUCT_WEIGHT = 1000;
+
 export function useCalculator({
   initialData,
   initialFormulaToLoad,
@@ -141,10 +145,6 @@ export function useCalculator({
     Record<string, { formula: string; macros: RawMaterial[]; micros: RawMaterial[] }>
   >({});
   const hasAppliedInitialDefaults = useRef(false);
-
-  const DEFAULT_BRANCH_NAME = 'FERTIGRAN UBERABA';
-  const DEFAULT_LOCAL_NAME = 'CARREGAMENTO UBERABA';
-  const PURE_PRODUCT_WEIGHT = 1000;
 
   const getProductFormulaLabel = (material?: RawMaterial | null) => {
     if (!material) return '';
@@ -234,7 +234,9 @@ export function useCalculator({
         setCompCategories(savedCategories);
       } catch (error) {
         console.error('[useCalculator] Falha ao carregar dados da calculadora:', error);
-        showError('Erro ao carregar dados iniciais da calculadora.');
+        showError(
+          'Não foi possível carregar filiais, listas de preço e cadastros iniciais da calculadora.'
+        );
         setMaterialsLoadError(true);
         setBranches([]);
         setPriceLists([]);
@@ -258,13 +260,19 @@ export function useCalculator({
       .catch((error) => {
         console.error('[useCalculator] Falha ao carregar locais de carregamento:', error);
         setLocaisCarregamento([]);
-        showError('Erro ao carregar locais de carregamento.');
+        showError(
+          'Não foi possível carregar os locais de carregamento. Recarregue a página ou tente novamente.'
+        );
       })
       .finally(() => setLocaisLoaded(true));
   }, []);
 
   useEffect(() => {
-    if (initialData || hasAppliedInitialDefaults.current || isMaterialsLoading || !locaisLoaded) {
+    const shouldSkipInitialDefaults =
+      !!initialData || hasAppliedInitialDefaults.current || isMaterialsLoading || !locaisLoaded;
+
+    // Defaults are applied only once on the first fresh calculator open.
+    if (shouldSkipInitialDefaults) {
       return;
     }
 
@@ -281,8 +289,6 @@ export function useCalculator({
 
     hasAppliedInitialDefaults.current = true;
   }, [
-    DEFAULT_BRANCH_NAME,
-    DEFAULT_LOCAL_NAME,
     branches,
     initialBranchId,
     initialData,
@@ -590,7 +596,9 @@ export function useCalculator({
           (material) => material.id === selectedProductId
         );
         if (!selectedProduct) {
-          showError('Produto Macro/Micro selecionado não foi encontrado na lista atual.');
+          showError(
+            `Produto Macro/Micro selecionado (${selectedProductId}) não foi encontrado. Selecione um produto da lista de preço atual.`
+          );
           return;
         }
 
@@ -843,7 +851,9 @@ export function useCalculator({
         );
 
         if (!selectedProduct) {
-          showError('Produto selecionado não encontrado na lista de preço atual.');
+          showError(
+            'O produto selecionado não está disponível na lista de preço atual. Verifique a lista selecionada ou escolha outro produto.'
+          );
           return calc;
         }
 
