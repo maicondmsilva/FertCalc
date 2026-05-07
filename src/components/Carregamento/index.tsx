@@ -822,6 +822,10 @@ export function ModalNovoCarregamento({
                 onChange={(e) => setForm({ ...form, quantidade_total: e.target.value })}
                 readOnly={form.pedido_venda_id !== '' && pedidoItens.length > 0}
                 className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm ${
+                  form.pedido_venda_id !== '' && pedidoItens.length > 0
+                    ? 'bg-stone-100 text-stone-600 cursor-not-allowed'
+                    : ''
+                } ${
                   selectedPedidoVenda?.saldo_disponivel != null &&
                   parseFloat(form.quantidade_total || '0') > selectedPedidoVenda.saldo_disponivel
                     ? 'border-amber-400 bg-amber-50'
