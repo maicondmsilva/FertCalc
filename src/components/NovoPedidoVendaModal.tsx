@@ -2,7 +2,12 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { PricingRecord, Client, Embalagem } from '../types';
 import { X, ClipboardList, Search, Plus, Trash2, Zap } from 'lucide-react';
 import { getClients } from '../services/db';
-import { createPedidoVenda, createPedidoVendaItens } from '../services/pedidosVendaService';
+import {
+  checkPedidoDuplicado,
+  createPedidoVenda,
+  createPedidoVendaItens,
+  getEmitentesUsados,
+} from '../services/pedidosVendaService';
 import { getProdutosFormulados, ProdutoFormulado } from '../services/produtosFormuladosService';
 import { getEmbalagens } from '../services/embalagensService';
 import { useToast } from './Toast';
@@ -46,7 +51,8 @@ function getInitialVencimento(pricing?: PricingRecord | null): string {
   return getPricingDueDate(pricing) || '';
 }
 
-const EMITENTE_OPTIONS = Array.from({ length: 200 }, (_, i) => i + 1);
+const EMITENTE_OPTIONS_MAX = 200;
+const EMITENTE_OPTIONS = Array.from({ length: EMITENTE_OPTIONS_MAX }, (_, i) => i + 1);
 
 export default function NovoPedidoVendaModal({
   pricing,
@@ -60,6 +66,8 @@ export default function NovoPedidoVendaModal({
   const [embalagens, setEmbalagens] = useState<Embalagem[]>([]);
   const [saving, setSaving] = useState(false);
   const [loadingEmbalagens, setLoadingEmbalagens] = useState(false);
+  const [loadingEmitentes, setLoadingEmitentes] = useState(false);
+  const [emitentesUsados, setEmitentesUsados] = useState<number[]>([]);
 
   // Client autocomplete
   const [clientSearch, setClientSearch] = useState(pricing?.factors?.client?.name ?? '');
@@ -165,6 +173,48 @@ export default function NovoPedidoVendaModal({
     );
   }, [produtosFormulados]);
 
+  useEffect(() => {
+    const numero = numeroPedido.trim();
+
+    if (!numero) {
+      setEmitentesUsados([]);
+      setLoadingEmitentes(false);
+      return;
+    }
+
+    let isCancelled = false;
+    setLoadingEmitentes(true);
+
+    const timer = window.setTimeout(async () => {
+      try {
+        const usados = await getEmitentesUsados(numero);
+        if (isCancelled) return;
+        setEmitentesUsados(usados);
+
+        const usadosSet = new Set(usados);
+        const proximoDisponivel = EMITENTE_OPTIONS.find((n) => !usadosSet.has(n));
+        if (proximoDisponivel !== undefined) {
+          setEmitente(proximoDisponivel);
+        } else {
+          const maxUsedIssuer = usados.length > 0 ? Math.max(...usados) : 0;
+          setEmitente('custom');
+          setEmitenteCustom(String(maxUsedIssuer + 1));
+        }
+      } catch {
+        if (isCancelled) return;
+        setEmitentesUsados([]);
+        showError('Erro ao consultar emitentes em uso.');
+      } finally {
+        if (!isCancelled) setLoadingEmitentes(false);
+      }
+    }, 500);
+
+    return () => {
+      isCancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [numeroPedido, showError]);
+
   const filteredClients =
     clientSearch.length >= 2
       ? clients.filter((c) => c.name.toLowerCase().includes(clientSearch.toLowerCase()))
@@ -245,16 +295,25 @@ export default function NovoPedidoVendaModal({
     }
 
     const emitenteNum = getEmitenteValue();
-    const barraPedido = `${numeroPedido.trim()}/${emitenteNum}`;
+    const numeroPedidoTrim = numeroPedido.trim();
+    const barraPedido = `${numeroPedidoTrim}/${emitenteNum}`;
 
     setSaving(true);
     try {
+      const jaExiste = await checkPedidoDuplicado(numeroPedidoTrim, emitenteNum);
+      if (jaExiste) {
+        showError(
+          `Já existe o pedido ${numeroPedidoTrim}/${emitenteNum}. Escolha outro emitente para reemitir.`
+        );
+        return;
+      }
+
       const precoPrincipal =
         itens[0].preco_unitario !== '' ? Number(itens[0].preco_unitario) : undefined;
 
       const pedidoCriado = await createPedidoVenda({
         precificacao_id: pricing?.id ?? undefined,
-        numero_pedido: numeroPedido.trim(),
+        numero_pedido: numeroPedidoTrim,
         barra_pedido: barraPedido,
         emitente: emitenteNum,
         data_pedido: dataPedido || undefined,
@@ -418,11 +477,14 @@ export default function NovoPedidoVendaModal({
                   }}
                   className="flex-1 px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
                 >
-                  {EMITENTE_OPTIONS.map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
+                  {EMITENTE_OPTIONS.map((n) => {
+                    const isUsed = emitentesUsados.includes(n);
+                    return (
+                      <option key={n} value={n} disabled={isUsed}>
+                        {n} - {isUsed ? 'em uso' : 'disponível'}
+                      </option>
+                    );
+                  })}
                   <option value="custom">Outro...</option>
                 </select>
                 {emitente === 'custom' && (
@@ -439,6 +501,12 @@ export default function NovoPedidoVendaModal({
               {numeroPedido && (
                 <p className="text-xs text-emerald-600 mt-1 font-mono">
                   Pedido: {numeroPedido}/{getEmitenteValue()}
+                </p>
+              )}
+              {loadingEmitentes && (
+                <p className="text-xs text-stone-500 mt-1 flex items-center gap-1">
+                  <span className="w-3 h-3 border border-stone-300 border-t-emerald-500 rounded-full animate-spin" />
+                  Consultando emitentes em uso...
                 </p>
               )}
             </div>

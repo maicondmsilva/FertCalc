@@ -97,6 +97,45 @@ export async function getPedidoVendaByPrecificacao(
   return mapPedido(data);
 }
 
+export async function checkPedidoDuplicado(
+  numeroPedido: string,
+  emitente: number
+): Promise<boolean> {
+  const numero = numeroPedido.trim();
+  if (!numero || !emitente || emitente < 1) return false;
+
+  const { data, error } = await supabase
+    .from('pedidos_venda')
+    .select('id')
+    .eq('numero_pedido', numero)
+    .eq('emitente', emitente)
+    .limit(1);
+
+  if (error) throw error;
+  return (data ?? []).length > 0;
+}
+
+export async function getEmitentesUsados(numeroPedido: string): Promise<number[]> {
+  const numero = numeroPedido.trim();
+  if (!numero) return [];
+
+  const { data, error } = await supabase
+    .from('pedidos_venda')
+    .select('emitente')
+    .eq('numero_pedido', numero);
+
+  if (error) throw error;
+
+  const rows = (data ?? []) as Array<{ emitente: number | string | null }>;
+  const usados = new Set<number>();
+  for (const row of rows) {
+    const emitente = Number(row.emitente);
+    if (!Number.isNaN(emitente) && emitente >= 1) usados.add(emitente);
+  }
+
+  return Array.from(usados).sort((a, b) => a - b);
+}
+
 export async function createPedidoVenda(
   pedido: Omit<PedidoVenda, 'id' | 'criado_em' | 'atualizado_em'>
 ): Promise<PedidoVenda> {
@@ -134,7 +173,16 @@ export async function createPedidoVenda(
     })
     .select()
     .single();
-  if (error) throw error;
+  if (error) {
+    const errorCode =
+      typeof error === 'object' && error !== null && 'code' in error
+        ? String((error as { code?: unknown }).code)
+        : undefined;
+    if (errorCode === '23505') {
+      throw new Error('Pedido duplicado: já existe um pedido com esse número e emitente.');
+    }
+    throw error;
+  }
   return mapPedido(data);
 }
 
