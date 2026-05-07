@@ -51,7 +51,8 @@ function getInitialVencimento(pricing?: PricingRecord | null): string {
   return getPricingDueDate(pricing) || '';
 }
 
-const EMITENTE_OPTIONS = Array.from({ length: 200 }, (_, i) => i + 1);
+const EMITENTE_OPTIONS_MAX = 200;
+const EMITENTE_OPTIONS = Array.from({ length: EMITENTE_OPTIONS_MAX }, (_, i) => i + 1);
 
 export default function NovoPedidoVendaModal({
   pricing,
@@ -194,7 +195,7 @@ export default function NovoPedidoVendaModal({
         if (proximoDisponivel != null) {
           setEmitente(proximoDisponivel);
         } else {
-          const maiorUsado = usados.length > 0 ? Math.max(...usados) : 200;
+          const maiorUsado = usados.length > 0 ? Math.max(...usados) : EMITENTE_OPTIONS_MAX;
           setEmitente('custom');
           setEmitenteCustom(String(maiorUsado + 1));
         }
@@ -477,7 +478,7 @@ export default function NovoPedidoVendaModal({
                 >
                   {EMITENTE_OPTIONS.map((n) => (
                     <option key={n} value={n} disabled={emitentesUsados.includes(n)}>
-                      {n} — {emitentesUsados.includes(n) ? 'em uso' : 'disponível ✓'}
+                      {n} - {emitentesUsados.includes(n) ? 'em uso' : 'disponível'}
                     </option>
                   ))}
                   <option value="custom">Outro...</option>

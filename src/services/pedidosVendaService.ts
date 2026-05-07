@@ -126,9 +126,10 @@ export async function getEmitentesUsados(numeroPedido: string): Promise<number[]
 
   if (error) throw error;
 
+  const rows = (data ?? []) as Array<{ emitente: number | string | null }>;
   const usados = new Set<number>();
-  for (const row of data ?? []) {
-    const emitente = Number((row as { emitente?: number | string | null }).emitente);
+  for (const row of rows) {
+    const emitente = Number(row.emitente);
     if (!Number.isNaN(emitente) && emitente >= 1) usados.add(emitente);
   }
 
