@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { PricingRecord, User, AppSettings, PedidoVenda } from '../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { PricingRecord, User, AppSettings, PedidoVenda, Embalagem } from '../types';
 import {
   X,
   Edit3,
@@ -31,6 +31,7 @@ import {
   createPedidoVenda,
   updatePedidoVenda,
 } from '../services/pedidosVendaService';
+import { getEmbalagens } from '../services/embalagensService';
 import { useToast } from './Toast';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { useConfirm } from '../hooks/useConfirm';
@@ -96,7 +97,15 @@ export default function PricingDetailModal({
     valor_frete: string;
   } | null>(null);
   const [savingPedido, setSavingPedido] = useState(false);
+  const [embalagens, setEmbalagens] = useState<Embalagem[]>([]);
+  const [loadingEmbalagens, setLoadingEmbalagens] = useState(false);
   const [dbHistory, setDbHistory] = useState<DBPricingHistoryEntry[]>([]);
+  const embalagemOptions = useMemo(
+    () => embalagens.map((e) => e.nome).filter(Boolean),
+    [embalagens]
+  );
+  const embalagemAtual = extractedData?.embalagem ?? '';
+  const embalagemInOptions = embalagemOptions.includes(embalagemAtual);
 
   React.useEffect(() => {
     getPricingHistory(selectedPricing.id)
@@ -114,6 +123,14 @@ export default function PricingDetailModal({
   useEffect(() => {
     getPedidoVendaByPrecificacao(selectedPricing.id).then(setPedidoVenda);
   }, [selectedPricing.id]);
+
+  useEffect(() => {
+    setLoadingEmbalagens(true);
+    getEmbalagens(true)
+      .then(setEmbalagens)
+      .catch(() => showError('Erro ao carregar embalagens cadastradas.'))
+      .finally(() => setLoadingEmbalagens(false));
+  }, []);
 
   const handleOpenManualPedido = () => {
     const freight = selectedPricing.factors?.freight ?? 0;
@@ -652,35 +669,35 @@ export default function PricingDetailModal({
                     Embalagem
                   </label>
                   <select
-                    value={['Granel', 'Big Bag', 'Saco 50kg', 'Saco 25kg'].includes(extractedData.embalagem)
-                      ? extractedData.embalagem
-                      : extractedData.embalagem ? 'Outro' : ''}
-                    onChange={(e) => {
-                      if (e.target.value !== 'Outro') {
-                        setExtractedData({ ...extractedData, embalagem: e.target.value });
-                      } else {
-                        setExtractedData({ ...extractedData, embalagem: '' });
-                      }
-                    }}
+                    value={embalagemAtual}
+                    onChange={(e) =>
+                      setExtractedData({ ...extractedData, embalagem: e.target.value })
+                    }
                     className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                    disabled={loadingEmbalagens}
                   >
                     <option value="">— Selecionar —</option>
-                    <option value="Granel">Granel</option>
-                    <option value="Big Bag">Big Bag</option>
-                    <option value="Saco 50kg">Saco 50kg</option>
-                    <option value="Saco 25kg">Saco 25kg</option>
-                    <option value="Outro">Outro</option>
+                    {!embalagemInOptions && embalagemAtual && (
+                      <option value={embalagemAtual}>{embalagemAtual} (não cadastrada)</option>
+                    )}
+                    {embalagemOptions.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                    {!loadingEmbalagens && embalagemOptions.length === 0 && (
+                      <option value="" disabled>
+                        Nenhuma embalagem cadastrada.
+                      </option>
+                    )}
                   </select>
-                  {!['Granel', 'Big Bag', 'Saco 50kg', 'Saco 25kg', ''].includes(extractedData.embalagem) && (
-                    <input
-                      type="text"
-                      value={extractedData.embalagem}
-                      onChange={(e) =>
-                        setExtractedData({ ...extractedData, embalagem: e.target.value })
-                      }
-                      placeholder="Descreva a embalagem..."
-                      className="mt-1 w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-                    />
+                  {loadingEmbalagens && (
+                    <p className="mt-1 text-xs text-stone-500">Carregando embalagens...</p>
+                  )}
+                  {!loadingEmbalagens && embalagemOptions.length === 0 && (
+                    <p className="mt-1 text-xs text-stone-500">
+                      Nenhuma embalagem foi cadastrada em Cadastro de Produtos → Embalagem.
+                    </p>
                   )}
                 </div>
                 <div>

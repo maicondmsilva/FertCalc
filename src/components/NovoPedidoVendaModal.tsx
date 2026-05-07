@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { PricingRecord, Client } from '../types';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { PricingRecord, Client, Embalagem } from '../types';
 import { X, ClipboardList, Search, Plus, Trash2, Zap } from 'lucide-react';
 import { getClients } from '../services/db';
 import { createPedidoVenda, createPedidoVendaItens } from '../services/pedidosVendaService';
 import { getProdutosFormulados, ProdutoFormulado } from '../services/produtosFormuladosService';
+import { getEmbalagens } from '../services/embalagensService';
 import { useToast } from './Toast';
 
 interface NovoPedidoVendaModalProps {
@@ -55,7 +56,9 @@ export default function NovoPedidoVendaModal({
   const { showSuccess, showError } = useToast();
   const [clients, setClients] = useState<Client[]>([]);
   const [produtosFormulados, setProdutosFormulados] = useState<ProdutoFormulado[]>([]);
+  const [embalagens, setEmbalagens] = useState<Embalagem[]>([]);
   const [saving, setSaving] = useState(false);
+  const [loadingEmbalagens, setLoadingEmbalagens] = useState(false);
 
   // Client autocomplete
   const [clientSearch, setClientSearch] = useState(pricing?.factors?.client?.name ?? '');
@@ -84,17 +87,10 @@ export default function NovoPedidoVendaModal({
   const [observacoes, setObservacoes] = useState('');
 
   // Embalagem — pre-fill from pricing if available
-  const pricingEmbalagem = (pricing?.factors as any)?.embalagem_nome ?? (pricing?.factors as any)?.embalagem ?? '';
+  const pricingEmbalagem =
+    (pricing?.factors as any)?.embalagem_nome ?? (pricing?.factors as any)?.embalagem ?? '';
   const [embalagem, setEmbalagem] = useState<string>(pricingEmbalagem);
-  const [embalagemOutro, setEmbalagemOutro] = useState('');
   const autoEmbalagem = !!pricing && !!pricingEmbalagem;
-
-  const EMBALAGEM_OPTIONS = ['Granel', 'Big Bag', 'Saco 50kg', 'Saco 25kg', 'Outro'];
-
-  const getEmbalagemValue = (): string | undefined => {
-    if (embalagem === 'Outro') return embalagemOutro.trim() || undefined;
-    return embalagem || undefined;
-  };
 
   /** Round price to 2 decimal places when initializing from pricing */
   const roundPrice = (v: number | undefined): number | '' => {
@@ -139,6 +135,11 @@ export default function NovoPedidoVendaModal({
     getProdutosFormulados()
       .then(setProdutosFormulados)
       .catch(() => {});
+    setLoadingEmbalagens(true);
+    getEmbalagens(true)
+      .then(setEmbalagens)
+      .catch(() => showError('Erro ao carregar embalagens cadastradas.'))
+      .finally(() => setLoadingEmbalagens(false));
   }, []);
 
   // When produtosFormulados loads, match unmatched items to products
@@ -270,7 +271,7 @@ export default function NovoPedidoVendaModal({
         valor_frete: tipoFrete === 'CIF' && valorFrete !== '' ? Number(valorFrete) : undefined,
         condicao_pagamento: condicaoPagamento.trim() || undefined,
         observacoes: observacoes.trim() || undefined,
-        embalagem: getEmbalagemValue(),
+        embalagem: embalagem || undefined,
         status: 'pendente',
         importado_por: currentUser.id,
       });
@@ -310,6 +311,11 @@ export default function NovoPedidoVendaModal({
       value: p.id,
       label: p.formula_npk ? `${p.nome} (${p.formula_npk})` : p.nome,
     }));
+  const embalagemOptions = useMemo(
+    () => embalagens.map((e) => e.nome).filter(Boolean),
+    [embalagens]
+  );
+  const embalagemInOptions = embalagemOptions.includes(embalagem);
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -642,22 +648,30 @@ export default function NovoPedidoVendaModal({
               value={embalagem}
               onChange={(e) => setEmbalagem(e.target.value)}
               className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 outline-none ${autoEmbalagem ? autoClass : normalClass}`}
+              disabled={loadingEmbalagens}
             >
               <option value="">— Selecionar embalagem —</option>
-              {EMBALAGEM_OPTIONS.map((opt) => (
+              {!embalagemInOptions && embalagem && (
+                <option value={embalagem}>{embalagem} (não cadastrada)</option>
+              )}
+              {embalagemOptions.map((opt) => (
                 <option key={opt} value={opt}>
                   {opt}
                 </option>
               ))}
+              {!loadingEmbalagens && embalagemOptions.length === 0 && (
+                <option value="" disabled>
+                  Nenhuma embalagem cadastrada.
+                </option>
+              )}
             </select>
-            {embalagem === 'Outro' && (
-              <input
-                type="text"
-                value={embalagemOutro}
-                onChange={(e) => setEmbalagemOutro(e.target.value)}
-                placeholder="Descreva a embalagem..."
-                className="mt-1 w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-              />
+            {loadingEmbalagens && (
+              <p className="mt-1 text-xs text-stone-500">Carregando embalagens...</p>
+            )}
+            {!loadingEmbalagens && embalagemOptions.length === 0 && (
+              <p className="mt-1 text-xs text-stone-500">
+                Nenhuma embalagem foi cadastrada em Cadastro de Produtos → Embalagem.
+              </p>
             )}
           </div>
 
