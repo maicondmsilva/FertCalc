@@ -193,12 +193,12 @@ export default function NovoPedidoVendaModal({
 
         const usadosSet = new Set(usados);
         const proximoDisponivel = EMITENTE_OPTIONS.find((n) => !usadosSet.has(n));
-        if (proximoDisponivel != null) {
+        if (proximoDisponivel !== undefined) {
           setEmitente(proximoDisponivel);
         } else {
-          const maiorUsado = usados.length > 0 ? Math.max(...usados) : 0;
+          const maxUsedIssuer = usados.length > 0 ? Math.max(...usados) : 0;
           setEmitente('custom');
-          setEmitenteCustom(String(maiorUsado + 1));
+          setEmitenteCustom(String(maxUsedIssuer + 1));
         }
       } catch {
         if (isCancelled) return;
@@ -477,11 +477,14 @@ export default function NovoPedidoVendaModal({
                   }}
                   className="flex-1 px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
                 >
-                  {EMITENTE_OPTIONS.map((n) => (
-                    <option key={n} value={n} disabled={emitentesUsados.includes(n)}>
-                      {n} - {emitentesUsados.includes(n) ? 'em uso' : 'disponível'}
-                    </option>
-                  ))}
+                  {EMITENTE_OPTIONS.map((n) => {
+                    const isUsed = emitentesUsados.includes(n);
+                    return (
+                      <option key={n} value={n} disabled={isUsed}>
+                        {n} - {isUsed ? 'em uso' : 'disponível'}
+                      </option>
+                    );
+                  })}
                   <option value="custom">Outro...</option>
                 </select>
                 {emitente === 'custom' && (
