@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { User, PricingRecord, PedidoVenda } from '../../types';
+import { User, PricingRecord, PedidoVenda, PedidoVendaItem } from '../../types';
 import {
   Truck,
   Package,
@@ -65,7 +65,7 @@ import {
   notifyCarregamentoEditado,
 } from '../../services/notificationService';
 import { getPricingRecords } from '../../services/db';
-import { getPedidosVenda } from '../../services/pedidosVendaService';
+import { getPedidosVenda, getPedidoVendaItens } from '../../services/pedidosVendaService';
 import { getLocaisAtivos } from '../../services/locaisCarregamentoService';
 import { useToast } from '../Toast';
 import SolicitacaoCotacaoIndependente from './SolicitacaoCotacao';
@@ -201,6 +201,7 @@ interface EnrichedPedido {
   barra_pedido?: string | null;
   quantidade_real?: number | null;
   tipo_frete?: string | null;
+  valor_frete?: number | null;
   saldo_disponivel?: number | null;
   status?: PedidoVenda['status'];
   pricing?: PricingRecord;
@@ -221,6 +222,13 @@ export interface CarregamentoFormData {
   cliente_nome: string;
   valor_frete: string;
   _freteAutoDetectado: boolean;
+  _freteOrigem?: 'pedido' | 'precificacao';
+  itens?: {
+    pedido_venda_item_id?: string;
+    produto_nome: string;
+    quantidade_ton: number;
+    embalagem?: string;
+  }[];
 }
 
 interface CotacaoFormData {
@@ -230,6 +238,12 @@ interface CotacaoFormData {
   validade_cotacao: string;
   observacoes: string;
 }
+
+type ItemCarregamentoState = {
+  item: PedidoVendaItem;
+  selecionado: boolean;
+  quantidade: string;
+};
 
 export interface ModalNovoCarregamentoProps {
   filiais: Filial[];
@@ -281,6 +295,8 @@ export function ModalNovoCarregamento({
           ? String(carregamentoEditando.valor_frete)
           : '',
         _freteAutoDetectado: false,
+        _freteOrigem: undefined,
+        itens: [],
       };
     }
     return {
@@ -297,10 +313,12 @@ export function ModalNovoCarregamento({
       precificacao_id: pedidoVinculado?.precificacao_id || '',
       cliente_nome: pedidoVinculado?.cliente_nome || '',
       valor_frete:
-        pedidoVinculado?.tipo_frete === 'CIF' && pedidoVinculado?.valor_frete
+        pedidoVinculado?.tipo_frete === 'CIF' && pedidoVinculado?.valor_frete != null
           ? String(pedidoVinculado.valor_frete)
           : '',
-      _freteAutoDetectado: !!pedidoVinculado,
+      _freteAutoDetectado: pedidoVinculado?.valor_frete != null,
+      _freteOrigem: pedidoVinculado?.valor_frete != null ? 'pedido' : undefined,
+      itens: [],
     };
   });
   const [saving, setSaving] = useState(false);
@@ -314,6 +332,9 @@ export function ModalNovoCarregamento({
   const [selectedPedidoVenda, setSelectedPedidoVenda] = useState<PedidoVenda | null>(
     pedidoVinculado ?? null
   );
+  const [pedidoItens, setPedidoItens] = useState<PedidoVendaItem[]>([]);
+  const [itensCarregamento, setItensCarregamento] = useState<ItemCarregamentoState[]>([]);
+  const [carregandoPedidoItens, setCarregandoPedidoItens] = useState(false);
 
   useEffect(() => {
     if (filiais.length === 0) {
@@ -405,10 +426,83 @@ export function ModalNovoCarregamento({
     setPedidoResults(filtered.slice(0, 10));
   }, [pedidoSearch, allPedidos]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPedidoItens = async () => {
+      if (!form.pedido_venda_id) {
+        setPedidoItens([]);
+        setItensCarregamento([]);
+        setCarregandoPedidoItens(false);
+        setForm((prev) => ({ ...prev, itens: [] }));
+        return;
+      }
+
+      try {
+        setPedidoItens([]);
+        setItensCarregamento([]);
+        setCarregandoPedidoItens(true);
+        const itens = await getPedidoVendaItens(form.pedido_venda_id);
+        if (cancelled) return;
+        setPedidoItens(itens);
+        setItensCarregamento(
+          itens.map((item) => ({
+            item,
+            selecionado: true,
+            quantidade: item.quantidade_ton ? String(item.quantidade_ton) : '',
+          }))
+        );
+      } catch (err) {
+        console.error('Erro ao carregar itens do pedido:', err);
+        if (cancelled) return;
+        setPedidoItens([]);
+        setItensCarregamento([]);
+      } finally {
+        if (!cancelled) setCarregandoPedidoItens(false);
+      }
+    };
+
+    loadPedidoItens();
+    return () => {
+      cancelled = true;
+    };
+  }, [form.pedido_venda_id]);
+
+  useEffect(() => {
+    if (!form.pedido_venda_id || pedidoItens.length === 0) {
+      return;
+    }
+
+    const itensSelecionados = itensCarregamento
+      .filter((it) => it.selecionado)
+      .map((it) => ({
+        pedido_venda_item_id: it.item.id,
+        produto_nome: it.item.produto_nome,
+        quantidade_ton: Number(it.quantidade || 0),
+        embalagem: it.item.embalagem,
+      }))
+      .filter((it) => it.quantidade_ton > 0);
+
+    const total = itensSelecionados.reduce((sum, it) => sum + it.quantidade_ton, 0);
+    const totalStr = total > 0 ? String(Number(total.toFixed(3))) : '';
+
+    setForm((prev) => ({
+      ...prev,
+      quantidade_total: totalStr,
+      itens: itensSelecionados,
+    }));
+  }, [itensCarregamento, pedidoItens, form.pedido_venda_id]);
+
   const selectPedido = (p: EnrichedPedido) => {
     const pricing = p.pricing;
     const tipoFrete = derivarTipoFrete(p, pricing);
-    const freteVal = Number(pricing?.factors?.freight ?? 0);
+    const pedidoFreteVal = p.valor_frete != null ? Number(p.valor_frete) : Number.NaN;
+    const pricingFreteVal =
+      pricing?.factors?.freight != null ? Number(pricing.factors.freight) : Number.NaN;
+    const temFretePedido = p.valor_frete != null && Number.isFinite(pedidoFreteVal);
+    const temFretePricing = pricing?.factors?.freight != null && Number.isFinite(pricingFreteVal);
+    const freteVal = temFretePedido ? pedidoFreteVal : pricingFreteVal;
+    const freteOrigem = temFretePedido ? 'pedido' : temFretePricing ? 'precificacao' : undefined;
     const numeroPedido = p._source === 'pedido' ? p.numero_pedido || '' : '';
     setForm((prev) => ({
       ...prev,
@@ -421,9 +515,11 @@ export function ModalNovoCarregamento({
           ? String(pricing.factors.totalTons)
           : prev.quantidade_total,
       tipo_frete: tipoFrete,
-      valor_frete: freteVal > 0 ? freteVal.toFixed(2) : '',
+      valor_frete: freteOrigem ? freteVal.toFixed(2) : '',
       cliente_nome: p.clientName || pricing?.factors?.client?.name || '',
-      _freteAutoDetectado: true,
+      _freteAutoDetectado: !!freteOrigem,
+      _freteOrigem: freteOrigem,
+      itens: [],
     }));
     // Track selected pedido de venda for saldo validation
     if (p._source === 'pedido' && p.id) {
@@ -442,17 +538,31 @@ export function ModalNovoCarregamento({
     if (p._source === 'pricing') {
       setPedidoSearch(`Precificação #${pricing?.formattedCod || pricing?.cod || ''}`);
     } else {
-      setPedidoSearch(
-        p.numero_pedido
-          ? `${p.numero_pedido}${p.barra_pedido ? '/' + p.barra_pedido : ''}`
-          : p.clientName || ''
-      );
+      setPedidoSearch(p.barra_pedido || p.numero_pedido || p.clientName || '');
     }
     setPedidoResults([]);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (form.pedido_venda_id && pedidoItens.length > 0) {
+      const invalido = itensCarregamento.some((entry) => {
+        if (!entry.selecionado) return false;
+        const quantidade = Number(entry.quantidade || 0);
+        const saldoDisponivel = Number(
+          (entry.item as PedidoVendaItem & { saldo_disponivel?: number }).saldo_disponivel ??
+            entry.item.quantidade_ton ??
+            0
+        );
+        return quantidade <= 0 || quantidade > saldoDisponivel;
+      });
+      if (invalido) {
+        showError('Revise as quantidades dos itens selecionados antes de salvar.');
+        return;
+      }
+    }
+
     setSaving(true);
     try {
       await onSave(form);
@@ -521,8 +631,7 @@ export function ModalNovoCarregamento({
                     ) : (
                       <>
                         <p className="font-bold text-stone-800">
-                          {p.numero_pedido ? `Pedido: ${p.numero_pedido}` : '—'}
-                          {p.barra_pedido ? ` / ${p.barra_pedido}` : ''}
+                          {p.barra_pedido || p.numero_pedido || '—'}
                         </p>
                         <p className="text-stone-500 text-xs">
                           {p.clientName || '—'} · COD: {p.pricing?.formattedCod || '—'}
@@ -557,8 +666,13 @@ export function ModalNovoCarregamento({
                       precificacao_id: '',
                       cliente_nome: '',
                       _freteAutoDetectado: false,
+                      _freteOrigem: undefined,
+                      itens: [],
                     }));
                     setSelectedPedidoVenda(null);
+                    setPedidoItens([]);
+                    setItensCarregamento([]);
+                    setCarregandoPedidoItens(false);
                     setPedidoSearch('');
                   }}
                   className="text-xs text-stone-400 hover:text-red-500 transition-colors"
@@ -568,6 +682,104 @@ export function ModalNovoCarregamento({
               </div>
             )}
           </div>
+
+          {form.pedido_venda_id && pedidoItens.length > 0 && (
+            <div className="border border-stone-200 rounded-xl p-4 space-y-3 bg-stone-50/60">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-bold text-stone-800">Produtos a Carregar</h4>
+                <span className="text-xs text-stone-500">
+                  Total:{' '}
+                  {itensCarregamento
+                    .filter((it) => it.selecionado)
+                    .reduce((sum, it) => sum + Number(it.quantidade || 0), 0)
+                    .toLocaleString('pt-BR', {
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 3,
+                    })}{' '}
+                  ton
+                </span>
+              </div>
+
+              <div className="space-y-2">
+                {itensCarregamento.map((entry, idx) => {
+                  const saldoDisponivel = Number(
+                    (entry.item as PedidoVendaItem & { saldo_disponivel?: number })
+                      .saldo_disponivel ??
+                      entry.item.quantidade_ton ??
+                      0
+                  );
+                  const quantidadeNum = Number(entry.quantidade || 0);
+                  const excedeuSaldo = quantidadeNum > saldoDisponivel;
+
+                  return (
+                    <div
+                      key={entry.item.id || `${entry.item.produto_nome}-${idx}`}
+                      className="bg-white border border-stone-200 rounded-lg p-3"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <label className="flex items-start gap-2 text-sm text-stone-800 flex-1">
+                          <input
+                            type="checkbox"
+                            checked={entry.selecionado}
+                            onChange={(e) =>
+                              setItensCarregamento((prev) =>
+                                prev.map((it, i) =>
+                                  i === idx ? { ...it, selecionado: e.target.checked } : it
+                                )
+                              )
+                            }
+                            className="mt-0.5"
+                          />
+                          <span>
+                            <span className="font-semibold">{entry.item.produto_nome}</span>
+                            {entry.item.embalagem && (
+                              <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                                {entry.item.embalagem}
+                              </span>
+                            )}
+                            {Number.isFinite(saldoDisponivel) && (
+                              <span className="ml-2 text-xs text-stone-500">
+                                Saldo: {saldoDisponivel.toLocaleString('pt-BR')} ton
+                              </span>
+                            )}
+                          </span>
+                        </label>
+                        <div className="w-36">
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.001"
+                            disabled={!entry.selecionado}
+                            value={entry.quantidade}
+                            onChange={(e) =>
+                              setItensCarregamento((prev) =>
+                                prev.map((it, i) =>
+                                  i === idx ? { ...it, quantidade: e.target.value } : it
+                                )
+                              )
+                            }
+                            className={`w-full px-2 py-1.5 text-sm border rounded-md outline-none focus:ring-2 focus:ring-amber-500 ${
+                              excedeuSaldo ? 'border-red-300 bg-red-50' : 'border-stone-300'
+                            }`}
+                          />
+                          {entry.selecionado && excedeuSaldo && (
+                            <p className="mt-1 text-[10px] text-red-600">
+                              Excede o saldo disponível.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {form.pedido_venda_id && !carregandoPedidoItens && pedidoItens.length === 0 && (
+            <p className="text-xs text-stone-500">
+              Este pedido não possui itens cadastrados. Informe a quantidade total manualmente.
+            </p>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -586,6 +798,7 @@ export function ModalNovoCarregamento({
                     ...form,
                     tipo_frete: e.target.value as 'CIF' | 'FOB',
                     _freteAutoDetectado: false,
+                    _freteOrigem: undefined,
                   })
                 }
                 className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
@@ -605,6 +818,7 @@ export function ModalNovoCarregamento({
                 step="0.001"
                 value={form.quantidade_total}
                 onChange={(e) => setForm({ ...form, quantidade_total: e.target.value })}
+                readOnly={form.pedido_venda_id !== '' && pedidoItens.length > 0}
                 className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm ${
                   selectedPedidoVenda?.saldo_disponivel != null &&
                   parseFloat(form.quantidade_total || '0') > selectedPedidoVenda.saldo_disponivel
@@ -613,6 +827,11 @@ export function ModalNovoCarregamento({
                 }`}
                 required
               />
+              {form.pedido_venda_id && pedidoItens.length > 0 && (
+                <p className="mt-1 text-[11px] text-stone-500">
+                  Total calculado automaticamente com base nos itens selecionados.
+                </p>
+              )}
             </div>
           </div>
 
@@ -681,7 +900,7 @@ export function ModalNovoCarregamento({
                 Valor do Frete (R$/t)
                 {form._freteAutoDetectado && form.valor_frete && (
                   <span className="ml-2 text-[10px] font-normal text-emerald-600 normal-case">
-                    ✓ preenchido da precificação
+                    {form._freteOrigem === 'pedido' ? '✓ do pedido de venda' : '✓ da precificação'}
                   </span>
                 )}
               </label>
@@ -690,7 +909,14 @@ export function ModalNovoCarregamento({
                 min="0"
                 step="0.01"
                 value={form.valor_frete}
-                onChange={(e) => setForm({ ...form, valor_frete: e.target.value })}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    valor_frete: e.target.value,
+                    _freteAutoDetectado: false,
+                    _freteOrigem: undefined,
+                  })
+                }
                 placeholder="0,00"
                 className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
               />
@@ -3565,23 +3791,26 @@ export default function CarregamentoModule({
   const handleCreateCarregamento = async (form: CarregamentoFormData) => {
     try {
       const numero = await gerarNumeroCarregamento();
-      await createCarregamento({
-        numero_carregamento: numero,
-        tipo_frete: form.tipo_frete,
-        quantidade_total: parseFloat(form.quantidade_total),
-        quantidade_liberada: 0,
-        quantidade_carregada: 0,
-        filial_id: form.filial_id || undefined,
-        local_carregamento_id: form.local_carregamento_id || undefined,
-        pedido_precificacao_id: form.precificacao_id || undefined,
-        pedido_venda_id: form.pedido_venda_id || undefined,
-        pedido_venda_numero: form.pedido_venda_numero || undefined,
-        data_prevista_carregamento: form.data_prevista_carregamento || undefined,
-        observacoes: form.observacoes || undefined,
-        valor_frete: form.valor_frete ? parseFloat(form.valor_frete) : undefined,
-        status: 'aguardando_cotacao',
-        criado_por: currentUser.id,
-      });
+      await createCarregamento(
+        {
+          numero_carregamento: numero,
+          tipo_frete: form.tipo_frete,
+          quantidade_total: parseFloat(form.quantidade_total),
+          quantidade_liberada: 0,
+          quantidade_carregada: 0,
+          filial_id: form.filial_id || undefined,
+          local_carregamento_id: form.local_carregamento_id || undefined,
+          pedido_precificacao_id: form.precificacao_id || undefined,
+          pedido_venda_id: form.pedido_venda_id || undefined,
+          pedido_venda_numero: form.pedido_venda_numero || undefined,
+          data_prevista_carregamento: form.data_prevista_carregamento || undefined,
+          observacoes: form.observacoes || undefined,
+          valor_frete: form.valor_frete ? parseFloat(form.valor_frete) : undefined,
+          status: 'aguardando_cotacao',
+          criado_por: currentUser.id,
+        },
+        form.itens
+      );
       showSuccess('Carregamento criado com sucesso!');
       setShowModalNovo(false);
       await load();

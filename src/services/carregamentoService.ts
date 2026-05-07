@@ -192,7 +192,8 @@ export async function getCarregamentos(
 ): Promise<Carregamento[]> {
   let query = supabase
     .from('carregamentos')
-    .select(`
+    .select(
+      `
       *,
       branches(*),
       transportadoras(*),
@@ -204,7 +205,8 @@ export async function getCarregamentos(
         saldo_disponivel,
         quantidade_real
       )
-    `)
+    `
+    )
     .order('criado_em', { ascending: false });
 
   if (filialId) {
@@ -229,8 +231,7 @@ export async function getCarregamentos(
       pedido_data_vencimento: pv?.data_vencimento as string | undefined,
       pedido_saldo_disponivel:
         pv?.saldo_disponivel != null ? Number(pv.saldo_disponivel) : undefined,
-      pedido_quantidade_real:
-        pv?.quantidade_real != null ? Number(pv.quantidade_real) : undefined,
+      pedido_quantidade_real: pv?.quantidade_real != null ? Number(pv.quantidade_real) : undefined,
     };
   });
 }
@@ -253,12 +254,37 @@ export async function getCarregamentoById(id: string): Promise<Carregamento | nu
 }
 
 export async function createCarregamento(
-  payload: Omit<Carregamento, 'id' | 'criado_em' | 'atualizado_em' | 'filial' | 'transportadora'>
+  payload: Omit<Carregamento, 'id' | 'criado_em' | 'atualizado_em' | 'filial' | 'transportadora'>,
+  itens?: {
+    pedido_venda_item_id?: string;
+    produto_nome: string;
+    quantidade_ton: number;
+    embalagem?: string;
+  }[]
 ): Promise<Carregamento> {
   const { data, error } = await supabase.from('carregamentos').insert(payload).select().single();
   if (error || !data) {
     console.error('Erro ao criar carregamento:', error);
     throw error ?? new Error('Falha ao criar carregamento: nenhum dado retornado');
+  }
+  if (itens && itens.length > 0) {
+    const rows = itens
+      .filter((item) => item.quantidade_ton > 0)
+      .map((item) => ({
+        carregamento_id: data.id,
+        pedido_venda_item_id: item.pedido_venda_item_id ?? null,
+        produto_nome: item.produto_nome,
+        quantidade_ton: item.quantidade_ton,
+        embalagem: item.embalagem ?? null,
+      }));
+
+    if (rows.length > 0) {
+      const { error: itensError } = await supabase.from('carregamento_itens').insert(rows);
+      if (itensError) {
+        await supabase.from('carregamentos').delete().eq('id', data.id);
+        throw itensError;
+      }
+    }
   }
   return mapCarregamento(data);
 }
@@ -500,7 +526,8 @@ export async function getCarregamentosRelatorio(
 ): Promise<Carregamento[]> {
   let query = supabase
     .from('carregamentos')
-    .select(`
+    .select(
+      `
       *,
       branches(*),
       transportadoras(*),
@@ -512,7 +539,8 @@ export async function getCarregamentosRelatorio(
         saldo_disponivel,
         quantidade_real
       )
-    `)
+    `
+    )
     .order('criado_em', { ascending: false });
 
   if (filtros.filial_id) query = query.eq('filial_id', filtros.filial_id);
@@ -540,8 +568,7 @@ export async function getCarregamentosRelatorio(
       pedido_data_vencimento: pv?.data_vencimento as string | undefined,
       pedido_saldo_disponivel:
         pv?.saldo_disponivel != null ? Number(pv.saldo_disponivel) : undefined,
-      pedido_quantidade_real:
-        pv?.quantidade_real != null ? Number(pv.quantidade_real) : undefined,
+      pedido_quantidade_real: pv?.quantidade_real != null ? Number(pv.quantidade_real) : undefined,
     };
   });
 }
@@ -609,7 +636,9 @@ export async function getCarregamentosCalendario(
     return {
       ...mapCarregamento(d),
       filial: d.branches ? mapBranchToFilial(d.branches as Record<string, unknown>) : undefined,
-      transportadora: d.transportadoras ? mapTransportadora(d.transportadoras as Record<string, unknown>) : undefined,
+      transportadora: d.transportadoras
+        ? mapTransportadora(d.transportadoras as Record<string, unknown>)
+        : undefined,
       local_carregamento: d.locais_carregamento
         ? mapLocalCarregamento(d.locais_carregamento as Record<string, unknown>)
         : undefined,
@@ -618,8 +647,7 @@ export async function getCarregamentosCalendario(
       pedido_data_vencimento: pv?.data_vencimento as string | undefined,
       pedido_saldo_disponivel:
         pv?.saldo_disponivel != null ? Number(pv.saldo_disponivel) : undefined,
-      pedido_quantidade_real:
-        pv?.quantidade_real != null ? Number(pv.quantidade_real) : undefined,
+      pedido_quantidade_real: pv?.quantidade_real != null ? Number(pv.quantidade_real) : undefined,
     };
   };
 
@@ -631,12 +659,11 @@ export async function getCarregamentosCalendario(
 // ─────────────────────────────────────────────────────────────
 
 /** Busca carregamentos para o Painel de Logística com join em pedido_venda */
-export async function getCarregamentosLogistica(
-  filialIds?: string[]
-): Promise<Carregamento[]> {
+export async function getCarregamentosLogistica(filialIds?: string[]): Promise<Carregamento[]> {
   let query = supabase
     .from('carregamentos')
-    .select(`
+    .select(
+      `
       *,
       branches(*),
       transportadoras(*),
@@ -648,7 +675,8 @@ export async function getCarregamentosLogistica(
         saldo_disponivel,
         quantidade_real
       )
-    `)
+    `
+    )
     .not('status', 'in', '(cancelado,carregado)')
     .order('data_prevista_carregamento', { ascending: true, nullsFirst: false });
 
@@ -672,8 +700,7 @@ export async function getCarregamentosLogistica(
       pedido_data_vencimento: pv?.data_vencimento as string | undefined,
       pedido_saldo_disponivel:
         pv?.saldo_disponivel != null ? Number(pv.saldo_disponivel) : undefined,
-      pedido_quantidade_real:
-        pv?.quantidade_real != null ? Number(pv.quantidade_real) : undefined,
+      pedido_quantidade_real: pv?.quantidade_real != null ? Number(pv.quantidade_real) : undefined,
     };
   });
 }
