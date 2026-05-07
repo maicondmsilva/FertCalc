@@ -44,108 +44,6 @@ import {
 } from '../services/produtosFormuladosService';
 import { addHistoricoPreco } from '../services/historicoPrecoService';
 
-const defaultMacros: RawMaterial[] = [
-  {
-    id: 'm1',
-    type: 'macro',
-    name: 'Ureia',
-    price: 2500,
-    n: 45,
-    p: 0,
-    k: 0,
-    s: 0,
-    ca: 0,
-    microGuarantees: [],
-    minQty: 50,
-    maxQty: 1000,
-    selected: true,
-    quantity: 0,
-  },
-  {
-    id: 'm2',
-    type: 'macro',
-    name: 'MAP',
-    price: 3200,
-    n: 11,
-    p: 52,
-    k: 0,
-    s: 0,
-    ca: 0,
-    microGuarantees: [],
-    minQty: 50,
-    maxQty: 1000,
-    selected: true,
-    quantity: 0,
-  },
-  {
-    id: 'm3',
-    type: 'macro',
-    name: 'KCL',
-    price: 2800,
-    n: 0,
-    p: 0,
-    k: 60,
-    s: 0,
-    ca: 0,
-    microGuarantees: [],
-    minQty: 50,
-    maxQty: 1000,
-    selected: true,
-    quantity: 0,
-  },
-  {
-    id: 'm4',
-    type: 'macro',
-    name: 'Enchimento (Areia/Calcário)',
-    price: 100,
-    n: 0,
-    p: 0,
-    k: 0,
-    s: 0,
-    ca: 0,
-    microGuarantees: [],
-    minQty: 0,
-    maxQty: 1000,
-    selected: true,
-    quantity: 0,
-  },
-];
-
-const defaultMicros: RawMaterial[] = [
-  {
-    id: 'mi1',
-    type: 'micro',
-    name: 'Zinco Sulfato',
-    price: 5000,
-    n: 0,
-    p: 0,
-    k: 0,
-    s: 10,
-    ca: 0,
-    microGuarantees: [{ name: 'Zn', value: 20 }],
-    minQty: 0,
-    maxQty: 1000,
-    selected: true,
-    quantity: 0,
-  },
-  {
-    id: 'mi2',
-    type: 'micro',
-    name: 'Boro',
-    price: 6000,
-    n: 0,
-    p: 0,
-    k: 0,
-    s: 0,
-    ca: 0,
-    microGuarantees: [{ name: 'B', value: 10 }],
-    minQty: 0,
-    maxQty: 1000,
-    selected: true,
-    quantity: 0,
-  },
-];
-
 interface UseCalculatorProps {
   initialData?: PricingRecord | null;
   initialFormulaToLoad?: SavedFormula | null;
@@ -206,8 +104,9 @@ export function useCalculator({
   const [showClientResults, setShowClientResults] = useState(false);
   const [showAgentResults, setShowAgentResults] = useState(false);
 
-  const [macros, setMacros] = useState<RawMaterial[]>(defaultMacros);
-  const [micros, setMicros] = useState<RawMaterial[]>(defaultMicros);
+  const [macros, setMacros] = useState<RawMaterial[]>([]);
+  const [micros, setMicros] = useState<RawMaterial[]>([]);
+  const [isMaterialsLoading, setIsMaterialsLoading] = useState<boolean>(true);
   const [incompatibilityRules, setIncompatibilityRules] = useState<IncompatibilityRule[]>([]);
   const [compCategories, setCompCategories] = useState<any[]>([]);
 
@@ -283,21 +182,33 @@ export function useCalculator({
 
   useEffect(() => {
     const loadData = async () => {
-      const [savedBranches, savedLists, savedClients, savedAgents, savedRules, savedCategories] =
-        await Promise.all([
-          getBranches(),
-          getPriceLists(),
-          getClients(),
-          getAgents(),
-          getIncompatibilityRules(),
-          getCompatibilityCategories(),
-        ]);
-      setBranches(savedBranches);
-      setPriceLists(savedLists);
-      setAvailableClients(savedClients);
-      setAvailableAgents(savedAgents);
-      setIncompatibilityRules(savedRules);
-      setCompCategories(savedCategories);
+      setIsMaterialsLoading(true);
+      try {
+        const [savedBranches, savedLists, savedClients, savedAgents, savedRules, savedCategories] =
+          await Promise.all([
+            getBranches(),
+            getPriceLists(),
+            getClients(),
+            getAgents(),
+            getIncompatibilityRules(),
+            getCompatibilityCategories(),
+          ]);
+        setBranches(savedBranches);
+        setPriceLists(savedLists);
+        setAvailableClients(savedClients);
+        setAvailableAgents(savedAgents);
+        setIncompatibilityRules(savedRules);
+        setCompCategories(savedCategories);
+      } catch {
+        setBranches([]);
+        setPriceLists([]);
+        setAvailableClients([]);
+        setAvailableAgents([]);
+        setIncompatibilityRules([]);
+        setCompCategories([]);
+      } finally {
+        setIsMaterialsLoading(false);
+      }
     };
     loadData();
   }, []);
@@ -385,6 +296,9 @@ export function useCalculator({
 
   const [expandedCalc, setExpandedCalc] = useState<string | null>(null);
   const [microsInGear, setMicrosInGear] = useState<boolean>(true);
+  const hasNoMaterialsInDatabase =
+    !isMaterialsLoading &&
+    priceLists.every((list) => (list.macros?.length || 0) + (list.micros?.length || 0) === 0);
 
   const handleMacroChange = (
     id: string,
@@ -1272,6 +1186,8 @@ export function useCalculator({
     setMicros,
     incompatibilityRules,
     compCategories,
+    isMaterialsLoading,
+    hasNoMaterialsInDatabase,
 
     // Locked state
     isLocked,

@@ -8,6 +8,8 @@ interface CalculatorSettingsModalProps {
   formula: TargetFormula | null;
   globalMacros: RawMaterial[];
   globalMicros: RawMaterial[];
+  isMaterialsLoading?: boolean;
+  hasNoMaterialsInDatabase?: boolean;
   onConfirm: (updatedFormula: TargetFormula) => void;
 }
 
@@ -17,6 +19,8 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
   formula,
   globalMacros,
   globalMicros,
+  isMaterialsLoading = false,
+  hasNoMaterialsInDatabase = false,
   onConfirm,
 }) => {
   const [activeTab, setActiveTab] = useState<'macros' | 'micros'>('macros');
@@ -89,6 +93,30 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
     const filtered = currentProducts.filter((p) =>
       p.name.toLowerCase().includes(search.toLowerCase())
     );
+
+    if (isMaterialsLoading) {
+      return (
+        <div className="mt-4 rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-600">
+          Carregando matérias-primas cadastradas...
+        </div>
+      );
+    }
+
+    if (currentProducts.length === 0 && hasNoMaterialsInDatabase) {
+      return (
+        <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          Nenhuma matéria-prima cadastrada. Acesse o cadastro de produtos para adicionar.
+        </div>
+      );
+    }
+
+    if (filtered.length === 0) {
+      return (
+        <div className="mt-4 rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-600">
+          Nenhum produto encontrado para o filtro informado.
+        </div>
+      );
+    }
 
     return (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-4">

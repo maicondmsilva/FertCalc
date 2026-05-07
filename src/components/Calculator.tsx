@@ -91,6 +91,8 @@ export default function Calculator({
     macros,
     micros,
     compCategories,
+    isMaterialsLoading,
+    hasNoMaterialsInDatabase,
     isLocked,
     factors,
     setFactors,
@@ -491,6 +493,16 @@ export default function Calculator({
 
               {/* F\u00f3rmulas Alvo \u2014 full-width below status */}
               <div className="mt-4 pt-4 border-t border-stone-100">
+                {isMaterialsLoading && (
+                  <div className="mb-3 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-xs font-medium text-stone-600">
+                    Carregando matérias-primas cadastradas...
+                  </div>
+                )}
+                {!isMaterialsLoading && hasNoMaterialsInDatabase && (
+                  <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800">
+                    Nenhuma matéria-prima cadastrada. Acesse o cadastro de produtos para adicionar.
+                  </div>
+                )}
                 <label className="block text-sm font-medium text-stone-600 mb-2">
                   Fórmulas Alvo
                 </label>
@@ -1505,6 +1517,8 @@ export default function Calculator({
         formula={calculations.find((c) => c.id === activeFormulaId) || null}
         globalMacros={macros}
         globalMicros={micros}
+        isMaterialsLoading={isMaterialsLoading}
+        hasNoMaterialsInDatabase={hasNoMaterialsInDatabase}
         onConfirm={(updatedFormula) => {
           setCalculations(
             calculations.map((c) => (c.id === updatedFormula.id ? updatedFormula : c))
