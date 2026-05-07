@@ -483,7 +483,9 @@ export default function Calculator({
                   Nenhuma matéria-prima cadastrada. Acesse o cadastro de produtos para adicionar.
                 </div>
               )}
-              <label className="block text-sm font-medium text-stone-600 mb-2">Fórmulas Alvo</label>
+              <label className="block text-sm font-medium text-stone-600 mb-2">
+                Fórmula Alvo (opcional)
+              </label>
               <div className="space-y-3">
                 {calculations.map((calc, calcIdx) => (
                   <div
@@ -503,7 +505,7 @@ export default function Calculator({
                         type="text"
                         value={calc.formula}
                         onChange={(e) => updateCalculation(calc.id, 'formula', e.target.value)}
-                        placeholder="Ex: 04-14-08"
+                        placeholder="Ex: 04-14-08 (opcional)"
                         className="flex-1 min-w-[90px] px-2 py-1 text-sm border border-stone-300 rounded focus:ring-2 focus:ring-emerald-500"
                       />
                       {/* CA% input */}

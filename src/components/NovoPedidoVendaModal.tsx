@@ -7,6 +7,7 @@ import { getProdutosFormulados, ProdutoFormulado } from '../services/produtosFor
 import { getEmbalagens } from '../services/embalagensService';
 import { useToast } from './Toast';
 import {
+  formatDatePtBr,
   getPricingDueDate,
   getPricingFreightType,
   getPricingFreightValue,
@@ -25,6 +26,7 @@ interface ItemLocal {
   produto_id?: string;
   quantidade_ton: number | '';
   preco_unitario: number | '';
+  embalagem?: string;
   autoFilled?: boolean;
 }
 
@@ -85,12 +87,6 @@ export default function NovoPedidoVendaModal({
 
   const [observacoes, setObservacoes] = useState('');
 
-  // Embalagem — pre-fill from pricing if available
-  const pricingEmbalagem =
-    (pricing?.factors as any)?.embalagem_nome ?? (pricing?.factors as any)?.embalagem ?? '';
-  const [embalagem, setEmbalagem] = useState<string>(pricingEmbalagem);
-  const autoEmbalagem = !!pricing && !!pricingEmbalagem;
-
   /** Round price to 2 decimal places when initializing from pricing */
   const roundPrice = (v: number | undefined): number | '' => {
     if (v == null) return '';
@@ -107,6 +103,7 @@ export default function NovoPedidoVendaModal({
         quantidade_ton:
           (calc.factors?.totalTons ?? 0) > 0 ? (calc.factors?.totalTons as number) : '',
         preco_unitario: roundPrice(calc.summary?.finalPrice),
+        embalagem: (calc.factors as any)?.embalagem_nome ?? (calc.factors as any)?.embalagem ?? '',
         autoFilled: true,
       }));
     }
@@ -120,6 +117,8 @@ export default function NovoPedidoVendaModal({
         produto_id: undefined,
         quantidade_ton: qtd,
         preco_unitario: roundPrice(pricing?.calculations?.[0]?.summary?.finalPrice),
+        embalagem:
+          (pricing?.factors as any)?.embalagem_nome ?? (pricing?.factors as any)?.embalagem,
         autoFilled: !!pricing,
       },
     ];
@@ -250,7 +249,6 @@ export default function NovoPedidoVendaModal({
 
     setSaving(true);
     try {
-      const produtoPrincipal = itens[0].produto_nome;
       const precoPrincipal =
         itens[0].preco_unitario !== '' ? Number(itens[0].preco_unitario) : undefined;
 
@@ -262,15 +260,12 @@ export default function NovoPedidoVendaModal({
         data_pedido: dataPedido || undefined,
         data_vencimento: dataVencimento || undefined,
         cliente_id: clientId || undefined,
-        cliente_nome: clientSearch.trim() || undefined,
-        produto_nome: produtoPrincipal,
         quantidade_real: totalTon,
         preco_unitario: precoPrincipal,
         tipo_frete: tipoFrete,
         valor_frete: tipoFrete === 'CIF' && valorFrete !== '' ? Number(valorFrete) : undefined,
         condicao_pagamento: condicaoPagamento.trim() || undefined,
         observacoes: observacoes.trim() || undefined,
-        embalagem: embalagem || undefined,
         status: 'pendente',
         importado_por: currentUser.id,
       });
@@ -281,6 +276,7 @@ export default function NovoPedidoVendaModal({
           produto_nome: item.produto_nome.trim(),
           quantidade_ton: Number(item.quantidade_ton),
           preco_unitario: item.preco_unitario !== '' ? Number(item.preco_unitario) : undefined,
+          embalagem: item.embalagem?.trim() || undefined,
           precificacao_id: pricing?.id || undefined,
         }))
       );
@@ -314,8 +310,6 @@ export default function NovoPedidoVendaModal({
     () => embalagens.map((e) => e.nome).filter(Boolean),
     [embalagens]
   );
-  const embalagemInOptions = embalagemOptions.includes(embalagem);
-
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
@@ -342,6 +336,10 @@ export default function NovoPedidoVendaModal({
                 Precificação:{' '}
               </span>
               <span className="font-mono font-bold">{precificacaoCod}</span>
+              <div className="mt-1 text-xs text-emerald-800/90 space-y-0.5">
+                <p>Emissão: {formatDatePtBr(pricing?.date)}</p>
+                <p>Vencimento: {formatDatePtBr(getPricingDueDate(pricing))}</p>
+              </div>
             </div>
           )}
 
@@ -614,6 +612,26 @@ export default function NovoPedidoVendaModal({
                       className={`w-full px-2 py-1.5 border rounded text-sm focus:ring-1 focus:ring-emerald-500 outline-none ${item.autoFilled ? 'border-emerald-300 bg-emerald-50' : 'border-stone-300 bg-white'}`}
                     />
                   </div>
+                  <div className="w-40 flex-shrink-0">
+                    <select
+                      value={item.embalagem || ''}
+                      onChange={(e) => updateItem(item.id, 'embalagem', e.target.value)}
+                      className={`w-full px-2 py-1.5 border rounded text-sm focus:ring-1 focus:ring-emerald-500 outline-none ${item.autoFilled ? 'border-emerald-300 bg-emerald-50' : 'border-stone-300 bg-white'}`}
+                      disabled={loadingEmbalagens}
+                    >
+                      <option value="">Embalagem</option>
+                      {item.embalagem &&
+                        !embalagemOptions.includes(item.embalagem) &&
+                        item.embalagem.trim() !== '' && (
+                          <option value={item.embalagem}>{item.embalagem} (não cadastrada)</option>
+                        )}
+                      {embalagemOptions.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                   {itens.length > 1 && (
                     <button
                       type="button"
@@ -635,43 +653,6 @@ export default function NovoPedidoVendaModal({
               <Plus className="w-4 h-4" />
               Adicionar Produto
             </button>
-          </div>
-
-          {/* Embalagem */}
-          <div>
-            <label className="flex items-center gap-1 text-xs font-bold text-stone-500 uppercase tracking-wider mb-1">
-              Tipo de Embalagem
-              {autoEmbalagem && <Zap className="w-3 h-3 text-emerald-500" />}
-            </label>
-            <select
-              value={embalagem}
-              onChange={(e) => setEmbalagem(e.target.value)}
-              className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 outline-none ${autoEmbalagem ? autoClass : normalClass}`}
-              disabled={loadingEmbalagens}
-            >
-              <option value="">— Selecionar embalagem —</option>
-              {!embalagemInOptions && embalagem && (
-                <option value={embalagem}>{embalagem} (não cadastrada)</option>
-              )}
-              {embalagemOptions.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-              {!loadingEmbalagens && embalagemOptions.length === 0 && (
-                <option value="" disabled>
-                  Nenhuma embalagem cadastrada.
-                </option>
-              )}
-            </select>
-            {loadingEmbalagens && (
-              <p className="mt-1 text-xs text-stone-500">Carregando embalagens...</p>
-            )}
-            {!loadingEmbalagens && embalagemOptions.length === 0 && (
-              <p className="mt-1 text-xs text-stone-500">
-                Nenhuma embalagem foi cadastrada em Cadastro de Produtos → Embalagem.
-              </p>
-            )}
           </div>
 
           {/* Observações */}

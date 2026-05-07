@@ -20,6 +20,7 @@ describe('pricingDisplay', () => {
     expect(getPricingDueDate({ factors: { data_validade: '2026-06-02' } } as any)).toBe(
       '2026-06-02'
     );
+    expect(getPricingDueDate({ vencimento: '2026-06-03' } as any)).toBe('2026-06-03');
   });
 
   it('prioriza tipo de frete salvo na precificação', () => {
