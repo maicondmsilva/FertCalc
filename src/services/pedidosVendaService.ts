@@ -174,7 +174,11 @@ export async function createPedidoVenda(
     .select()
     .single();
   if (error) {
-    if ((error as { code?: string }).code === '23505') {
+    const errorCode =
+      typeof error === 'object' && error !== null && 'code' in error
+        ? String((error as { code?: unknown }).code)
+        : undefined;
+    if (errorCode === '23505') {
       throw new Error('Pedido duplicado: já existe um pedido com esse número e emitente.');
     }
     throw error;

@@ -191,11 +191,12 @@ export default function NovoPedidoVendaModal({
         if (isCancelled) return;
         setEmitentesUsados(usados);
 
-        const proximoDisponivel = EMITENTE_OPTIONS.find((n) => !usados.includes(n));
+        const usadosSet = new Set(usados);
+        const proximoDisponivel = EMITENTE_OPTIONS.find((n) => !usadosSet.has(n));
         if (proximoDisponivel != null) {
           setEmitente(proximoDisponivel);
         } else {
-          const maiorUsado = usados.length > 0 ? Math.max(...usados) : EMITENTE_OPTIONS_MAX;
+          const maiorUsado = usados.length > 0 ? Math.max(...usados) : 0;
           setEmitente('custom');
           setEmitenteCustom(String(maiorUsado + 1));
         }
