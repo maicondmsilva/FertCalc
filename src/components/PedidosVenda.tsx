@@ -129,23 +129,26 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
   const handleSolicitarCarregamento = async (form: CarregamentoFormData) => {
     try {
       const numero = await gerarNumeroCarregamento();
-      await createCarregamento({
-        numero_carregamento: numero,
-        tipo_frete: form.tipo_frete,
-        quantidade_total: parseFloat(form.quantidade_total),
-        quantidade_liberada: 0,
-        quantidade_carregada: 0,
-        filial_id: form.filial_id || undefined,
-        local_carregamento_id: form.local_carregamento_id || undefined,
-        pedido_precificacao_id: form.precificacao_id || undefined,
-        pedido_venda_id: form.pedido_venda_id || undefined,
-        pedido_venda_numero: form.pedido_venda_numero || undefined,
-        data_prevista_carregamento: form.data_prevista_carregamento || undefined,
-        observacoes: form.observacoes || undefined,
-        valor_frete: form.valor_frete ? parseFloat(form.valor_frete) : undefined,
-        status: 'aguardando_cotacao',
-        criado_por: currentUser.id,
-      });
+      await createCarregamento(
+        {
+          numero_carregamento: numero,
+          tipo_frete: form.tipo_frete,
+          quantidade_total: parseFloat(form.quantidade_total),
+          quantidade_liberada: 0,
+          quantidade_carregada: 0,
+          filial_id: form.filial_id || undefined,
+          local_carregamento_id: form.local_carregamento_id || undefined,
+          pedido_precificacao_id: form.precificacao_id || undefined,
+          pedido_venda_id: form.pedido_venda_id || undefined,
+          pedido_venda_numero: form.pedido_venda_numero || undefined,
+          data_prevista_carregamento: form.data_prevista_carregamento || undefined,
+          observacoes: form.observacoes || undefined,
+          valor_frete: form.valor_frete ? parseFloat(form.valor_frete) : undefined,
+          status: 'aguardando_cotacao',
+          criado_por: currentUser.id,
+        },
+        form.itens
+      );
       showSuccess('Carregamento criado com sucesso!');
       setModalCarregamentoAberto(false);
       setPedidoParaCarregamento(null);
