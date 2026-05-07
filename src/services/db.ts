@@ -919,6 +919,7 @@ function pricingRecordToDb(r: Partial<PricingRecord>) {
   if (r.userName !== undefined) d.user_name = r.userName;
   if (r.userCode !== undefined) d.user_code = r.userCode;
   if (r.date !== undefined) d.date = r.date;
+  if (r.modo_calculo !== undefined) d.modo_calculo = r.modo_calculo;
   if (r.status !== undefined) d.status = r.status;
   if (r.approvalStatus !== undefined) d.approval_status = r.approvalStatus;
   if (r.macros !== undefined) d.macros = r.macros;
@@ -952,6 +953,7 @@ function mapPricingRecord(d: Record<string, unknown>): PricingRecord {
     userName: d.user_name,
     userCode: d.user_code,
     date: d.date,
+    modo_calculo: d.modo_calculo as PricingRecord['modo_calculo'],
     status: d.status,
     approvalStatus: d.approval_status,
     macros: d.macros || [],
