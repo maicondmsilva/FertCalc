@@ -358,6 +358,11 @@ export interface TargetFormula {
   id: string;
   formula: string;
   selected: boolean;
+  modo_calculo?: 'formulacao' | 'produtos_livres';
+  produtos_livres?: Array<{
+    productId: string;
+    quantity: number;
+  }>;
   category?: 'phosphated' | 'nitrogenous' | 'fertigran_p' | 'all';
   factors: PricingFactors;
   summary?: PricingSummary;
@@ -454,6 +459,7 @@ export interface PricingHistoryEntry {
 export interface PricingRecord {
   id: string;
   cod?: number;
+  modo_calculo?: 'formulacao' | 'produtos_livres';
   userId: string;
   userName?: string;
   userCode?: string;

@@ -24,6 +24,7 @@ import ProfitabilityModal from './ProfitabilityModal';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { PromptDialog } from './ui/PromptDialog';
 import { useCalculator } from '../hooks/useCalculator';
+import { getCalculationMode } from '../utils/calculationMode';
 import { getCotacoesAprovadasByCliente } from '../services/cotacaoSolicitadaService';
 import { CotacaoSolicitada } from '../types/carregamento';
 import { getEmbalagens } from '../services/embalagensService';
@@ -97,7 +98,6 @@ export default function Calculator({
     setFactors,
     calculations,
     setCalculations,
-    formulaProductSelections,
     expandedCalc,
     setExpandedCalc,
     handleFactorChange,
@@ -105,7 +105,10 @@ export default function Calculator({
     addTargetFormula,
     removeTargetFormula,
     updateCalculation,
-    setCalculationProduct,
+    setCalculationMode,
+    addProdutoLivreToCalculation,
+    updateProdutoLivreQuantity,
+    removeProdutoLivreFromCalculation,
     updateCalculationFactors,
     savePricing,
     saveToFormulasList,
@@ -158,12 +161,16 @@ export default function Calculator({
     }
   };
 
-  const availableFormulaProducts = [...macros, ...micros]
-    .filter((material) => material.name)
-    .sort((left, right) => left.name.localeCompare(right.name, 'pt-BR'));
+  const getAvailableProductsForCalc = (calc: (typeof calculations)[number]) =>
+    [
+      ...(calc.macros.length > 0 ? calc.macros : macros),
+      ...(calc.micros.length > 0 ? calc.micros : micros),
+    ]
+      .filter((material) => material.name)
+      .sort((left, right) => left.name.localeCompare(right.name, 'pt-BR'));
 
   const formatFormulaProductDetails = (
-    product?: (typeof availableFormulaProducts)[number] | null
+    product?: ReturnType<typeof getAvailableProductsForCalc>[number] | null
   ) => {
     if (!product) return '—';
 
@@ -492,299 +499,383 @@ export default function Calculator({
                     key={calc.id}
                     className="relative p-2 bg-stone-50 rounded-lg border border-stone-200 space-y-2"
                   >
-                    {/* Main row: checkbox + formula + CA/S + type + gear + calc + delete */}
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <input
-                        type="checkbox"
-                        checked={calc.selected}
-                        onChange={(e) => updateCalculation(calc.id, 'selected', e.target.checked)}
-                        className="w-4 h-4 text-emerald-600 rounded border-stone-300 focus:ring-emerald-500"
-                      />
-                      {/* Formula input */}
-                      <input
-                        type="text"
-                        value={calc.formula}
-                        onChange={(e) => updateCalculation(calc.id, 'formula', e.target.value)}
-                        placeholder="Ex: 04-14-08 (opcional)"
-                        className="flex-1 min-w-[90px] px-2 py-1 text-sm border border-stone-300 rounded focus:ring-2 focus:ring-emerald-500"
-                      />
-                      {/* CA% input */}
-                      <div className="flex items-center gap-0.5">
-                        <span className="text-[10px] font-bold text-amber-600">CA%</span>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.1"
-                          value={(calc.targetCa || 0) === 0 ? '' : calc.targetCa}
-                          onChange={(e) =>
-                            updateCalculation(
-                              calc.id,
-                              'targetCa',
-                              e.target.value === '' ? 0 : Number(e.target.value)
-                            )
-                          }
-                          placeholder="0"
-                          title="Cálcio alvo (%)"
-                          className="w-14 px-1.5 py-1 text-xs border border-amber-300 rounded focus:ring-1 focus:ring-amber-400 bg-amber-50"
-                        />
-                      </div>
-                      {/* S% input */}
-                      <div className="flex items-center gap-0.5">
-                        <span className="text-[10px] font-bold text-yellow-600">S%</span>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.1"
-                          value={(calc.targetS || 0) === 0 ? '' : calc.targetS}
-                          onChange={(e) =>
-                            updateCalculation(
-                              calc.id,
-                              'targetS',
-                              e.target.value === '' ? 0 : Number(e.target.value)
-                            )
-                          }
-                          placeholder="0"
-                          title="Enxofre alvo (%)"
-                          className="w-14 px-1.5 py-1 text-xs border border-yellow-300 rounded focus:ring-1 focus:ring-yellow-400 bg-yellow-50"
-                        />
-                      </div>
-                      <select
-                        value={calc.category || 'all'}
-                        onChange={(e) => updateCalculation(calc.id, 'category', e.target.value)}
-                        className="px-2 py-1 text-xs border border-stone-300 rounded focus:ring-2 focus:ring-emerald-500 w-24"
-                        title="Tipo de Fórmula"
-                      >
-                        <option value="all">Todas</option>
-                        {compCategories.map((cat) => (
-                          <option key={cat.id} value={cat.id}>
-                            {cat.nome}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        onClick={() => openSettings(calc.id)}
-                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                        title="Configurar Produtos"
-                      >
-                        <Settings className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => setExpandedCalc(expandedCalc === calc.id ? null : calc.id)}
-                        className={`p-1.5 rounded transition-colors ${expandedCalc === calc.id ? 'bg-indigo-100 text-indigo-700' : 'text-indigo-600 hover:bg-indigo-50'}`}
-                        title="Fatores e Micronutrientes"
-                      >
-                        <CalculatorIcon className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => calculateFormula(calc.id)}
-                        className="p-1.5 bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-colors"
-                        title="Calcular esta fórmula"
-                      >
-                        <CalculatorIcon className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => removeTargetFormula(calc.id)}
-                        className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    {(() => {
+                      const calcMode = getCalculationMode(calc);
+                      const isProdutosLivresMode = calcMode === 'produtos_livres';
+                      const availableFormulaProducts = getAvailableProductsForCalc(calc);
+                      const selectedProdutosLivres = (calc.produtos_livres || [])
+                        .map((item) => ({
+                          ...item,
+                          product: availableFormulaProducts.find(
+                            (product) => product.id === item.productId
+                          ),
+                        }))
+                        .filter((item) => item.product);
 
-                    <div className="space-y-2">
-                      <label className="block text-[10px] font-bold text-stone-400 uppercase">
-                        Produto Macro/Micro (opcional)
-                      </label>
-                      <div className="relative">
-                        <div className="relative">
-                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-stone-400" />
-                          <input
-                            type="text"
-                            value={formulaProductSearch[calc.id] || ''}
-                            onChange={(e) => {
-                              setFormulaProductSearch((prev) => ({
-                                ...prev,
-                                [calc.id]: e.target.value,
-                              }));
-                              setActiveProductSearchCalcId(calc.id);
-                            }}
-                            onFocus={() => setActiveProductSearchCalcId(calc.id)}
-                            placeholder="Pesquisar macro ou micro..."
-                            className="w-full pl-9 pr-3 py-2 text-sm border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                          />
-                        </div>
+                      return (
+                        <>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => setCalculationMode(calc.id, 'formulacao')}
+                              className={`px-2 py-1 rounded-full text-xs font-bold transition-colors ${
+                                calcMode === 'formulacao'
+                                  ? 'bg-emerald-600 text-white'
+                                  : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
+                              }`}
+                            >
+                              Formulação NPK
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setCalculationMode(calc.id, 'produtos_livres')}
+                              className={`px-2 py-1 rounded-full text-xs font-bold transition-colors ${
+                                isProdutosLivresMode
+                                  ? 'bg-emerald-600 text-white'
+                                  : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
+                              }`}
+                            >
+                              Produtos Livres
+                            </button>
+                          </div>
 
-                        {(() => {
-                          const productSearchTerm = (formulaProductSearch[calc.id] || '').trim();
-                          const filteredProducts = availableFormulaProducts.filter((product) =>
-                            product.name.toLowerCase().includes(productSearchTerm.toLowerCase())
-                          );
+                          {/* Main row: checkbox + formula + CA/S + type + gear + calc + delete */}
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <input
+                              type="checkbox"
+                              checked={calc.selected}
+                              onChange={(e) =>
+                                updateCalculation(calc.id, 'selected', e.target.checked)
+                              }
+                              className="w-4 h-4 text-emerald-600 rounded border-stone-300 focus:ring-emerald-500"
+                            />
+                            {/* Formula input */}
+                            <input
+                              type="text"
+                              value={calc.formula}
+                              onChange={(e) =>
+                                updateCalculation(calc.id, 'formula', e.target.value)
+                              }
+                              placeholder="Ex: 04-14-08 (opcional)"
+                              disabled={isProdutosLivresMode}
+                              className={`flex-1 min-w-[90px] px-2 py-1 text-sm border rounded focus:ring-2 focus:ring-emerald-500 ${
+                                isProdutosLivresMode
+                                  ? 'border-stone-200 bg-stone-100 text-stone-400 cursor-not-allowed'
+                                  : 'border-stone-300'
+                              }`}
+                            />
+                            {/* CA% input */}
+                            <div className="flex items-center gap-0.5">
+                              <span className="text-[10px] font-bold text-amber-600">CA%</span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.1"
+                                value={(calc.targetCa || 0) === 0 ? '' : calc.targetCa}
+                                onChange={(e) =>
+                                  updateCalculation(
+                                    calc.id,
+                                    'targetCa',
+                                    e.target.value === '' ? 0 : Number(e.target.value)
+                                  )
+                                }
+                                placeholder="0"
+                                title="Cálcio alvo (%)"
+                                className="w-14 px-1.5 py-1 text-xs border border-amber-300 rounded focus:ring-1 focus:ring-amber-400 bg-amber-50"
+                              />
+                            </div>
+                            {/* S% input */}
+                            <div className="flex items-center gap-0.5">
+                              <span className="text-[10px] font-bold text-yellow-600">S%</span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.1"
+                                value={(calc.targetS || 0) === 0 ? '' : calc.targetS}
+                                onChange={(e) =>
+                                  updateCalculation(
+                                    calc.id,
+                                    'targetS',
+                                    e.target.value === '' ? 0 : Number(e.target.value)
+                                  )
+                                }
+                                placeholder="0"
+                                title="Enxofre alvo (%)"
+                                className="w-14 px-1.5 py-1 text-xs border border-yellow-300 rounded focus:ring-1 focus:ring-yellow-400 bg-yellow-50"
+                              />
+                            </div>
+                            <select
+                              value={calc.category || 'all'}
+                              onChange={(e) =>
+                                updateCalculation(calc.id, 'category', e.target.value)
+                              }
+                              className="px-2 py-1 text-xs border border-stone-300 rounded focus:ring-2 focus:ring-emerald-500 w-24"
+                              title="Tipo de Fórmula"
+                            >
+                              <option value="all">Todas</option>
+                              {compCategories.map((cat) => (
+                                <option key={cat.id} value={cat.id}>
+                                  {cat.nome}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              onClick={() => openSettings(calc.id)}
+                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                              title="Configurar Produtos"
+                            >
+                              <Settings className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() =>
+                                setExpandedCalc(expandedCalc === calc.id ? null : calc.id)
+                              }
+                              className={`p-1.5 rounded transition-colors ${expandedCalc === calc.id ? 'bg-indigo-100 text-indigo-700' : 'text-indigo-600 hover:bg-indigo-50'}`}
+                              title="Fatores e Micronutrientes"
+                            >
+                              <CalculatorIcon className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => calculateFormula(calc.id)}
+                              className="p-1.5 bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-colors"
+                              title="Calcular esta fórmula"
+                            >
+                              <CalculatorIcon className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => removeTargetFormula(calc.id)}
+                              className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
 
-                          if (!shouldShowProductDropdown(calc.id, productSearchTerm)) {
-                            return null;
-                          }
-
-                          return (
-                            <div className="absolute z-20 mt-1 w-full rounded-lg border border-stone-200 bg-white shadow-xl max-h-56 overflow-y-auto">
-                              {filteredProducts.length > 0 ? (
-                                filteredProducts.map((product) => (
-                                  <button
-                                    key={product.id}
-                                    type="button"
-                                    onClick={() => {
-                                      setCalculationProduct(calc.id, product.id);
+                          {isProdutosLivresMode && (
+                            <div className="space-y-2">
+                              <label className="block text-[10px] font-bold text-stone-400 uppercase">
+                                Produtos Livres
+                              </label>
+                              <div className="relative">
+                                <div className="relative">
+                                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-stone-400" />
+                                  <input
+                                    type="text"
+                                    value={formulaProductSearch[calc.id] || ''}
+                                    onChange={(e) => {
                                       setFormulaProductSearch((prev) => ({
                                         ...prev,
-                                        [calc.id]: '',
+                                        [calc.id]: e.target.value,
                                       }));
-                                      setActiveProductSearchCalcId(null);
+                                      setActiveProductSearchCalcId(calc.id);
                                     }}
-                                    className="w-full px-4 py-2 text-left hover:bg-stone-50 border-b border-stone-100 last:border-b-0"
-                                  >
-                                    <p className="text-sm font-bold text-stone-800">
-                                      {product.name}
-                                    </p>
-                                    <p className="text-[10px] text-stone-500">
-                                      {product.type === 'macro' ? 'Macro' : 'Micro'} ·{' '}
-                                      {formatFormulaProductDetails(product)}
-                                    </p>
-                                  </button>
-                                ))
-                              ) : (
-                                <div className="px-4 py-3 text-xs text-stone-500">
-                                  Nenhum macro ou micro encontrado.
+                                    onFocus={() => setActiveProductSearchCalcId(calc.id)}
+                                    placeholder="Pesquisar macro ou micro para adicionar..."
+                                    className="w-full pl-9 pr-3 py-2 text-sm border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                                  />
+                                </div>
+
+                                {(() => {
+                                  const productSearchTerm = (
+                                    formulaProductSearch[calc.id] || ''
+                                  ).trim();
+                                  const selectedIds = new Set(
+                                    (calc.produtos_livres || []).map((item) => item.productId)
+                                  );
+                                  const filteredProducts = availableFormulaProducts.filter(
+                                    (product) =>
+                                      product.name
+                                        .toLowerCase()
+                                        .includes(productSearchTerm.toLowerCase()) &&
+                                      !selectedIds.has(product.id)
+                                  );
+
+                                  if (!shouldShowProductDropdown(calc.id, productSearchTerm)) {
+                                    return null;
+                                  }
+
+                                  return (
+                                    <div className="absolute z-20 mt-1 w-full rounded-lg border border-stone-200 bg-white shadow-xl max-h-56 overflow-y-auto">
+                                      {filteredProducts.length > 0 ? (
+                                        filteredProducts.map((product) => (
+                                          <button
+                                            key={product.id}
+                                            type="button"
+                                            onClick={() => {
+                                              addProdutoLivreToCalculation(calc.id, product.id);
+                                              setFormulaProductSearch((prev) => ({
+                                                ...prev,
+                                                [calc.id]: '',
+                                              }));
+                                              setActiveProductSearchCalcId(null);
+                                            }}
+                                            className="w-full px-4 py-2 text-left hover:bg-stone-50 border-b border-stone-100 last:border-b-0"
+                                          >
+                                            <p className="text-sm font-bold text-stone-800">
+                                              {product.name}
+                                            </p>
+                                            <p className="text-[10px] text-stone-500">
+                                              {product.type === 'macro' ? 'Macro' : 'Micro'} ·{' '}
+                                              {formatFormulaProductDetails(product)}
+                                            </p>
+                                          </button>
+                                        ))
+                                      ) : (
+                                        <div className="px-4 py-3 text-xs text-stone-500">
+                                          Nenhum macro ou micro encontrado.
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+
+                              {availableFormulaProducts.length === 0 && (
+                                <p className="text-[11px] text-stone-500">
+                                  Selecione uma lista de preço com produtos cadastrados para
+                                  pesquisar.
+                                </p>
+                              )}
+
+                              {selectedProdutosLivres.length > 0 && (
+                                <div className="space-y-2">
+                                  {selectedProdutosLivres.map(
+                                    ({ productId, quantity, product }) => (
+                                      <div
+                                        key={productId}
+                                        className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2"
+                                      >
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-xs font-bold text-emerald-700 truncate">
+                                            {product?.name}
+                                          </p>
+                                          <p className="text-[11px] text-emerald-800">
+                                            {product?.type === 'macro' ? 'NPK' : 'Garantias'} ·{' '}
+                                            {formatFormulaProductDetails(product)}
+                                          </p>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                          <input
+                                            type="number"
+                                            min="0"
+                                            value={quantity === 0 ? '' : quantity}
+                                            onChange={(e) =>
+                                              updateProdutoLivreQuantity(
+                                                calc.id,
+                                                productId,
+                                                e.target.value === '' ? 0 : Number(e.target.value)
+                                              )
+                                            }
+                                            className="w-24 px-2 py-1 text-sm border border-emerald-200 rounded focus:ring-1 focus:ring-emerald-500"
+                                            placeholder="kg"
+                                          />
+                                          <span className="text-xs font-bold text-emerald-700">
+                                            kg
+                                          </span>
+                                        </div>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            removeProdutoLivreFromCalculation(calc.id, productId)
+                                          }
+                                          className="text-emerald-500 hover:text-emerald-700"
+                                          aria-label={`Remover produto ${product?.name || productId}`}
+                                        >
+                                          <X className="w-4 h-4" />
+                                        </button>
+                                      </div>
+                                    )
+                                  )}
                                 </div>
                               )}
                             </div>
-                          );
-                        })()}
-                      </div>
-
-                      {availableFormulaProducts.length === 0 && (
-                        <p className="text-[11px] text-stone-500">
-                          Selecione uma lista de preço com produtos cadastrados para pesquisar.
-                        </p>
-                      )}
-
-                      {(() => {
-                        const selectedProduct = availableFormulaProducts.find(
-                          (product) => product.id === formulaProductSelections[calc.id]
-                        );
-
-                        if (!selectedProduct) return null;
-
-                        return (
-                          <div className="flex items-start justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
-                            <div>
-                              <p className="text-xs font-bold text-emerald-700">
-                                {selectedProduct.name}
-                              </p>
-                              <p className="text-[11px] text-emerald-800">
-                                {selectedProduct.type === 'macro' ? 'NPK' : 'Garantias'} ·{' '}
-                                {formatFormulaProductDetails(selectedProduct)}
-                              </p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setCalculationProduct(calc.id);
-                                setFormulaProductSearch((prev) => ({
-                                  ...prev,
-                                  [calc.id]: '',
-                                }));
-                                setActiveProductSearchCalcId(null);
-                              }}
-                              className="text-emerald-500 hover:text-emerald-700"
-                              aria-label={`Limpar produto ${selectedProduct.name}`}
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </div>
-                        );
-                      })()}
-                    </div>
+                          )}
+                        </>
+                      );
+                    })()}
 
                     {/* Selected Macros and Micros with Min Quantity Adjustments */}
-                    {[...calc.macros, ...calc.micros].filter((m) => m.selected).length > 0 && (
-                      <div className="mt-4 pt-3 border-t border-stone-100">
-                        <p className="text-[10px] uppercase font-bold text-stone-500 mb-2">
-                          Macros Selecionados
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {[...calc.macros, ...calc.micros]
-                            .filter((m) => m.selected)
-                            .map((m) => (
-                              <div
-                                key={m.id}
-                                className="flex items-center gap-2 bg-stone-50 border border-stone-200 rounded px-2 py-1 text-xs shadow-sm"
-                              >
-                                <span
-                                  className="font-medium text-stone-700 truncate max-w-[120px]"
-                                  title={m.name}
+                    {getCalculationMode(calc) !== 'produtos_livres' &&
+                      [...calc.macros, ...calc.micros].filter((m) => m.selected).length > 0 && (
+                        <div className="mt-4 pt-3 border-t border-stone-100">
+                          <p className="text-[10px] uppercase font-bold text-stone-500 mb-2">
+                            Macros Selecionados
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {[...calc.macros, ...calc.micros]
+                              .filter((m) => m.selected)
+                              .map((m) => (
+                                <div
+                                  key={m.id}
+                                  className="flex items-center gap-2 bg-stone-50 border border-stone-200 rounded px-2 py-1 text-xs shadow-sm"
                                 >
-                                  {m.name}
-                                </span>
-                                <span className="text-[10px] text-stone-400">
-                                  (Mín: {m.minQuantity || 0})
-                                </span>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  value={m.minQty === 0 ? '' : m.minQty}
-                                  onChange={(e) => {
-                                    const val = Number(e.target.value);
-                                    if (m.type === 'macro') {
-                                      updateCalculation(
-                                        calc.id,
-                                        'macros',
-                                        calc.macros.map((mac) =>
-                                          mac.id === m.id ? { ...mac, minQty: val } : mac
-                                        )
-                                      );
-                                    } else {
-                                      updateCalculation(
-                                        calc.id,
-                                        'micros',
-                                        calc.micros.map((mic) =>
-                                          mic.id === m.id ? { ...mic, minQty: val } : mic
-                                        )
-                                      );
-                                    }
-                                  }}
-                                  className="w-14 px-1 py-0.5 text-right border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500 bg-white"
-                                  placeholder="0"
-                                  title="Ajuste a quantidade mínima"
-                                />
-                                <span className="text-stone-500 font-medium">kg</span>
-                                <button
-                                  onClick={() => {
-                                    if (m.type === 'macro') {
-                                      updateCalculation(
-                                        calc.id,
-                                        'macros',
-                                        calc.macros.map((mac) =>
-                                          mac.id === m.id ? { ...mac, selected: false } : mac
-                                        )
-                                      );
-                                    } else {
-                                      updateCalculation(
-                                        calc.id,
-                                        'micros',
-                                        calc.micros.map((mic) =>
-                                          mic.id === m.id ? { ...mic, selected: false } : mic
-                                        )
-                                      );
-                                    }
-                                  }}
-                                  className="text-stone-400 hover:text-red-500 ml-1 transition-colors"
-                                  title="Remover produto da fórmula"
-                                >
-                                  <X className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            ))}
+                                  <span
+                                    className="font-medium text-stone-700 truncate max-w-[120px]"
+                                    title={m.name}
+                                  >
+                                    {m.name}
+                                  </span>
+                                  <span className="text-[10px] text-stone-400">
+                                    (Mín: {m.minQuantity || 0})
+                                  </span>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={m.minQty === 0 ? '' : m.minQty}
+                                    onChange={(e) => {
+                                      const val = Number(e.target.value);
+                                      if (m.type === 'macro') {
+                                        updateCalculation(
+                                          calc.id,
+                                          'macros',
+                                          calc.macros.map((mac) =>
+                                            mac.id === m.id ? { ...mac, minQty: val } : mac
+                                          )
+                                        );
+                                      } else {
+                                        updateCalculation(
+                                          calc.id,
+                                          'micros',
+                                          calc.micros.map((mic) =>
+                                            mic.id === m.id ? { ...mic, minQty: val } : mic
+                                          )
+                                        );
+                                      }
+                                    }}
+                                    className="w-14 px-1 py-0.5 text-right border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500 bg-white"
+                                    placeholder="0"
+                                    title="Ajuste a quantidade mínima"
+                                  />
+                                  <span className="text-stone-500 font-medium">kg</span>
+                                  <button
+                                    onClick={() => {
+                                      if (m.type === 'macro') {
+                                        updateCalculation(
+                                          calc.id,
+                                          'macros',
+                                          calc.macros.map((mac) =>
+                                            mac.id === m.id ? { ...mac, selected: false } : mac
+                                          )
+                                        );
+                                      } else {
+                                        updateCalculation(
+                                          calc.id,
+                                          'micros',
+                                          calc.micros.map((mic) =>
+                                            mic.id === m.id ? { ...mic, selected: false } : mic
+                                          )
+                                        );
+                                      }
+                                    }}
+                                    className="text-stone-400 hover:text-red-500 ml-1 transition-colors"
+                                    title="Remover produto da fórmula"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ))}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
 
                     {/* Expanded Gear Panel \u2014 absolute, extends right toward summary */}
                     {expandedCalc === calc.id && (
