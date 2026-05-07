@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { RawMaterial, TargetFormula } from '../types';
-import { applyProdutosLivresToMaterials, getCalculationMode } from '../utils/calculationMode';
+import {
+  addProdutoLivre,
+  applyCalculationModeChange,
+  applyProdutosLivresToMaterials,
+  getCalculationMode,
+  removeProdutoLivre,
+  updateProdutoLivre,
+} from '../utils/calculationMode';
 
 const createMaterial = (overrides: Partial<RawMaterial>): RawMaterial => ({
   id: overrides.id || 'material-1',
@@ -50,5 +57,40 @@ describe('useCalculator helpers', () => {
       minQty: 50,
       maxQty: 50,
     });
+  });
+
+  it('resets calc fields when switching mode', () => {
+    const calc = {
+      id: 'c1',
+      formula: '20-00-20',
+      selected: true,
+      modo_calculo: 'formulacao',
+      produtos_livres: [{ productId: 'macro-1', quantity: 250 }],
+      macros: [createMaterial({ id: 'macro-1', selected: true, quantity: 250 })],
+      micros: [createMaterial({ id: 'micro-1', type: 'micro', selected: true, quantity: 25 })],
+    } as TargetFormula;
+
+    const updated = applyCalculationModeChange(calc, 'produtos_livres', calc.macros, calc.micros);
+    expect(updated.modo_calculo).toBe('produtos_livres');
+    expect(updated.formula).toBe('');
+    expect(updated.produtos_livres).toEqual([]);
+    expect(updated.macros[0]).toMatchObject({ selected: false, quantity: 0 });
+    expect(updated.micros[0]).toMatchObject({ selected: false, quantity: 0 });
+  });
+
+  it('adds products without duplicates and updates/removes quantities', () => {
+    const initial = [{ productId: 'macro-1', quantity: 0 }];
+    const withDuplicate = addProdutoLivre(initial, 'macro-1');
+    expect(withDuplicate).toHaveLength(1);
+
+    const withNew = addProdutoLivre(initial, 'micro-1');
+    expect(withNew).toHaveLength(2);
+    expect(withNew[1]).toEqual({ productId: 'micro-1', quantity: 0 });
+
+    const withQty = updateProdutoLivre(withNew, 'micro-1', 50);
+    expect(withQty[1]).toEqual({ productId: 'micro-1', quantity: 50 });
+
+    const afterRemove = removeProdutoLivre(withQty, 'macro-1');
+    expect(afterRemove).toEqual([{ productId: 'micro-1', quantity: 50 }]);
   });
 });

@@ -34,11 +34,15 @@ import {
 import { useToast } from '../components/Toast';
 import { formatNPK } from '../utils/formatters';
 import {
+  addProdutoLivre,
+  applyCalculationModeChange,
   applyProdutosLivresToMaterials,
   CalculationMode,
   DEFAULT_CALCULATION_MODE,
   getCalculationMode,
-  resetMaterialsForMode,
+  isProdutoLivreAvailable,
+  removeProdutoLivre,
+  updateProdutoLivre,
 } from '../utils/calculationMode';
 import { useCalculatorSettings } from './useCalculatorSettings';
 import { notifyPricingCreated, notifyPricingEdited } from '../services/notificationService';
@@ -992,21 +996,14 @@ export function useCalculator({
     setCalculations((prev) =>
       prev.map((calc) => {
         if (calc.id !== calcId) return calc;
-        if (getCalculationMode(calc) === mode) return calc;
 
         const availableMacros = calc.macros.length > 0 ? calc.macros : macros;
         const availableMicros = calc.micros.length > 0 ? calc.micros : micros;
-        const clearedMacros = resetMaterialsForMode(availableMacros);
-        const clearedMicros = resetMaterialsForMode(availableMicros);
+        const nextCalc = applyCalculationModeChange(calc, mode, availableMacros, availableMicros);
 
         return {
-          ...calc,
-          formula: '',
-          macros: clearedMacros,
-          micros: clearedMicros,
-          modo_calculo: mode,
-          produtos_livres: [],
-          summary: calculateSummary(clearedMacros, clearedMicros, calc.factors),
+          ...nextCalc,
+          summary: calculateSummary(nextCalc.macros, nextCalc.micros, calc.factors),
         };
       })
     );
@@ -1029,22 +1026,19 @@ export function useCalculator({
       prev.map((calc) => {
         if (calc.id !== calcId) return calc;
 
+        const products = calc.produtos_livres || [];
         const availableMaterials = [...(calc.macros || []), ...(calc.micros || [])];
-        const product = availableMaterials.find((material) => material.id === productId);
-
-        if (!product) {
+        if (!availableMaterials.some((material) => material.id === productId)) {
           showError('Produto não encontrado na lista de preço atual.');
           return calc;
         }
-
-        const existing = calc.produtos_livres || [];
-        if (existing.some((item) => item.productId === productId)) {
+        if (!isProdutoLivreAvailable(productId, availableMaterials, products)) {
           return calc;
         }
 
         return {
           ...calc,
-          produtos_livres: [...existing, { productId, quantity: 0 }],
+          produtos_livres: addProdutoLivre(products, productId),
         };
       })
     );
@@ -1056,9 +1050,7 @@ export function useCalculator({
         if (calc.id !== calcId) return calc;
         return {
           ...calc,
-          produtos_livres: (calc.produtos_livres || []).map((item) =>
-            item.productId === productId ? { ...item, quantity: Number(quantity || 0) } : item
-          ),
+          produtos_livres: updateProdutoLivre(calc.produtos_livres || [], productId, quantity),
         };
       })
     );
@@ -1070,9 +1062,7 @@ export function useCalculator({
         if (calc.id !== calcId) return calc;
         return {
           ...calc,
-          produtos_livres: (calc.produtos_livres || []).filter(
-            (item) => item.productId !== productId
-          ),
+          produtos_livres: removeProdutoLivre(calc.produtos_livres || [], productId),
         };
       })
     );
