@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { PricingRecord, User, AppSettings, PedidoVenda, Embalagem } from '../types';
 import {
   X,
@@ -100,7 +100,10 @@ export default function PricingDetailModal({
   const [embalagens, setEmbalagens] = useState<Embalagem[]>([]);
   const [loadingEmbalagens, setLoadingEmbalagens] = useState(false);
   const [dbHistory, setDbHistory] = useState<DBPricingHistoryEntry[]>([]);
-  const embalagemOptions = embalagens.map((e) => e.nome).filter(Boolean);
+  const embalagemOptions = useMemo(
+    () => embalagens.map((e) => e.nome).filter(Boolean),
+    [embalagens]
+  );
   const embalagemAtual = extractedData?.embalagem ?? '';
   const embalagemInOptions = embalagemOptions.includes(embalagemAtual);
 
@@ -127,7 +130,7 @@ export default function PricingDetailModal({
       .then(setEmbalagens)
       .catch(() => showError('Erro ao carregar embalagens cadastradas.'))
       .finally(() => setLoadingEmbalagens(false));
-  }, [showError]);
+  }, []);
 
   const handleOpenManualPedido = () => {
     const freight = selectedPricing.factors?.freight ?? 0;

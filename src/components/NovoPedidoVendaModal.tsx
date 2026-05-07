@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { PricingRecord, Client, Embalagem } from '../types';
 import { X, ClipboardList, Search, Plus, Trash2, Zap } from 'lucide-react';
 import { getClients } from '../services/db';
@@ -140,7 +140,7 @@ export default function NovoPedidoVendaModal({
       .then(setEmbalagens)
       .catch(() => showError('Erro ao carregar embalagens cadastradas.'))
       .finally(() => setLoadingEmbalagens(false));
-  }, [showError]);
+  }, []);
 
   // When produtosFormulados loads, match unmatched items to products
   useEffect(() => {
@@ -311,7 +311,10 @@ export default function NovoPedidoVendaModal({
       value: p.id,
       label: p.formula_npk ? `${p.nome} (${p.formula_npk})` : p.nome,
     }));
-  const embalagemOptions = embalagens.map((e) => e.nome).filter(Boolean);
+  const embalagemOptions = useMemo(
+    () => embalagens.map((e) => e.nome).filter(Boolean),
+    [embalagens]
+  );
   const embalagemInOptions = embalagemOptions.includes(embalagem);
 
   return (
