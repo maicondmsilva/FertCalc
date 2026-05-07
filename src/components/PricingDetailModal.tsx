@@ -20,6 +20,13 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { formatNPK } from '../utils/formatters';
 import {
+  formatDatePtBr,
+  getPedidoVendaDueDate,
+  getPricingDueDate,
+  getPricingFreightType,
+  getPricingFreightValue,
+} from '../utils/pricingDisplay';
+import {
   updatePricingRecord,
   getUsers,
   transferPricingRecord,
@@ -133,8 +140,8 @@ export default function PricingDetailModal({
   }, []);
 
   const handleOpenManualPedido = () => {
-    const freight = selectedPricing.factors?.freight ?? 0;
-    const tipoFrete = selectedPricing.factors?.tipoFrete ?? (freight > 0 ? 'CIF' : 'FOB');
+    const freight = getPricingFreightValue(selectedPricing);
+    const tipoFrete = getPricingFreightType(selectedPricing);
 
     setExtractedData({
       numero_pedido: pedidoVenda?.numero_pedido ?? '',
@@ -354,12 +361,9 @@ export default function PricingDetailModal({
     const cod =
       pricing.formattedCod ||
       (pricing.cod ? String(pricing.cod).padStart(4, '0') : pricing.id.slice(-8));
-    const freight = pricing.factors?.freight ?? 0;
-    const tipoFrete = pricing.factors?.tipoFrete ?? (freight > 0 ? 'CIF' : 'FOB');
-    const freightLabel = tipoFrete;
-    const dueDate = pricing.factors?.dueDate
-      ? new Date(pricing.factors.dueDate).toLocaleDateString('pt-BR')
-      : '—';
+    const freightType = getPricingFreightType(pricing);
+    const freightValue = getPricingFreightValue(pricing);
+    const dueDate = formatDatePtBr(getPricingDueDate(pricing));
 
     // Título compacto
     doc.setFontSize(16);
@@ -378,7 +382,7 @@ export default function PricingDetailModal({
           `COD: ${cod}  |  Data: ${new Date(pricing.date).toLocaleString('pt-BR')}  |  Cliente: ${pricing.factors?.client?.name || 'N/A'}  |  Agente: ${pricing.factors?.agent?.name || 'N/A'}`,
         ],
         [
-          `Status: ${pricing.status}  |  Aprovação: ${pricing.approvalStatus || 'Pendente'}  |  Tipo de Frete: ${freightLabel}  |  Valor do Frete: ${freight > 0 ? `R$ ${freight.toFixed(2)}/ton` : '—'}  |  Vencimento: ${dueDate}`,
+          `Status: ${pricing.status}  |  Aprovação: ${pricing.approvalStatus || 'Pendente'}  |  Transporte: ${freightType === 'CIF' ? `CIF — R$ ${freightValue.toFixed(2)}/ton` : 'FOB'}  |  Vencimento: ${dueDate}`,
         ],
       ],
       styles: { fontSize: 8, cellPadding: 2 },
@@ -407,11 +411,11 @@ export default function PricingDetailModal({
         .filter((p) => p.quantity > 0)
         .map((p) => [
           p.name,
-          freightLabel,
+          freightType,
           (p.quantity / 1000).toFixed(2),
           `R$ ${Number(p.price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-          freight > 0 ? `R$ ${freight.toFixed(0)}` : 'R$ 0',
-          `R$ ${((p.quantity / 1000) * Number(p.price) + (p.quantity / 1000) * freight).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+          freightType === 'CIF' ? `R$ ${freightValue.toFixed(0)}` : 'R$ 0',
+          `R$ ${((p.quantity / 1000) * Number(p.price) + (p.quantity / 1000) * freightValue).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
         ]);
 
       autoTable(doc, {
@@ -1421,9 +1425,7 @@ export default function PricingDetailModal({
                 <div>
                   <p className="text-xs font-bold text-emerald-600 uppercase mb-0.5">Vencimento</p>
                   <p className="text-stone-800">
-                    {pedidoVenda.data_pedido
-                      ? new Date(pedidoVenda.data_pedido + 'T00:00:00').toLocaleDateString('pt-BR')
-                      : '—'}
+                    {formatDatePtBr(getPedidoVendaDueDate(pedidoVenda))}
                   </p>
                 </div>
                 <div>
@@ -1439,16 +1441,25 @@ export default function PricingDetailModal({
                   <p className="text-stone-800">{pedidoVenda.embalagem || '—'}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-emerald-600 uppercase mb-0.5">
-                    Tipo de Frete
-                  </p>
+                  <p className="text-xs font-bold text-emerald-600 uppercase mb-0.5">Transporte</p>
                   <p className="text-stone-800">
                     {pedidoVenda.tipo_frete ? (
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${pedidoVenda.tipo_frete === 'CIF' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}
-                      >
-                        {pedidoVenda.tipo_frete}
-                      </span>
+                      pedidoVenda.tipo_frete === 'CIF' ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-800">
+                          CIF —{' '}
+                          {pedidoVenda.valor_frete != null
+                            ? pedidoVenda.valor_frete.toLocaleString('pt-BR', {
+                                style: 'currency',
+                                currency: 'BRL',
+                              })
+                            : 'R$ 0,00'}
+                          /t
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-green-100 text-green-800">
+                          FOB
+                        </span>
+                      )
                     ) : (
                       '—'
                     )}
