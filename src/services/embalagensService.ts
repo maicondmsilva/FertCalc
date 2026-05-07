@@ -4,14 +4,20 @@ import { Embalagem } from '../types';
 function mapEmbalagem(data: Record<string, unknown>): Embalagem {
   const cobrar = data.cobrar === true;
   const descontar = data.descontar === true || data.desconto === true;
-  const valorCobrar =
-    data.valor_cobrar != null ? Number(data.valor_cobrar) : cobrar ? Number(data.valor || 0) : null;
-  const valorDescontar =
-    data.valor_descontar != null
-      ? Number(data.valor_descontar)
-      : descontar
-        ? Number(data.valor || 0)
-        : null;
+  let valorCobrar: number | null = null;
+  let valorDescontar: number | null = null;
+
+  if (data.valor_cobrar != null) {
+    valorCobrar = Number(data.valor_cobrar);
+  } else if (cobrar) {
+    valorCobrar = Number(data.valor || 0);
+  }
+
+  if (data.valor_descontar != null) {
+    valorDescontar = Number(data.valor_descontar);
+  } else if (descontar) {
+    valorDescontar = Number(data.valor || 0);
+  }
 
   return {
     id: data.id as string,

@@ -887,10 +887,9 @@ export default function Calculator({
                                   const embSelecionada = embalagens.find(
                                     (em) => em.id === calc.factors.embalagem_id
                                   );
-                                  const podeCobrar = embSelecionada?.cobrar === true;
+                                  const podeCobrar = embSelecionada?.cobrar ?? false;
                                   const podeDescontar =
-                                    (embSelecionada?.descontar ?? embSelecionada?.desconto) ===
-                                    true;
+                                    embSelecionada?.descontar ?? embSelecionada?.desconto ?? false;
                                   const mostrarAjuste =
                                     !!embSelecionada && (podeCobrar || podeDescontar);
                                   const ajusteAtual =

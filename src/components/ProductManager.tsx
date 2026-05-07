@@ -161,13 +161,16 @@ export default function ProductManager() {
   };
 
   const openEmbalagemEdit = (emb: Embalagem) => {
+    const descontar = emb.descontar ?? emb.desconto ?? false;
+    const valorCobrar = emb.valor_cobrar ?? (emb.cobrar ? emb.valor || 0 : null);
+    const valorDescontar = emb.valor_descontar ?? (descontar ? emb.valor || 0 : null);
+
     setEditingEmbalagemId(emb.id);
     setEmbalagemForm({
       ...emb,
-      descontar: emb.descontar ?? emb.desconto ?? false,
-      valor_cobrar: emb.valor_cobrar ?? (emb.cobrar ? emb.valor || 0 : null),
-      valor_descontar:
-        emb.valor_descontar ?? ((emb.descontar ?? emb.desconto) ? emb.valor || 0 : null),
+      descontar,
+      valor_cobrar: valorCobrar,
+      valor_descontar: valorDescontar,
     });
     setIsEmbalagemModalOpen(true);
   };
