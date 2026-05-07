@@ -92,10 +92,6 @@ export default function NovoPedidoVendaModal({
   const [embalagem, setEmbalagem] = useState<string>(pricingEmbalagem);
   const autoEmbalagem = !!pricing && !!pricingEmbalagem;
 
-  const getEmbalagemValue = (): string | undefined => {
-    return embalagem || undefined;
-  };
-
   /** Round price to 2 decimal places when initializing from pricing */
   const roundPrice = (v: number | undefined): number | '' => {
     if (v == null) return '';
@@ -275,7 +271,7 @@ export default function NovoPedidoVendaModal({
         valor_frete: tipoFrete === 'CIF' && valorFrete !== '' ? Number(valorFrete) : undefined,
         condicao_pagamento: condicaoPagamento.trim() || undefined,
         observacoes: observacoes.trim() || undefined,
-        embalagem: getEmbalagemValue(),
+        embalagem: embalagem || undefined,
         status: 'pendente',
         importado_por: currentUser.id,
       });
