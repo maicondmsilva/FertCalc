@@ -486,7 +486,7 @@ export function ModalNovoCarregamento({
       .filter((it) => it.quantidade_ton > 0);
 
     const total = itensSelecionados.reduce((sum, it) => sum + it.quantidade_ton, 0);
-    const totalStr = total > 0 ? String(Number(total.toFixed(3))) : '';
+    const totalStr = total > 0 ? total.toFixed(3).replace(/\.?0+$/, '') : '';
 
     setForm((prev) => ({
       ...prev,
@@ -548,7 +548,12 @@ export function ModalNovoCarregamento({
     e.preventDefault();
 
     if (form.pedido_venda_id && pedidoItens.length > 0) {
-      const itensInvalidos = itensCarregamento
+      const itensQtdInvalida = itensCarregamento
+        .filter((entry) => entry.selecionado)
+        .filter((entry) => Number(entry.quantidade || 0) <= 0)
+        .map((entry) => entry.item.produto_nome);
+
+      const itensAcimaSaldo = itensCarregamento
         .filter((entry) => entry.selecionado)
         .filter((entry) => {
           const quantidade = Number(entry.quantidade || 0);
@@ -557,11 +562,19 @@ export function ModalNovoCarregamento({
               entry.item.quantidade_ton ??
               0
           );
-          return quantidade <= 0 || quantidade > saldoDisponivel;
+          return quantidade > saldoDisponivel;
         })
         .map((entry) => entry.item.produto_nome);
-      if (itensInvalidos.length > 0) {
-        showError(`Itens com quantidade inválida ou acima do saldo: ${itensInvalidos.join(', ')}.`);
+
+      if (itensQtdInvalida.length > 0 || itensAcimaSaldo.length > 0) {
+        const partes: string[] = [];
+        if (itensQtdInvalida.length > 0) {
+          partes.push(`quantidade inválida: ${itensQtdInvalida.join(', ')}`);
+        }
+        if (itensAcimaSaldo.length > 0) {
+          partes.push(`acima do saldo: ${itensAcimaSaldo.join(', ')}`);
+        }
+        showError(`Revise os itens selecionados (${partes.join(' | ')}).`);
         return;
       }
     }
@@ -654,8 +667,12 @@ export function ModalNovoCarregamento({
                   )}
                   {selectedPedidoVenda?.saldo_disponivel != null && (
                     <span className="ml-1 text-stone-500">
-                      · {selectedPedidoVenda.saldo_disponivel.toLocaleString('pt-BR')} ton
-                      disponíveis
+                      ·{' '}
+                      {selectedPedidoVenda.saldo_disponivel.toLocaleString('pt-BR', {
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 3,
+                      })}{' '}
+                      ton disponíveis
                     </span>
                   )}
                 </p>
@@ -848,7 +865,11 @@ export function ModalNovoCarregamento({
               <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
                 <AlertTriangle className="w-4 h-4 flex-shrink-0" />
                 ⚠️ Quantidade excede o saldo disponível do pedido (
-                {selectedPedidoVenda.saldo_disponivel.toLocaleString('pt-BR')} ton).
+                {selectedPedidoVenda.saldo_disponivel.toLocaleString('pt-BR', {
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 3,
+                })}{' '}
+                ton).
               </div>
             )}
 

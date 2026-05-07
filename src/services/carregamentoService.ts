@@ -291,10 +291,11 @@ export async function createCarregamento(
             rollbackError,
           });
         }
-        const detalhes = itensError.message ?? 'erro desconhecido';
-        throw new Error(
-          `Falha ao inserir itens do carregamento ${data.id}. Rollback aplicado no carregamento criado. Detalhes: ${detalhes}`
-        );
+        console.error('Falha ao inserir itens do carregamento:', {
+          carregamentoId: data.id,
+          itensError,
+        });
+        throw new Error('Não foi possível salvar os itens do carregamento. Tente novamente.');
       }
     }
   }
