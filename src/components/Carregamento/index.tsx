@@ -817,36 +817,6 @@ export function ModalNovoCarregamento({
             </p>
           )}
 
-          <div>
-            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
-              Quantidade Total (ton) *
-            </label>
-            <input
-              type="number"
-              min="0"
-              step="0.001"
-              value={form.quantidade_total}
-              onChange={(e) => setForm({ ...form, quantidade_total: e.target.value })}
-              readOnly={form.pedido_venda_id !== '' && pedidoItens.length > 0}
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm ${
-                form.pedido_venda_id !== '' && pedidoItens.length > 0
-                  ? 'bg-stone-100 text-stone-600 cursor-not-allowed'
-                  : ''
-              } ${
-                selectedPedidoVenda?.saldo_disponivel != null &&
-                parseFloat(form.quantidade_total || '0') > selectedPedidoVenda.saldo_disponivel
-                  ? 'border-amber-400 bg-amber-50'
-                  : 'border-stone-300'
-              }`}
-              required
-            />
-            {form.pedido_venda_id && pedidoItens.length > 0 && (
-              <p className="mt-1 text-[11px] text-stone-500">
-                Total calculado automaticamente com base nos itens selecionados.
-              </p>
-            )}
-          </div>
-
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
@@ -953,6 +923,36 @@ export function ModalNovoCarregamento({
                   className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
                 />
               </div>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+              Quantidade Total (ton) *
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="0.001"
+              value={form.quantidade_total}
+              onChange={(e) => setForm({ ...form, quantidade_total: e.target.value })}
+              readOnly={form.pedido_venda_id !== '' && pedidoItens.length > 0}
+              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm ${
+                form.pedido_venda_id !== '' && pedidoItens.length > 0
+                  ? 'bg-stone-100 text-stone-600 cursor-not-allowed'
+                  : ''
+              } ${
+                selectedPedidoVenda?.saldo_disponivel != null &&
+                parseFloat(form.quantidade_total || '0') > selectedPedidoVenda.saldo_disponivel
+                  ? 'border-amber-400 bg-amber-50'
+                  : 'border-stone-300'
+              }`}
+              required
+            />
+            {form.pedido_venda_id && pedidoItens.length > 0 && (
+              <p className="mt-1 text-[11px] text-stone-500">
+                Total calculado automaticamente com base nos itens selecionados.
+              </p>
             )}
           </div>
 
