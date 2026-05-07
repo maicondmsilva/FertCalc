@@ -117,6 +117,20 @@ describe('calculateSummary', () => {
     expect(result.totalSaleValue).toBeCloseTo(result.finalPrice * 10);
   });
 
+  it('aplica cobrança de embalagem no preço final', () => {
+    const macro = makeMacro({ quantity: 1000, price: 1000 });
+    const factors = makeFactors({ embalagem_valor: 35 });
+    const result = calculateSummary([macro], [], factors);
+    expect(result.finalPrice).toBeCloseTo(1035);
+  });
+
+  it('aplica desconto de embalagem no preço final', () => {
+    const macro = makeMacro({ quantity: 1000, price: 1000 });
+    const factors = makeFactors({ embalagem_valor: -20 });
+    const result = calculateSummary([macro], [], factors);
+    expect(result.finalPrice).toBeCloseTo(980);
+  });
+
   it('combina múltiplos materiais corretamente', () => {
     const ureia = makeMacro({
       id: 'u1',

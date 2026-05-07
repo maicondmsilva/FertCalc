@@ -2,14 +2,28 @@ import { supabase } from './supabase';
 import { Embalagem } from '../types';
 
 function mapEmbalagem(data: Record<string, unknown>): Embalagem {
+  const cobrar = data.cobrar === true;
+  const descontar = data.descontar === true || data.desconto === true;
+  const valorCobrar =
+    data.valor_cobrar != null ? Number(data.valor_cobrar) : cobrar ? Number(data.valor || 0) : null;
+  const valorDescontar =
+    data.valor_descontar != null
+      ? Number(data.valor_descontar)
+      : descontar
+        ? Number(data.valor || 0)
+        : null;
+
   return {
     id: data.id as string,
     id_numeric: data.id_numeric as number,
     nome: data.nome as string,
-    cobrar: data.cobrar as boolean,
-    desconto: data.desconto as boolean,
-    valor: data.valor as number,
-    tipo_valor: data.tipo_valor as 'por_tonelada' | 'fixo',
+    cobrar,
+    descontar,
+    valor_cobrar: Number.isFinite(valorCobrar) ? valorCobrar : null,
+    valor_descontar: Number.isFinite(valorDescontar) ? valorDescontar : null,
+    desconto: descontar,
+    valor: Number(data.valor || 0),
+    tipo_valor: (data.tipo_valor as 'por_tonelada' | 'fixo') || 'por_tonelada',
     ativo: data.ativo as boolean,
     criado_em: data.criado_em as string | undefined,
   };

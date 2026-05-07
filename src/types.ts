@@ -408,6 +408,7 @@ export interface PricingFactors {
   embalagem_id?: string;
   embalagem_nome?: string;
   embalagem_valor?: number;
+  embalagem_ajuste?: 'nenhum' | 'cobrar' | 'descontar';
 }
 
 export interface Embalagem {
@@ -415,9 +416,12 @@ export interface Embalagem {
   id_numeric: number;
   nome: string;
   cobrar: boolean;
-  desconto: boolean;
-  valor: number;
-  tipo_valor: 'por_tonelada' | 'fixo';
+  descontar?: boolean;
+  valor_cobrar?: number | null;
+  valor_descontar?: number | null;
+  desconto?: boolean;
+  valor?: number;
+  tipo_valor?: 'por_tonelada' | 'fixo';
   ativo: boolean;
   criado_em?: string;
 }
