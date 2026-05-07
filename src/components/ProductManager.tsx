@@ -92,9 +92,9 @@ export default function ProductManager() {
   const [embalagemForm, setEmbalagemForm] = useState<Partial<Embalagem>>({
     nome: '',
     cobrar: false,
-    desconto: false,
-    valor: 0,
-    tipo_valor: 'por_tonelada',
+    descontar: false,
+    valor_cobrar: null,
+    valor_descontar: null,
     ativo: true,
   });
   const [editingEmbalagemId, setEditingEmbalagemId] = useState<string | null>(null);
@@ -135,9 +135,9 @@ export default function ProductManager() {
       setEmbalagemForm({
         nome: '',
         cobrar: false,
-        desconto: false,
-        valor: 0,
-        tipo_valor: 'por_tonelada',
+        descontar: false,
+        valor_cobrar: null,
+        valor_descontar: null,
         ativo: true,
       });
       setIsEmbalagemModalOpen(true);
@@ -161,8 +161,17 @@ export default function ProductManager() {
   };
 
   const openEmbalagemEdit = (emb: Embalagem) => {
+    const descontar = emb.descontar ?? emb.desconto ?? false;
+    const valorCobrar = emb.valor_cobrar ?? (emb.cobrar ? emb.valor || 0 : null);
+    const valorDescontar = emb.valor_descontar ?? (descontar ? emb.valor || 0 : null);
+
     setEditingEmbalagemId(emb.id);
-    setEmbalagemForm({ ...emb });
+    setEmbalagemForm({
+      ...emb,
+      descontar,
+      valor_cobrar: valorCobrar,
+      valor_descontar: valorDescontar,
+    });
     setIsEmbalagemModalOpen(true);
   };
 
@@ -176,9 +185,9 @@ export default function ProductManager() {
       const payload: Partial<Embalagem> = {
         nome: embalagemForm.nome,
         cobrar: embalagemForm.cobrar ?? false,
-        desconto: embalagemForm.desconto ?? false,
-        valor: embalagemForm.valor ?? 0,
-        tipo_valor: embalagemForm.tipo_valor ?? 'por_tonelada',
+        descontar: embalagemForm.descontar ?? false,
+        valor_cobrar: embalagemForm.cobrar ? (embalagemForm.valor_cobrar ?? 0) : null,
+        valor_descontar: embalagemForm.descontar ? (embalagemForm.valor_descontar ?? 0) : null,
         ativo: embalagemForm.ativo ?? true,
       };
       if (editingEmbalagemId) {
@@ -463,9 +472,9 @@ export default function ProductManager() {
                 <th className="px-5 py-3 w-16">ID</th>
                 <th className="px-5 py-3">Nome</th>
                 <th className="px-5 py-3 text-center">Cobrar</th>
-                <th className="px-5 py-3 text-center">Desconto</th>
-                <th className="px-5 py-3 text-right">Valor</th>
-                <th className="px-5 py-3">Tipo</th>
+                <th className="px-5 py-3 text-center">Descontar</th>
+                <th className="px-5 py-3 text-right">Valor Cobrar (R$/t)</th>
+                <th className="px-5 py-3 text-right">Valor Desconto (R$/t)</th>
                 <th className="px-5 py-3 text-center">Ativo</th>
                 <th className="px-5 py-3 text-right">Ações</th>
               </tr>
@@ -499,17 +508,16 @@ export default function ProductManager() {
                     </td>
                     <td className="px-5 py-3 text-center">
                       <span
-                        className={`text-xs font-bold px-2 py-0.5 rounded ${emb.desconto ? 'bg-blue-100 text-blue-700' : 'bg-stone-100 text-stone-500'}`}
+                        className={`text-xs font-bold px-2 py-0.5 rounded ${emb.descontar ? 'bg-blue-100 text-blue-700' : 'bg-stone-100 text-stone-500'}`}
                       >
-                        {emb.desconto ? 'Sim' : 'Não'}
+                        {emb.descontar ? 'Sim' : 'Não'}
                       </span>
                     </td>
                     <td className="px-5 py-3 text-right font-mono">
-                      R$ {emb.valor.toFixed(2)}
-                      {emb.tipo_valor === 'por_tonelada' ? '/t' : ' fixo'}
+                      {emb.cobrar ? `R$ ${(emb.valor_cobrar || 0).toFixed(2)}` : '—'}
                     </td>
-                    <td className="px-5 py-3 text-stone-500 text-xs">
-                      {emb.tipo_valor === 'por_tonelada' ? 'Por tonelada' : 'Valor fixo'}
+                    <td className="px-5 py-3 text-right font-mono">
+                      {emb.descontar ? `R$ ${(emb.valor_descontar || 0).toFixed(2)}` : '—'}
                     </td>
                     <td className="px-5 py-3 text-center">
                       <span
@@ -869,7 +877,6 @@ export default function ProductManager() {
                       setEmbalagemForm((p) => ({
                         ...p,
                         cobrar: !p.cobrar,
-                        desconto: p.cobrar ? p.desconto : false,
                       }))
                     }
                     className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${embalagemForm.cobrar ? 'bg-emerald-100 text-emerald-700 border border-emerald-300' : 'bg-stone-100 text-stone-500 border border-stone-200'}`}
@@ -884,63 +891,71 @@ export default function ProductManager() {
                   <p className="text-xs text-stone-400 mt-1">Acrescenta ao preço</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-stone-600 mb-1">Desconto</label>
+                  <label className="block text-sm font-medium text-stone-600 mb-1">Descontar</label>
                   <button
                     type="button"
                     onClick={() =>
                       setEmbalagemForm((p) => ({
                         ...p,
-                        desconto: !p.desconto,
-                        cobrar: p.desconto ? p.cobrar : false,
+                        descontar: !p.descontar,
                       }))
                     }
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${embalagemForm.desconto ? 'bg-blue-100 text-blue-700 border border-blue-300' : 'bg-stone-100 text-stone-500 border border-stone-200'}`}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${embalagemForm.descontar ? 'bg-blue-100 text-blue-700 border border-blue-300' : 'bg-stone-100 text-stone-500 border border-stone-200'}`}
                   >
-                    {embalagemForm.desconto ? (
+                    {embalagemForm.descontar ? (
                       <ToggleRight className="w-4 h-4" />
                     ) : (
                       <ToggleLeft className="w-4 h-4" />
                     )}
-                    {embalagemForm.desconto ? 'Sim' : 'Não'}
+                    {embalagemForm.descontar ? 'Sim' : 'Não'}
                   </button>
                   <p className="text-xs text-stone-400 mt-1">Desconta do preço</p>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-stone-600 mb-1">
-                    Valor (R$)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={embalagemForm.valor || 0}
-                    onChange={(e) =>
-                      setEmbalagemForm((p) => ({ ...p, valor: Number(e.target.value) }))
-                    }
-                    className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-                  />
+              {(embalagemForm.cobrar || embalagemForm.descontar) && (
+                <div className="grid grid-cols-2 gap-4">
+                  {embalagemForm.cobrar && (
+                    <div>
+                      <label className="block text-sm font-medium text-stone-600 mb-1">
+                        Valor a Cobrar (R$/t)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={embalagemForm.valor_cobrar ?? 0}
+                        onChange={(e) =>
+                          setEmbalagemForm((p) => ({
+                            ...p,
+                            valor_cobrar: Number(e.target.value),
+                          }))
+                        }
+                        className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                      />
+                    </div>
+                  )}
+                  {embalagemForm.descontar && (
+                    <div>
+                      <label className="block text-sm font-medium text-stone-600 mb-1">
+                        Valor do Desconto (R$/t)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={embalagemForm.valor_descontar ?? 0}
+                        onChange={(e) =>
+                          setEmbalagemForm((p) => ({
+                            ...p,
+                            valor_descontar: Number(e.target.value),
+                          }))
+                        }
+                        className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                      />
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-stone-600 mb-1">
-                    Tipo de Valor
-                  </label>
-                  <select
-                    value={embalagemForm.tipo_valor || 'por_tonelada'}
-                    onChange={(e) =>
-                      setEmbalagemForm((p) => ({
-                        ...p,
-                        tipo_valor: e.target.value as 'por_tonelada' | 'fixo',
-                      }))
-                    }
-                    className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-                  >
-                    <option value="por_tonelada">Por tonelada</option>
-                    <option value="fixo">Valor fixo</option>
-                  </select>
-                </div>
-              </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-stone-600 mb-1">Ativo</label>
                 <button
