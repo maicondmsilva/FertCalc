@@ -559,8 +559,9 @@ export function ModalNovoCarregamento({
           const quantidade = Number(entry.quantidade || 0);
           const rawSaldo = (entry.item as PedidoVendaItemComSaldo).saldo_disponivel;
           const rawQtd = entry.item.quantidade_ton;
+          const temSaldoDefinido = rawSaldo != null || rawQtd != null;
 
-          if (rawSaldo == null && rawQtd == null) return false;
+          if (!temSaldoDefinido) return false;
 
           const saldoDisponivel = Number(rawSaldo ?? rawQtd ?? 0);
           return quantidade > saldoDisponivel;
@@ -947,7 +948,7 @@ export function ModalNovoCarregamento({
                   ? 'border-amber-400 bg-amber-50'
                   : 'border-stone-300'
               }`}
-              required={!(form.pedido_venda_id !== '' && pedidoItens.length > 0)}
+              required={!form.pedido_venda_id || pedidoItens.length === 0}
             />
             {form.pedido_venda_id && pedidoItens.length > 0 && (
               <p className="mt-1 text-[11px] text-stone-500">
