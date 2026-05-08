@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { TargetFormula } from '../types';
 
 vi.mock('./supabase', () => ({
   supabase: {},
@@ -7,15 +8,16 @@ vi.mock('./supabase', () => ({
 import { normalizeCalculationsForDb } from './db';
 
 describe('normalizeCalculationsForDb', () => {
-  it('normalizes produto livre calculations with missing formula/summary fields', () => {
+  it('normalizes free product calculations with missing formula/summary fields', () => {
+    const freeProductCalc: Partial<TargetFormula> = {
+      modo_calculo: 'produtos_livres',
+      produtos_livres: [{ productId: 'p1', quantity: 500 }],
+      macros: [{ id: 'p1', quantity: 500, price: 1200 } as TargetFormula['macros'][number]],
+      micros: [],
+    };
+
     const calculations = normalizeCalculationsForDb([
-      {
-        modo_calculo: 'produtos_livres',
-        produtos_livres: [{ productId: 'p1', quantity: 500 }],
-        macros: [{ id: 'p1', quantity: 500, price: 1200 }],
-        micros: [],
-        summary: {},
-      } as any,
+      freeProductCalc as NonNullable<Parameters<typeof normalizeCalculationsForDb>[0]>[number],
     ]);
 
     expect(calculations[0].formula).toBe('Produtos Livres');

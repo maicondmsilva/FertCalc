@@ -61,6 +61,7 @@ interface PricingDetailModalProps {
   onTransferSuccess?: () => void;
   appSettings?: AppSettings;
 }
+type PricingCalculation = PricingRecord | NonNullable<PricingRecord['calculations']>[number];
 
 export default function PricingDetailModal({
   selectedPricing,
@@ -212,18 +213,20 @@ export default function PricingDetailModal({
     }
   };
 
-  const getCalculationSummary = (calc: any) => ({
+  const getCalculationSummary = (calc: Partial<PricingCalculation>) => ({
     ...selectedPricing.summary,
     ...(calc?.summary || {}),
   });
 
-  const getCalculationMaterials = (calc: any) => [
+  const getCalculationMaterials = (calc: Partial<PricingCalculation>) => [
     ...(calc?.macros || selectedPricing.macros || []),
     ...(calc?.micros || selectedPricing.micros || []),
   ];
 
-  const getCalculationFormulaLabel = (calc: any) =>
-    calc?.formula || selectedPricing.factors?.targetFormula || 'Produtos Livres';
+  const getCalculationFormulaLabel = (calc: Partial<PricingCalculation>) =>
+    ('formula' in calc && calc.formula) ||
+    selectedPricing.factors?.targetFormula ||
+    'Produtos Livres';
 
   const loadSellers = async () => {
     try {
@@ -549,7 +552,7 @@ export default function PricingDetailModal({
     const calcs =
       pricing.calculations && pricing.calculations.length > 0 ? pricing.calculations : [pricing];
 
-    const wsData = [
+    const wsData: Array<Array<string | number>> = [
       ['RELATÓRIO DE PRECIFICAÇÃO'],
       ['Empresa', appSettings.companyName],
       ['ID', pricing.id],

@@ -930,31 +930,42 @@ const EMPTY_PRICING_SUMMARY: PricingRecord['summary'] = {
   resultingCa: 0,
   resultingMicros: {},
 };
+const FREE_PRODUCTS_FORMULA_LABEL = 'Produtos Livres';
+type CalculationDbInput =
+  | Partial<NonNullable<PricingRecord['calculations']>[number]>
+  | null
+  | undefined;
 
-const toSafeNumber = (value: unknown, fallback = 0) => {
+const parseFiniteNumber = (value: unknown, fallback = 0) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
-export const normalizeCalculationForDb = (calc: any) => {
+export const normalizeCalculationForDb = (calc: CalculationDbInput) => {
   const macros = Array.isArray(calc?.macros) ? calc.macros : [];
   const micros = Array.isArray(calc?.micros) ? calc.micros : [];
   const materials = [...macros, ...micros];
-  const totalWeight =
-    materials.reduce((sum, item) => sum + toSafeNumber(item?.quantity), 0) ||
-    toSafeNumber(calc?.summary?.totalWeight);
-  const baseCost =
-    materials.reduce(
-      (sum, item) => sum + (toSafeNumber(item?.quantity) / 1000) * toSafeNumber(item?.price),
-      0
-    ) || toSafeNumber(calc?.summary?.baseCost);
+  const hasMaterials = materials.length > 0;
+  const calculatedTotalWeight = materials.reduce(
+    (sum, item) => sum + parseFiniteNumber(item?.quantity),
+    0
+  );
+  const calculatedBaseCost = materials.reduce(
+    (sum, item) =>
+      sum + (parseFiniteNumber(item?.quantity) / 1000) * parseFiniteNumber(item?.price),
+    0
+  );
+  const totalWeight = hasMaterials
+    ? calculatedTotalWeight
+    : parseFiniteNumber(calc?.summary?.totalWeight);
+  const baseCost = hasMaterials ? calculatedBaseCost : parseFiniteNumber(calc?.summary?.baseCost);
 
   return {
     ...calc,
     formula:
       typeof calc?.formula === 'string' && calc.formula.trim().length > 0
         ? calc.formula
-        : 'Produtos Livres',
+        : FREE_PRODUCTS_FORMULA_LABEL,
     macros,
     micros,
     summary: {
@@ -962,7 +973,7 @@ export const normalizeCalculationForDb = (calc: any) => {
       ...(calc?.summary || {}),
       totalWeight,
       baseCost,
-      finalPrice: toSafeNumber(calc?.summary?.finalPrice, baseCost),
+      finalPrice: parseFiniteNumber(calc?.summary?.finalPrice, baseCost),
     },
   };
 };
