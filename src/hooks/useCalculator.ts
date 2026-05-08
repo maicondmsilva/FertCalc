@@ -1192,35 +1192,54 @@ export function useCalculator({
 
     const updatedCalculations = calculations.map((c) => {
       const mode = getCalculationMode(c);
+      const calculationFactors = c.factors || factors;
+      const currentMacros = c.macros && c.macros.length > 0 ? c.macros : macros;
+      const currentMicros = c.micros && c.micros.length > 0 ? c.micros : micros;
+      const produtosLivres = (c.produtos_livres || []).filter((item) => Number(item.quantity) > 0);
+      const materialsInCalculation =
+        mode === 'produtos_livres'
+          ? applyProdutosLivresToMaterials(produtosLivres, currentMacros, currentMicros)
+          : { nextMacros: currentMacros, nextMicros: currentMicros };
+      const summary = calculateSummary(
+        materialsInCalculation.nextMacros,
+        materialsInCalculation.nextMicros,
+        calculationFactors
+      );
       const selectedProduct = formulaProductSelections[c.id]
-        ? [...(c.macros || []), ...(c.micros || [])].find(
+        ? [...materialsInCalculation.nextMacros, ...materialsInCalculation.nextMicros].find(
             (material) => material.id === formulaProductSelections[c.id]
           )
         : undefined;
       const formulaName =
         mode === 'produtos_livres'
-          ? formatNPK(
-              c.formula || '0-0-0',
-              c.summary?.resultingN || 0,
-              c.summary?.resultingP || 0,
-              c.summary?.resultingK || 0
-            )
+          ? summary.totalWeight > 0
+            ? formatNPK(
+                c.formula || '0-0-0',
+                summary.resultingN,
+                summary.resultingP,
+                summary.resultingK
+              )
+            : c.formula || 'Produtos Livres'
           : selectedProduct
             ? getProductFormulaLabel(selectedProduct)
             : c.formula;
 
       return {
         ...c,
+        factors: calculationFactors,
+        macros: materialsInCalculation.nextMacros,
+        micros: materialsInCalculation.nextMicros,
+        summary,
         modo_calculo: mode,
         formula: getDetailedFormulaName(
           formulaName,
-          c.macros,
-          c.micros,
-          c.summary?.resultingMicros,
+          materialsInCalculation.nextMacros,
+          materialsInCalculation.nextMicros,
+          summary.resultingMicros,
           c.targetCa,
           c.targetS,
-          c.summary?.resultingCa,
-          c.summary?.resultingS
+          summary.resultingCa,
+          summary.resultingS
         ),
       };
     });

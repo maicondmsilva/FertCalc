@@ -913,6 +913,63 @@ export async function saveProfitabilityToCalc(
   if (error) throw error;
 }
 
+const EMPTY_PRICING_SUMMARY: PricingRecord['summary'] = {
+  totalWeight: 0,
+  baseCost: 0,
+  basePrice: 0,
+  interestValue: 0,
+  taxValue: 0,
+  commissionValue: 0,
+  freightValue: 0,
+  finalPrice: 0,
+  totalSaleValue: 0,
+  resultingN: 0,
+  resultingP: 0,
+  resultingK: 0,
+  resultingS: 0,
+  resultingCa: 0,
+  resultingMicros: {},
+};
+
+const toSafeNumber = (value: unknown, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+export const normalizeCalculationForDb = (calc: any) => {
+  const macros = Array.isArray(calc?.macros) ? calc.macros : [];
+  const micros = Array.isArray(calc?.micros) ? calc.micros : [];
+  const materials = [...macros, ...micros];
+  const totalWeight =
+    materials.reduce((sum, item) => sum + toSafeNumber(item?.quantity), 0) ||
+    toSafeNumber(calc?.summary?.totalWeight);
+  const baseCost =
+    materials.reduce(
+      (sum, item) => sum + (toSafeNumber(item?.quantity) / 1000) * toSafeNumber(item?.price),
+      0
+    ) || toSafeNumber(calc?.summary?.baseCost);
+
+  return {
+    ...calc,
+    formula:
+      typeof calc?.formula === 'string' && calc.formula.trim().length > 0
+        ? calc.formula
+        : 'Produtos Livres',
+    macros,
+    micros,
+    summary: {
+      ...EMPTY_PRICING_SUMMARY,
+      ...(calc?.summary || {}),
+      totalWeight,
+      baseCost,
+      finalPrice: toSafeNumber(calc?.summary?.finalPrice, baseCost),
+    },
+  };
+};
+
+export const normalizeCalculationsForDb = (calculations?: PricingRecord['calculations']) =>
+  Array.isArray(calculations) ? calculations.map((calc) => normalizeCalculationForDb(calc)) : [];
+
 function pricingRecordToDb(r: Partial<PricingRecord>) {
   const d: Record<string, unknown> = {};
   if (r.userId !== undefined) d.user_id = r.userId;
@@ -926,7 +983,7 @@ function pricingRecordToDb(r: Partial<PricingRecord>) {
   if (r.micros !== undefined) d.micros = r.micros;
   if (r.factors !== undefined) d.factors = r.factors;
   if (r.summary !== undefined) d.summary = r.summary;
-  if (r.calculations !== undefined) d.calculations = r.calculations;
+  if (r.calculations !== undefined) d.calculations = normalizeCalculationsForDb(r.calculations);
   if (r.history !== undefined) d.history = r.history;
   if (r.commercialObservation !== undefined) d.commercial_observation = r.commercialObservation;
   if (r.transferToUserId !== undefined) d.transfer_to_user_id = r.transferToUserId;
