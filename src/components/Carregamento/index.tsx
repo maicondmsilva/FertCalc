@@ -557,11 +557,12 @@ export function ModalNovoCarregamento({
         .filter((entry) => entry.selecionado)
         .filter((entry) => {
           const quantidade = Number(entry.quantidade || 0);
-          const saldoDisponivel = Number(
-            (entry.item as PedidoVendaItemComSaldo).saldo_disponivel ??
-              entry.item.quantidade_ton ??
-              0
-          );
+          const rawSaldo = (entry.item as PedidoVendaItemComSaldo).saldo_disponivel;
+          const rawQtd = entry.item.quantidade_ton;
+
+          if (rawSaldo == null && rawQtd == null) return false;
+
+          const saldoDisponivel = Number(rawSaldo ?? rawQtd ?? 0);
           return quantidade > saldoDisponivel;
         })
         .map((entry) => entry.item.produto_nome);
@@ -728,13 +729,12 @@ export function ModalNovoCarregamento({
                   <div className="sm:col-span-3">Qtd. a carregar</div>
                 </div>
                 {itensCarregamento.map((entry, idx) => {
-                  const saldoDisponivel = Number(
-                    (entry.item as PedidoVendaItemComSaldo).saldo_disponivel ??
-                      entry.item.quantidade_ton ??
-                      0
-                  );
+                  const rawSaldo = (entry.item as PedidoVendaItemComSaldo).saldo_disponivel;
+                  const rawQtd = entry.item.quantidade_ton;
+                  const temSaldoDefinido = rawSaldo != null || rawQtd != null;
+                  const saldoDisponivel = Number(rawSaldo ?? rawQtd ?? 0);
                   const quantidadeNum = Number(entry.quantidade || 0);
-                  const excedeuSaldo = quantidadeNum > saldoDisponivel;
+                  const excedeuSaldo = temSaldoDefinido && quantidadeNum > saldoDisponivel;
 
                   return (
                     <div
@@ -772,7 +772,7 @@ export function ModalNovoCarregamento({
                             Saldo
                           </span>
                           <span className="text-xs text-stone-600">
-                            {Number.isFinite(saldoDisponivel)
+                            {temSaldoDefinido && Number.isFinite(saldoDisponivel)
                               ? `${saldoDisponivel.toLocaleString('pt-BR')} ton`
                               : '—'}
                           </span>
@@ -947,7 +947,7 @@ export function ModalNovoCarregamento({
                   ? 'border-amber-400 bg-amber-50'
                   : 'border-stone-300'
               }`}
-              required
+              required={!(form.pedido_venda_id !== '' && pedidoItens.length > 0)}
             />
             {form.pedido_venda_id && pedidoItens.length > 0 && (
               <p className="mt-1 text-[11px] text-stone-500">
