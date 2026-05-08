@@ -361,7 +361,6 @@ function PainelResponsavel({
         obs_responsavel: obsResponsavel || undefined,
         cotado_em: cotadoEm,
       });
-      const { registrarAuditLog } = await import('../../services/auditLogService');
       await registrarAuditLog({
         tabela: 'cotacoes_solicitadas',
         registro_id: cotacao.id,
@@ -438,7 +437,6 @@ function PainelResponsavel({
         status: 'aprovado',
         aprovado_em: aprovadoEm,
       });
-      const { registrarAuditLog } = await import('../../services/auditLogService');
       await registrarAuditLog({
         tabela: 'cotacoes_solicitadas',
         registro_id: cotacao.id,
