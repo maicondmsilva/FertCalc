@@ -28,7 +28,7 @@ import {
 } from '../../types/carregamento';
 import { getFiliais, getTransportadoras } from '../../services/carregamentoService';
 import { getLocaisAtivos } from '../../services/locaisCarregamentoService';
-import { getClients, getUsers } from '../../services/db';
+import { getClients } from '../../services/db';
 import {
   createCotacaoSolicitada,
   updateCotacaoSolicitada,
@@ -1363,16 +1363,7 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
       // Notify responsáveis for the selected filial
       let responsavelIds = await getResponsaveisByFilial(formFilialId || undefined);
       if (responsavelIds.length === 0) {
-        const fallbackUsers = await getUsers();
-        responsavelIds = fallbackUsers
-          .filter(
-            (user) =>
-              user.ativo &&
-              (user.permissions?.carregamento_tratar_cotacao ||
-                user.role === 'admin' ||
-                user.role === 'master')
-          )
-          .map((user) => user.id);
+        responsavelIds = await getResponsaveisByFilial(undefined);
       }
       await notifyCotacaoSolicitada(cotacao, currentUser.name ?? 'Vendedor', responsavelIds);
 
