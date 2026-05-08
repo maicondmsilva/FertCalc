@@ -61,6 +61,7 @@ interface PricingDetailModalProps {
   onTransferSuccess?: () => void;
   appSettings?: AppSettings;
 }
+type PricingCalculation = PricingRecord | NonNullable<PricingRecord['calculations']>[number];
 
 export default function PricingDetailModal({
   selectedPricing,
@@ -211,6 +212,21 @@ export default function PricingDetailModal({
       setSavingPedido(false);
     }
   };
+
+  const getCalculationSummary = (calc: Partial<PricingCalculation>) => ({
+    ...selectedPricing.summary,
+    ...(calc?.summary || {}),
+  });
+
+  const getCalculationMaterials = (calc: Partial<PricingCalculation>) => [
+    ...(calc?.macros || selectedPricing.macros || []),
+    ...(calc?.micros || selectedPricing.micros || []),
+  ];
+
+  const getCalculationFormulaLabel = (calc: Partial<PricingCalculation>) =>
+    ('formula' in calc && calc.formula) ||
+    selectedPricing.factors?.targetFormula ||
+    'Produtos Livres';
 
   const loadSellers = async () => {
     try {
@@ -396,6 +412,8 @@ export default function PricingDetailModal({
       pricing.calculations && pricing.calculations.length > 0 ? pricing.calculations : [pricing];
 
     calcs.forEach((calc, idx) => {
+      const calcSummary = getCalculationSummary(calc);
+      const calcMaterials = getCalculationMaterials(calc);
       if (idx > 0 && currentY > 230) {
         doc.addPage();
         currentY = 15;
@@ -403,11 +421,11 @@ export default function PricingDetailModal({
 
       doc.setFontSize(11);
       doc.setFont(undefined as any, 'bold');
-      doc.text(`Fórmula: ${calc.formula || pricing.factors.targetFormula}`, 14, currentY);
+      doc.text(`Fórmula: ${getCalculationFormulaLabel(calc)}`, 14, currentY);
       currentY += 5;
 
       // Products - novo layout com Frete
-      const productsData = [...(calc.macros || pricing.macros), ...(calc.micros || pricing.micros)]
+      const productsData = calcMaterials
         .filter((p) => p.quantity > 0)
         .map((p) => [
           p.name,
@@ -441,18 +459,15 @@ export default function PricingDetailModal({
         startY: currentY,
         head: [['Resumo', 'Valor']],
         body: [
-          ['Custo Base', `R$ ${(calc.summary?.baseCost || pricing.summary.baseCost).toFixed(2)}`],
-          [
-            'Preço Final/ton',
-            `R$ ${(calc.summary?.finalPrice || pricing.summary.finalPrice).toFixed(2)}`,
-          ],
+          ['Custo Base', `R$ ${Number(calcSummary.baseCost).toFixed(2)}`],
+          ['Preço Final/ton', `R$ ${Number(calcSummary.finalPrice).toFixed(2)}`],
           [
             'N-P-K Real',
             formatNPK(
               calc.formula,
-              calc.summary?.resultingN || 0,
-              calc.summary?.resultingP || 0,
-              calc.summary?.resultingK || 0
+              calcSummary.resultingN || 0,
+              calcSummary.resultingP || 0,
+              calcSummary.resultingK || 0
             ),
           ],
         ],
@@ -537,7 +552,7 @@ export default function PricingDetailModal({
     const calcs =
       pricing.calculations && pricing.calculations.length > 0 ? pricing.calculations : [pricing];
 
-    const wsData = [
+    const wsData: Array<Array<string | number>> = [
       ['RELATÓRIO DE PRECIFICAÇÃO'],
       ['Empresa', appSettings.companyName],
       ['ID', pricing.id],
@@ -554,27 +569,26 @@ export default function PricingDetailModal({
     ];
 
     calcs.forEach((calc, idx) => {
+      const calcSummary = getCalculationSummary(calc);
+      const calcMaterials = getCalculationMaterials(calc);
       wsData.push(
-        [`FÓRMULA ${idx + 1}: ${calc.formula || pricing.factors.targetFormula}`],
+        [`FÓRMULA ${idx + 1}: ${getCalculationFormulaLabel(calc)}`],
         ['COMPOSIÇÃO'],
         ['Produto', 'Qtd (kg)', 'Preço (R$/ton)', 'Subtotal (R$)']
       );
 
-      const materials = [
-        ...(calc.macros || pricing.macros),
-        ...(calc.micros || pricing.micros),
-      ].filter((p) => p.quantity > 0);
+      const materials = calcMaterials.filter((p) => p.quantity > 0);
       materials.forEach((p) => {
         wsData.push([p.name, p.quantity, p.price, (p.quantity / 1000) * p.price]);
       });
 
       wsData.push(
         ['RESUMO FINANCEIRO'],
-        ['Custo Base', calc.summary?.baseCost || pricing.summary.baseCost],
-        ['PREÇO FINAL', calc.summary?.finalPrice || pricing.summary.finalPrice],
-        ['Garantia N', calc.summary?.resultingN || pricing.summary.resultingN],
-        ['Garantia P', calc.summary?.resultingP || pricing.summary.resultingP],
-        ['Garantia K', calc.summary?.resultingK || pricing.summary.resultingK],
+        ['Custo Base', calcSummary.baseCost],
+        ['PREÇO FINAL', calcSummary.finalPrice],
+        ['Garantia N', calcSummary.resultingN],
+        ['Garantia P', calcSummary.resultingP],
+        ['Garantia K', calcSummary.resultingK],
         ['']
       );
     });
@@ -1115,291 +1129,299 @@ export default function PricingDetailModal({
             {(selectedPricing.calculations && selectedPricing.calculations.length > 0
               ? selectedPricing.calculations
               : [selectedPricing]
-            ).map((calc, calcIdx) => (
-              <div
-                key={calcIdx}
-                className="space-y-6 p-6 bg-stone-50 rounded-2xl border border-stone-200"
-              >
-                <div className="flex justify-between items-center border-b border-stone-200 pb-4">
-                  <h3 className="text-xl font-black text-emerald-700 uppercase tracking-tight">
-                    Fórmula: {calc.formula || 'N/A'}
-                  </h3>
-                  <div className="text-right">
-                    <p className="text-[10px] font-bold text-stone-400 uppercase">Preço Final</p>
-                    <p className="text-lg font-bold text-emerald-600 font-mono">
-                      R$ {calc.summary?.finalPrice.toFixed(2)} / ton
-                    </p>
-                  </div>
-                </div>
+            ).map((calc, calcIdx) => {
+              const calcSummary = getCalculationSummary(calc);
+              const calcMaterials = getCalculationMaterials(calc);
+              const calcFormula = getCalculationFormulaLabel(calc);
 
-                {/* Products Table */}
-                <div>
-                  <h4 className="text-xs font-bold text-stone-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-                    <Tag className="w-3.5 h-3.5" /> Composição da Batida
-                  </h4>
-                  <div className="border border-stone-200 rounded-xl overflow-hidden bg-white">
-                    <table className="w-full text-sm text-left">
-                      <thead className="bg-stone-50 text-stone-500 uppercase text-[10px] font-bold">
-                        <tr>
-                          <th className="px-4 py-3">Produto</th>
-                          <th className="px-4 py-3 text-right">Qtd (kg)</th>
-                          <th className="px-4 py-3 text-right">Preço (R$/ton)</th>
-                          <th className="px-4 py-3 text-right">Subtotal (R$)</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-stone-100">
-                        {[...(calc.macros || []), ...(calc.micros || [])]
-                          .filter((p) => p.quantity > 0)
-                          .map((p) => (
-                            <tr key={p.id}>
-                              <td className="px-4 py-3 font-medium text-stone-800">{p.name}</td>
-                              <td className="px-4 py-3 text-right font-mono">
-                                {Number(p.quantity).toFixed(2)}
-                              </td>
-                              <td className="px-4 py-3 text-right font-mono">
-                                R$ {Number(p.price).toFixed(2)}
-                              </td>
-                              <td className="px-4 py-3 text-right font-mono">
-                                R$ {((Number(p.quantity) / 1000) * Number(p.price)).toFixed(2)}
-                              </td>
-                            </tr>
-                          ))}
-                      </tbody>
-                      <tfoot className="bg-stone-50 font-bold">
-                        <tr>
-                          <td className="px-4 py-3">TOTAL DA BATIDA</td>
-                          <td className="px-4 py-3 text-right font-mono">
-                            {calc.summary?.totalWeight.toFixed(2)} kg
-                          </td>
-                          <td></td>
-                          <td className="px-4 py-3 text-right font-mono text-emerald-600">
-                            R$ {calc.summary?.baseCost.toFixed(2)}
-                          </td>
-                        </tr>
-                      </tfoot>
-                    </table>
+              return (
+                <div
+                  key={calcIdx}
+                  className="space-y-6 p-6 bg-stone-50 rounded-2xl border border-stone-200"
+                >
+                  <div className="flex justify-between items-center border-b border-stone-200 pb-4">
+                    <h3 className="text-xl font-black text-emerald-700 uppercase tracking-tight">
+                      Fórmula: {calcFormula}
+                    </h3>
+                    <div className="text-right">
+                      <p className="text-[10px] font-bold text-stone-400 uppercase">Preço Final</p>
+                      <p className="text-lg font-bold text-emerald-600 font-mono">
+                        R$ {Number(calcSummary.finalPrice).toFixed(2)} / ton
+                      </p>
+                    </div>
                   </div>
-                </div>
 
-                {/* Financial Breakdown */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="bg-white p-4 rounded-xl border border-stone-200">
-                    <h4 className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-4">
-                      Detalhamento de Valores
+                  {/* Products Table */}
+                  <div>
+                    <h4 className="text-xs font-bold text-stone-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                      <Tag className="w-3.5 h-3.5" /> Composição da Batida
                     </h4>
-                    <div className="space-y-3">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-stone-500">Valor Matéria Prima (Base)</span>
-                        <span className="font-mono font-medium">
-                          R$ {Number(calc.summary?.baseCost).toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-stone-500">
-                          Ajuste Fator ({calc.factors?.factor})
-                        </span>
-                        <span className="font-mono font-medium">
-                          R${' '}
-                          {(Number(calc.summary?.baseCost) * (calc.factors?.factor || 1)).toFixed(
-                            2
-                          )}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-stone-500">Margem Rentabilidade (R$/ton)</span>
-                        <span className="font-mono font-medium">
-                          + R$ {Number(calc.factors?.margin || 0).toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-stone-500">Desconto (R$/ton)</span>
-                        <span className="font-mono font-medium text-red-500">
-                          - R$ {Number(calc.factors?.discount || 0).toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="pt-2 border-t border-stone-100 flex justify-between font-bold text-stone-800">
-                        <span>Preço Base de Venda</span>
-                        <span className="font-mono">
-                          R$ {Number(calc.summary?.basePrice).toFixed(2)}
-                        </span>
-                      </div>
+                    <div className="border border-stone-200 rounded-xl overflow-hidden bg-white">
+                      <table className="w-full text-sm text-left">
+                        <thead className="bg-stone-50 text-stone-500 uppercase text-[10px] font-bold">
+                          <tr>
+                            <th className="px-4 py-3">Produto</th>
+                            <th className="px-4 py-3 text-right">Qtd (kg)</th>
+                            <th className="px-4 py-3 text-right">Preço (R$/ton)</th>
+                            <th className="px-4 py-3 text-right">Subtotal (R$)</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-stone-100">
+                          {calcMaterials
+                            .filter((p) => p.quantity > 0)
+                            .map((p) => (
+                              <tr key={p.id}>
+                                <td className="px-4 py-3 font-medium text-stone-800">{p.name}</td>
+                                <td className="px-4 py-3 text-right font-mono">
+                                  {Number(p.quantity).toFixed(2)}
+                                </td>
+                                <td className="px-4 py-3 text-right font-mono">
+                                  R$ {Number(p.price).toFixed(2)}
+                                </td>
+                                <td className="px-4 py-3 text-right font-mono">
+                                  R$ {((Number(p.quantity) / 1000) * Number(p.price)).toFixed(2)}
+                                </td>
+                              </tr>
+                            ))}
+                        </tbody>
+                        <tfoot className="bg-stone-50 font-bold">
+                          <tr>
+                            <td className="px-4 py-3">TOTAL DA BATIDA</td>
+                            <td className="px-4 py-3 text-right font-mono">
+                              {Number(calcSummary.totalWeight).toFixed(2)} kg
+                            </td>
+                            <td></td>
+                            <td className="px-4 py-3 text-right font-mono text-emerald-600">
+                              R$ {Number(calcSummary.baseCost).toFixed(2)}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
                     </div>
                   </div>
 
-                  <div className="bg-white p-4 rounded-xl border border-stone-200">
-                    <h4 className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-4">
-                      Acréscimos e Encargos
-                    </h4>
-                    <div className="space-y-3">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-stone-500">Frete (R$/ton)</span>
-                        <span className="font-mono font-medium">
-                          + R$ {Number(calc.summary?.freightValue).toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-stone-500">Juros de Vencimento</span>
-                        <span className="font-mono font-medium">
-                          + R$ {Number(calc.summary?.interestValue).toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-stone-500">
-                          Alíquota de Impostos ({calc.factors?.taxRate}%)
-                        </span>
-                        <span className="font-mono font-medium">
-                          + R$ {Number(calc.summary?.taxValue).toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-stone-500">
-                          Comissão do Agente ({calc.factors?.commission}%)
-                        </span>
-                        <span className="font-mono font-medium">
-                          + R$ {Number(calc.summary?.commissionValue).toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="pt-2 border-t border-stone-100 flex justify-between text-xl font-black text-emerald-600">
-                        <span>PREÇO FINAL</span>
-                        <span className="font-mono">
-                          R$ {Number(calc.summary?.finalPrice).toFixed(2)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Guarantees Summary */}
-                <div className="bg-stone-900 text-white p-6 rounded-2xl">
-                  <h4 className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-4">
-                    Garantias Finais
-                  </h4>
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-center">
-                    <div className="p-3 bg-stone-800 rounded-xl">
-                      <p className="text-[10px] text-stone-500 font-bold mb-1">NITROGÊNIO (N)</p>
-                      <p className="text-xl font-mono font-bold">
-                        {Number(calc.summary?.resultingN).toFixed(2)}%
-                      </p>
-                    </div>
-                    <div className="p-3 bg-stone-800 rounded-xl">
-                      <p className="text-[10px] text-stone-500 font-bold mb-1">FÓSFORO (P)</p>
-                      <p className="text-xl font-mono font-bold">
-                        {Number(calc.summary?.resultingP).toFixed(2)}%
-                      </p>
-                    </div>
-                    <div className="p-3 bg-stone-800 rounded-xl">
-                      <p className="text-[10px] text-stone-500 font-bold mb-1">POTÁSSIO (K)</p>
-                      <p className="text-xl font-mono font-bold">
-                        {Number(calc.summary?.resultingK).toFixed(2)}%
-                      </p>
-                    </div>
-                    <div className="p-3 bg-stone-800 rounded-xl">
-                      <p className="text-[10px] text-stone-500 font-bold mb-1">ENXOFRE (S)</p>
-                      <p className="text-xl font-mono font-bold">
-                        {Number(calc.summary?.resultingS).toFixed(2)}%
-                      </p>
-                    </div>
-                    <div className="p-3 bg-stone-800 rounded-xl">
-                      <p className="text-[10px] text-stone-500 font-bold mb-1">CÁLCIO (Ca)</p>
-                      <p className="text-xl font-mono font-bold">
-                        {Number(calc.summary?.resultingCa).toFixed(2)}%
-                      </p>
-                    </div>
-                  </div>
-                  {calc.summary?.resultingMicros &&
-                    Object.keys(calc.summary.resultingMicros).length > 0 && (
-                      <div className="mt-4 pt-4 border-t border-stone-800 flex flex-wrap gap-4 justify-center">
-                        {Object.entries(calc.summary.resultingMicros).map(([name, val]) => (
-                          <div
-                            key={name}
-                            className="flex items-center gap-2 px-3 py-1 bg-stone-800 rounded-full"
-                          >
-                            <span className="text-[10px] font-bold text-stone-500">{name}:</span>
-                            <span className="text-sm font-mono font-bold">
-                              {(val as number).toFixed(3)}%
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                </div>
-
-                {/* Análise de Rentabilidade (se existir) */}
-                {(calc as any).profitabilityAnalysis &&
-                  (() => {
-                    const pa = (calc as any).profitabilityAnalysis;
-                    const isPaPositive = pa.profitability >= 0;
-                    return (
-                      <div
-                        className={`p-4 rounded-xl border ${isPaPositive ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}
-                      >
-                        <h4
-                          className="text-xs font-bold uppercase tracking-widest mb-3"
-                          style={{ color: isPaPositive ? '#065f46' : '#991b1b' }}
-                        >
-                          📊 Análise de Rentabilidade
-                        </h4>
-                        <div className="space-y-2 text-sm">
-                          <div className="flex justify-between">
-                            <span className="text-stone-500">Valor Unitário (Venda)</span>
-                            <span className="font-mono">
-                              R$ {Number(pa.unitaryPrice).toFixed(2)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-stone-500">Custo × Fator ({pa.factor})</span>
-                            <span className="font-mono">
-                              R$ {Number(pa.baseCostAfterFactor).toFixed(2)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between text-red-600">
-                            <span>(-) Frete</span>
-                            <span className="font-mono">
-                              - R$ {Number(pa.freightDeduction).toFixed(2)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between text-red-600">
-                            <span>(-) Comissão ({pa.commissionRate}%)</span>
-                            <span className="font-mono">
-                              - R$ {Number(pa.commissionDeduction).toFixed(2)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between text-red-600">
-                            <span>(-) Juros ({pa.interestRate}%)</span>
-                            <span className="font-mono">
-                              - R$ {Number(pa.interestDeduction).toFixed(2)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between text-red-600">
-                            <span>(-) Alíquota ({pa.taxRate}%)</span>
-                            <span className="font-mono">
-                              - R$ {Number(pa.taxDeduction).toFixed(2)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between font-bold border-t border-stone-200 pt-2">
-                            <span>= Receita Líquida</span>
-                            <span className="font-mono">R$ {Number(pa.netRevenue).toFixed(2)}</span>
-                          </div>
-                          <div
-                            className={`flex justify-between text-lg font-black pt-1 ${isPaPositive ? 'text-emerald-700' : 'text-red-700'}`}
-                          >
-                            <span>
-                              RENTABILIDADE ({Number(pa.profitabilityPercent).toFixed(2)}%)
-                            </span>
-                            <span className="font-mono">
-                              {isPaPositive ? '+' : ''}R$ {Number(pa.profitability).toFixed(2)}
-                            </span>
-                          </div>
-                          <p className="text-[10px] text-stone-400 mt-2">
-                            Analisado por {pa.analyzedByName} em{' '}
-                            {new Date(pa.analyzedAt).toLocaleString('pt-BR')}
-                          </p>
+                  {/* Financial Breakdown */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="bg-white p-4 rounded-xl border border-stone-200">
+                      <h4 className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-4">
+                        Detalhamento de Valores
+                      </h4>
+                      <div className="space-y-3">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-stone-500">Valor Matéria Prima (Base)</span>
+                          <span className="font-mono font-medium">
+                            R$ {Number(calcSummary.baseCost).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-stone-500">
+                            Ajuste Fator ({calc.factors?.factor})
+                          </span>
+                          <span className="font-mono font-medium">
+                            R${' '}
+                            {(Number(calcSummary.baseCost) * (calc.factors?.factor || 1)).toFixed(
+                              2
+                            )}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-stone-500">Margem Rentabilidade (R$/ton)</span>
+                          <span className="font-mono font-medium">
+                            + R$ {Number(calc.factors?.margin || 0).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-stone-500">Desconto (R$/ton)</span>
+                          <span className="font-mono font-medium text-red-500">
+                            - R$ {Number(calc.factors?.discount || 0).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="pt-2 border-t border-stone-100 flex justify-between font-bold text-stone-800">
+                          <span>Preço Base de Venda</span>
+                          <span className="font-mono">
+                            R$ {Number(calcSummary.basePrice).toFixed(2)}
+                          </span>
                         </div>
                       </div>
-                    );
-                  })()}
-              </div>
-            ))}
+                    </div>
+
+                    <div className="bg-white p-4 rounded-xl border border-stone-200">
+                      <h4 className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-4">
+                        Acréscimos e Encargos
+                      </h4>
+                      <div className="space-y-3">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-stone-500">Frete (R$/ton)</span>
+                          <span className="font-mono font-medium">
+                            + R$ {Number(calcSummary.freightValue).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-stone-500">Juros de Vencimento</span>
+                          <span className="font-mono font-medium">
+                            + R$ {Number(calcSummary.interestValue).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-stone-500">
+                            Alíquota de Impostos ({calc.factors?.taxRate}%)
+                          </span>
+                          <span className="font-mono font-medium">
+                            + R$ {Number(calcSummary.taxValue).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-stone-500">
+                            Comissão do Agente ({calc.factors?.commission}%)
+                          </span>
+                          <span className="font-mono font-medium">
+                            + R$ {Number(calcSummary.commissionValue).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="pt-2 border-t border-stone-100 flex justify-between text-xl font-black text-emerald-600">
+                          <span>PREÇO FINAL</span>
+                          <span className="font-mono">
+                            R$ {Number(calcSummary.finalPrice).toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Guarantees Summary */}
+                  <div className="bg-stone-900 text-white p-6 rounded-2xl">
+                    <h4 className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-4">
+                      Garantias Finais
+                    </h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-center">
+                      <div className="p-3 bg-stone-800 rounded-xl">
+                        <p className="text-[10px] text-stone-500 font-bold mb-1">NITROGÊNIO (N)</p>
+                        <p className="text-xl font-mono font-bold">
+                          {Number(calcSummary.resultingN).toFixed(2)}%
+                        </p>
+                      </div>
+                      <div className="p-3 bg-stone-800 rounded-xl">
+                        <p className="text-[10px] text-stone-500 font-bold mb-1">FÓSFORO (P)</p>
+                        <p className="text-xl font-mono font-bold">
+                          {Number(calcSummary.resultingP).toFixed(2)}%
+                        </p>
+                      </div>
+                      <div className="p-3 bg-stone-800 rounded-xl">
+                        <p className="text-[10px] text-stone-500 font-bold mb-1">POTÁSSIO (K)</p>
+                        <p className="text-xl font-mono font-bold">
+                          {Number(calcSummary.resultingK).toFixed(2)}%
+                        </p>
+                      </div>
+                      <div className="p-3 bg-stone-800 rounded-xl">
+                        <p className="text-[10px] text-stone-500 font-bold mb-1">ENXOFRE (S)</p>
+                        <p className="text-xl font-mono font-bold">
+                          {Number(calcSummary.resultingS).toFixed(2)}%
+                        </p>
+                      </div>
+                      <div className="p-3 bg-stone-800 rounded-xl">
+                        <p className="text-[10px] text-stone-500 font-bold mb-1">CÁLCIO (Ca)</p>
+                        <p className="text-xl font-mono font-bold">
+                          {Number(calcSummary.resultingCa).toFixed(2)}%
+                        </p>
+                      </div>
+                    </div>
+                    {calcSummary.resultingMicros &&
+                      Object.keys(calcSummary.resultingMicros).length > 0 && (
+                        <div className="mt-4 pt-4 border-t border-stone-800 flex flex-wrap gap-4 justify-center">
+                          {Object.entries(calcSummary.resultingMicros).map(([name, val]) => (
+                            <div
+                              key={name}
+                              className="flex items-center gap-2 px-3 py-1 bg-stone-800 rounded-full"
+                            >
+                              <span className="text-[10px] font-bold text-stone-500">{name}:</span>
+                              <span className="text-sm font-mono font-bold">
+                                {(val as number).toFixed(3)}%
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                  </div>
+
+                  {/* Análise de Rentabilidade (se existir) */}
+                  {(calc as any).profitabilityAnalysis &&
+                    (() => {
+                      const pa = (calc as any).profitabilityAnalysis;
+                      const isPaPositive = pa.profitability >= 0;
+                      return (
+                        <div
+                          className={`p-4 rounded-xl border ${isPaPositive ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}
+                        >
+                          <h4
+                            className="text-xs font-bold uppercase tracking-widest mb-3"
+                            style={{ color: isPaPositive ? '#065f46' : '#991b1b' }}
+                          >
+                            📊 Análise de Rentabilidade
+                          </h4>
+                          <div className="space-y-2 text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-stone-500">Valor Unitário (Venda)</span>
+                              <span className="font-mono">
+                                R$ {Number(pa.unitaryPrice).toFixed(2)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-stone-500">Custo × Fator ({pa.factor})</span>
+                              <span className="font-mono">
+                                R$ {Number(pa.baseCostAfterFactor).toFixed(2)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between text-red-600">
+                              <span>(-) Frete</span>
+                              <span className="font-mono">
+                                - R$ {Number(pa.freightDeduction).toFixed(2)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between text-red-600">
+                              <span>(-) Comissão ({pa.commissionRate}%)</span>
+                              <span className="font-mono">
+                                - R$ {Number(pa.commissionDeduction).toFixed(2)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between text-red-600">
+                              <span>(-) Juros ({pa.interestRate}%)</span>
+                              <span className="font-mono">
+                                - R$ {Number(pa.interestDeduction).toFixed(2)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between text-red-600">
+                              <span>(-) Alíquota ({pa.taxRate}%)</span>
+                              <span className="font-mono">
+                                - R$ {Number(pa.taxDeduction).toFixed(2)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between font-bold border-t border-stone-200 pt-2">
+                              <span>= Receita Líquida</span>
+                              <span className="font-mono">
+                                R$ {Number(pa.netRevenue).toFixed(2)}
+                              </span>
+                            </div>
+                            <div
+                              className={`flex justify-between text-lg font-black pt-1 ${isPaPositive ? 'text-emerald-700' : 'text-red-700'}`}
+                            >
+                              <span>
+                                RENTABILIDADE ({Number(pa.profitabilityPercent).toFixed(2)}%)
+                              </span>
+                              <span className="font-mono">
+                                {isPaPositive ? '+' : ''}R$ {Number(pa.profitability).toFixed(2)}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-stone-400 mt-2">
+                              Analisado por {pa.analyzedByName} em{' '}
+                              {new Date(pa.analyzedAt).toLocaleString('pt-BR')}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                </div>
+              );
+            })}
           </div>
 
           {/* Pedido de Venda Section */}
