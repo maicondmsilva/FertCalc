@@ -201,6 +201,22 @@ function DetalheModal({ cotacao, onClose }: { cotacao: CotacaoSolicitada; onClos
               <p className="text-sm text-stone-700">{cotacao.fazenda}</p>
             </div>
           )}
+          {cotacao.inscricao_estadual && (
+            <div>
+              <p className="text-xs font-bold text-stone-400 uppercase mb-0.5">
+                I.E. (Inscrição Estadual)
+              </p>
+              <p className="text-sm text-stone-700">{cotacao.inscricao_estadual}</p>
+            </div>
+          )}
+          {(cotacao.cidade_entrega || cotacao.estado_entrega) && (
+            <div>
+              <p className="text-xs font-bold text-stone-400 uppercase mb-0.5">Cidade / Estado</p>
+              <p className="text-sm text-stone-700">
+                {[cotacao.cidade_entrega, cotacao.estado_entrega].filter(Boolean).join(' — ')}
+              </p>
+            </div>
+          )}
           {cotacao.maps_url && sanitizeUrl(cotacao.maps_url) && (
             <div>
               <p className="text-xs font-bold text-stone-400 uppercase mb-0.5">Link Maps</p>
@@ -544,6 +560,20 @@ function PainelResponsavel({
                 <p className="text-sm text-stone-700">{cotacao.fazenda}</p>
               </div>
             )}
+            {cotacao.inscricao_estadual && (
+              <div className="mt-2">
+                <p className="text-xs text-stone-400 mb-0.5">I.E. (Inscrição Estadual)</p>
+                <p className="text-sm text-stone-700">{cotacao.inscricao_estadual}</p>
+              </div>
+            )}
+            {(cotacao.cidade_entrega || cotacao.estado_entrega) && (
+              <div className="mt-2">
+                <p className="text-xs text-stone-400 mb-0.5">Cidade / Estado</p>
+                <p className="text-sm text-stone-700">
+                  {[cotacao.cidade_entrega, cotacao.estado_entrega].filter(Boolean).join(' — ')}
+                </p>
+              </div>
+            )}
             {cotacao.maps_url && sanitizeUrl(cotacao.maps_url) && (
               <div className="mt-2">
                 <p className="text-xs text-stone-400 mb-0.5">Link Maps</p>
@@ -796,6 +826,7 @@ function PainelResponsavel({
 interface ModalEditarCotacaoProps {
   cotacao: CotacaoSolicitada;
   filiais: Filial[];
+  locais: LocalCarregamento[];
   onSave: (
     e: React.FormEvent,
     form: {
@@ -805,6 +836,9 @@ interface ModalEditarCotacaoProps {
       localId: string;
       endereco: string;
       fazenda: string;
+      inscricaoEstadual: string;
+      cidadeEntrega: string;
+      estadoEntrega: string;
       maps: string;
       produto: string;
       qtd: string;
@@ -818,6 +852,7 @@ interface ModalEditarCotacaoProps {
 function ModalEditarCotacao({
   cotacao,
   filiais,
+  locais,
   onSave,
   onClose,
   saving,
@@ -827,25 +862,15 @@ function ModalEditarCotacao({
   const [localId, setLocalId] = useState(cotacao.local_carregamento_id ?? '');
   const [endereco, setEndereco] = useState(cotacao.endereco_entrega ?? '');
   const [fazenda, setFazenda] = useState(cotacao.fazenda ?? '');
+  const [inscricaoEstadual, setInscricaoEstadual] = useState(cotacao.inscricao_estadual ?? '');
+  const [cidadeEntrega, setCidadeEntrega] = useState(cotacao.cidade_entrega ?? '');
+  const [estadoEntrega, setEstadoEntrega] = useState(cotacao.estado_entrega ?? '');
   const [maps, setMaps] = useState(cotacao.maps_url ?? '');
   const [produto, setProduto] = useState(cotacao.produto ?? '');
   const [qtd, setQtd] = useState(
     cotacao.quantidade_ton != null ? String(cotacao.quantidade_ton) : ''
   );
   const [obs, setObs] = useState(cotacao.observacoes ?? '');
-  const [locais, setLocais] = useState<LocalCarregamento[]>([]);
-
-  useEffect(() => {
-    if (!filialId) {
-      setLocais([]);
-      return;
-    }
-    import('../../services/locaisCarregamentoService').then(({ getLocaisAtivos }) =>
-      getLocaisAtivos(filialId)
-        .then(setLocais)
-        .catch(() => setLocais([]))
-    );
-  }, [filialId]);
 
   const handleSubmit = (e: React.FormEvent) => {
     onSave(e, {
@@ -855,6 +880,9 @@ function ModalEditarCotacao({
       localId,
       endereco,
       fazenda,
+      inscricaoEstadual,
+      cidadeEntrega,
+      estadoEntrega,
       maps,
       produto,
       qtd,
@@ -897,10 +925,7 @@ function ModalEditarCotacao({
               </label>
               <select
                 value={filialId}
-                onChange={(e) => {
-                  setFilialId(e.target.value);
-                  setLocalId('');
-                }}
+                onChange={(e) => setFilialId(e.target.value)}
                 className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
               >
                 <option value="">Selecione...</option>
@@ -919,7 +944,6 @@ function ModalEditarCotacao({
                 value={localId}
                 onChange={(e) => setLocalId(e.target.value)}
                 className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
-                disabled={!filialId}
               >
                 <option value="">Selecione...</option>
                 {locais.map((l) => (
@@ -963,12 +987,48 @@ function ModalEditarCotacao({
               className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
             />
           </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                Cidade de Entrega
+              </label>
+              <input
+                type="text"
+                value={cidadeEntrega}
+                onChange={(e) => setCidadeEntrega(e.target.value)}
+                className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                Estado (UF)
+              </label>
+              <input
+                type="text"
+                value={estadoEntrega}
+                onChange={(e) => setEstadoEntrega(e.target.value.toUpperCase())}
+                maxLength={2}
+                className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+              />
+            </div>
+          </div>
           <div>
             <label className="block text-xs font-bold text-stone-500 uppercase mb-1">Fazenda</label>
             <input
               type="text"
               value={fazenda}
               onChange={(e) => setFazenda(e.target.value)}
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+              I.E. (Inscrição Estadual)
+            </label>
+            <input
+              type="text"
+              value={inscricaoEstadual}
+              onChange={(e) => setInscricaoEstadual(e.target.value)}
               className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
             />
           </div>
@@ -1065,6 +1125,10 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
   const [formLocalId, setFormLocalId] = useState('');
   const [formEndereco, setFormEndereco] = useState('');
   const [formFazenda, setFormFazenda] = useState('');
+  const [formInscricaoEstadual, setFormInscricaoEstadual] = useState('');
+  const [formCidadeEntrega, setFormCidadeEntrega] = useState('');
+  const [formEstadoEntrega, setFormEstadoEntrega] = useState('');
+  const [clienteAutoFilled, setClienteAutoFilled] = useState<Set<string>>(new Set());
   const [formMaps, setFormMaps] = useState('');
   const [formProduto, setFormProduto] = useState('');
   const [formQtd, setFormQtd] = useState('');
@@ -1087,6 +1151,9 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
 
   // History state
   const [historicoCotacao, setHistoricoCotacao] = useState<CotacaoSolicitada | null>(null);
+
+  // Filter state for responsável view
+  const [filtroSolicitante, setFiltroSolicitante] = useState('');
 
   // ── Load data ──
   const loadFiliais = useCallback(async () => {
@@ -1122,6 +1189,11 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
     }
   }, [currentUser.id, canSolicitar]);
 
+  const loadLocais = useCallback(async () => {
+    const data = await getLocaisAtivos();
+    setLocais(data);
+  }, []);
+
   const loadCotacoesResponsavel = useCallback(async () => {
     if (!canTratar) return;
     setLoadingResponsavel(true);
@@ -1139,9 +1211,17 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
     loadFiliais();
     loadTransportadoras();
     loadClientes();
+    loadLocais();
     loadMinhasCotacoes();
     loadCotacoesResponsavel();
-  }, [loadFiliais, loadTransportadoras, loadClientes, loadMinhasCotacoes, loadCotacoesResponsavel]);
+  }, [
+    loadFiliais,
+    loadTransportadoras,
+    loadClientes,
+    loadLocais,
+    loadMinhasCotacoes,
+    loadCotacoesResponsavel,
+  ]);
 
   // Close client autocomplete on outside click
   useEffect(() => {
@@ -1153,19 +1233,6 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-
-  // Load locais when filial changes
-  useEffect(() => {
-    if (!formFilialId) {
-      setLocais([]);
-      setFormLocalId('');
-      return;
-    }
-    getLocaisAtivos(formFilialId).then((data) => {
-      setLocais(data);
-      setFormLocalId('');
-    });
-  }, [formFilialId]);
 
   // Pre-computed lowercase client values for autocomplete performance
   const clientsLower = useMemo(
@@ -1188,11 +1255,29 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
       .slice(0, 10);
   }, [clientsLower, formClienteSearch]);
 
+  // Unique solicitantes from responsável list (for filter dropdown)
+  const solicitantesUnicos = useMemo(() => {
+    const seen = new Map<string, string>();
+    cotacoesResponsavel.forEach((c) => {
+      if (c.solicitante_nome && c.solicitado_por) {
+        seen.set(c.solicitado_por, c.solicitante_nome);
+      }
+    });
+    return Array.from(seen.entries()).map(([id, nome]) => ({ id, nome }));
+  }, [cotacoesResponsavel]);
+
+  // Filtered cotações for responsável view
+  const cotacoesResponsavelFiltradas = useMemo(() => {
+    if (!filtroSolicitante) return cotacoesResponsavel;
+    return cotacoesResponsavel.filter((c) => c.solicitado_por === filtroSolicitante);
+  }, [cotacoesResponsavel, filtroSolicitante]);
+
   // Client selection helpers
   const clearClienteSelection = () => {
     setFormClienteNome('');
     setFormClienteId('');
     setFormClienteSearch('');
+    setClienteAutoFilled(new Set());
   };
 
   const selectCliente = (c: Client) => {
@@ -1200,6 +1285,42 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
     setFormClienteId(c.id);
     setFormClienteSearch(c.name);
     setShowClienteResults(false);
+
+    // Auto-fill address fields from client data
+    const addr =
+      c.deliverySameAsAddress || !c.deliveryAddress?.street ? c.address : c.deliveryAddress;
+    const autofilled = new Set<string>();
+
+    const enderecoParts = [
+      addr?.street,
+      addr?.number,
+      addr?.neighborhood,
+      addr?.city,
+      addr?.state,
+    ].filter(Boolean);
+    if (enderecoParts.length > 0) {
+      setFormEndereco(enderecoParts.join(', '));
+      autofilled.add('endereco');
+    }
+    if (c.fazenda) {
+      setFormFazenda(c.fazenda);
+      autofilled.add('fazenda');
+    }
+    if (c.stateRegistration) {
+      setFormInscricaoEstadual(c.stateRegistration);
+      autofilled.add('inscricao_estadual');
+    }
+    const city = addr?.city;
+    if (city) {
+      setFormCidadeEntrega(city);
+      autofilled.add('cidade_entrega');
+    }
+    const state = addr?.state;
+    if (state) {
+      setFormEstadoEntrega(state.toUpperCase());
+      autofilled.add('estado_entrega');
+    }
+    setClienteAutoFilled(autofilled);
   };
 
   // Safe Maps URL: only allow http/https to prevent XSS
@@ -1223,6 +1344,9 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
         local_carregamento_id: formLocalId || undefined,
         endereco_entrega: formEndereco.trim() || undefined,
         fazenda: formFazenda.trim() || undefined,
+        inscricao_estadual: formInscricaoEstadual.trim() || undefined,
+        cidade_entrega: formCidadeEntrega.trim() || undefined,
+        estado_entrega: formEstadoEntrega.trim() || undefined,
         maps_url: formMaps.trim() || undefined,
         produto: formProduto.trim() || undefined,
         quantidade_ton: formQtd ? parseFloat(formQtd) : undefined,
@@ -1243,6 +1367,10 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
       setFormLocalId('');
       setFormEndereco('');
       setFormFazenda('');
+      setFormInscricaoEstadual('');
+      setFormCidadeEntrega('');
+      setFormEstadoEntrega('');
+      setClienteAutoFilled(new Set());
       setFormMaps('');
       setFormProduto('');
       setFormQtd('');
@@ -1303,6 +1431,9 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
       localId: string;
       endereco: string;
       fazenda: string;
+      inscricaoEstadual: string;
+      cidadeEntrega: string;
+      estadoEntrega: string;
       maps: string;
       produto: string;
       qtd: string;
@@ -1323,6 +1454,9 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
       local_carregamento_id: form.localId || undefined,
       endereco_entrega: form.endereco.trim() || undefined,
       fazenda: form.fazenda.trim() || undefined,
+      inscricao_estadual: form.inscricaoEstadual.trim() || undefined,
+      cidade_entrega: form.cidadeEntrega.trim() || undefined,
+      estado_entrega: form.estadoEntrega.trim() || undefined,
       maps_url: form.maps.trim() || undefined,
       produto: form.produto.trim() || undefined,
       quantidade_ton: form.qtd ? parseFloat(form.qtd) : undefined,
@@ -1474,8 +1608,7 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
                     <select
                       value={formLocalId}
                       onChange={(e) => setFormLocalId(e.target.value)}
-                      disabled={!formFilialId}
-                      className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none disabled:opacity-50"
+                      className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
                     >
                       <option value="">Selecione...</option>
                       {locais.map((l) => (
@@ -1489,11 +1622,23 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
                   <div>
                     <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
                       Endereço de Entrega
+                      {clienteAutoFilled.has('endereco') && (
+                        <span className="ml-1.5 text-emerald-600 normal-case font-normal text-[10px]">
+                          ✓ do cadastro do cliente
+                        </span>
+                      )}
                     </label>
                     <input
                       type="text"
                       value={formEndereco}
-                      onChange={(e) => setFormEndereco(e.target.value)}
+                      onChange={(e) => {
+                        setFormEndereco(e.target.value);
+                        setClienteAutoFilled((prev) => {
+                          const next = new Set(prev);
+                          next.delete('endereco');
+                          return next;
+                        });
+                      }}
                       className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
                       placeholder="Endereço de entrega"
                     />
@@ -1501,14 +1646,102 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
 
                   <div>
                     <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                      Cidade de Entrega
+                      {clienteAutoFilled.has('cidade_entrega') && (
+                        <span className="ml-1.5 text-emerald-600 normal-case font-normal text-[10px]">
+                          ✓ do cadastro do cliente
+                        </span>
+                      )}
+                    </label>
+                    <input
+                      type="text"
+                      value={formCidadeEntrega}
+                      onChange={(e) => {
+                        setFormCidadeEntrega(e.target.value);
+                        setClienteAutoFilled((prev) => {
+                          const next = new Set(prev);
+                          next.delete('cidade_entrega');
+                          return next;
+                        });
+                      }}
+                      className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                      placeholder="Cidade"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                      Estado (UF)
+                      {clienteAutoFilled.has('estado_entrega') && (
+                        <span className="ml-1.5 text-emerald-600 normal-case font-normal text-[10px]">
+                          ✓ do cadastro do cliente
+                        </span>
+                      )}
+                    </label>
+                    <input
+                      type="text"
+                      value={formEstadoEntrega}
+                      onChange={(e) => {
+                        setFormEstadoEntrega(e.target.value.toUpperCase());
+                        setClienteAutoFilled((prev) => {
+                          const next = new Set(prev);
+                          next.delete('estado_entrega');
+                          return next;
+                        });
+                      }}
+                      maxLength={2}
+                      className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                      placeholder="UF"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
                       Fazenda
+                      {clienteAutoFilled.has('fazenda') && (
+                        <span className="ml-1.5 text-emerald-600 normal-case font-normal text-[10px]">
+                          ✓ do cadastro do cliente
+                        </span>
+                      )}
                     </label>
                     <input
                       type="text"
                       value={formFazenda}
-                      onChange={(e) => setFormFazenda(e.target.value)}
+                      onChange={(e) => {
+                        setFormFazenda(e.target.value);
+                        setClienteAutoFilled((prev) => {
+                          const next = new Set(prev);
+                          next.delete('fazenda');
+                          return next;
+                        });
+                      }}
                       className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
                       placeholder="Nome da fazenda"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                      I.E. (Inscrição Estadual)
+                      {clienteAutoFilled.has('inscricao_estadual') && (
+                        <span className="ml-1.5 text-emerald-600 normal-case font-normal text-[10px]">
+                          ✓ do cadastro do cliente
+                        </span>
+                      )}
+                    </label>
+                    <input
+                      type="text"
+                      value={formInscricaoEstadual}
+                      onChange={(e) => {
+                        setFormInscricaoEstadual(e.target.value);
+                        setClienteAutoFilled((prev) => {
+                          const next = new Set(prev);
+                          next.delete('inscricao_estadual');
+                          return next;
+                        });
+                      }}
+                      className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                      placeholder="Inscrição Estadual"
                     />
                   </div>
 
@@ -1753,12 +1986,28 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
                 Cotações aguardando resposta ou aprovação
               </p>
             </div>
-            <button
-              onClick={loadCotacoesResponsavel}
-              className="text-stone-400 hover:text-stone-600 transition-colors p-1"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-2">
+              {solicitantesUnicos.length > 0 && (
+                <select
+                  value={filtroSolicitante}
+                  onChange={(e) => setFiltroSolicitante(e.target.value)}
+                  className="px-3 py-1.5 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none bg-white"
+                >
+                  <option value="">Todos os solicitantes</option>
+                  {solicitantesUnicos.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.nome}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <button
+                onClick={loadCotacoesResponsavel}
+                className="text-stone-400 hover:text-stone-600 transition-colors p-1"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden">
@@ -1766,7 +2015,7 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
               <div className="flex justify-center py-10">
                 <RefreshCw className="w-5 h-5 animate-spin text-stone-300" />
               </div>
-            ) : cotacoesResponsavel.length === 0 ? (
+            ) : cotacoesResponsavelFiltradas.length === 0 ? (
               <div className="py-10 text-center text-stone-400">
                 <AlertCircle className="w-10 h-10 mx-auto mb-2 opacity-30" />
                 <p className="text-sm">Nenhuma solicitação pendente.</p>
@@ -1787,7 +2036,7 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-stone-100">
-                    {cotacoesResponsavel.map((c) => (
+                    {cotacoesResponsavelFiltradas.map((c) => (
                       <tr key={c.id} className="hover:bg-stone-50 transition-colors">
                         <td className="px-4 py-3 font-mono font-bold text-blue-600 text-xs">
                           {c.numero_cotacao}
@@ -1940,6 +2189,7 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
         <ModalEditarCotacao
           cotacao={editandoCotacao}
           filiais={filiais}
+          locais={locais}
           onSave={handleEditarCotacao}
           onClose={() => setEditandoCotacao(null)}
           saving={editSaving}

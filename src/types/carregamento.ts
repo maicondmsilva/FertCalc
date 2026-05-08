@@ -212,6 +212,10 @@ export interface CotacaoSolicitada {
   precificacao_id?: string;
   criado_em: string;
   atualizado_em: string;
+  // additional delivery fields
+  inscricao_estadual?: string;
+  cidade_entrega?: string;
+  estado_entrega?: string;
   // rejection fields
   motivo_recusa?: string;
   recusado_por_id?: string;
