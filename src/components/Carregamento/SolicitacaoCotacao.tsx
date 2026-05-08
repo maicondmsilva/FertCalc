@@ -34,6 +34,7 @@ import {
   updateCotacaoSolicitada,
   getCotacoesByVendedor,
   getCotacoesByFiliais,
+  getCotacoesFinalizadas,
   getResponsaveisByFilial,
 } from '../../services/cotacaoSolicitadaService';
 import { registrarAuditLog } from '../../services/auditLogService';
@@ -349,6 +350,7 @@ function PainelResponsavel({
     }
     setSaving(true);
     try {
+      const cotadoEm = new Date().toISOString();
       await updateCotacaoSolicitada(cotacao.id, {
         status: 'cotado',
         transportadora_id: transportadoraId,
@@ -357,7 +359,24 @@ function PainelResponsavel({
         valor_frete_unitario: fretePorTonNum,
         prazo_entrega_dias: prazoDias ? parseInt(prazoDias, 10) : undefined,
         obs_responsavel: obsResponsavel || undefined,
-        cotado_em: new Date().toISOString(),
+        cotado_em: cotadoEm,
+      });
+      const { registrarAuditLog } = await import('../../services/auditLogService');
+      await registrarAuditLog({
+        tabela: 'cotacoes_solicitadas',
+        registro_id: cotacao.id,
+        acao: 'UPDATE',
+        dados_anteriores: { status: cotacao.status } as Record<string, unknown>,
+        dados_novos: {
+          status: 'cotado',
+          transportadora_id: transportadoraId,
+          valor_frete_unitario: fretePorTonNum,
+          valor_frete: valorTotalFrete,
+          cotado_em: cotadoEm,
+        } as Record<string, unknown>,
+        motivo: `Cotação informada por ${currentUser.name ?? currentUser.id}`,
+        usuario_id: currentUser.id,
+        usuario_nome: currentUser.name ?? currentUser.id,
       });
       await notifyCotacaoDisponivel(
         { ...cotacao, status: 'cotado', numero_cotacao: cotacao.numero_cotacao },
@@ -418,6 +437,17 @@ function PainelResponsavel({
       await updateCotacaoSolicitada(cotacao.id, {
         status: 'aprovado',
         aprovado_em: aprovadoEm,
+      });
+      const { registrarAuditLog } = await import('../../services/auditLogService');
+      await registrarAuditLog({
+        tabela: 'cotacoes_solicitadas',
+        registro_id: cotacao.id,
+        acao: 'UPDATE',
+        dados_anteriores: { status: cotacao.status } as Record<string, unknown>,
+        dados_novos: { status: 'aprovado', aprovado_em: aprovadoEm } as Record<string, unknown>,
+        motivo: `Cotação aprovada por ${currentUser.name ?? currentUser.id}`,
+        usuario_id: currentUser.id,
+        usuario_nome: currentUser.name ?? currentUser.id,
       });
       await notifyCotacaoAprovada(
         { ...cotacao, status: 'aprovado', aprovado_em: aprovadoEm },
@@ -1146,6 +1176,20 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
   const [loadingResponsavel, setLoadingResponsavel] = useState(false);
   const [painelCotacao, setPainelCotacao] = useState<CotacaoSolicitada | null>(null);
 
+  // Histórico / Finalizadas state (canAprovar)
+  const [cotacoesFinalizadas, setCotacoesFinalizadas] = useState<CotacaoSolicitada[]>([]);
+  const [loadingFinalizadas, setLoadingFinalizadas] = useState(false);
+  const [detalheFinalizadaModal, setDetalheFinalizadaModal] = useState<CotacaoSolicitada | null>(
+    null
+  );
+  const [filtroFinalizadasStatus, setFiltroFinalizadasStatus] = useState<
+    '' | 'aprovado' | 'cancelado'
+  >('');
+  const [filtroFinalizadasFilialId, setFiltroFinalizadasFilialId] = useState('');
+  const [filtroFinalizadasSolicitante, setFiltroFinalizadasSolicitante] = useState('');
+  const [filtroFinalizadasDataInicio, setFiltroFinalizadasDataInicio] = useState('');
+  const [filtroFinalizadasDataFim, setFiltroFinalizadasDataFim] = useState('');
+
   // Delete confirmation state
   const [excluindoCotacao, setExcluindoCotacao] = useState<CotacaoSolicitada | null>(null);
   const [motivoExclusaoCotacao, setMotivoExclusaoCotacao] = useState('');
@@ -1213,6 +1257,19 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
     }
   }, [canTratar, filialIds]);
 
+  const loadCotacoesFinalizadas = useCallback(async () => {
+    if (!canAprovar) return;
+    setLoadingFinalizadas(true);
+    try {
+      const data = await getCotacoesFinalizadas(filialIds.length > 0 ? filialIds : undefined);
+      setCotacoesFinalizadas(data);
+    } catch {
+      // silent
+    } finally {
+      setLoadingFinalizadas(false);
+    }
+  }, [canAprovar, filialIds]);
+
   useEffect(() => {
     loadFiliais();
     loadTransportadoras();
@@ -1220,6 +1277,7 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
     loadLocais();
     loadMinhasCotacoes();
     loadCotacoesResponsavel();
+    loadCotacoesFinalizadas();
   }, [
     loadFiliais,
     loadTransportadoras,
@@ -1227,6 +1285,7 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
     loadLocais,
     loadMinhasCotacoes,
     loadCotacoesResponsavel,
+    loadCotacoesFinalizadas,
   ]);
 
   // Close client autocomplete on outside click
@@ -1277,6 +1336,40 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
     if (!filtroSolicitante) return cotacoesResponsavel;
     return cotacoesResponsavel.filter((c) => c.solicitado_por === filtroSolicitante);
   }, [cotacoesResponsavel, filtroSolicitante]);
+
+  // Filtered cotações for finalizadas view
+  const cotacoesFinalizadasFiltradas = useMemo(() => {
+    let list = cotacoesFinalizadas;
+    if (filtroFinalizadasStatus) {
+      list = list.filter((c) => c.status === filtroFinalizadasStatus);
+    }
+    if (filtroFinalizadasFilialId) {
+      list = list.filter((c) => c.filial_id === filtroFinalizadasFilialId);
+    }
+    if (filtroFinalizadasSolicitante) {
+      list = list.filter((c) =>
+        (c.solicitante_nome ?? '')
+          .toLowerCase()
+          .includes(filtroFinalizadasSolicitante.toLowerCase())
+      );
+    }
+    if (filtroFinalizadasDataInicio) {
+      const from = new Date(filtroFinalizadasDataInicio).getTime();
+      list = list.filter((c) => new Date(c.criado_em).getTime() >= from);
+    }
+    if (filtroFinalizadasDataFim) {
+      const to = new Date(filtroFinalizadasDataFim).getTime() + 86400000; // inclusive
+      list = list.filter((c) => new Date(c.criado_em).getTime() <= to);
+    }
+    return list;
+  }, [
+    cotacoesFinalizadas,
+    filtroFinalizadasStatus,
+    filtroFinalizadasFilialId,
+    filtroFinalizadasSolicitante,
+    filtroFinalizadasDataInicio,
+    filtroFinalizadasDataFim,
+  ]);
 
   // Client selection helpers
   const clearClienteSelection = () => {
@@ -1366,6 +1459,14 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
         responsavelIds = await getResponsaveisByFilial(undefined);
       }
       await notifyCotacaoSolicitada(cotacao, currentUser.name ?? 'Vendedor', responsavelIds);
+      await registrarAuditLog({
+        tabela: 'cotacoes_solicitadas',
+        registro_id: cotacao.id,
+        acao: 'INSERT',
+        dados_novos: cotacao as unknown as Record<string, unknown>,
+        usuario_id: currentUser.id,
+        usuario_nome: currentUser.name ?? currentUser.id,
+      });
 
       showSuccess('Solicitação de cotação enviada com sucesso!');
       // Reset form
@@ -1396,6 +1497,7 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
   const handleUpdate = async () => {
     await loadMinhasCotacoes();
     await loadCotacoesResponsavel();
+    await loadCotacoesFinalizadas();
   };
 
   const handleExcluirCotacao = async () => {
@@ -1492,6 +1594,7 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
         acao: 'UPDATE',
         dados_anteriores: anterior as unknown as Record<string, unknown>,
         dados_novos: { ...anterior, ...updates } as unknown as Record<string, unknown>,
+        motivo: editandoCotacao.motivo_recusa ? 'Reenvio após recusa' : undefined,
         usuario_id: currentUser.id,
         usuario_nome: currentUser.name ?? currentUser.id,
       });
@@ -2123,9 +2226,188 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
         </div>
       )}
 
+      {/* ══════════════════════════════════════════════════════
+          VISÃO C — Histórico / Finalizadas (canAprovar)
+      ══════════════════════════════════════════════════════ */}
+      {canAprovar && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-bold text-stone-800">
+                Histórico / Cotações Finalizadas
+              </h2>
+              <p className="text-xs text-stone-400 mt-0.5">
+                Cotações aprovadas ou canceladas definitivamente
+              </p>
+            </div>
+            <button
+              onClick={loadCotacoesFinalizadas}
+              className="text-stone-400 hover:text-stone-600 transition-colors p-1"
+              title="Atualizar"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Filtros */}
+          <div className="bg-white rounded-xl border border-stone-200 shadow-sm p-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                  Status
+                </label>
+                <select
+                  value={filtroFinalizadasStatus}
+                  onChange={(e) =>
+                    setFiltroFinalizadasStatus(e.target.value as '' | 'aprovado' | 'cancelado')
+                  }
+                  className="w-full px-3 py-1.5 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none bg-white"
+                >
+                  <option value="">Todos</option>
+                  <option value="aprovado">Aprovado</option>
+                  <option value="cancelado">Cancelado</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                  Filial
+                </label>
+                <select
+                  value={filtroFinalizadasFilialId}
+                  onChange={(e) => setFiltroFinalizadasFilialId(e.target.value)}
+                  className="w-full px-3 py-1.5 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none bg-white"
+                >
+                  <option value="">Todas</option>
+                  {filiais.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.nome}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                  Solicitante
+                </label>
+                <input
+                  type="text"
+                  value={filtroFinalizadasSolicitante}
+                  onChange={(e) => setFiltroFinalizadasSolicitante(e.target.value)}
+                  placeholder="Nome..."
+                  className="w-full px-3 py-1.5 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                  Data início
+                </label>
+                <input
+                  type="date"
+                  value={filtroFinalizadasDataInicio}
+                  onChange={(e) => setFiltroFinalizadasDataInicio(e.target.value)}
+                  className="w-full px-3 py-1.5 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                  Data fim
+                </label>
+                <input
+                  type="date"
+                  value={filtroFinalizadasDataFim}
+                  onChange={(e) => setFiltroFinalizadasDataFim(e.target.value)}
+                  className="w-full px-3 py-1.5 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Tabela */}
+          <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden">
+            {loadingFinalizadas ? (
+              <div className="flex justify-center py-10">
+                <RefreshCw className="w-5 h-5 animate-spin text-stone-300" />
+              </div>
+            ) : cotacoesFinalizadasFiltradas.length === 0 ? (
+              <div className="py-10 text-center text-stone-400">
+                <AlertCircle className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                <p className="text-sm">Nenhuma cotação finalizada encontrada.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto max-h-[480px] overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-stone-50 text-stone-500 uppercase text-[10px] font-bold border-b border-stone-200 sticky top-0 z-10">
+                    <tr>
+                      <th className="px-4 py-2 text-left">Nº Cotação</th>
+                      <th className="px-4 py-2 text-left hidden sm:table-cell">Data</th>
+                      <th className="px-4 py-2 text-left">Cliente</th>
+                      <th className="px-4 py-2 text-left hidden sm:table-cell">Filial</th>
+                      <th className="px-4 py-2 text-left hidden md:table-cell">Produto/Pedido</th>
+                      <th className="px-4 py-2 text-right hidden md:table-cell">Qtd (ton)</th>
+                      <th className="px-4 py-2 text-left">Status</th>
+                      <th className="px-4 py-2 text-left hidden lg:table-cell">Solicitante</th>
+                      <th className="px-4 py-2 text-left hidden lg:table-cell">Finalizado em</th>
+                      <th className="px-4 py-2 text-center">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stone-100">
+                    {cotacoesFinalizadasFiltradas.map((c) => (
+                      <tr key={c.id} className="hover:bg-stone-50 transition-colors">
+                        <td className="px-4 py-3 font-mono font-bold text-blue-600 text-xs">
+                          {c.numero_cotacao}
+                        </td>
+                        <td className="px-4 py-3 text-stone-400 text-xs hidden sm:table-cell">
+                          {formatDate(c.criado_em)}
+                        </td>
+                        <td className="px-4 py-3 text-stone-700">{c.cliente_nome || '—'}</td>
+                        <td className="px-4 py-3 text-stone-500 hidden sm:table-cell">
+                          {c.filial?.nome || '—'}
+                        </td>
+                        <td className="px-4 py-3 text-stone-500 hidden md:table-cell">
+                          {c.produto || '—'}
+                        </td>
+                        <td className="px-4 py-3 text-right text-stone-700 hidden md:table-cell">
+                          {c.quantidade_ton?.toFixed(3) ?? '—'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <StatusBadge status={c.status} />
+                        </td>
+                        <td className="px-4 py-3 text-stone-500 text-xs hidden lg:table-cell">
+                          {c.solicitante_nome || '—'}
+                        </td>
+                        <td className="px-4 py-3 text-stone-400 text-xs hidden lg:table-cell">
+                          {c.status === 'aprovado'
+                            ? formatDate(c.aprovado_em)
+                            : formatDate(c.atualizado_em)}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <button
+                            onClick={() => setDetalheFinalizadaModal(c)}
+                            className="text-stone-400 hover:text-amber-600 transition-colors p-1"
+                            title="Ver detalhes"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Modals */}
       {detalheModal && (
         <DetalheModal cotacao={detalheModal} onClose={() => setDetalheModal(null)} />
+      )}
+      {detalheFinalizadaModal && (
+        <DetalheModal
+          cotacao={detalheFinalizadaModal}
+          onClose={() => setDetalheFinalizadaModal(null)}
+        />
       )}
       {painelCotacao && (
         <PainelResponsavel
