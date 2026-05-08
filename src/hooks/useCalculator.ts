@@ -1224,22 +1224,41 @@ export function useCalculator({
             ? getProductFormulaLabel(selectedProduct)
             : c.formula;
 
+      const EMPTY_SUMMARY = {
+        totalWeight: 0,
+        baseCost: 0,
+        basePrice: 0,
+        interestValue: 0,
+        taxValue: 0,
+        commissionValue: 0,
+        freightValue: 0,
+        finalPrice: 0,
+        totalSaleValue: 0,
+        resultingN: 0,
+        resultingP: 0,
+        resultingK: 0,
+        resultingS: 0,
+        resultingCa: 0,
+        resultingMicros: {},
+      };
+      const resolvedSummary = summary ?? EMPTY_SUMMARY;
+
       return {
         ...c,
         factors: calculationFactors,
         macros: materialsInCalculation.nextMacros,
         micros: materialsInCalculation.nextMicros,
-        summary,
+        summary: resolvedSummary,
         modo_calculo: mode,
         formula: getDetailedFormulaName(
           formulaName,
           materialsInCalculation.nextMacros,
           materialsInCalculation.nextMicros,
-          summary.resultingMicros,
+          resolvedSummary.resultingMicros,
           c.targetCa,
           c.targetS,
-          summary.resultingCa,
-          summary.resultingS
+          resolvedSummary.resultingCa,
+          resolvedSummary.resultingS
         ),
       };
     });
@@ -1286,16 +1305,29 @@ export function useCalculator({
       history: [...(initialData?.history || []), historyEntry],
     };
 
-    try {
-      let savedRecord: PricingRecord;
-      const isNew = !initialData;
-      const wasApproved = initialData?.approvalStatus === 'Aprovada';
-      const wasRejected = initialData?.approvalStatus === 'Reprovada';
+    // === BLOCO 1: Apenas o save no banco ===
+    let savedRecord: PricingRecord;
+    const wasApproved = initialData?.approvalStatus === 'Aprovada';
+    const wasRejected = initialData?.approvalStatus === 'Reprovada';
 
+    try {
       if (initialData) {
         await updatePricingRecord(initialData.id, record);
         savedRecord = { ...record, id: initialData.id };
+      } else {
+        savedRecord = await createPricingRecord(record);
+      }
+    } catch (error: any) {
+      const msg =
+        error?.message || error?.error_description || 'Verifique os dados e tente novamente.';
+      showError(`Erro ao salvar precificação: ${msg}`);
+      console.error('[savePricing] Erro no Supabase:', error);
+      return;
+    }
 
+    // === BLOCO 2: Notificações — falha silenciosa, não bloqueia o sucesso ===
+    try {
+      if (initialData) {
         await notifyPricingEdited(savedRecord, currentUser);
 
         if (wasApproved || wasRejected) {
@@ -1330,8 +1362,6 @@ export function useCalculator({
           }
         }
       } else {
-        savedRecord = await createPricingRecord(record);
-
         await notifyPricingCreated(savedRecord, currentUser);
 
         // Record price history for linked produto_formulado
@@ -1380,18 +1410,20 @@ export function useCalculator({
           });
         }
       }
-      showSuccess(
-        `Precificação ${wasApproved || wasRejected ? 'atualizada' : 'salva'} com sucesso!${wasApproved || wasRejected ? ' Notificação enviada aos gerentes.' : ''}`
-      );
-      setClientSearch('');
-      setAgentSearch('');
-      setSavedPricingId(savedRecord.id);
-      if (onClearEditing) onClearEditing();
-      if (onSaveSuccess) onSaveSuccess(savedRecord);
-    } catch (error) {
-      showError('Erro ao salvar precificação.');
-      console.error(error);
+    } catch (notifError) {
+      console.warn('[savePricing] Falha ao enviar notificações (não crítico):', notifError);
+      // Não propaga — save já foi bem-sucedido
     }
+
+    // === BLOCO 3: Sucesso sempre chegará aqui ===
+    showSuccess(
+      `Precificação ${wasApproved || wasRejected ? 'atualizada' : 'salva'} com sucesso!${wasApproved || wasRejected ? ' Notificação enviada aos gerentes.' : ''}`
+    );
+    setClientSearch('');
+    setAgentSearch('');
+    setSavedPricingId(savedRecord.id);
+    if (onClearEditing) onClearEditing();
+    if (onSaveSuccess) onSaveSuccess(savedRecord);
   };
 
   const saveToFormulasList = async () => {
