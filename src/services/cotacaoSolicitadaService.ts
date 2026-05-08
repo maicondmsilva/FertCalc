@@ -213,6 +213,22 @@ export async function getCotacoesAprovadasByCliente(
   return (data as Record<string, unknown>[]).map(mapCotacaoSolicitada);
 }
 
+export async function getCotacoesFinalizadas(filialIds?: string[]): Promise<CotacaoSolicitada[]> {
+  let query = supabase
+    .from('cotacoes_solicitadas')
+    .select(SELECT_FIELDS)
+    .in('status', ['aprovado', 'cancelado'])
+    .order('atualizado_em', { ascending: false });
+
+  if (filialIds && filialIds.length > 0) {
+    query = query.in('filial_id', filialIds);
+  }
+
+  const { data, error } = await query;
+  if (error || !data) return [];
+  return (data as Record<string, unknown>[]).map(mapCotacaoSolicitada);
+}
+
 // ─────────────────────────────────────────────────────────────
 //  CRUD
 // ─────────────────────────────────────────────────────────────
