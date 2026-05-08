@@ -28,7 +28,7 @@ import {
 } from '../../types/carregamento';
 import { getFiliais, getTransportadoras } from '../../services/carregamentoService';
 import { getLocaisAtivos } from '../../services/locaisCarregamentoService';
-import { getClients } from '../../services/db';
+import { getClients, getUsers } from '../../services/db';
 import {
   createCotacaoSolicitada,
   updateCotacaoSolicitada,
@@ -41,6 +41,7 @@ import {
   notifyCotacaoSolicitada,
   notifyCotacaoDisponivel,
   notifyCotacaoCancelada,
+  notifyCotacaoAprovada,
 } from '../../services/notificationService';
 import { useToast } from '../Toast';
 import HistoricoModificacoes from '../HistoricoModificacoes';
@@ -360,7 +361,7 @@ function PainelResponsavel({
       });
       await notifyCotacaoDisponivel(
         { ...cotacao, status: 'cotado', numero_cotacao: cotacao.numero_cotacao },
-        'Responsável de Logística'
+        currentUser.name ?? 'Responsável'
       );
       showSuccess('Cotação informada com sucesso!');
       onUpdate();
@@ -413,10 +414,15 @@ function PainelResponsavel({
   const handleAprovar = async () => {
     setSaving(true);
     try {
+      const aprovadoEm = new Date().toISOString();
       await updateCotacaoSolicitada(cotacao.id, {
         status: 'aprovado',
-        aprovado_em: new Date().toISOString(),
+        aprovado_em: aprovadoEm,
       });
+      await notifyCotacaoAprovada(
+        { ...cotacao, status: 'aprovado', aprovado_em: aprovadoEm },
+        currentUser.name ?? 'Responsável'
+      );
       showSuccess('Cotação aprovada!');
       onUpdate();
       onClose();
@@ -1355,7 +1361,19 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
       });
 
       // Notify responsáveis for the selected filial
-      const responsavelIds = await getResponsaveisByFilial(formFilialId || undefined);
+      let responsavelIds = await getResponsaveisByFilial(formFilialId || undefined);
+      if (responsavelIds.length === 0) {
+        const fallbackUsers = await getUsers();
+        responsavelIds = fallbackUsers
+          .filter(
+            (user) =>
+              user.ativo &&
+              (user.permissions?.carregamento_tratar_cotacao ||
+                user.role === 'admin' ||
+                user.role === 'master')
+          )
+          .map((user) => user.id);
+      }
       await notifyCotacaoSolicitada(cotacao, currentUser.name ?? 'Vendedor', responsavelIds);
 
       showSuccess('Solicitação de cotação enviada com sucesso!');

@@ -251,6 +251,21 @@ export const notifyCotacaoCancelada = async (
   });
 };
 
+export const notifyCotacaoAprovada = async (
+  cotacao: CotacaoSolicitada,
+  aprovadoPorNome: string
+): Promise<void> => {
+  if (!cotacao.solicitado_por) return;
+  await createNotification({
+    user_id: cotacao.solicitado_por,
+    type: NotificationType.COTACAO_APROVADA,
+    group_type: NotificationGroup.CARREGAMENTO,
+    title: 'Cotação Aprovada ✅',
+    message: `Sua solicitação ${cotacao.numero_cotacao} foi aprovada por ${aprovadoPorNome}`,
+    action_url: '/carregamento_solicitacao',
+  });
+};
+
 export const notifyNovoCarregamento = async (
   numeroCarregamento: string,
   solicitanteNome: string,
