@@ -1006,7 +1006,7 @@ function ModalEditarCotacao({
               <input
                 type="text"
                 value={estadoEntrega}
-                onChange={(e) => setEstadoEntrega(e.target.value)}
+                onChange={(e) => setEstadoEntrega(e.target.value.toUpperCase())}
                 maxLength={2}
                 className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
               />
@@ -1317,7 +1317,7 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
     }
     const state = addr?.state;
     if (state) {
-      setFormEstadoEntrega(state);
+      setFormEstadoEntrega(state.toUpperCase());
       autofilled.add('estado_entrega');
     }
     setClienteAutoFilled(autofilled);
@@ -1682,7 +1682,7 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
                       type="text"
                       value={formEstadoEntrega}
                       onChange={(e) => {
-                        setFormEstadoEntrega(e.target.value);
+                        setFormEstadoEntrega(e.target.value.toUpperCase());
                         setClienteAutoFilled((prev) => {
                           const next = new Set(prev);
                           next.delete('estado_entrega');
