@@ -3761,18 +3761,18 @@ export default function CarregamentoModule({
   const canAceitarCotacao =
     currentUser.role === 'master' ||
     currentUser.role === 'admin' ||
-    !!(currentUser.permissions as any)?.carregamento_aceitar_cotacao;
+    !!(currentUser.permissions as any)?.carregamento_aprovar_cotacao;
 
   const canAceitarCarregamento =
     currentUser.role === 'master' ||
     currentUser.role === 'admin' ||
-    !!(currentUser.permissions as any)?.carregamento_aceitar_carregamento;
+    !!(currentUser.permissions as any)?.carregamento_liberar;
 
   const canLiberarCarregamento =
     currentUser.role === 'master' ||
     currentUser.role === 'admin' ||
     currentUser.role === 'manager' ||
-    !!(currentUser.permissions as any)?.carregamento_liberacao;
+    !!(currentUser.permissions as any)?.carregamento_liberar;
 
   const canVerArquivadas =
     currentUser.role === 'master' ||
@@ -3839,12 +3839,40 @@ export default function CarregamentoModule({
   // ── Create carregamento ───────────────────────────────────────────────────
   const handleCreateCarregamento = async (form: CarregamentoFormData) => {
     try {
+      // Validações robustas
+      const qtdTotal = parseFloat(form.quantidade_total);
+      if (isNaN(qtdTotal) || qtdTotal <= 0) {
+        showError('Quantidade total inválida. Informe um valor maior que zero.');
+        return;
+      }
+
+      if (!form.tipo_frete || !['CIF', 'FOB'].includes(form.tipo_frete)) {
+        showError('Tipo de frete inválido. Selecione CIF ou FOB.');
+        return;
+      }
+
+      if (form.itens && form.itens.length > 0) {
+        const totalItens = form.itens.reduce((sum, item) => sum + (item.quantidade_ton || 0), 0);
+        if (Math.abs(totalItens - qtdTotal) > 0.001) {
+          showError(
+            `A soma dos itens (${totalItens.toFixed(3)} ton) não coincide com a quantidade total (${qtdTotal.toFixed(3)} ton).`
+          );
+          return;
+        }
+        
+        const itensInvalidos = form.itens.filter((i) => !i.produto_nome || i.quantidade_ton <= 0);
+        if (itensInvalidos.length > 0) {
+          showError('Todos os itens devem ter produto e quantidade válidos.');
+          return;
+        }
+      }
+
       const numero = await gerarNumeroCarregamento();
       await createCarregamento(
         {
           numero_carregamento: numero,
           tipo_frete: form.tipo_frete,
-          quantidade_total: parseFloat(form.quantidade_total),
+          quantidade_total: qtdTotal,
           quantidade_liberada: 0,
           quantidade_carregada: 0,
           filial_id: form.filial_id || undefined,

@@ -1265,6 +1265,18 @@ export function useCalculator({
     const selectedCalculation =
       updatedCalculations.find((c) => c.selected) || updatedCalculations[0];
 
+    // Merge global factors with selected calculation's factors (CIF/FOB, freight)
+    const mergedFactors = {
+      ...factors,
+      // Override with selected calculation's freight settings if available
+      ...(selectedCalculation?.factors?.tipoFrete && {
+        tipoFrete: selectedCalculation.factors.tipoFrete,
+      }),
+      ...(selectedCalculation?.factors?.freight !== undefined && {
+        freight: selectedCalculation.factors.freight,
+      }),
+    };
+
     const record: PricingRecord = {
       id: initialData?.id || '',
       modo_calculo: selectedCalculation
@@ -1281,7 +1293,7 @@ export function useCalculator({
           : initialData?.approvalStatus || 'Pendente',
       macros,
       micros,
-      factors,
+      factors: mergedFactors,
       rejectionObservation:
         initialData?.approvalStatus === 'Reprovada' ? '' : initialData?.rejectionObservation,
       summary: updatedCalculations.find((c) => c.selected)?.summary || {
