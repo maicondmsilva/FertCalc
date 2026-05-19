@@ -85,7 +85,7 @@ export interface User {
   name: string;
   nickname: string;
   ativo: boolean;
-  role: 'admin' | 'user' | 'manager' | 'master';
+  role: string;
   managedUserIds?: string[];
   filiais_permitidas?: string[]; // array de UUIDs de branches permitidas
   permissions?: {
@@ -100,6 +100,7 @@ export interface User {
     branches: boolean;
     users: boolean;
     accessProfiles?: boolean;
+    accessLevels?: boolean;
     settings: boolean;
     approvals: boolean;
     reports: boolean;
@@ -548,10 +549,23 @@ export interface PedidoVendaItem {
   produto_nome: string;
   formulacao?: string;
   quantidade_ton: number;
+  saldo_disponivel?: number;
   preco_unitario?: number;
   embalagem?: string;
   precificacao_id?: string;
   criado_em?: string;
+}
+
+export interface AccessLevel {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  is_system: boolean;
+  hierarchy_level: number;
+  default_permissions: Record<string, unknown>;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface PedidoVenda {

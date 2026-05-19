@@ -12,13 +12,13 @@ import {
   Building2,
 } from 'lucide-react';
 import { User, Branch } from '../types';
-import { getUsers, createUser, updateUser, deleteUser, getBranches } from '../services/db';
+import { getUsers, updateUser, deleteUser, getBranches } from '../services/db';
 import { createAuthUser } from '../services/authService';
 import { useToast } from './Toast';
 import { useConfirm } from '../hooks/useConfirm';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { AccessProfile, getAccessProfiles } from '../services/accessProfileService';
-import { logger } from '../utils/logger';
+import { useAccessLevels } from '../hooks/useAccessLevels';
 
 interface UserManagerProps {
   currentUser: User;
@@ -218,6 +218,7 @@ export default function UserManager({ currentUser }: UserManagerProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalTab, setModalTab] = useState<'dados' | 'permissoes' | 'filiais'>('dados');
   const [searchQuery, setSearchQuery] = useState('');
+  const { levels: accessLevels, byCode: accessLevelsByCode } = useAccessLevels();
 
   const getDefaultPermissions = (role: string) => {
     const base = {
@@ -285,6 +286,14 @@ export default function UserManager({ currentUser }: UserManagerProps) {
     return { ...base, creditCard: 'none' };
   };
 
+  const getDefaultPermissionsFromRole = (role: string) => {
+    const level = accessLevelsByCode.get(role);
+    if (level && Object.keys(level.default_permissions ?? {}).length > 0) {
+      return level.default_permissions;
+    }
+    return getDefaultPermissions(role);
+  };
+
   const emptyFormData = () => ({
     name: '',
     email: '',
@@ -292,10 +301,10 @@ export default function UserManager({ currentUser }: UserManagerProps) {
     idNumeric: 0,
     password: '',
     ativo: true,
-    role: 'user' as 'master' | 'user' | 'manager' | 'admin',
+    role: 'user',
     managedUserIds: [] as string[],
     filiais_permitidas: [] as string[],
-    permissions: getDefaultPermissions('user') as any,
+    permissions: getDefaultPermissionsFromRole('user') as any,
   });
 
   const [formData, setFormData] = useState(emptyFormData);
@@ -319,9 +328,9 @@ export default function UserManager({ currentUser }: UserManagerProps) {
     setFormData(emptyFormData());
   };
 
-  const handleRoleChange = (role: 'master' | 'user' | 'manager' | 'admin') => {
+  const handleRoleChange = (role: string) => {
     setAppliedProfileId('');
-    setFormData({ ...formData, role, permissions: getDefaultPermissions(role) as any });
+    setFormData({ ...formData, role, permissions: getDefaultPermissionsFromRole(role) as any });
   };
 
   const toggleFilial = (filialId: string) => {
@@ -378,34 +387,19 @@ export default function UserManager({ currentUser }: UserManagerProps) {
           filiais_permitidas: formData.filiais_permitidas,
         });
       } else {
-        const authResult = await createAuthUser(normalizedEmail, formData.password);
+        const authResult = await createAuthUser({
+          email: normalizedEmail,
+          password: formData.password,
+          name: formData.name,
+          nickname: formData.nickname,
+          role: formData.role,
+          ativo: formData.ativo,
+          managed_user_ids: formData.role === 'manager' ? formData.managedUserIds : [],
+          permissions: formData.permissions as Record<string, unknown>,
+          filiais_permitidas: formData.filiais_permitidas,
+        });
         if (!authResult.success) {
           showError(`Erro ao criar autenticação: ${authResult.error || 'Erro desconhecido'}`);
-          setLoading(false);
-          return;
-        }
-        try {
-          await createUser({
-            id: authResult.userId,
-            idNumeric: 0,
-            name: formData.name,
-            email: normalizedEmail,
-            nickname: formData.nickname,
-            role: formData.role,
-            ativo: formData.ativo,
-            managedUserIds: formData.role === 'manager' ? formData.managedUserIds : [],
-            permissions: formData.permissions as any,
-            filiais_permitidas: formData.filiais_permitidas,
-          });
-        } catch (dbErr) {
-          logger.error('Usuário criado no Auth, mas falhou ao salvar em app_users:', {
-            authUserId: authResult.userId,
-            email: normalizedEmail,
-            error: dbErr,
-          });
-          showError(
-            'Falha ao finalizar o cadastro do usuário após criar o acesso de login. Contate o administrador do sistema para concluir a regularização e tente novamente.'
-          );
           setLoading(false);
           return;
         }
@@ -445,7 +439,7 @@ export default function UserManager({ currentUser }: UserManagerProps) {
       showError('Apenas usuários Master podem editar outros usuários Master.');
       return;
     }
-    const basePerms = user.permissions || getDefaultPermissions(user.role);
+    const basePerms = user.permissions || getDefaultPermissionsFromRole(user.role);
     const carregamentoFilialIds = (basePerms as any)?.carregamento_filial_ids;
     const autoAllFiliais =
       (basePerms as any)?.carregamento_all_filiais ??
@@ -615,16 +609,32 @@ export default function UserManager({ currentUser }: UserManagerProps) {
                   <div>
                     <label className="block text-sm font-medium text-stone-600 mb-1">
                       Nível de Acesso
+                      <span
+                        className="ml-1 text-[10px] text-stone-400"
+                        title="Nível de Acesso define hierarquia; Perfil de Acesso aplica um conjunto de permissões."
+                      >
+                        (?)
+                      </span>
                     </label>
                     <select
                       value={formData.role}
                       onChange={(e) => handleRoleChange(e.target.value as any)}
                       className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
                     >
-                      <option value="user">Vendedor</option>
-                      <option value="manager">Gerente</option>
-                      <option value="admin">Administrador</option>
-                      <option value="master">Master</option>
+                      {accessLevels.length > 0 ? (
+                        accessLevels.map((level) => (
+                          <option key={level.code} value={level.code}>
+                            {level.name}
+                          </option>
+                        ))
+                      ) : (
+                        <>
+                          <option value="user">Vendedor</option>
+                          <option value="manager">Gerente</option>
+                          <option value="admin">Administrador</option>
+                          <option value="master">Master</option>
+                        </>
+                      )}
                     </select>
                   </div>
                   <div className="flex items-end pb-1">

@@ -28,6 +28,8 @@ import CancelamentoDefinitivoModal from './CancelamentoDefinitivoModal';
 import RelatorioCancSubstitui from './RelatorioCancSubstitui';
 import { ModalNovoCarregamento, CarregamentoFormData } from './Carregamento';
 import { Filial } from '../types/carregamento';
+import { getStatusInicial } from '../utils/getStatusInicial';
+import HistoricoCarregamentosPedido from './HistoricoCarregamentosPedido';
 
 const STATUS_LABEL: Record<PedidoVenda['status'], string> = {
   pendente: 'Ativo',
@@ -144,7 +146,7 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
           data_prevista_carregamento: form.data_prevista_carregamento || undefined,
           observacoes: form.observacoes || undefined,
           valor_frete: form.valor_frete ? parseFloat(form.valor_frete) : undefined,
-          status: 'aguardando_cotacao',
+          status: getStatusInicial(form.tipo_frete),
           criado_por: currentUser.id,
         },
         form.itens
@@ -293,6 +295,12 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
               {filtered.map((p) => {
                 const isExpanded = expandedIds.has(p.id);
                 const saldo = p.saldo_disponivel ?? null;
+                const itensPedido = itensPorPedido[p.id] ?? [];
+                const hasSaldoNosItens =
+                  itensPedido.length === 0 ||
+                  itensPedido.some(
+                    (item) => Number(item.saldo_disponivel ?? item.quantidade_ton ?? 0) > 0
+                  );
 
                 return (
                   <div
@@ -401,7 +409,8 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                                         setPedidoParaCarregamento(p);
                                         setModalCarregamentoAberto(true);
                                       }}
-                                      className="px-3 py-1 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-1"
+                                      disabled={!hasSaldoNosItens}
+                                      className="px-3 py-1 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-1 disabled:bg-stone-300 disabled:cursor-not-allowed"
                                     >
                                       🚛 Solicitar Carregamento
                                     </button>
@@ -425,11 +434,23 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                                   className="flex justify-between items-center text-sm"
                                 >
                                   <span className="text-stone-700">{item.produto_nome}</span>
-                                  <span className="text-stone-500 font-mono text-xs">
+                                  <span className="text-stone-500 font-mono text-xs flex items-center gap-2">
                                     {item.quantidade_ton.toFixed(3)} ton
                                     {item.preco_unitario
                                       ? ` · R$ ${item.preco_unitario.toFixed(2)}/ton`
                                       : ''}
+                                    <span
+                                      className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                        Number(item.saldo_disponivel ?? item.quantidade_ton ?? 0) >
+                                        0
+                                          ? 'bg-emerald-100 text-emerald-700'
+                                          : 'bg-red-100 text-red-700'
+                                      }`}
+                                    >
+                                      {Number(item.saldo_disponivel ?? item.quantidade_ton ?? 0) > 0
+                                        ? `Saldo: ${Number(item.saldo_disponivel ?? item.quantidade_ton ?? 0).toFixed(3)} ton`
+                                        : '❌ Esgotado'}
+                                    </span>
                                   </span>
                                 </div>
                               ))}
@@ -484,6 +505,13 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                               <p className="text-stone-700">{p.observacoes}</p>
                             </div>
                           )}
+                        </div>
+
+                        <div className="pt-2 border-t border-stone-100">
+                          <h4 className="text-xs uppercase font-bold text-stone-500 mb-2">
+                            Histórico de Carregamentos
+                          </h4>
+                          <HistoricoCarregamentosPedido pedidoVendaId={p.id} />
                         </div>
 
                         {/* Action buttons — Canc/Substitui + Cancelar Definitivo */}

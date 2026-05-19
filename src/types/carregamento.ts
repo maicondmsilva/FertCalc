@@ -57,7 +57,9 @@ export interface Carregamento {
   quantidade_total: number;
   quantidade_liberada: number;
   quantidade_carregada: number;
+  quantidade_cancelada?: number;
   saldo_disponivel?: number;
+  saldo_a_carregar?: number;
   data_prevista_carregamento?: string;
   data_real_carregamento?: string;
   data_solicitacao_cotacao?: string;
@@ -82,6 +84,7 @@ export interface Carregamento {
   pedido_venda_numero?: string;
   // cancellation fields
   obs_cancelamento_parcial?: string;
+  motivo_cancelamento_saldo?: string;
   cancelado_por_id?: string;
   cancelado_por_nome?: string;
   cancelado_em?: string;
@@ -91,6 +94,29 @@ export interface Carregamento {
   pedido_data_vencimento?: string;
   pedido_saldo_disponivel?: number;
   pedido_quantidade_real?: number;
+}
+
+export type StatusExecucaoCarregamento = 'agendado' | 'em_carregamento' | 'concluido' | 'cancelado';
+
+export interface ExecucaoCarregamento {
+  id: string;
+  id_numeric?: number;
+  carregamento_id: string;
+  motorista_nome: string;
+  motorista_cpf?: string;
+  placa_veiculo: string;
+  placa_carreta?: string;
+  quantidade_agendada: number;
+  quantidade_carregada?: number;
+  data_agendamento?: string;
+  data_inicio_carregamento?: string;
+  data_conclusao_carregamento?: string;
+  status: StatusExecucaoCarregamento;
+  motivo_cancelamento?: string;
+  observacoes?: string;
+  criado_por?: string;
+  criado_em?: string;
+  atualizado_em?: string;
 }
 
 // ── Cotação de Frete ──────────────────────────────────────────

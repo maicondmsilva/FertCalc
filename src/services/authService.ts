@@ -14,6 +14,18 @@ export interface AuthResult {
   error: string | null;
 }
 
+export interface CreateAuthUserPayload {
+  email: string;
+  password: string;
+  name?: string;
+  nickname?: string;
+  role?: string;
+  ativo?: boolean;
+  managed_user_ids?: string[];
+  permissions?: Record<string, unknown>;
+  filiais_permitidas?: string[];
+}
+
 /**
  * Login seguro: autentica via Supabase Auth e carrega o perfil do usuário.
  * Suporta login por e-mail ou por nickname (busca o e-mail correspondente).
@@ -136,10 +148,15 @@ export async function restoreSession(): Promise<User | null> {
  * sem disparar e-mail de confirmação, e sem expor a service_role key no frontend.
  */
 export async function createAuthUser(
-  email: string,
-  password: string
+  payloadOrEmail: CreateAuthUserPayload | string,
+  passwordArg?: string
 ): Promise<{ success: boolean; userId?: string; error?: string }> {
   try {
+    const payload: CreateAuthUserPayload =
+      typeof payloadOrEmail === 'string'
+        ? { email: payloadOrEmail, password: passwordArg ?? '' }
+        : payloadOrEmail;
+
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData.session?.access_token;
 
@@ -154,13 +171,19 @@ export async function createAuthUser(
         Authorization: `Bearer ${token}`,
         apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
       },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify(payload),
     });
 
-    let responseBody: { user_id?: string; error?: string } = {};
-    const contentType = res.headers.get('content-type') ?? '';
+    let responseBody: { user_id?: string; userId?: string; code?: string; error?: string } = {};
+    const contentType =
+      typeof res.headers?.get === 'function' ? (res.headers.get('content-type') ?? '') : '';
     if (contentType.includes('application/json')) {
-      responseBody = (await res.json()) as { user_id?: string; error?: string };
+      responseBody = (await res.json()) as {
+        user_id?: string;
+        userId?: string;
+        code?: string;
+        error?: string;
+      };
     } else {
       const text = await res.text();
       responseBody = { error: text };
@@ -172,20 +195,29 @@ export async function createAuthUser(
         message =
           'Função admin-create-user não encontrada. Faça o deploy com: supabase functions deploy admin-create-user';
       } else if (res.status === 403) {
-        message = 'Apenas usuários Master podem criar novos usuários.';
+        message = 'Apenas usuários com nível Master/Admin podem criar novos usuários.';
       } else if (res.status === 401) {
         message = 'Sessão inválida ou expirada. Faça login novamente.';
+      } else if (res.status === 422) {
+        if (responseBody.code === 'email_exists') {
+          message = 'Este e-mail já está cadastrado no autenticador.';
+        } else if (responseBody.code === 'weak_password') {
+          message = 'Senha fraca. Use pelo menos 6 caracteres com maior complexidade.';
+        } else {
+          message = responseBody.error ?? 'Dados inválidos para criação do usuário.';
+        }
       }
       logger.warn('[authService] createAuthUser error:', message);
       return { success: false, error: message };
     }
 
-    if (!responseBody.user_id) {
+    const userId = responseBody.user_id ?? responseBody.userId;
+    if (!userId) {
       logger.warn('[authService] createAuthUser invalid response: missing user_id');
       return { success: false, error: 'Resposta inválida da função de autenticação.' };
     }
 
-    return { success: true, userId: responseBody.user_id };
+    return { success: true, userId };
   } catch (err: unknown) {
     logger.error('[authService] Unexpected error in createAuthUser:', err);
     return { success: false, error: err instanceof Error ? err.message : String(err) };
