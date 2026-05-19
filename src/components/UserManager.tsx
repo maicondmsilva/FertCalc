@@ -18,6 +18,7 @@ import { useToast } from './Toast';
 import { useConfirm } from '../hooks/useConfirm';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { AccessProfile, getAccessProfiles } from '../services/accessProfileService';
+import { logger } from '../utils/logger';
 
 interface UserManagerProps {
   currentUser: User;
@@ -397,13 +398,13 @@ export default function UserManager({ currentUser }: UserManagerProps) {
             filiais_permitidas: formData.filiais_permitidas,
           });
         } catch (dbErr) {
-          console.error('Usuário criado no Auth, mas falhou ao salvar em app_users:', {
+          logger.error('Usuário criado no Auth, mas falhou ao salvar em app_users:', {
             authUserId: authResult.userId,
             email: normalizedEmail,
             error: dbErr,
           });
           showError(
-            'Usuário criado no Auth, mas falhou ao salvar no cadastro interno. Contate o Master para limpar o usuário órfão no Auth e tente novamente.'
+            'Falha ao finalizar o cadastro do usuário após criar o acesso de login. Contate o administrador do sistema para concluir a regularização e tente novamente.'
           );
           setLoading(false);
           return;

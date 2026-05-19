@@ -157,17 +157,17 @@ export async function createAuthUser(
       body: JSON.stringify({ email, password }),
     });
 
-    let body: { user_id?: string; error?: string } = {};
+    let responseBody: { user_id?: string; error?: string } = {};
     const contentType = res.headers.get('content-type') ?? '';
     if (contentType.includes('application/json')) {
-      body = (await res.json()) as { user_id?: string; error?: string };
+      responseBody = (await res.json()) as { user_id?: string; error?: string };
     } else {
       const text = await res.text();
-      body = { error: text };
+      responseBody = { error: text };
     }
 
     if (!res.ok) {
-      let message = body.error ?? 'Erro ao criar usuário no Auth';
+      let message = responseBody.error ?? 'Erro ao criar usuário no Auth';
       if (res.status === 404) {
         message =
           'Função admin-create-user não encontrada. Faça o deploy com: supabase functions deploy admin-create-user';
@@ -180,12 +180,12 @@ export async function createAuthUser(
       return { success: false, error: message };
     }
 
-    if (!body.user_id) {
+    if (!responseBody.user_id) {
       logger.warn('[authService] createAuthUser invalid response: missing user_id');
       return { success: false, error: 'Resposta inválida da função de autenticação.' };
     }
 
-    return { success: true, userId: body.user_id };
+    return { success: true, userId: responseBody.user_id };
   } catch (err: unknown) {
     logger.error('[authService] Unexpected error in createAuthUser:', err);
     return { success: false, error: err instanceof Error ? err.message : String(err) };
