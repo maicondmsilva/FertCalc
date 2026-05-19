@@ -40,7 +40,7 @@ describe('createAuthUser', () => {
       vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
-        headers: new Headers({ 'content-type': 'application/json' }),
+        headers: { 'content-type': 'application/json' },
         json: async () => ({ user_id: 'auth-user-id' }),
       })
     );
@@ -59,7 +59,7 @@ describe('createAuthUser', () => {
       vi.fn().mockResolvedValue({
         ok: false,
         status: 404,
-        headers: new Headers({ 'content-type': 'application/json' }),
+        headers: { 'content-type': 'application/json' },
         json: async () => ({ error: 'Not Found' }),
       })
     );
