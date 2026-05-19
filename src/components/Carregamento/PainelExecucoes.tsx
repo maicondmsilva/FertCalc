@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Carregamento, ExecucaoCarregamento } from '../../types/carregamento';
 import { getExecucoesByCarregamento } from '../../services/execucaoCarregamentoService';
 import ModalAgendarVeiculo from './ModalAgendarVeiculo';
@@ -26,7 +26,7 @@ export default function PainelExecucoes({
   const [concluindo, setConcluindo] = useState<ExecucaoCarregamento | null>(null);
   const [cancelandoSaldo, setCancelandoSaldo] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const rows = await getExecucoesByCarregamento(carregamento.id);
@@ -34,11 +34,11 @@ export default function PainelExecucoes({
     } finally {
       setLoading(false);
     }
-  };
+  }, [carregamento.id]);
 
   useEffect(() => {
     load();
-  }, [carregamento.id]);
+  }, [load]);
 
   const saldoAtual = useMemo(() => {
     const totalConcluido = execucoes

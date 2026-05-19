@@ -301,7 +301,7 @@ export default function UserManager({ currentUser }: UserManagerProps) {
     idNumeric: 0,
     password: '',
     ativo: true,
-    role: 'user' as string,
+    role: 'user',
     managedUserIds: [] as string[],
     filiais_permitidas: [] as string[],
     permissions: getDefaultPermissionsFromRole('user') as any,

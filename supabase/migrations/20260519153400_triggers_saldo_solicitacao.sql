@@ -37,7 +37,10 @@ BEGIN
         USING ERRCODE = 'P0001';
     END IF;
     IF NEW.quantidade_carregada > NEW.quantidade_agendada THEN
-      RAISE EXCEPTION 'quantidade_carregada não pode ser maior que quantidade_agendada'
+      RAISE EXCEPTION 'Quantidade carregada (%.3f ton) excede agendada (%.3f ton) para veículo %',
+        NEW.quantidade_carregada,
+        NEW.quantidade_agendada,
+        COALESCE(NEW.placa_veiculo, 'N/A')
         USING ERRCODE = 'P0001';
     END IF;
     IF NEW.data_conclusao_carregamento IS NULL THEN

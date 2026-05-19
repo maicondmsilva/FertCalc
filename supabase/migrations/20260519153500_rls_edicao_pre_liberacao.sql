@@ -2,22 +2,24 @@ CREATE OR REPLACE FUNCTION public.bloquear_edicao_apos_liberacao()
 RETURNS TRIGGER AS $$
 DECLARE
   caller_role TEXT;
+  caller_logistica BOOLEAN;
 BEGIN
   SELECT role INTO caller_role
   FROM public.app_users
   WHERE id = auth.uid();
 
-  IF caller_role IN ('master', 'admin') OR COALESCE(public.user_hierarchy_level(auth.uid()), 0) >= 80 THEN
+  SELECT COALESCE((permissions->>'carregamento_logistica')::boolean, false)
+    INTO caller_logistica
+  FROM public.app_users
+  WHERE id = auth.uid();
+
+  IF caller_role IN ('master', 'admin')
+     OR COALESCE(public.user_hierarchy_level(auth.uid()), 0) >= 80
+     OR COALESCE(caller_logistica, false) THEN
     RETURN NEW;
   END IF;
 
-  IF OLD.status <> 'aguardando_liberacao'
-     AND OLD.criado_por = auth.uid()
-     AND (
-       NEW.quantidade_total IS DISTINCT FROM OLD.quantidade_total
-       OR NEW.tipo_frete IS DISTINCT FROM OLD.tipo_frete
-       OR NEW.observacoes IS DISTINCT FROM OLD.observacoes
-     ) THEN
+  IF OLD.status <> 'aguardando_liberacao' THEN
     RAISE EXCEPTION 'Carregamento já liberado não pode ser editado pelo solicitante'
       USING ERRCODE = 'P0001';
   END IF;

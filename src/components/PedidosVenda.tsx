@@ -403,13 +403,13 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                                   )}
                                 </td>
                                 <td className="py-2">
-                                  {saldo != null && p.status !== 'cancelado' && (
+                                  {saldo != null && saldo > 0 && p.status !== 'cancelado' && (
                                     <button
                                       onClick={() => {
                                         setPedidoParaCarregamento(p);
                                         setModalCarregamentoAberto(true);
                                       }}
-                                      disabled={!hasSaldoNosItens || saldo <= 0}
+                                      disabled={!hasSaldoNosItens}
                                       className="px-3 py-1 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-1 disabled:bg-stone-300 disabled:cursor-not-allowed"
                                     >
                                       🚛 Solicitar Carregamento

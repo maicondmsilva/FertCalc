@@ -44,10 +44,7 @@ Deno.serve(async (req: Request) => {
     const role = (payload.role?.trim() || 'user').toLowerCase();
 
     if (!email || !password || !name || !nickname) {
-      return jsonResponse(
-        { error: 'Campos obrigatórios: email, password, name, nickname e role' },
-        422
-      );
+      return jsonResponse({ error: 'Campos obrigatórios: email, password, name e nickname' }, 422);
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -148,12 +145,7 @@ Deno.serve(async (req: Request) => {
 
     return jsonResponse({ user_id: createdUserId }, 200);
   } catch (err) {
-    return jsonResponse(
-      {
-        error: 'Internal server error',
-        details: err instanceof Error ? err.message : String(err),
-      },
-      500
-    );
+    console.error('[admin-create-user] unexpected error:', err);
+    return jsonResponse({ error: 'Internal server error' }, 500);
   }
 });
