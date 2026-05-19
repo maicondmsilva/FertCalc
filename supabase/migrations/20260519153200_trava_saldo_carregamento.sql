@@ -22,7 +22,7 @@ BEGIN
 
   IF NEW.quantidade_ton > COALESCE(saldo_atual, 0) THEN
     RAISE EXCEPTION 'Saldo insuficiente. Disponível: % ton, solicitado: % ton',
-      saldo_atual, NEW.quantidade_ton
+      ROUND(COALESCE(saldo_atual, 0), 3), ROUND(NEW.quantidade_ton, 3)
       USING ERRCODE = 'P0001';
   END IF;
 
