@@ -99,6 +99,7 @@ export interface User {
     priceLists: boolean;
     branches: boolean;
     users: boolean;
+    accessProfiles?: boolean;
     settings: boolean;
     approvals: boolean;
     reports: boolean;

@@ -414,7 +414,7 @@ export default function App() {
           id: 'access_profiles',
           label: 'Perfis de Acesso',
           icon: ShieldCheck,
-          permission: 'users',
+          permission: 'accessProfiles',
         },
         { id: 'branches', label: 'Filiais e Locais', icon: Building2, permission: 'branches' },
         { id: 'settings', label: 'Personalização', icon: Settings, permission: 'settings' },
@@ -995,7 +995,7 @@ export default function App() {
             )}
             {activeModule === 'config' &&
               activeTab === 'access_profiles' &&
-              hasPermission('users') && <AccessProfileManager />}
+              hasPermission('accessProfiles') && <AccessProfileManager />}
             {activeModule === 'config' &&
               activeTab === 'alert_center' &&
               (hasPermission('alertas') ||
