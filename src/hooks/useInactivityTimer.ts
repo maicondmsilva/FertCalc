@@ -13,7 +13,16 @@ const WATCHED_EVENTS = [
 ] as const;
 
 /**
- * Encerra a sessão do usuário após `INACTIVITY_MS` de inatividade.
+ * @deprecated Este hook não é mais utilizado.
+ *
+ * A partir de 19/05/2026, o sistema usa sessão de navegador (sessionStorage)
+ * que expira automaticamente ao fechar o navegador, sem timeout por inatividade.
+ *
+ * Mantido apenas para referência histórica.
+ *
+ * ---
+ *
+ * Encerrava a sessão do usuário após `INACTIVITY_MS` de inatividade.
  *
  * @param isActive  `true` quando há usuário logado — hook fica inativo caso contrário.
  * @param onTimeout Callback chamado quando o timeout dispara (deve chamar logout).

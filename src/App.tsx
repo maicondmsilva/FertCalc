@@ -90,7 +90,6 @@ import { getPendingCount, getCheckedCount } from './services/expenseService';
 
 import { useNotifications } from './hooks/useNotifications';
 import { NotificationBell } from './components/notifications/NotificationBell';
-import { useInactivityTimer } from './hooks/useInactivityTimer';
 import { usePWAInstall } from './hooks/usePWAInstall';
 import { NotificationPanel } from './components/notifications/NotificationPanel';
 import { NotificationCard } from './components/notifications/NotificationCard';
@@ -229,15 +228,12 @@ export default function App() {
   // ── PWA install prompt (extraído para usePWAInstall) ─────────────────────
   const { canInstall, handleInstall } = usePWAInstall();
 
-  // ── Logout (definido antes de useInactivityTimer para evitar referência circular) ──
+  // ── Logout ───────────────────────────────────────────────────────────────
   const handleLogout = React.useCallback(() => {
     setCurrentUser(null);
     signOut();
     navigate('/');
   }, [navigate]);
-
-  // ── Inatividade → logout automático (extraído para useInactivityTimer) ───
-  useInactivityTimer(!!currentUser, handleLogout);
 
   // Sincronizar logout entre abas + fechar menus ao clicar fora
   useEffect(() => {

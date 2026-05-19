@@ -94,10 +94,11 @@ export async function getUserByEmail(emailOrNickname: string): Promise<User | nu
   return mapUser(data);
 }
 
-export async function createUser(user: Omit<User, 'id'>): Promise<User> {
+export async function createUser(user: Omit<User, 'id'> & { id?: string }): Promise<User> {
   const { data, error } = await supabase
     .from('app_users')
     .insert({
+      ...(user.id ? { id: user.id } : {}),
       email: user.email,
       name: user.name,
       nickname: user.nickname,
