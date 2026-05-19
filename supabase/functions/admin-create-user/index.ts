@@ -1,92 +1,159 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 
+type CreateUserPayload = {
+  email?: string;
+  password?: string;
+  name?: string;
+  nickname?: string;
+  role?: string;
+  ativo?: boolean;
+  managed_user_ids?: string[];
+  permissions?: Record<string, unknown>;
+  filiais_permitidas?: string[];
+};
+
+function jsonResponse(body: Record<string, unknown>, status: number) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
+
+function isWeakPassword(message: string): boolean {
+  const lower = message.toLowerCase();
+  return lower.includes('password') && (lower.includes('weak') || lower.includes('at least'));
+}
+
 Deno.serve(async (req: Request) => {
-  // IMPORTANTE: após alterações neste arquivo, fazer deploy com:
-  // supabase functions deploy admin-create-user
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    // Verify the caller is authenticated
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return jsonResponse({ error: 'Missing Authorization header' }, 401);
     }
 
-    // Parse request body
-    const { email, password } = await req.json() as {
-      email: string;
-      password: string;
-    };
+    const payload = (await req.json()) as CreateUserPayload;
+    const email = payload.email?.trim().toLowerCase();
+    const password = payload.password?.trim();
+    const name = payload.name?.trim();
+    const nickname = payload.nickname?.trim();
+    const role = (payload.role?.trim() || 'user').toLowerCase();
 
-    if (!email?.trim() || !password?.trim()) {
-      return new Response(JSON.stringify({ error: 'email and password are required' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    if (!email || !password || !name || !nickname) {
+      return jsonResponse(
+        { error: 'Campos obrigatórios: email, password, name, nickname e role' },
+        422
+      );
     }
 
-    // Create admin Supabase client using service role key (available automatically in Edge Functions)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return jsonResponse({ error: 'E-mail inválido' }, 422);
+    }
+
+    if (password.length < 6) {
+      return jsonResponse(
+        { error: 'Senha fraca', code: 'weak_password', details: 'mínimo de 6 caracteres' },
+        422
+      );
+    }
+
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
-    // Verify the caller's token is valid and retrieve their identity
     const token = authHeader.replace('Bearer ', '');
-    const { data: { user: callerUser }, error: callerError } = await supabaseAdmin.auth.getUser(token);
+    const {
+      data: { user: callerUser },
+      error: callerError,
+    } = await supabaseAdmin.auth.getUser(token);
+
     if (callerError || !callerUser) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return jsonResponse({ error: 'Unauthorized' }, 401);
     }
 
-    // Verify the caller has admin (master) privileges in the app_users table
-    // Use callerUser.id to match auth.uid() — more reliable than email matching
     const { data: callerProfile, error: profileError } = await supabaseAdmin
       .from('app_users')
       .select('role')
       .eq('id', callerUser.id)
       .single();
 
-    // Regra de produto: apenas usuários master podem criar novos usuários.
-    if (profileError || !callerProfile || callerProfile.role !== 'master') {
-      return new Response(JSON.stringify({ error: 'Forbidden: admin privileges required' }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    if (profileError || !callerProfile) {
+      return jsonResponse({ error: 'Forbidden: perfil não encontrado' }, 403);
     }
 
-    // Create the user using the admin API — no confirmation e-mail sent
-    const { data, error } = await supabaseAdmin.auth.admin.createUser({
+    let callerHierarchy = 0;
+    const { data: hierarchyData, error: hierarchyError } = await supabaseAdmin
+      .from('access_levels')
+      .select('hierarchy_level')
+      .eq('code', callerProfile.role)
+      .maybeSingle();
+
+    if (!hierarchyError && hierarchyData?.hierarchy_level != null) {
+      callerHierarchy = Number(hierarchyData.hierarchy_level);
+    }
+
+    const hasStaticAdminRole = callerProfile.role === 'master' || callerProfile.role === 'admin';
+    if (!hasStaticAdminRole && callerHierarchy < 80) {
+      return jsonResponse({ error: 'Forbidden: admin privileges required' }, 403);
+    }
+
+    const { data: createdAuth, error: createAuthError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
+      user_metadata: { name, nickname, role },
     });
 
-    if (error) {
-      return new Response(JSON.stringify({ error: error.message }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    if (createAuthError || !createdAuth.user) {
+      const message = createAuthError?.message ?? 'Erro ao criar usuário no autenticador';
+      if (message.toLowerCase().includes('already') || message.toLowerCase().includes('exists')) {
+        return jsonResponse({ error: 'E-mail já cadastrado', code: 'email_exists' }, 422);
+      }
+      if (isWeakPassword(message)) {
+        return jsonResponse({ error: 'Senha fraca', code: 'weak_password' }, 422);
+      }
+      return jsonResponse({ error: message }, 400);
     }
 
-    return new Response(JSON.stringify({ user_id: data.user.id }), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    const createdUserId = createdAuth.user.id;
+    const { error: appUserError } = await supabaseAdmin.from('app_users').insert({
+      id: createdUserId,
+      email,
+      name,
+      nickname,
+      role,
+      ativo: payload.ativo ?? true,
+      managed_user_ids: payload.managed_user_ids ?? [],
+      permissions: payload.permissions ?? {},
+      filiais_permitidas: payload.filiais_permitidas ?? [],
     });
-  } catch (_err) {
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+
+    if (appUserError) {
+      await supabaseAdmin.auth.admin.deleteUser(createdUserId);
+      return jsonResponse(
+        {
+          error: `Falha ao salvar app_users: ${appUserError.message}`,
+          code: 'app_user_create_failed',
+        },
+        500
+      );
+    }
+
+    return jsonResponse({ user_id: createdUserId }, 200);
+  } catch (err) {
+    return jsonResponse(
+      {
+        error: 'Internal server error',
+        details: err instanceof Error ? err.message : String(err),
+      },
+      500
+    );
   }
 });

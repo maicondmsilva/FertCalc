@@ -290,6 +290,7 @@ export async function getPedidoVendaItens(pedidoVendaId: string): Promise<Pedido
     produto_nome: d.produto_nome as string,
     formulacao: d.formulacao as string | undefined,
     quantidade_ton: Number(d.quantidade_ton),
+    saldo_disponivel: d.saldo_disponivel != null ? Number(d.saldo_disponivel) : undefined,
     preco_unitario: d.preco_unitario != null ? Number(d.preco_unitario) : undefined,
     embalagem: d.embalagem as string | undefined,
     precificacao_id: d.precificacao_id as string | undefined,

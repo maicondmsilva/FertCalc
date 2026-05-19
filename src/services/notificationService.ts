@@ -333,3 +333,53 @@ export const notifyCarregamentoExcluido = async (
     });
   }
 };
+
+async function getAprovadoresCarregamentoIds(): Promise<string[]> {
+  const { data, error } = await supabase.from('app_users').select('id, role, permissions');
+
+  if (error || !data) return [];
+  return (data as Array<{ id: string; role: string; permissions?: Record<string, unknown> }>)
+    .filter(
+      (row) =>
+        row.role === 'master' ||
+        row.role === 'admin' ||
+        Boolean(row.permissions?.carregamento_aprovar)
+    )
+    .map((row) => row.id);
+}
+
+export const notifyCarregamentoEditadoPeloSolicitante = async (
+  numeroCarregamento: string,
+  solicitanteNome: string
+): Promise<void> => {
+  const destinatarios = await getAprovadoresCarregamentoIds();
+  for (const destinatarioId of destinatarios) {
+    await createNotification({
+      user_id: destinatarioId,
+      type: NotificationType.CARREGAMENTO_EDITADO,
+      group_type: NotificationGroup.CARREGAMENTO,
+      title: 'Carregamento Editado pelo Solicitante',
+      message: `${solicitanteNome} editou o carregamento ${numeroCarregamento}`,
+      action_url: '/carregamento',
+      metadata: { numero: numeroCarregamento },
+    });
+  }
+};
+
+export const notifyCarregamentoExcluidoPeloSolicitante = async (
+  numeroCarregamento: string,
+  solicitanteNome: string
+): Promise<void> => {
+  const destinatarios = await getAprovadoresCarregamentoIds();
+  for (const destinatarioId of destinatarios) {
+    await createNotification({
+      user_id: destinatarioId,
+      type: NotificationType.CARREGAMENTO_EXCLUIDO,
+      group_type: NotificationGroup.CARREGAMENTO,
+      title: 'Carregamento Excluído pelo Solicitante',
+      message: `${solicitanteNome} excluiu o carregamento ${numeroCarregamento}`,
+      action_url: '/carregamento',
+      metadata: { numero: numeroCarregamento },
+    });
+  }
+};

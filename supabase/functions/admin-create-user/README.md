@@ -51,7 +51,17 @@ O frontend (`src/services/authService.ts`) chama estas funções via `fetch`, pa
 
 ```json
 // Body
-{ "email": "usuario@exemplo.com", "password": "senha123" }
+{
+  "email": "usuario@exemplo.com",
+  "password": "senha123",
+  "name": "Usuário Exemplo",
+  "nickname": "usuario.exemplo",
+  "role": "user",
+  "ativo": true,
+  "managed_user_ids": [],
+  "permissions": {},
+  "filiais_permitidas": []
+}
 
 // Resposta de sucesso (200)
 { "user_id": "uuid-do-usuario" }

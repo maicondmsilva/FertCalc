@@ -23,6 +23,7 @@ import Home from './components/Home';
 import Dashboard from './components/Dashboard';
 import SavedFormulas from './components/SavedFormulas';
 import AccessProfileManager from './components/AccessProfileManager';
+import AccessLevelManager from './components/AccessLevelManager';
 import ProdutosFormulados from './components/ProdutosFormulados';
 import AlertCenter from './components/AlertCenter';
 import {
@@ -139,7 +140,9 @@ export default function App() {
   ) {
     activeModule = 'pricing';
   } else if (
-    ['branches', 'settings', 'users', 'access_profiles', 'alert_center'].includes(activeTab)
+    ['branches', 'settings', 'users', 'access_profiles', 'access_levels', 'alert_center'].includes(
+      activeTab
+    )
   ) {
     activeModule = 'config';
   } else if (activeTab === 'prd') {
@@ -409,6 +412,12 @@ export default function App() {
         {
           id: 'access_profiles',
           label: 'Perfis de Acesso',
+          icon: ShieldCheck,
+          permission: 'accessProfiles',
+        },
+        {
+          id: 'access_levels',
+          label: 'Níveis de Acesso',
           icon: ShieldCheck,
           permission: 'accessProfiles',
         },
@@ -992,6 +1001,9 @@ export default function App() {
             {activeModule === 'config' &&
               activeTab === 'access_profiles' &&
               hasPermission('accessProfiles') && <AccessProfileManager />}
+            {activeModule === 'config' &&
+              activeTab === 'access_levels' &&
+              hasPermission('accessProfiles') && <AccessLevelManager />}
             {activeModule === 'config' &&
               activeTab === 'alert_center' &&
               (hasPermission('alertas') ||

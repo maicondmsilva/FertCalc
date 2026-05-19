@@ -161,6 +161,21 @@ Para configurar, adicione os seguintes **secrets** no repositório GitHub (`Sett
 | `VITE_SUPABASE_URL` | URL do projeto Supabase |
 | `VITE_SUPABASE_ANON_KEY` | Chave anônima do Supabase |
 
+### Deploy automático de Edge Functions (Supabase)
+
+O repositório também possui o workflow **`.github/workflows/deploy-supabase-functions.yml`**.
+
+- Trigger automático: `push` em `main` com mudanças em `supabase/functions/**`
+- Trigger manual: `workflow_dispatch`
+- Funções publicadas: `admin-create-user` e `admin-update-password`
+
+Secrets necessários no GitHub (`Settings → Secrets and variables → Actions`):
+
+| Secret | Descrição |
+|--------|-----------|
+| `SUPABASE_ACCESS_TOKEN` | Access token da conta Supabase para CLI |
+| `SUPABASE_PROJECT_REF` | Project Ref do projeto Supabase (ex.: `abcd1234efgh5678`) |
+
 ---
 
 ## Módulos principais
@@ -181,4 +196,3 @@ Para configurar, adicione os seguintes **secrets** no repositório GitHub (`Sett
 ## Licença
 
 MIT © [maicondmsilva](https://github.com/maicondmsilva/FertCalc)
-

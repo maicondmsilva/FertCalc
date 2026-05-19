@@ -9,14 +9,23 @@ Este plano foi atualizado com base em análise técnica completa realizada em 07
 
 ## ✅ Correções aplicadas em produção (19/05/2026)
 
-- Cadastro de usuários: criação agora vincula `auth.users.id` ao `app_users.id` para compatibilidade com políticas RLS baseadas em `auth.uid()`.
-- Fluxo de carregamento por tipo de frete:
-  - **CIF**: `aguardando_cotacao` → `cotacao_solicitada` → `cotacao_recebida` → `aguardando_liberacao`
-  - **FOB**: `aguardando_liberacao` (sem etapa de cotação)
-- Migration aplicada para saneamento de legado FOB:
-  - `supabase/migrations/20260519125500_fix_fob_status_to_liberacao.sql`
-- Deploy obrigatório de função (quando alterada):
-  - `supabase functions deploy admin-create-user`
+- Plano V5 implementado com fluxo unificado CIF/FOB para `aguardando_liberacao`.
+- Cadastro de usuários consolidado na Edge Function `admin-create-user` (criação de `auth.users` + `app_users` em chamada única).
+- Modelo de saldo em duas camadas (pedido × solicitação) com trava de saldo no frontend e no banco.
+- Workflow pós-liberação com execuções de veículos (`carregamento_execucoes`) e cancelamento de saldo residual.
+- Níveis de acesso dinâmicos via tabela `access_levels`, CRUD na UI e fallback para compatibilidade.
+- Histórico de carregamentos por pedido com agrupamento por status e drill-down de execuções.
+- Deploy automatizado de Edge Functions via GitHub Actions (`deploy-supabase-functions.yml`).
+
+### Fluxo de saldo V5 (resumo)
+
+```mermaid
+flowchart LR
+  A[Pedido de Venda saldo_disponivel] -->|Reserva na criação| B[Solicitação de Carregamento]
+  B --> C[Execuções de Veículo]
+  C -->|Concluir parcial| B
+  B -->|Cancelar saldo restante| A
+```
 
 ---
 

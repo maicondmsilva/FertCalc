@@ -72,25 +72,23 @@ import SolicitacaoCotacaoIndependente from './SolicitacaoCotacao';
 import HistoricoModificacoes from '../HistoricoModificacoes';
 import { formatCarregamentoId } from '../../utils/formatId';
 import KanbanLogistico from './KanbanLogistico';
+import PainelExecucoes from './PainelExecucoes';
 import { getStatusInicial } from '../../utils/getStatusInicial';
 
 // ─── Permission helper ────────────────────────────────────────────────────────
 function canEditDeleteCarregamento(
   status: StatusCarregamento,
-  currentUser: User
+  currentUser: User,
+  criadoPor?: string
 ): { canEdit: boolean; canDelete: boolean } {
   const isAdmin = ['admin', 'master'].includes(currentUser.role);
-  const isLogistica = !!(currentUser.permissions as Record<string, unknown>)?.carregamento_aprovar;
+  const isLogistica =
+    !!(currentUser.permissions as Record<string, unknown>)?.carregamento_aprovar ||
+    !!(currentUser.permissions as Record<string, unknown>)?.carregamento_logistica;
   if (isAdmin || isLogistica) return { canEdit: true, canDelete: true };
-  // After liberation / in transit / completed — only logística can edit
-  const statusBloqueado: StatusCarregamento[] = [
-    'liberado_parcial',
-    'liberado_total',
-    'em_carregamento',
-    'carregado',
-  ];
-  if (statusBloqueado.includes(status)) return { canEdit: false, canDelete: false };
-  return { canEdit: true, canDelete: true };
+  if (status !== 'aguardando_liberacao') return { canEdit: false, canDelete: false };
+  const isSolicitante = !!criadoPor && criadoPor === currentUser.id;
+  return { canEdit: isSolicitante, canDelete: isSolicitante };
 }
 
 // ─── Sub-view type ─────────────────────────────────────────────────────────────
@@ -338,6 +336,11 @@ export function ModalNovoCarregamento({
   const [pedidoItens, setPedidoItens] = useState<PedidoVendaItem[]>([]);
   const [itensCarregamento, setItensCarregamento] = useState<ItemCarregamentoState[]>([]);
   const [carregandoPedidoItens, setCarregandoPedidoItens] = useState(false);
+  const todosItensEsgotados =
+    pedidoItens.length > 0 &&
+    pedidoItens.every(
+      (item) => Number((item as PedidoVendaItemComSaldo).saldo_disponivel ?? 0) <= 0
+    );
 
   useEffect(() => {
     if (filiais.length === 0) {
@@ -773,9 +776,19 @@ export function ModalNovoCarregamento({
                           <span className="sm:hidden block text-[11px] font-bold uppercase text-stone-500 mb-1">
                             Saldo
                           </span>
-                          <span className="text-xs text-stone-600">
+                          <span
+                            className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              temSaldoDefinido &&
+                              Number.isFinite(saldoDisponivel) &&
+                              saldoDisponivel > 0
+                                ? 'bg-emerald-100 text-emerald-700'
+                                : 'bg-red-100 text-red-700'
+                            }`}
+                          >
                             {temSaldoDefinido && Number.isFinite(saldoDisponivel)
-                              ? `${saldoDisponivel.toLocaleString('pt-BR')} ton`
+                              ? saldoDisponivel > 0
+                                ? `Saldo: ${saldoDisponivel.toLocaleString('pt-BR')} ton`
+                                : '❌ Esgotado'
                               : '—'}
                           </span>
                         </div>
@@ -995,7 +1008,7 @@ export function ModalNovoCarregamento({
             </button>
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || todosItensEsgotados}
               className="px-5 py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white rounded-lg text-sm font-bold transition-colors"
             >
               {saving ? 'Salvando...' : isEditMode ? 'Salvar Alterações' : 'Criar Carregamento'}
@@ -1610,7 +1623,10 @@ function TabelaCarregamentos({
                 <td className="px-4 py-3 text-right">
                   <div className="flex justify-end gap-1">
                     {showActions.includes('cotacao') &&
-                      ['aguardando_cotacao'].includes(c.status) && (
+                      c.tipo_frete === 'CIF' &&
+                      ['aguardando_liberacao', 'liberado_total', 'liberado_parcial'].includes(
+                        c.status
+                      ) && (
                         <button
                           onClick={() => onAction?.(c, 'cotacao')}
                           className="px-2.5 py-1 text-xs font-bold bg-blue-50 text-blue-700 rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors"
@@ -1652,11 +1668,26 @@ function TabelaCarregamentos({
                           Confirmar Carg.
                         </button>
                       )}
+                    {showActions.includes('execucoes') &&
+                      ['liberado_total', 'liberado_parcial', 'em_carregamento'].includes(
+                        c.status
+                      ) && (
+                        <button
+                          onClick={() => onAction?.(c, 'execucoes')}
+                          className="px-2.5 py-1 text-xs font-bold bg-violet-50 text-violet-700 rounded-lg border border-violet-200 hover:bg-violet-100 transition-colors"
+                        >
+                          Execuções
+                        </button>
+                      )}
                     {/* Edit / Delete / History buttons */}
                     {hasEditDelete &&
                       currentUser &&
                       (() => {
-                        const perms = canEditDeleteCarregamento(c.status, currentUser);
+                        const perms = canEditDeleteCarregamento(
+                          c.status,
+                          currentUser,
+                          c.criado_por
+                        );
                         return (
                           <>
                             {onEdit && (
@@ -1834,7 +1865,7 @@ function VisaoGeral({
             carregamentos={pendentes}
             currentUser={currentUser}
             onAction={onAction}
-            showActions={['cotacao', 'liberar']}
+            showActions={['cotacao', 'liberar', 'execucoes']}
             onEdit={onEdit}
             onDelete={onDelete}
             onCancel={onCancel}
@@ -1896,7 +1927,11 @@ function SolicitacaoCotacao({
   canVerArquivadas?: boolean;
 }) {
   const { showSuccess, showError } = useToast();
-  const elegiveis = carregamentos.filter((c) => c.status === 'aguardando_cotacao');
+  const elegiveis = carregamentos.filter(
+    (c) =>
+      c.tipo_frete === 'CIF' &&
+      ['aguardando_liberacao', 'liberado_total', 'liberado_parcial'].includes(c.status)
+  );
   const emAndamento = carregamentos.filter((c) =>
     ['cotacao_solicitada', 'cotacao_recebida'].includes(c.status)
   );
@@ -2377,7 +2412,7 @@ function LiberacaoCarregamento({
           <TabelaCarregamentos
             carregamentos={prontos}
             onAction={onAction}
-            showActions={['liberar']}
+            showActions={['liberar', 'execucoes']}
             canLiberar={canLiberar}
           />
         )}
@@ -3739,6 +3774,7 @@ export default function CarregamentoModule({
   const [modalCotacao, setModalCotacao] = useState<Carregamento | null>(null);
   const [modalLiberacao, setModalLiberacao] = useState<Carregamento | null>(null);
   const [modalTransportador, setModalTransportador] = useState<Carregamento | null>(null);
+  const [modalExecucoes, setModalExecucoes] = useState<Carregamento | null>(null);
   // Edit / Delete / History
   const [editandoCarregamento, setEditandoCarregamento] = useState<Carregamento | null>(null);
   const [excluindoCarregamento, setExcluindoCarregamento] = useState<Carregamento | null>(null);
@@ -3827,6 +3863,8 @@ export default function CarregamentoModule({
         setModalLiberacao(c);
       } else if (action === 'transportador') {
         setModalTransportador(c);
+      } else if (action === 'execucoes') {
+        setModalExecucoes(c);
       } else if (action === 'confirmar') {
         await updateStatusCarregamento(c.id, 'carregado', {
           data_real_carregamento: new Date().toISOString().slice(0, 10),
@@ -3916,9 +3954,6 @@ export default function CarregamentoModule({
         observacoes: form.observacoes || undefined,
         status: 'pendente',
         solicitado_por: currentUser.id,
-      });
-      await updateStatusCarregamento(carregamentoId, 'cotacao_solicitada', {
-        data_solicitacao_cotacao: new Date().toISOString(),
       });
       showSuccess('Cotação solicitada com sucesso!');
       setModalCotacao(null);
@@ -4355,6 +4390,34 @@ export default function CarregamentoModule({
           onSave={handleInformarTransportador}
           onClose={() => setModalTransportador(null)}
         />
+      )}
+
+      {modalExecucoes && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-stone-800">
+                Execuções — {fmtCarregamentoNum(modalExecucoes)}
+              </h3>
+              <button
+                onClick={() => setModalExecucoes(null)}
+                className="px-3 py-1.5 rounded-lg border border-stone-300 text-sm font-bold text-stone-600 hover:bg-stone-50"
+              >
+                Fechar
+              </button>
+            </div>
+            <PainelExecucoes
+              carregamento={modalExecucoes}
+              currentUserId={currentUser.id}
+              canManage={
+                currentUser.role === 'master' ||
+                currentUser.role === 'admin' ||
+                !!(currentUser.permissions as Record<string, unknown>)?.carregamento_logistica
+              }
+              onChanged={load}
+            />
+          </div>
+        </div>
       )}
     </div>
   );

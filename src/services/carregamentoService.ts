@@ -11,6 +11,7 @@ import {
   KPICarregamento,
   StatusCarregamento,
   TipoFrete,
+  ExecucaoCarregamento,
 } from '../types/carregamento';
 
 // ─────────────────────────────────────────────────────────────
@@ -31,6 +32,7 @@ function mapCarregamento(d: Record<string, unknown>): Carregamento {
     quantidade_total: Number(d.quantidade_total ?? 0),
     quantidade_liberada: Number(d.quantidade_liberada ?? 0),
     quantidade_carregada: Number(d.quantidade_carregada ?? 0),
+    quantidade_cancelada: Number(d.quantidade_cancelada ?? 0),
     saldo_disponivel: d.saldo_disponivel != null ? Number(d.saldo_disponivel) : undefined,
     data_prevista_carregamento: d.data_prevista_carregamento as string | undefined,
     data_real_carregamento: d.data_real_carregamento as string | undefined,
@@ -52,6 +54,7 @@ function mapCarregamento(d: Record<string, unknown>): Carregamento {
     pedido_venda_id: d.pedido_venda_id as string | undefined,
     pedido_venda_numero: d.pedido_venda_numero as string | undefined,
     obs_cancelamento_parcial: d.obs_cancelamento_parcial as string | undefined,
+    motivo_cancelamento_saldo: d.motivo_cancelamento_saldo as string | undefined,
     cancelado_por_id: d.cancelado_por_id as string | undefined,
     cancelado_por_nome: d.cancelado_por_nome as string | undefined,
     cancelado_em: d.cancelado_em as string | undefined,
@@ -264,6 +267,11 @@ export async function createCarregamento(
 ): Promise<Carregamento> {
   const { data, error } = await supabase.from('carregamentos').insert(payload).select().single();
   if (error || !data) {
+    if (error?.code === 'P0001') {
+      throw new Error(
+        'Saldo insuficiente para um ou mais itens do carregamento. Revise as quantidades e tente novamente.'
+      );
+    }
     console.error('Erro ao criar carregamento:', error);
     throw error ?? new Error('Falha ao criar carregamento: nenhum dado retornado');
   }
@@ -281,6 +289,11 @@ export async function createCarregamento(
     if (rows.length > 0) {
       const { error: itensError } = await supabase.from('carregamento_itens').insert(rows);
       if (itensError) {
+        if (itensError.code === 'P0001') {
+          throw new Error(
+            'Saldo insuficiente. A quantidade solicitada excede o saldo disponível do pedido.'
+          );
+        }
         const { error: rollbackError } = await supabase
           .from('carregamentos')
           .delete()
@@ -716,4 +729,101 @@ export async function getCarregamentosLogistica(filialIds?: string[]): Promise<C
       pedido_quantidade_real: pv?.quantidade_real != null ? Number(pv.quantidade_real) : undefined,
     };
   });
+}
+
+export async function getCarregamentosByPedidoVenda(pedidoVendaId: string): Promise<{
+  aguardando_liberacao: Carregamento[];
+  liberado: (Carregamento & { execucoes?: ExecucaoCarregamento[] })[];
+  em_carregamento: (Carregamento & { execucoes?: ExecucaoCarregamento[] })[];
+  carregado: (Carregamento & { execucoes?: ExecucaoCarregamento[] })[];
+  cancelado: Carregamento[];
+  resumo: { quantidade_solicitada: number; quantidade_carregada: number; percentual: number };
+}> {
+  const { data, error } = await supabase
+    .from('carregamentos')
+    .select('*')
+    .eq('pedido_venda_id', pedidoVendaId)
+    .order('criado_em', { ascending: false });
+
+  if (error || !data) {
+    return {
+      aguardando_liberacao: [],
+      liberado: [],
+      em_carregamento: [],
+      carregado: [],
+      cancelado: [],
+      resumo: { quantidade_solicitada: 0, quantidade_carregada: 0, percentual: 0 },
+    };
+  }
+
+  const mapped = data.map((row) => mapCarregamento(row));
+  const ids = mapped.map((c) => c.id);
+  const execucoesByCarregamento: Record<string, ExecucaoCarregamento[]> = {};
+
+  if (ids.length > 0) {
+    const { data: execucoesData } = await supabase
+      .from('carregamento_execucoes')
+      .select('*')
+      .in('carregamento_id', ids)
+      .order('data_agendamento', { ascending: false });
+
+    for (const row of execucoesData ?? []) {
+      const key = row.carregamento_id as string;
+      if (!execucoesByCarregamento[key]) execucoesByCarregamento[key] = [];
+      execucoesByCarregamento[key].push({
+        id: row.id as string,
+        id_numeric: row.id_numeric != null ? Number(row.id_numeric) : undefined,
+        carregamento_id: key,
+        motorista_nome: row.motorista_nome as string,
+        motorista_cpf: row.motorista_cpf as string | undefined,
+        placa_veiculo: row.placa_veiculo as string,
+        placa_carreta: row.placa_carreta as string | undefined,
+        quantidade_agendada: Number(row.quantidade_agendada ?? 0),
+        quantidade_carregada:
+          row.quantidade_carregada != null ? Number(row.quantidade_carregada) : undefined,
+        data_agendamento: row.data_agendamento as string | undefined,
+        data_inicio_carregamento: row.data_inicio_carregamento as string | undefined,
+        data_conclusao_carregamento: row.data_conclusao_carregamento as string | undefined,
+        status: row.status as ExecucaoCarregamento['status'],
+        motivo_cancelamento: row.motivo_cancelamento as string | undefined,
+        observacoes: row.observacoes as string | undefined,
+        criado_por: row.criado_por as string | undefined,
+        criado_em: row.criado_em as string | undefined,
+        atualizado_em: row.atualizado_em as string | undefined,
+      });
+    }
+  }
+
+  const aguardando = mapped.filter((c) => c.status === 'aguardando_liberacao');
+  const liberado = mapped
+    .filter((c) => c.status === 'liberado_total' || c.status === 'liberado_parcial')
+    .map((c) => ({ ...c, execucoes: execucoesByCarregamento[c.id] ?? [] }));
+  const emCarregamento = mapped
+    .filter((c) => c.status === 'em_carregamento')
+    .map((c) => ({ ...c, execucoes: execucoesByCarregamento[c.id] ?? [] }));
+  const carregado = mapped
+    .filter((c) => c.status === 'carregado')
+    .map((c) => ({ ...c, execucoes: execucoesByCarregamento[c.id] ?? [] }));
+  const cancelado = mapped.filter((c) => c.status === 'cancelado');
+
+  const quantidadeSolicitada = mapped.reduce((acc, c) => acc + Number(c.quantidade_total ?? 0), 0);
+  const quantidadeCarregada = mapped.reduce(
+    (acc, c) => acc + Number(c.quantidade_carregada ?? 0),
+    0
+  );
+  const percentual =
+    quantidadeSolicitada > 0 ? (quantidadeCarregada / quantidadeSolicitada) * 100 : 0;
+
+  return {
+    aguardando_liberacao: aguardando,
+    liberado,
+    em_carregamento: emCarregamento,
+    carregado,
+    cancelado,
+    resumo: {
+      quantidade_solicitada: quantidadeSolicitada,
+      quantidade_carregada: quantidadeCarregada,
+      percentual,
+    },
+  };
 }

@@ -17,7 +17,7 @@ import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { useConfirm } from '../../hooks/useConfirm';
 
 // ── Kanban columns ────────────────────────────────────────────────────────────
-type KanbanColumn = 'aguardando' | 'cotado' | 'liberado' | 'carregado';
+type KanbanColumn = 'aguardando_liberacao' | 'liberado' | 'em_carregamento' | 'carregado';
 
 const COLUMN_CONFIG: Record<
   KanbanColumn,
@@ -29,26 +29,26 @@ const COLUMN_CONFIG: Record<
     headerColor: string;
   }
 > = {
-  aguardando: {
-    label: 'Aguardando',
-    statuses: ['aguardando_cotacao', 'cotacao_solicitada'],
-    targetStatus: 'aguardando_cotacao',
+  aguardando_liberacao: {
+    label: 'Aguardando Liberação',
+    statuses: ['aguardando_liberacao'],
+    targetStatus: 'aguardando_liberacao',
     color: 'bg-stone-100 border-stone-300',
     headerColor: 'bg-stone-500 text-white',
   },
-  cotado: {
-    label: 'Cotado',
-    statuses: ['cotacao_recebida', 'aguardando_liberacao'],
-    targetStatus: 'cotacao_recebida',
-    color: 'bg-amber-50 border-amber-300',
-    headerColor: 'bg-amber-500 text-white',
-  },
   liberado: {
     label: 'Liberado',
-    statuses: ['liberado_parcial', 'liberado_total', 'em_carregamento'],
+    statuses: ['liberado_parcial', 'liberado_total'],
     targetStatus: 'liberado_total',
     color: 'bg-blue-50 border-blue-300',
     headerColor: 'bg-blue-600 text-white',
+  },
+  em_carregamento: {
+    label: 'Em Carregamento',
+    statuses: ['em_carregamento'],
+    targetStatus: 'em_carregamento',
+    color: 'bg-purple-50 border-purple-300',
+    headerColor: 'bg-purple-600 text-white',
   },
   carregado: {
     label: 'Carregado',
