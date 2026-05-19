@@ -105,11 +105,14 @@ export interface User {
     reports: boolean;
     managementReports: boolean;
     savedFormulas?: boolean;
+    savedFormulas_delete?: boolean;
+    savedFormulas_report?: boolean;
     pricingReport?: boolean;
     commissionReport?: boolean;
     prd?: boolean;
     pricingBySeller?: boolean;
     produtosFormulados?: boolean;
+    produtosFormulados_edit?: boolean;
     // Sub-permissões da Calculadora
     calculator_savePricing?: boolean;
     calculator_generatePDF?: boolean;
@@ -157,6 +160,7 @@ export interface User {
     carregamento_configurar_filiais?: boolean;
     carregamento_tratar_cotacao?: boolean;
     carregamento_aprovar_cotacao?: boolean;
+    carregamento_ver_arquivadas?: boolean;
     carregamento_filial_ids?: string[];
   };
 }
