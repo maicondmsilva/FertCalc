@@ -138,7 +138,7 @@ export async function restoreSession(): Promise<User | null> {
 export async function createAuthUser(
   email: string,
   password: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; userId?: string; error?: string }> {
   try {
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData.session?.access_token;
@@ -147,27 +147,45 @@ export async function createAuthUser(
       return { success: false, error: 'Usuário não autenticado' };
     }
 
-    const res = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-create-user`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({ email, password }),
-      }
-    );
+    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-create-user`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ email, password }),
+    });
+
+    let body: { user_id?: string; error?: string } = {};
+    const contentType = res.headers.get('content-type') ?? '';
+    if (contentType.includes('application/json')) {
+      body = (await res.json()) as { user_id?: string; error?: string };
+    } else {
+      const text = await res.text();
+      body = { error: text };
+    }
 
     if (!res.ok) {
-      const err = await res.json() as { error?: string };
-      const message = err.error ?? 'Erro ao criar usuário no Auth';
+      let message = body.error ?? 'Erro ao criar usuário no Auth';
+      if (res.status === 404) {
+        message =
+          'Função admin-create-user não encontrada. Faça o deploy com: supabase functions deploy admin-create-user';
+      } else if (res.status === 403) {
+        message = 'Apenas usuários Master podem criar novos usuários.';
+      } else if (res.status === 401) {
+        message = 'Sessão inválida ou expirada. Faça login novamente.';
+      }
       logger.warn('[authService] createAuthUser error:', message);
       return { success: false, error: message };
     }
 
-    return { success: true };
+    if (!body.user_id) {
+      logger.warn('[authService] createAuthUser invalid response: missing user_id');
+      return { success: false, error: 'Resposta inválida da função de autenticação.' };
+    }
+
+    return { success: true, userId: body.user_id };
   } catch (err: unknown) {
     logger.error('[authService] Unexpected error in createAuthUser:', err);
     return { success: false, error: err instanceof Error ? err.message : String(err) };
@@ -228,7 +246,7 @@ export async function adminUpdateAuthPassword(
     );
 
     if (!res.ok) {
-      const err = await res.json() as { error?: string };
+      const err = (await res.json()) as { error?: string };
       const message = err.error ?? 'Erro ao atualizar senha no Auth';
       logger.warn('[authService] adminUpdateAuthPassword error:', message);
       return { success: false, error: message };

@@ -7,6 +7,19 @@ Este plano foi atualizado com base em análise técnica completa realizada em 07
 
 ---
 
+## ✅ Correções aplicadas em produção (19/05/2026)
+
+- Cadastro de usuários: criação agora vincula `auth.users.id` ao `app_users.id` para compatibilidade com políticas RLS baseadas em `auth.uid()`.
+- Fluxo de carregamento por tipo de frete:
+  - **CIF**: `aguardando_cotacao` → `cotacao_solicitada` → `cotacao_recebida` → `aguardando_liberacao`
+  - **FOB**: `aguardando_liberacao` (sem etapa de cotação)
+- Migration aplicada para saneamento de legado FOB:
+  - `supabase/migrations/20260519125500_fix_fob_status_to_liberacao.sql`
+- Deploy obrigatório de função (quando alterada):
+  - `supabase functions deploy admin-create-user`
+
+---
+
 ## 🔴 FASE 0 — Segurança Crítica (Bloqueante)
 > Prioridade máxima. Esses problemas expõem dados de usuários e devem ser resolvidos antes de qualquer outra entrega.
 

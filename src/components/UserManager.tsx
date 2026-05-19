@@ -349,8 +349,18 @@ export default function UserManager({ currentUser }: UserManagerProps) {
       showError('Nome, e-mail e nível de acesso são obrigatórios.');
       return;
     }
+    const normalizedEmail = formData.email.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(normalizedEmail)) {
+      showError('Informe um e-mail válido.');
+      return;
+    }
     if (!editingId && !formData.password) {
       showError('A senha é obrigatória para um novo usuário.');
+      return;
+    }
+    if (!editingId && formData.password.length < 6) {
+      showError('A senha deve ter no mínimo 6 caracteres.');
       return;
     }
     setLoading(true);
@@ -358,7 +368,7 @@ export default function UserManager({ currentUser }: UserManagerProps) {
       if (editingId) {
         await updateUser(editingId, {
           name: formData.name,
-          email: formData.email,
+          email: normalizedEmail,
           nickname: formData.nickname,
           role: formData.role,
           ativo: formData.ativo,
@@ -367,23 +377,37 @@ export default function UserManager({ currentUser }: UserManagerProps) {
           filiais_permitidas: formData.filiais_permitidas,
         });
       } else {
-        const authResult = await createAuthUser(formData.email, formData.password);
+        const authResult = await createAuthUser(normalizedEmail, formData.password);
         if (!authResult.success) {
           showError(`Erro ao criar autenticação: ${authResult.error || 'Erro desconhecido'}`);
           setLoading(false);
           return;
         }
-        await createUser({
-          idNumeric: 0,
-          name: formData.name,
-          email: formData.email,
-          nickname: formData.nickname,
-          role: formData.role,
-          ativo: formData.ativo,
-          managedUserIds: formData.role === 'manager' ? formData.managedUserIds : [],
-          permissions: formData.permissions as any,
-          filiais_permitidas: formData.filiais_permitidas,
-        });
+        try {
+          await createUser({
+            id: authResult.userId,
+            idNumeric: 0,
+            name: formData.name,
+            email: normalizedEmail,
+            nickname: formData.nickname,
+            role: formData.role,
+            ativo: formData.ativo,
+            managedUserIds: formData.role === 'manager' ? formData.managedUserIds : [],
+            permissions: formData.permissions as any,
+            filiais_permitidas: formData.filiais_permitidas,
+          });
+        } catch (dbErr) {
+          console.error('Usuário criado no Auth, mas falhou ao salvar em app_users:', {
+            authUserId: authResult.userId,
+            email: normalizedEmail,
+            error: dbErr,
+          });
+          showError(
+            'Usuário criado no Auth, mas falhou ao salvar no cadastro interno. Contate o Master para limpar o usuário órfão no Auth e tente novamente.'
+          );
+          setLoading(false);
+          return;
+        }
       }
       await loadUsers();
       showSuccess(editingId ? 'Usuário atualizado com sucesso!' : 'Usuário criado com sucesso!');

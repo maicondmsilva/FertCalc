@@ -72,6 +72,7 @@ import SolicitacaoCotacaoIndependente from './SolicitacaoCotacao';
 import HistoricoModificacoes from '../HistoricoModificacoes';
 import { formatCarregamentoId } from '../../utils/formatId';
 import KanbanLogistico from './KanbanLogistico';
+import { getStatusInicial } from '../../utils/getStatusInicial';
 
 // ─── Permission helper ────────────────────────────────────────────────────────
 function canEditDeleteCarregamento(
@@ -3859,7 +3860,7 @@ export default function CarregamentoModule({
           );
           return;
         }
-        
+
         const itensInvalidos = form.itens.filter((i) => !i.produto_nome || i.quantidade_ton <= 0);
         if (itensInvalidos.length > 0) {
           showError('Todos os itens devem ter produto e quantidade válidos.');
@@ -3868,6 +3869,7 @@ export default function CarregamentoModule({
       }
 
       const numero = await gerarNumeroCarregamento();
+      const statusInicial = getStatusInicial(form.tipo_frete);
       await createCarregamento(
         {
           numero_carregamento: numero,
@@ -3883,7 +3885,7 @@ export default function CarregamentoModule({
           data_prevista_carregamento: form.data_prevista_carregamento || undefined,
           observacoes: form.observacoes || undefined,
           valor_frete: form.valor_frete ? parseFloat(form.valor_frete) : undefined,
-          status: 'aguardando_cotacao',
+          status: statusInicial,
           criado_por: currentUser.id,
         },
         form.itens

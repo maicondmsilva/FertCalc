@@ -2,6 +2,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 
 Deno.serve(async (req: Request) => {
+  // IMPORTANTE: após alterações neste arquivo, fazer deploy com:
+  // supabase functions deploy admin-create-user
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -55,6 +57,7 @@ Deno.serve(async (req: Request) => {
       .eq('id', callerUser.id)
       .single();
 
+    // Regra de produto: apenas usuários master podem criar novos usuários.
     if (profileError || !callerProfile || callerProfile.role !== 'master') {
       return new Response(JSON.stringify({ error: 'Forbidden: admin privileges required' }), {
         status: 403,
