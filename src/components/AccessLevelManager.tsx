@@ -46,6 +46,12 @@ export default function AccessLevelManager() {
   };
 
   const handleSave = async () => {
+    const codeTrimmed = form.code.trim();
+    const nameTrimmed = form.name.trim();
+    if (!codeTrimmed || !nameTrimmed) {
+      showError('O Código (Slug) e o Nome de Exibição são obrigatórios.');
+      return;
+    }
     try {
       setSaving(true);
       let defaultPermissions: Record<string, unknown> = {};
@@ -55,8 +61,8 @@ export default function AccessLevelManager() {
 
       if (editing) {
         await updateAccessLevel(editing.id, {
-          code: form.code,
-          name: form.name,
+          code: codeTrimmed,
+          name: nameTrimmed,
           description: form.description || undefined,
           hierarchy_level: Number(form.hierarchy_level),
           default_permissions: defaultPermissions,
@@ -64,8 +70,8 @@ export default function AccessLevelManager() {
         showSuccess('Nível de acesso atualizado com sucesso.');
       } else {
         await createAccessLevel({
-          code: form.code,
-          name: form.name,
+          code: codeTrimmed,
+          name: nameTrimmed,
           description: form.description || undefined,
           hierarchy_level: Number(form.hierarchy_level),
           default_permissions: defaultPermissions,
@@ -117,45 +123,70 @@ export default function AccessLevelManager() {
 
       <div className="bg-white rounded-xl border border-stone-200 shadow-sm p-4 space-y-3">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <input
-            value={form.code}
-            onChange={(e) => setForm((prev) => ({ ...prev, code: e.target.value.toLowerCase() }))}
-            placeholder="code (slug)"
-            className="px-3 py-2 border border-stone-300 rounded-lg text-sm"
-            disabled={editing?.is_system}
-          />
-          <input
-            value={form.name}
-            onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-            placeholder="Nome"
-            className="px-3 py-2 border border-stone-300 rounded-lg text-sm"
-            disabled={editing?.is_system}
-          />
-          <input
-            value={form.description}
-            onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
-            placeholder="Descrição"
-            className="px-3 py-2 border border-stone-300 rounded-lg text-sm md:col-span-2"
-            disabled={editing?.is_system}
-          />
-          <input
-            type="number"
-            min={0}
-            max={100}
-            value={form.hierarchy_level}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, hierarchy_level: Number(e.target.value) }))
-            }
-            placeholder="Hierarquia (0-100)"
-            className="px-3 py-2 border border-stone-300 rounded-lg text-sm"
-            disabled={editing?.is_system}
-          />
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-bold text-stone-600 flex items-center gap-1">
+              Código / Slug (Único e sem espaços) <span className="text-red-500">*</span>
+            </label>
+            <input
+              value={form.code}
+              onChange={(e) => setForm((prev) => ({ ...prev, code: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '') }))}
+              placeholder="Ex: vendedor, assistente"
+              className="px-3 py-2 border border-stone-300 rounded-lg text-sm outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+              disabled={editing?.is_system}
+            />
+            <span className="text-[10px] text-stone-400">
+              Identificador (somente letras minúsculas, números, - e _).
+            </span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-bold text-stone-600 flex items-center gap-1">
+              Nome de Exibição <span className="text-red-500">*</span>
+            </label>
+            <input
+              value={form.name}
+              onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+              placeholder="Ex: Vendedor Técnico, Assistente"
+              className="px-3 py-2 border border-stone-300 rounded-lg text-sm outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+              disabled={editing?.is_system}
+            />
+            <span className="text-[10px] text-stone-400">
+              Nome amigável mostrado nas telas e nos cadastros.
+            </span>
+          </div>
+          <div className="flex flex-col gap-1 md:col-span-2">
+            <label className="text-xs font-bold text-stone-600">Descrição</label>
+            <input
+              value={form.description}
+              onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
+              placeholder="Descreva o propósito deste nível de acesso"
+              className="px-3 py-2 border border-stone-300 rounded-lg text-sm outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+              disabled={editing?.is_system}
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-bold text-stone-600">Hierarquia (0-100)</label>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={form.hierarchy_level}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, hierarchy_level: Number(e.target.value) }))
+              }
+              placeholder="Hierarquia (0-100)"
+              className="px-3 py-2 border border-stone-300 rounded-lg text-sm outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+              disabled={editing?.is_system}
+            />
+            <span className="text-[10px] text-stone-400">
+              Maior valor = maior poder hierárquico (Ex: Master = 100, Admin = 80).
+            </span>
+          </div>
         </div>
         <textarea
           value={form.default_permissions}
           onChange={(e) => setForm((prev) => ({ ...prev, default_permissions: e.target.value }))}
           rows={6}
-          className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm font-mono"
+          className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm font-mono focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
           placeholder='{"users": true, "carregamento": true}'
           disabled={editing?.is_system}
         />
@@ -163,8 +194,8 @@ export default function AccessLevelManager() {
           <button
             type="button"
             onClick={handleSave}
-            disabled={saving || !form.code || !form.name || !!editing?.is_system}
-            className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 disabled:bg-emerald-300 flex items-center gap-2"
+            disabled={saving || !!editing?.is_system}
+            className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 disabled:bg-emerald-300 flex items-center gap-2 transition-colors"
           >
             <Plus className="w-4 h-4" />
             {editing ? 'Salvar Alterações' : 'Novo Nível'}
@@ -173,7 +204,7 @@ export default function AccessLevelManager() {
             <button
               type="button"
               onClick={resetForm}
-              className="px-4 py-2 rounded-lg border border-stone-300 text-sm font-bold text-stone-600 hover:bg-stone-50"
+              className="px-4 py-2 rounded-lg border border-stone-300 text-sm font-bold text-stone-600 hover:bg-stone-50 transition-colors"
             >
               Cancelar edição
             </button>

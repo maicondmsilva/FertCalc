@@ -202,7 +202,7 @@ export async function getCarregamentos(
       transportadoras(*),
       locais_carregamento(*),
       pedidos_venda!pedido_venda_id(
-        cliente_nome,
+        cliente_nome_novo,
         produto_nome,
         data_vencimento,
         saldo_disponivel,
@@ -229,7 +229,7 @@ export async function getCarregamentos(
       local_carregamento: d.locais_carregamento
         ? mapLocalCarregamento(d.locais_carregamento as Record<string, unknown>)
         : undefined,
-      pedido_cliente_nome: pv?.cliente_nome as string | undefined,
+      pedido_cliente_nome: pv?.cliente_nome_novo as string | undefined,
       pedido_produto_nome: pv?.produto_nome as string | undefined,
       pedido_data_vencimento: pv?.data_vencimento as string | undefined,
       pedido_saldo_disponivel:
@@ -559,7 +559,7 @@ export async function getCarregamentosRelatorio(
       transportadoras(*),
       locais_carregamento(*),
       pedidos_venda!pedido_venda_id(
-        cliente_nome,
+        cliente_nome_novo,
         produto_nome,
         data_vencimento,
         saldo_disponivel,
@@ -589,7 +589,7 @@ export async function getCarregamentosRelatorio(
       local_carregamento: d.locais_carregamento
         ? mapLocalCarregamento(d.locais_carregamento as Record<string, unknown>)
         : undefined,
-      pedido_cliente_nome: pv?.cliente_nome as string | undefined,
+      pedido_cliente_nome: pv?.cliente_nome_novo as string | undefined,
       pedido_produto_nome: pv?.produto_nome as string | undefined,
       pedido_data_vencimento: pv?.data_vencimento as string | undefined,
       pedido_saldo_disponivel:
@@ -617,7 +617,7 @@ export async function getCarregamentosCalendario(
       transportadoras(*),
       locais_carregamento(*),
       pedidos_venda!pedido_venda_id(
-        cliente_nome,
+        cliente_nome_novo,
         produto_nome,
         data_vencimento,
         saldo_disponivel,
@@ -668,7 +668,7 @@ export async function getCarregamentosCalendario(
       local_carregamento: d.locais_carregamento
         ? mapLocalCarregamento(d.locais_carregamento as Record<string, unknown>)
         : undefined,
-      pedido_cliente_nome: pv?.cliente_nome as string | undefined,
+      pedido_cliente_nome: pv?.cliente_nome_novo as string | undefined,
       pedido_produto_nome: pv?.produto_nome as string | undefined,
       pedido_data_vencimento: pv?.data_vencimento as string | undefined,
       pedido_saldo_disponivel:
@@ -695,7 +695,7 @@ export async function getCarregamentosLogistica(filialIds?: string[]): Promise<C
       transportadoras(*),
       locais_carregamento(*),
       pedidos_venda!pedido_venda_id(
-        cliente_nome,
+        cliente_nome_novo,
         produto_nome,
         data_vencimento,
         saldo_disponivel,
@@ -721,7 +721,7 @@ export async function getCarregamentosLogistica(filialIds?: string[]): Promise<C
       local_carregamento: d.locais_carregamento
         ? mapLocalCarregamento(d.locais_carregamento as Record<string, unknown>)
         : undefined,
-      pedido_cliente_nome: pv?.cliente_nome as string | undefined,
+      pedido_cliente_nome: pv?.cliente_nome_novo as string | undefined,
       pedido_produto_nome: pv?.produto_nome as string | undefined,
       pedido_data_vencimento: pv?.data_vencimento as string | undefined,
       pedido_saldo_disponivel:
