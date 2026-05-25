@@ -11,6 +11,7 @@ type CreateUserPayload = {
   managed_user_ids?: string[];
   permissions?: Record<string, unknown>;
   filiais_permitidas?: string[];
+  requer_alteracao_senha?: boolean;
 };
 
 function jsonResponse(body: Record<string, unknown>, status: number) {
@@ -130,6 +131,7 @@ Deno.serve(async (req: Request) => {
       managed_user_ids: payload.managed_user_ids ?? [],
       permissions: payload.permissions ?? {},
       filiais_permitidas: payload.filiais_permitidas ?? [],
+      requer_alteracao_senha: payload.requer_alteracao_senha ?? true,
     });
 
     if (appUserError) {

@@ -6,10 +6,11 @@ import {
   deleteSavedFormula,
   getPriceLists,
   getAppSettings,
+  getClients,
 } from '../services/db';
 import { getLocaisAtivos } from '../services/locaisCarregamentoService';
 import { getProdutoFormuladoBySavedFormulaId } from '../services/produtosFormuladosService';
-import { SavedFormula, User, PriceList, AppSettings } from '../types';
+import { SavedFormula, User, PriceList, AppSettings, Client } from '../types';
 import { LocalCarregamento } from '../types/carregamento';
 import { formatId } from '../utils/formatId';
 import {
@@ -88,6 +89,19 @@ function ModalGerarRelatorio({
     return initial;
   });
 
+  const [clients, setClients] = useState<Client[]>([]);
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [clientSearch, setClientSearch] = useState('');
+  const [showClientResults, setShowClientResults] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      getClients().then(setClients).catch(() => {});
+      setSelectedClient(null);
+      setClientSearch('');
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const getFactors = (id: string): ReportFactors =>
@@ -109,13 +123,53 @@ function ModalGerarRelatorio({
     const now = new Date();
     const dateStr = now.toLocaleDateString('pt-BR');
 
-    // Header
-    doc.setFontSize(16);
+    // Header Design (Premium Theme)
+    doc.setFillColor(16, 124, 65); // Forest green primary header accent bar
+    doc.rect(0, 0, 210, 8, 'F');
+
+    doc.setFontSize(20);
     doc.setFont('helvetica', 'bold');
-    doc.text(companyName, 14, 18);
+    doc.setTextColor(16, 124, 65);
+    doc.text(companyName, 14, 22);
+
     doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Relatório de Preços para Clientes — ${dateStr}`, 14, 25);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(120, 120, 120);
+    doc.text(`RELATÓRIO DE PREÇOS — EMITIDO EM ${dateStr}`, 14, 28);
+    
+    doc.setDrawColor(220, 220, 220);
+    doc.setLineWidth(0.5);
+    doc.line(14, 31, 196, 31);
+
+    let currentY = 36;
+
+    // Optional Client Details Card
+    if (selectedClient) {
+      // Draw background
+      doc.setFillColor(248, 250, 248);
+      doc.setDrawColor(220, 230, 220);
+      doc.roundedRect(14, currentY, 182, 30, 3, 3, 'FD');
+
+      // Client Title
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(16, 124, 65);
+      doc.text('DADOS DO CLIENTE', 19, currentY + 6);
+
+      // Client Data columns
+      doc.setFontSize(8.5);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(60, 60, 60);
+      
+      doc.text(`Razão Social / Nome: ${selectedClient.name}`, 19, currentY + 12);
+      doc.text(`CPF / CNPJ: ${selectedClient.document}`, 19, currentY + 18);
+      doc.text(`IE: ${selectedClient.stateRegistration || 'Isento'}`, 19, currentY + 24);
+
+      doc.text(`Fazenda: ${selectedClient.fazenda || '—'}`, 110, currentY + 12);
+      doc.text(`Cidade / UF: ${selectedClient.address?.city || ''} / ${selectedClient.address?.state || ''}`, 110, currentY + 18);
+      
+      currentY += 36;
+    }
 
     // Main table
     const tableBody: (string | number)[][] = selectedFormulas.map((formula) => {
@@ -132,12 +186,13 @@ function ModalGerarRelatorio({
     });
 
     autoTable(doc, {
-      startY: 32,
-      head: [['ID', 'Nome da Fórmula', 'NPK', 'Preço Final R$/t']],
+      startY: currentY,
+      head: [['ID', 'Nome do Produto / Fórmula', 'NPK Alvo', 'Preço Final R$/t']],
       body: tableBody,
-      styles: { fontSize: 9, cellPadding: 3 },
-      headStyles: { fillColor: [52, 168, 83], textColor: 255, fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: [245, 245, 245] },
+      styles: { fontSize: 9, cellPadding: 4, font: 'helvetica' },
+      headStyles: { fillColor: [16, 124, 65], textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [248, 250, 248] },
+      margin: { left: 14, right: 14 },
     });
 
     // If include composition
@@ -147,10 +202,21 @@ function ModalGerarRelatorio({
         const activeMicros = formula.micros.filter((m) => m.quantity > 0);
         if (activeMacros.length === 0 && activeMicros.length === 0) return;
 
-        const lastY = (doc as any).lastAutoTable?.finalY ?? 30;
+        const lastY = (doc as any).lastAutoTable?.finalY ?? currentY + 20;
+        
+        // Page break if composition section is too low
+        if (lastY > 240) {
+          doc.addPage();
+          doc.setFillColor(16, 124, 65);
+          doc.rect(0, 0, 210, 8, 'F');
+        }
+
+        const compY = lastY > 240 ? 20 : lastY + 10;
+
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
-        doc.text(`Composição: ${formula.name} (${formula.targetFormula})`, 14, lastY + 10);
+        doc.setTextColor(30, 30, 30);
+        doc.text(`Detalhamento da Composição: ${formula.name} (${formula.targetFormula})`, 14, compY);
 
         const composicaoBody = [
           ...activeMacros.map((m) => [m.name, `${m.quantity.toFixed(0)} kg`, 'Macro']),
@@ -158,11 +224,13 @@ function ModalGerarRelatorio({
         ];
 
         autoTable(doc, {
-          startY: lastY + 14,
-          head: [['Matéria-Prima', 'Quantidade', 'Tipo']],
+          startY: compY + 4,
+          head: [['Matéria-Prima Utilizada', 'Quantidade', 'Tipo de Nutriente']],
           body: composicaoBody,
-          styles: { fontSize: 8, cellPadding: 2 },
-          headStyles: { fillColor: [80, 80, 80], textColor: 255 },
+          styles: { fontSize: 8, cellPadding: 3 },
+          headStyles: { fillColor: [80, 90, 80], textColor: 255 },
+          alternateRowStyles: { fillColor: [250, 250, 250] },
+          margin: { left: 14, right: 14 },
         });
       });
     }
@@ -172,17 +240,24 @@ function ModalGerarRelatorio({
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i);
       const pageHeight = doc.internal.pageSize.height;
+      
+      // Footer line separator
+      doc.setDrawColor(240, 240, 240);
+      doc.setLineWidth(0.5);
+      doc.line(14, pageHeight - 15, 196, pageHeight - 15);
+
       doc.setFontSize(8);
       doc.setFont('helvetica', 'italic');
       doc.setTextColor(120);
+      
       const venc = globalFactors.vencimento
-        ? `Válido até: ${new Date(globalFactors.vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}`
+        ? `Válido até: ${new Date(globalFactors.vencimento + 'T12:00:00').toLocaleDateString('pt-BR')}`
         : '';
-      doc.text(venc, 14, pageHeight - 10);
-      doc.text('Este relatório é confidencial.', doc.internal.pageSize.width / 2, pageHeight - 10, {
+      doc.text(venc, 14, pageHeight - 9);
+      doc.text('Este documento é um relatório comercial confidencial emitido por FertCalc.', doc.internal.pageSize.width / 2, pageHeight - 9, {
         align: 'center',
       });
-      doc.text(`Pág. ${i}/${pageCount}`, doc.internal.pageSize.width - 14, pageHeight - 10, {
+      doc.text(`Pág. ${i}/${pageCount}`, doc.internal.pageSize.width - 14, pageHeight - 9, {
         align: 'right',
       });
     }
@@ -221,6 +296,81 @@ function ModalGerarRelatorio({
         </div>
 
         <div className="p-6 space-y-6">
+          {/* Client Search Autocomplete */}
+          <div className="relative border border-stone-200 rounded-xl p-4 bg-stone-50">
+            <label className="text-xs font-bold text-stone-500 uppercase tracking-widest block mb-1 flex items-center gap-1">
+              <span>👤</span> Buscar Cliente (Opcional - sairá no relatório)
+            </label>
+            <div className="relative">
+              <Search className="absolute left-3 top-2.5 w-4 h-4 text-stone-400" />
+              <input
+                type="text"
+                value={clientSearch}
+                onChange={(e) => {
+                  setClientSearch(e.target.value);
+                  setShowClientResults(true);
+                }}
+                onFocus={() => setShowClientResults(true)}
+                onBlur={() => {
+                  setTimeout(() => setShowClientResults(false), 250);
+                }}
+                placeholder="Pesquisar cliente por nome ou CPF/CNPJ..."
+                className="w-full pl-9 pr-4 py-2 border border-stone-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+              />
+            </div>
+            {showClientResults && clientSearch.trim() && (
+              <div className="absolute z-50 left-4 right-4 mt-1 bg-white border border-stone-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                {(() => {
+                  const term = clientSearch.toLowerCase().trim();
+                  const filtered = clients.filter(
+                    (c) => c.name.toLowerCase().includes(term) || c.document.includes(term)
+                  );
+                  if (filtered.length === 0) {
+                    return <p className="p-2 text-xs text-stone-400">Nenhum cliente encontrado</p>;
+                  }
+                  return filtered.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedClient(c);
+                        setClientSearch(c.name);
+                        setShowClientResults(false);
+                      }}
+                      className="w-full text-left px-4 py-2 hover:bg-stone-50 border-b border-stone-100 last:border-0 text-xs flex flex-col"
+                    >
+                      <span className="font-bold text-stone-800">{c.name}</span>
+                      <span className="text-[10px] text-stone-500">Doc: {c.document} IE: {c.stateRegistration || 'Isento'} | Fazenda: {c.fazenda || '—'}</span>
+                    </button>
+                  ));
+                })()}
+              </div>
+            )}
+            {selectedClient && (
+              <div className="mt-3 p-3 bg-emerald-50 border border-emerald-250 rounded-xl text-xs text-emerald-800 flex justify-between items-center">
+                <div>
+                  <p className="font-bold">✓ {selectedClient.name}</p>
+                  <p className="text-[10px] text-emerald-600 mt-0.5">
+                    Doc: {selectedClient.document} IE: {selectedClient.stateRegistration || 'Isento'} | Fazenda: {selectedClient.fazenda || '—'}
+                  </p>
+                  <p className="text-[10px] text-emerald-600">
+                    Cidade/UF: {selectedClient.address?.city || ''} / {selectedClient.address?.state || ''}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedClient(null);
+                    setClientSearch('');
+                  }}
+                  className="text-red-500 hover:text-red-700 font-bold ml-2 text-xs shrink-0"
+                >
+                  Remover
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* Options */}
           <div className="flex flex-col gap-3">
             <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -747,7 +897,7 @@ export default function SavedFormulas({ currentUser, onSendToCalculator }: Saved
                                 key={m.id}
                                 className="flex justify-between items-center text-[11px]"
                               >
-                                <span className="text-stone-600 flex items-center gap-1 truncate pr-2">
+                                <span className="text-stone-600 flex items-center gap-1 pr-2">
                                   <Package className="w-3 h-3 text-stone-400 flex-shrink-0" />
                                   {m.name}
                                 </span>
@@ -763,7 +913,7 @@ export default function SavedFormulas({ currentUser, onSendToCalculator }: Saved
                                 key={m.id}
                                 className="flex justify-between items-center text-[11px]"
                               >
-                                <span className="text-emerald-700 flex items-center gap-1 truncate pr-2">
+                                <span className="text-emerald-700 flex items-center gap-1 pr-2">
                                   <Zap className="w-3 h-3 text-emerald-400 flex-shrink-0" />
                                   {m.name}
                                 </span>

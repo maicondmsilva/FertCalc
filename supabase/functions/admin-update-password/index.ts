@@ -55,7 +55,8 @@ Deno.serve(async (req: Request) => {
       .eq('id', callerUser.id)
       .single();
 
-    if (profileError || !callerProfile || callerProfile.role !== 'master') {
+    const allowedRoles = ['master', 'admin'];
+    if (profileError || !callerProfile || !allowedRoles.includes(callerProfile.role)) {
       return new Response(JSON.stringify({ error: 'Forbidden: admin privileges required' }), {
         status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -73,6 +74,12 @@ Deno.serve(async (req: Request) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    // Set the requer_alteracao_senha flag to true in app_users
+    await supabaseAdmin
+      .from('app_users')
+      .update({ requer_alteracao_senha: true })
+      .eq('id', user_id);
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200,

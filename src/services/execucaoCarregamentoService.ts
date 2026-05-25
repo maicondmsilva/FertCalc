@@ -1,5 +1,21 @@
 import { supabase } from './supabase';
 import { ExecucaoCarregamento, StatusExecucaoCarregamento } from '../types/carregamento';
+import { syncPedidoVendaStatus } from './pedidosVendaService';
+
+async function triggerSyncForExecucao(carregamentoId: string): Promise<void> {
+  try {
+    const { data, error } = await supabase
+      .from('carregamentos')
+      .select('pedido_venda_id')
+      .eq('id', carregamentoId)
+      .maybeSingle();
+    if (!error && data?.pedido_venda_id) {
+      await syncPedidoVendaStatus(data.pedido_venda_id);
+    }
+  } catch (e) {
+    console.error('Erro ao sincronizar status do pedido de venda:', e);
+  }
+}
 
 function mapExecucao(row: Record<string, unknown>): ExecucaoCarregamento {
   return {
@@ -42,7 +58,6 @@ export async function createExecucao(
     ExecucaoCarregamento,
     | 'id'
     | 'id_numeric'
-    | 'data_agendamento'
     | 'data_inicio_carregamento'
     | 'data_conclusao_carregamento'
     | 'status'
@@ -60,6 +75,7 @@ export async function createExecucao(
       placa_veiculo: payload.placa_veiculo,
       placa_carreta: payload.placa_carreta ?? null,
       quantidade_agendada: payload.quantidade_agendada,
+      data_agendamento: payload.data_agendamento ?? null,
       observacoes: payload.observacoes ?? null,
       criado_por: payload.criado_por ?? null,
       status: 'agendado',
@@ -67,6 +83,7 @@ export async function createExecucao(
     .select('*')
     .single();
   if (error || !data) throw error ?? new Error('Falha ao criar execução');
+  triggerSyncForExecucao(payload.carregamento_id);
   return mapExecucao(data);
 }
 
@@ -85,6 +102,19 @@ export async function updateExecucaoStatus(
     payload.motivo_cancelamento = extra.motivo_cancelamento;
 
   const { error } = await supabase.from('carregamento_execucoes').update(payload).eq('id', id);
+  if (!error) {
+    // Sync order status in the background
+    supabase
+      .from('carregamento_execucoes')
+      .select('carregamento_id')
+      .eq('id', id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.carregamento_id) {
+          triggerSyncForExecucao(data.carregamento_id);
+        }
+      });
+  }
   return !error;
 }
 

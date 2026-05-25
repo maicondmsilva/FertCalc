@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { User, PedidoVenda, Branch, PedidoVendaItem } from '../types';
+import { User, PedidoVenda, Branch, PedidoVendaItem, Client, PricingRecord, CancelamentoPedido } from '../types';
 import {
   ClipboardList,
   RefreshCw,
@@ -14,13 +14,14 @@ import {
   getPedidosVenda,
   updatePedidoVenda,
   getPedidoVendaItens,
+  getCancelamentos,
 } from '../services/pedidosVendaService';
 import {
   createCarregamento,
   gerarNumeroCarregamento,
   getFiliais,
 } from '../services/carregamentoService';
-import { getBranches } from '../services/db';
+import { getBranches, getClients, getPricingRecords } from '../services/db';
 import { useToast } from './Toast';
 import NovoPedidoVendaModal from './NovoPedidoVendaModal';
 import CancSubstituiModal from './CancSubstituiModal';
@@ -54,7 +55,7 @@ interface PedidosVendaProps {
   currentUser: User;
 }
 
-type ActiveTab = 'pedidos' | 'relatorio';
+type ActiveTab = 'pedidos' | 'relatorio' | 'saldos_cancelados';
 
 export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
   const { showSuccess, showError } = useToast();
@@ -75,19 +76,52 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
     useState<PedidoVenda | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>('pedidos');
 
+  const [clients, setClients] = useState<Client[]>([]);
+  const [pricingRecords, setPricingRecords] = useState<PricingRecord[]>([]);
+  const [cancelamentos, setCancelamentos] = useState<CancelamentoPedido[]>([]);
+  const [loadingCancelamentos, setLoadingCancelamentos] = useState(false);
+  const [cancSearch, setCancSearch] = useState('');
+  const [cancDataInicio, setCancDataInicio] = useState('');
+  const [cancDataFim, setCancDataFim] = useState('');
+
   const load = useCallback(async () => {
     setPedidos([]);
     setLoading(true);
     try {
-      const [pedidosData, branchesData] = await Promise.all([getPedidosVenda(), getBranches()]);
+      const [pedidosData, branchesData, clientsData, pricingData] = await Promise.all([
+        getPedidosVenda(),
+        getBranches(),
+        getClients(),
+        getPricingRecords(),
+      ]);
       setPedidos(pedidosData);
       setBranches(branchesData);
+      setClients(clientsData);
+      setPricingRecords(pricingData);
     } catch {
       showError('Erro ao carregar pedidos de venda.');
     } finally {
       setLoading(false);
     }
   }, [showError]);
+
+  const loadCancelamentos = useCallback(async () => {
+    setLoadingCancelamentos(true);
+    try {
+      const data = await getCancelamentos({ tipo: 'definitivo' });
+      setCancelamentos(data);
+    } catch {
+      showError('Erro ao carregar cancelamentos.');
+    } finally {
+      setLoadingCancelamentos(false);
+    }
+  }, [showError]);
+
+  useEffect(() => {
+    if (activeTab === 'saldos_cancelados') {
+      loadCancelamentos();
+    }
+  }, [activeTab, loadCancelamentos]);
 
   useEffect(() => {
     getFiliais()
@@ -227,10 +261,155 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
           <FileText className="w-4 h-4 inline mr-1.5 mb-0.5" />
           Canc/Substitui
         </button>
+        <button
+          onClick={() => setActiveTab('saldos_cancelados')}
+          className={`px-4 py-2 text-sm font-semibold rounded-t-lg transition-colors ${
+            activeTab === 'saldos_cancelados'
+              ? 'bg-white border border-b-white border-stone-200 text-emerald-700 -mb-px'
+              : 'text-stone-500 hover:text-stone-700'
+          }`}
+        >
+          <Ban className="w-4 h-4 inline mr-1.5 mb-0.5" />
+          Saldos Cancelados
+        </button>
       </div>
 
       {activeTab === 'relatorio' ? (
         <RelatorioCancSubstitui currentUser={currentUser} />
+      ) : activeTab === 'saldos_cancelados' ? (
+        <div className="space-y-4">
+          {/* Filters */}
+          <div className="bg-white rounded-xl border border-stone-200 shadow-sm p-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="relative md:col-span-2">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar por cliente, nº pedido ou usuário..."
+                  value={cancSearch}
+                  onChange={(e) => setCancSearch(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                />
+              </div>
+              <div>
+                <input
+                  type="date"
+                  value={cancDataInicio}
+                  onChange={(e) => setCancDataInicio(e.target.value)}
+                  className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                  placeholder="De"
+                  title="Data Início"
+                />
+              </div>
+              <div>
+                <input
+                  type="date"
+                  value={cancDataFim}
+                  onChange={(e) => setCancDataFim(e.target.value)}
+                  className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                  placeholder="Até"
+                  title="Data Fim"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Table */}
+          {loadingCancelamentos ? (
+            <div className="flex justify-center py-12">
+              <RefreshCw className="w-6 h-6 animate-spin text-stone-300" />
+            </div>
+          ) : (() => {
+            const filteredCancelamentos = cancelamentos.filter((c) => {
+              const pOrigem = pedidos.find((x) => x.id === c.pedido_origem_id);
+              const clientObj = clients.find((x) => x.id === pOrigem?.cliente_id);
+              const clientName = clientObj?.name || pOrigem?.cliente_nome || '';
+              const orderNum = pOrigem?.numero_pedido || '';
+              const orderBar = pOrigem?.barra_pedido || '';
+              const userNome = c.usuario_nome || '';
+
+              const matchSearch =
+                !cancSearch ||
+                clientName.toLowerCase().includes(cancSearch.toLowerCase()) ||
+                orderNum.toLowerCase().includes(cancSearch.toLowerCase()) ||
+                orderBar.toLowerCase().includes(cancSearch.toLowerCase()) ||
+                userNome.toLowerCase().includes(cancSearch.toLowerCase());
+
+              const createdDate = c.criado_em ? c.criado_em.split('T')[0] : '';
+              const matchInicio = !cancDataInicio || createdDate >= cancDataInicio;
+              const matchFim = !cancDataFim || createdDate <= cancDataFim;
+
+              return matchSearch && matchInicio && matchFim;
+            });
+
+            if (filteredCancelamentos.length === 0) {
+              return (
+                <div className="text-center py-12 bg-white rounded-xl border border-stone-200 shadow-sm text-stone-400">
+                  <Ban className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm">Nenhum cancelamento definitivo de saldo encontrado</p>
+                </div>
+              );
+            }
+
+            return (
+              <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden animate-in fade-in duration-200">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left">
+                    <thead className="bg-stone-50 border-b border-stone-200 text-stone-500 uppercase text-[10px] font-bold">
+                      <tr>
+                        <th className="px-5 py-3">Pedido</th>
+                        <th className="px-5 py-3">Cliente / Fazenda</th>
+                        <th className="px-5 py-3 text-right">Qtd. Cancelada</th>
+                        <th className="px-5 py-3">Motivo</th>
+                        <th className="px-5 py-3">Data / Hora</th>
+                        <th className="px-5 py-3">Usuário</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-stone-100">
+                      {filteredCancelamentos.map((c) => {
+                        const pOrigem = pedidos.find((x) => x.id === c.pedido_origem_id);
+                        const clientObj = clients.find((x) => x.id === pOrigem?.cliente_id);
+                        const clientName = clientObj?.name || pOrigem?.cliente_nome || '—';
+                        const farmName = clientObj?.fazenda || '—';
+
+                        return (
+                          <tr key={c.id} className="hover:bg-stone-50 transition-colors">
+                            <td className="px-5 py-4 font-mono font-bold text-stone-700">
+                              {pOrigem?.barra_pedido ||
+                                (pOrigem?.numero_pedido
+                                  ? `${pOrigem.numero_pedido}/${pOrigem.emitente ?? 1}`
+                                  : '—')}
+                            </td>
+                            <td className="px-5 py-4">
+                              <span className="text-stone-800 font-medium block">{clientName}</span>
+                              {farmName !== '—' && (
+                                <span className="text-stone-400 text-xs block">{farmName}</span>
+                              )}
+                            </td>
+                            <td className="px-5 py-4 text-right font-mono font-bold text-red-600">
+                              {c.quantidade.toLocaleString('pt-BR', { minimumFractionDigits: 3 })} ton
+                            </td>
+                            <td className="px-5 py-4 text-stone-600 max-w-xs truncate" title={c.motivo}>
+                              {c.motivo || '—'}
+                            </td>
+                            <td className="px-5 py-4 text-stone-500 text-xs">
+                              {c.criado_em
+                                ? new Date(c.criado_em).toLocaleString('pt-BR')
+                                : '—'}
+                            </td>
+                            <td className="px-5 py-4 text-stone-700 font-medium">
+                              {c.usuario_nome || '—'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
       ) : (
         <>
           {/* Filters */}
@@ -302,6 +481,10 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                     (item) => Number(item.saldo_disponivel ?? item.quantidade_ton ?? 0) > 0
                   );
 
+                const clientObj = clients.find((c) => c.id === p.cliente_id);
+                const clientName = clientObj?.name || p.cliente_nome || '—';
+                const farmName = clientObj?.fazenda || '—';
+
                 return (
                   <div
                     key={p.id}
@@ -322,11 +505,9 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                                   ? `${p.numero_pedido}${p.emitente != null ? `/${p.emitente}` : ''}`
                                   : '—')}
                             </span>
-                            {p.cliente_nome && (
-                              <span className="text-stone-500 text-sm truncate">
-                                | {p.cliente_nome}
-                              </span>
-                            )}
+                            <span className="text-stone-500 text-sm truncate">
+                              | {clientName} {farmName !== '—' ? `(${farmName})` : ''}
+                            </span>
                           </div>
                           <div className="flex items-center gap-3 flex-wrap mt-1">
                             <span className="text-xs text-stone-400">{fmtDate(p.data_pedido)}</span>
@@ -458,8 +639,73 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                           </div>
                         )}
 
+                        {/* Dados do Cliente */}
+                        {clientObj && (
+                          <div className="bg-stone-50 border border-stone-100 rounded-xl p-4 space-y-3">
+                            <p className="text-xs font-bold text-emerald-700 uppercase tracking-widest">
+                              Dados do Cliente
+                            </p>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                              <div>
+                                <span className="font-semibold text-stone-500 block mb-0.5">Razão Social / Nome</span>
+                                <span className="text-stone-800 font-medium text-sm">{clientObj.name}</span>
+                              </div>
+                              {clientObj.document && (
+                                <div>
+                                  <span className="font-semibold text-stone-500 block mb-0.5">CNPJ / CPF</span>
+                                  <span className="text-stone-800 font-medium">{clientObj.document}</span>
+                                </div>
+                              )}
+                              {clientObj.stateRegistration && (
+                                <div>
+                                  <span className="font-semibold text-stone-500 block mb-0.5">Inscrição Estadual (IE)</span>
+                                  <span className="text-stone-800 font-medium">{clientObj.stateRegistration}</span>
+                                </div>
+                              )}
+                              {clientObj.phone && (
+                                <div>
+                                  <span className="font-semibold text-stone-500 block mb-0.5">Telefone</span>
+                                  <span className="text-stone-800 font-medium">{clientObj.phone}</span>
+                                </div>
+                              )}
+                              {clientObj.email && (
+                                <div>
+                                  <span className="font-semibold text-stone-500 block mb-0.5">E-mail</span>
+                                  <span className="text-stone-800 font-medium truncate block">{clientObj.email}</span>
+                                </div>
+                              )}
+                              {clientObj.fazenda && (
+                                <div>
+                                  <span className="font-semibold text-stone-500 block mb-0.5">Fazenda</span>
+                                  <span className="text-stone-800 font-medium">{clientObj.fazenda}</span>
+                                </div>
+                              )}
+                              {(clientObj.deliveryAddress || clientObj.address) && (
+                                <div className="md:col-span-3 border-t border-stone-200/60 pt-2">
+                                  <span className="font-semibold text-stone-500 block mb-1">Endereço de Entrega</span>
+                                  <span className="text-stone-700">
+                                    {(() => {
+                                      const addr = clientObj.deliveryAddress || clientObj.address;
+                                      if (!addr) return '—';
+                                      return `${addr.street}${addr.number ? `, ${addr.number}` : ''}${addr.neighborhood ? ` - ${addr.neighborhood}` : ''}${addr.city ? ` - ${addr.city}` : ''}${addr.state ? `/${addr.state}` : ''}${addr.cep ? ` (CEP: ${addr.cep})` : ''}`;
+                                    })()}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
                         {/* Extra info */}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs pt-2 border-t border-stone-100">
+                          {p.precificacao_id && (
+                            <div>
+                              <p className="font-bold text-stone-400 uppercase mb-0.5">Precificação</p>
+                              <p className="text-stone-700 font-mono font-bold">
+                                {pricingRecords.find((x) => x.id === p.precificacao_id)?.code || p.precificacao_id.slice(0, 8)}
+                              </p>
+                            </div>
+                          )}
                           {p.condicao_pagamento && (
                             <div>
                               <p className="font-bold text-stone-400 uppercase mb-0.5">Pagamento</p>
@@ -540,10 +786,11 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                             <button
                               key={s}
                               onClick={() => handleStatusChange(p.id, s)}
+                              disabled={(p.quantidade_carregada || 0) > 0 && s !== p.status}
                               className={`px-3 py-1 rounded-lg text-xs font-bold border transition-colors ${
                                 p.status === s
                                   ? `${STATUS_COLOR[s]} border-current`
-                                  : 'bg-stone-50 text-stone-500 border-stone-200 hover:bg-stone-100'
+                                  : 'bg-stone-50 text-stone-500 border-stone-200 hover:bg-stone-100 disabled:opacity-50 disabled:cursor-not-allowed'
                               }`}
                             >
                               {STATUS_LABEL[s]}

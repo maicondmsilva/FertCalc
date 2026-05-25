@@ -15,6 +15,7 @@ import {
   ShoppingBag,
   ToggleLeft,
   ToggleRight,
+  Star,
 } from 'lucide-react';
 import {
   UnifiedProduct,
@@ -391,7 +392,17 @@ export default function ProductManager() {
                 filtered.map((item) => (
                   <tr key={item.id} className="hover:bg-stone-50 transition-colors">
                     <td className="px-5 py-3 font-mono font-bold text-emerald-600">{item.code}</td>
-                    <td className="px-5 py-3 font-medium text-stone-800">{item.name}</td>
+                    <td className="px-5 py-3 font-medium text-stone-800">
+                      <div className="flex items-center gap-1.5">
+                        <span>{item.name}</span>
+                        {item.isPremiumLine && (
+                          <span className="flex items-center gap-0.5 bg-amber-50 text-amber-700 text-[10px] font-bold px-1.5 py-0.5 rounded border border-amber-200">
+                            <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500 shrink-0" />
+                            Premium
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-5 py-3 text-xs text-stone-500">
                       <div className="flex flex-wrap gap-1">
                         {(item.categories || []).map((cid) => {
@@ -643,6 +654,23 @@ export default function ProductManager() {
                     className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 disabled:bg-stone-50"
                   />
                 </div>
+
+                {(tab === 'macro' || tab === 'micro') && (
+                  <div className="flex items-center pt-6">
+                    <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-stone-700">
+                      <input
+                        type="checkbox"
+                        disabled={viewMode}
+                        checked={!!form.isPremiumLine}
+                        onChange={(e) =>
+                          setForm((p) => ({ ...p, isPremiumLine: e.target.checked }))
+                        }
+                        className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
+                      />
+                      Pertence à Linha Diferenciada (Premium)
+                    </label>
+                  </div>
+                )}
               </div>
 
               {(tab === 'macro' || tab === 'micro') && (

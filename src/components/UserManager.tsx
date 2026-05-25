@@ -10,10 +10,11 @@ import {
   ShieldCheck,
   Search,
   Building2,
+  KeyRound,
 } from 'lucide-react';
 import { User, Branch } from '../types';
 import { getUsers, updateUser, deleteUser, getBranches } from '../services/db';
-import { createAuthUser } from '../services/authService';
+import { createAuthUser, adminUpdateAuthPassword } from '../services/authService';
 import { useToast } from './Toast';
 import { useConfirm } from '../hooks/useConfirm';
 import { ConfirmDialog } from './ui/ConfirmDialog';
@@ -218,6 +219,9 @@ export default function UserManager({ currentUser }: UserManagerProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalTab, setModalTab] = useState<'dados' | 'permissoes' | 'filiais'>('dados');
   const [searchQuery, setSearchQuery] = useState('');
+  const [resettingUser, setResettingUser] = useState<User | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
   const { levels: accessLevels, byCode: accessLevelsByCode } = useAccessLevels();
 
   const getDefaultPermissions = (role: string) => {
@@ -394,6 +398,7 @@ export default function UserManager({ currentUser }: UserManagerProps) {
           nickname: formData.nickname,
           role: formData.role,
           ativo: formData.ativo,
+          requer_alteracao_senha: true,
           managed_user_ids: formData.role === 'manager' ? formData.managedUserIds : [],
           permissions: formData.permissions as Record<string, unknown>,
           filiais_permitidas: formData.filiais_permitidas,
@@ -976,6 +981,93 @@ export default function UserManager({ currentUser }: UserManagerProps) {
     </div>
   );
 
+  const renderResetModal = () => {
+    if (!resettingUser) return null;
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200">
+            <h3 className="text-lg font-bold text-stone-800 flex items-center gap-2">
+              <KeyRound className="w-5 h-5 text-amber-500" />
+              Resetar Senha de Usuário
+            </h3>
+            <button
+              type="button"
+              onClick={() => {
+                setResettingUser(null);
+                setNewPassword('');
+              }}
+              className="text-stone-400 hover:text-stone-600 p-1"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (newPassword.length < 6) {
+                showError('A senha deve ter no mínimo 6 caracteres.');
+                return;
+              }
+              setResetLoading(true);
+              try {
+                const res = await adminUpdateAuthPassword(resettingUser.id, newPassword);
+                if (res.success) {
+                  showSuccess(`Senha de ${resettingUser.name} redefinida com sucesso!`);
+                  setResettingUser(null);
+                  setNewPassword('');
+                } else {
+                  showError(res.error || 'Erro ao redefinir senha.');
+                }
+              } catch (err: unknown) {
+                showError(err instanceof Error ? err.message : 'Erro ao redefinir senha.');
+              } finally {
+                setResetLoading(false);
+              }
+            }}
+            className="p-6 space-y-4"
+          >
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-700">
+              Você está alterando a senha do usuário <strong>{resettingUser.name}</strong> ({resettingUser.email}).
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-stone-600 mb-1">
+                Nova Senha <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
+                required
+                placeholder="Mínimo 6 caracteres"
+              />
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setResettingUser(null);
+                  setNewPassword('');
+                }}
+                className="px-4 py-2 border border-stone-300 rounded-lg text-sm font-bold text-stone-600 hover:bg-stone-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={resetLoading}
+                className="px-6 py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white rounded-lg text-sm font-bold transition-all shadow-md flex items-center gap-2 justify-center"
+              >
+                {resetLoading ? 'Salvando...' : 'Redefinir Senha'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  };
+
   // ---------------------------------------------------------------------------
   // Main render
   // ---------------------------------------------------------------------------
@@ -991,6 +1083,7 @@ export default function UserManager({ currentUser }: UserManagerProps) {
       />
 
       {modalOpen && renderModal()}
+      {resettingUser && renderResetModal()}
 
       {/* Header */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
@@ -1107,6 +1200,17 @@ export default function UserManager({ currentUser }: UserManagerProps) {
                   <span className="text-xs text-stone-400 mr-auto self-center font-mono">
                     #{user.idNumeric}
                   </span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setResettingUser(user);
+                    }}
+                    disabled={!canEditUser(user)}
+                    className={`p-1.5 rounded transition-colors ${canEditUser(user) ? 'text-stone-400 hover:text-amber-600 hover:bg-amber-50' : 'text-stone-200 cursor-not-allowed'}`}
+                    title={canEditUser(user) ? 'Resetar Senha' : 'Sem permissão para resetar senha'}
+                  >
+                    <KeyRound className="w-4 h-4" />
+                  </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();

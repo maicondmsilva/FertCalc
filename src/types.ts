@@ -88,6 +88,7 @@ export interface User {
   role: string;
   managedUserIds?: string[];
   filiais_permitidas?: string[]; // array de UUIDs de branches permitidas
+  requer_alteracao_senha?: boolean;
   permissions?: {
     // Módulos (acesso à página)
     dashboard: boolean;
@@ -332,6 +333,7 @@ export interface MicroMaterial {
   categories?: string[];
   formulaSuffix?: string;
   minQuantity?: number;
+  isPremiumLine?: boolean;
 }
 
 export interface ProfitabilityAnalysis {
@@ -355,6 +357,8 @@ export interface ProfitabilityAnalysis {
   dueDate?: string;
   exemptCurrentMonth?: boolean;
   daysOfInterest?: number;
+  packagingValue?: number;
+  packagingDeduction?: number;
   analyzedByUserId: string;
   analyzedByName: string;
   analyzedAt: string;
@@ -409,6 +413,9 @@ export interface PricingFactors {
   monthlyInterestRate: number;
   dueDate: string;
   exemptCurrentMonth: boolean;
+  paymentCondition?: 'vencimento' | 'ddf';
+  dataCarregamento?: string;
+  ddfDias?: number;
   client: Client;
   agent: Agent;
   branchId: string;

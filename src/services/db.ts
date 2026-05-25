@@ -107,6 +107,7 @@ export async function createUser(user: Omit<User, 'id'> & { id?: string }): Prom
       managed_user_ids: user.managedUserIds || [],
       permissions: user.permissions || {},
       filiais_permitidas: user.filiais_permitidas || [],
+      requer_alteracao_senha: user.requer_alteracao_senha ?? false,
     })
     .select()
     .single();
@@ -124,6 +125,7 @@ export async function updateUser(id: string, user: Partial<User>): Promise<void>
   if (user.managedUserIds !== undefined) payload.managed_user_ids = user.managedUserIds;
   if (user.permissions !== undefined) payload.permissions = user.permissions;
   if (user.filiais_permitidas !== undefined) payload.filiais_permitidas = user.filiais_permitidas;
+  if (user.requer_alteracao_senha !== undefined) payload.requer_alteracao_senha = user.requer_alteracao_senha;
   const { error } = await supabase.from('app_users').update(payload).eq('id', id);
   if (error) throw error;
 }
@@ -146,6 +148,7 @@ function mapUser(data: Record<string, unknown>): User {
     managedUserIds: data.managed_user_ids || [],
     filiais_permitidas: (data.filiais_permitidas as string[]) || [],
     permissions: data.permissions || {},
+    requer_alteracao_senha: !!data.requer_alteracao_senha,
   } as User;
 }
 
@@ -533,6 +536,7 @@ function microToDb(m: Partial<MicroMaterial>) {
   if (m.categories !== undefined) d.categories = m.categories;
   if (m.formulaSuffix !== undefined) d.formula_suffix = m.formulaSuffix;
   if (m.minQuantity !== undefined) d.min_quantity = m.minQuantity;
+  if (m.isPremiumLine !== undefined) d.is_premium_line = m.isPremiumLine;
   return d;
 }
 
@@ -545,6 +549,7 @@ function mapMicro(data: Record<string, unknown>): MicroMaterial {
     categories: data.categories || [],
     formulaSuffix: data.formula_suffix,
     minQuantity: data.min_quantity ? Number(data.min_quantity) : 0,
+    isPremiumLine: data.is_premium_line || false,
   } as MicroMaterial;
 }
 
@@ -649,6 +654,7 @@ export async function getUnifiedProducts(): Promise<UnifiedProduct[]> {
       categories: m.categories || [],
       microGuarantees: m.microGuarantees,
       formulaSuffix: m.formulaSuffix,
+      isPremiumLine: m.isPremiumLine,
     })),
     ...finished.map((f) => ({
       id: f.id,
@@ -691,6 +697,7 @@ export async function saveUnifiedProduct(p: Partial<UnifiedProduct>, id?: string
       categories: p.categories || [],
       microGuarantees: p.microGuarantees || [],
       formulaSuffix: p.formulaSuffix,
+      isPremiumLine: p.isPremiumLine,
     };
     if (id) await updateMicroMaterial(id, microData);
     else await createMicroMaterial(microData as any);

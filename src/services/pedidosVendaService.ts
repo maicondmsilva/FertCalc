@@ -269,6 +269,7 @@ export async function createPedidoVendaItens(
     produto_nome: item.produto_nome,
     formulacao: item.formulacao ?? null,
     quantidade_ton: item.quantidade_ton,
+    saldo_disponivel: item.saldo_disponivel ?? item.quantidade_ton,
     preco_unitario: item.preco_unitario ?? null,
     embalagem: item.embalagem ?? null,
     precificacao_id: item.precificacao_id ?? null,
@@ -459,6 +460,10 @@ export async function executarCancSubstitui(payload: CancSubstituiPayload): Prom
     usuario_nome: usuarioNome,
   });
 
+  // Sync statuses of both parent and child
+  await syncPedidoVendaStatus(pedidoPai.id);
+  await syncPedidoVendaStatus(pedidoFilho.id);
+
   return pedidoFilho;
 }
 
@@ -499,10 +504,15 @@ export async function executarCancelamentoDefinitivo(
     quantidade_cancelada_definitiva: novaCancelada,
   };
 
-  // If total cancellation (or all remaining saldo), mark as cancelled
+  // If total cancellation (or all remaining saldo), mark as cancelled or concluido (if already loaded)
   if (isTotal || qtdCancelar >= saldo) {
-    updates.status = 'cancelado';
-    updates.status_pedido = 'cancelado';
+    if ((pedido.quantidade_carregada || 0) > 0) {
+      updates.status = 'concluido';
+      updates.status_pedido = 'concluido';
+    } else {
+      updates.status = 'cancelado';
+      updates.status_pedido = 'cancelado';
+    }
   }
 
   await updatePedidoVenda(pedido.id, updates);
@@ -515,4 +525,74 @@ export async function executarCancelamentoDefinitivo(
     usuario_id: usuarioId,
     usuario_nome: usuarioNome,
   });
+
+  // Sync status after cancellation
+  await syncPedidoVendaStatus(pedido.id);
+}
+
+/**
+ * Sincroniza síncronamente o status e quantidade carregada do pedido com base nos carregamentos associados.
+ */
+export async function syncPedidoVendaStatus(pedidoVendaId: string): Promise<void> {
+  // 1. Buscar detalhes do pedido
+  const { data: pedido, error: errPed } = await supabase
+    .from('pedidos_venda')
+    .select('*')
+    .eq('id', pedidoVendaId)
+    .maybeSingle();
+
+  if (errPed || !pedido) return;
+
+  // 2. Buscar todos os carregamentos atrelados a este pedido
+  const { data: carregamentos, error: errCarr } = await supabase
+    .from('carregamentos')
+    .select('*')
+    .eq('pedido_venda_id', pedidoVendaId);
+
+  if (errCarr || !carregamentos) return;
+
+  // 3. Somar quantidade concluída/carregada
+  const totalCarregado = carregamentos
+    .filter((c) => c.status === 'carregado')
+    .reduce((sum, c) => sum + Number(c.quantidade_carregada || 0), 0);
+
+  // 4. Determinar novo status do pedido
+  let newStatus: PedidoVenda['status'] = 'pendente';
+
+  if (pedido.status === 'cancelado') {
+    newStatus = 'cancelado';
+  } else {
+    if (totalCarregado > 0) {
+      const originalQty = Number(pedido.quantidade_original || pedido.quantidade_real || 0);
+      const canceladaDef = Number(pedido.quantidade_cancelada_definitiva || 0);
+      const desmembrada = Number(pedido.quantidade_desmembrada || 0);
+      const saldo = originalQty - desmembrada - canceladaDef - totalCarregado;
+
+      if (saldo <= 0) {
+        newStatus = 'concluido';
+      } else {
+        newStatus = 'carregando';
+      }
+    } else {
+      // Verificar se há carregamentos agendados, liberados ou em andamento
+      const hasActive = carregamentos.some(
+        (c) => c.status === 'agendado' || c.status === 'em_carregamento' || c.status === 'liberado'
+      );
+      if (hasActive) {
+        newStatus = 'carregando';
+      } else {
+        newStatus = 'pendente';
+      }
+    }
+  }
+
+  // 5. Gravar no banco
+  await supabase
+    .from('pedidos_venda')
+    .update({
+      status: newStatus,
+      quantidade_carregada: totalCarregado,
+      atualizado_em: new Date().toISOString(),
+    })
+    .eq('id', pedidoVendaId);
 }

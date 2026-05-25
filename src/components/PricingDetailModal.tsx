@@ -819,17 +819,18 @@ export default function PricingDetailModal({
             {pedidoVenda && (
               <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 border border-emerald-300 rounded-lg text-emerald-800 text-xs font-bold">
                 <CheckCircleIcon className="w-3.5 h-3.5" />
-                Pedido: {pedidoVenda.numero_pedido || '—'}
-                {pedidoVenda.barra_pedido && ` / ${pedidoVenda.barra_pedido}`}
+                Pedido: {pedidoVenda.barra_pedido || pedidoVenda.numero_pedido || '—'}
               </div>
             )}
-            <button
-              onClick={() => setShowNovoPedidoModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition-all active:scale-95 text-sm"
-              title="Novo Pedido de Venda"
-            >
-              <ClipboardList className="w-4 h-4" /> Novo Pedido de Venda
-            </button>
+            {!pedidoVenda && (
+              <button
+                onClick={() => setShowNovoPedidoModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition-all active:scale-95 text-sm"
+                title="Novo Pedido de Venda"
+              >
+                <ClipboardList className="w-4 h-4" /> Novo Pedido de Venda
+              </button>
+            )}
             {selectedPricing.status === 'Em Andamento' && onEdit && (
               <button
                 onClick={() => {

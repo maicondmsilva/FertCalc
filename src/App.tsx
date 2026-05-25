@@ -316,6 +316,16 @@ export default function App() {
     return <Login onLogin={handleLogin} />;
   }
 
+  if (currentUser.requer_alteracao_senha) {
+    return (
+      <Login
+        onLogin={handleLogin}
+        forceChangePasswordUserId={currentUser.id}
+        onPasswordChanged={(updatedUser) => setCurrentUser(updatedUser)}
+      />
+    );
+  }
+
   /**
    * Verifica se o usuário logado tem permissão para acessar um recurso.
    * master/admin sempre têm acesso; para outros roles, consulta permissions.

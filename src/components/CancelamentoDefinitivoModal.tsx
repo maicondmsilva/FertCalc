@@ -24,7 +24,10 @@ export default function CancelamentoDefinitivoModal({
 }: CancelamentoDefinitivoModalProps) {
   const { showSuccess, showError } = useToast();
   const [saving, setSaving] = useState(false);
-  const [tipoCancelamento, setTipoCancelamento] = useState<'total' | 'parcial'>('total');
+  const hasCarregado = (pedido.quantidade_carregada || 0) > 0;
+  const [tipoCancelamento, setTipoCancelamento] = useState<'total' | 'parcial'>(
+    hasCarregado ? 'parcial' : 'total'
+  );
   const [quantidade, setQuantidade] = useState<string>('');
   const [motivo, setMotivo] = useState('');
 
@@ -147,12 +150,13 @@ export default function CancelamentoDefinitivoModal({
               Tipo de Cancelamento
             </label>
             <div className="flex gap-3">
-              <label className="flex items-center gap-2 cursor-pointer">
+              <label className={`flex items-center gap-2 ${hasCarregado ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
                 <input
                   type="radio"
                   name="tipo_cancelamento"
                   value="total"
                   checked={tipoCancelamento === 'total'}
+                  disabled={hasCarregado}
                   onChange={() => setTipoCancelamento('total')}
                   className="accent-red-600"
                 />
@@ -171,6 +175,12 @@ export default function CancelamentoDefinitivoModal({
               </label>
             </div>
           </div>
+
+          {hasCarregado && tipoCancelamento === 'parcial' && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
+              ⚠️ Este pedido possui quantidade carregada ({fmtQtd(pedido.quantidade_carregada)}). Apenas o cancelamento parcial do saldo restante está permitido.
+            </div>
+          )}
 
           {tipoCancelamento === 'total' && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">

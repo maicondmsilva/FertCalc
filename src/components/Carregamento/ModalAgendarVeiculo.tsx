@@ -23,6 +23,7 @@ export default function ModalAgendarVeiculo({
   const [placaVeiculo, setPlacaVeiculo] = useState('');
   const [placaCarreta, setPlacaCarreta] = useState('');
   const [quantidade, setQuantidade] = useState('');
+  const [dataAgendamento, setDataAgendamento] = useState('');
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -39,6 +40,7 @@ export default function ModalAgendarVeiculo({
         placa_veiculo: placaVeiculo,
         placa_carreta: placaCarreta || undefined,
         quantidade_agendada: quantidadeNum,
+        data_agendamento: dataAgendamento || undefined,
         criado_por: currentUserId,
       });
       onCreated(created);
@@ -98,6 +100,18 @@ export default function ModalAgendarVeiculo({
             className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm"
             required
           />
+          <div className="space-y-1">
+            <label className="block text-[11px] font-bold text-stone-500 uppercase tracking-wider pl-1">
+              Data do Carregamento <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="date"
+              value={dataAgendamento}
+              onChange={(e) => setDataAgendamento(e.target.value)}
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm text-stone-700"
+              required
+            />
+          </div>
         </div>
         <div className="p-4 border-t border-stone-200 flex justify-end gap-2">
           <button

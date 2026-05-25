@@ -636,6 +636,23 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                 </div>
                 <div className="space-y-2 text-sm text-stone-600 mt-4">
                   <div className="flex items-center">
+                    <User className="w-4 h-4 mr-2 text-stone-400" />
+                    Vendedor: <span className="ml-1 font-medium">{p.userName || '—'}</span>
+                  </div>
+                  {(() => {
+                    const cCity = p.factors?.client?.deliveryAddress?.city || p.factors?.client?.address?.city;
+                    const cState = p.factors?.client?.deliveryAddress?.state || p.factors?.client?.address?.state;
+                    if (cCity && cState) {
+                      return (
+                        <div className="flex items-center">
+                          <MapPin className="w-4 h-4 mr-2 text-emerald-500" />
+                          Entrega: <span className="ml-1 font-medium">{cCity}/{cState}</span>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+                  <div className="flex items-center">
                     <Calendar className="w-4 h-4 mr-2 text-stone-400" />
                     Emissão: {formatDatePtBr(p.date)}
                   </div>

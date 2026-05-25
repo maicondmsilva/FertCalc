@@ -24,6 +24,7 @@ export interface CreateAuthUserPayload {
   managed_user_ids?: string[];
   permissions?: Record<string, unknown>;
   filiais_permitidas?: string[];
+  requer_alteracao_senha?: boolean;
 }
 
 /**

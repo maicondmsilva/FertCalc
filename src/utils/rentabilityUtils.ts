@@ -8,6 +8,7 @@ interface RentabilityInput {
   taxRate: number;
   dueDate?: string;          // data de vencimento (ISO date string)
   exemptCurrentMonth?: boolean; // isentar juros no mês atual
+  packagingValue?: number;     // valor da embalagem (positivo = custo/cobrança, negativo = desconto)
 }
 
 export function calcRentability(input: RentabilityInput): {
@@ -19,8 +20,9 @@ export function calcRentability(input: RentabilityInput): {
   profitability: number;
   profitabilityPercent: number;
   daysOfInterest: number;
+  packagingDeduction: number;
 } {
-  const { unitaryPrice, factor, baseCost, freightDeduction, commissionRate, interestRate, taxRate, dueDate, exemptCurrentMonth } = input;
+  const { unitaryPrice, factor, baseCost, freightDeduction, commissionRate, interestRate, taxRate, dueDate, exemptCurrentMonth, packagingValue } = input;
 
   const baseCostAfterFactor = baseCost * factor;
 
@@ -54,8 +56,9 @@ export function calcRentability(input: RentabilityInput): {
 
   const taxDeduction = unitaryPrice * (taxRate / 100);
   const commissionDeduction = unitaryPrice * (commissionRate / 100);
+  const pkgVal = packagingValue || 0;
 
-  const netRevenue = unitaryPrice - taxDeduction - freightDeduction - commissionDeduction - interestDeduction;
+  const netRevenue = unitaryPrice - taxDeduction - freightDeduction - commissionDeduction - interestDeduction - pkgVal;
 
   const profitability = netRevenue - baseCostAfterFactor;
 
@@ -70,5 +73,6 @@ export function calcRentability(input: RentabilityInput): {
     profitability,
     profitabilityPercent,
     daysOfInterest: days,
+    packagingDeduction: pkgVal,
   };
 }

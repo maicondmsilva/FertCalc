@@ -33,6 +33,7 @@ export default function ProfitabilityModal({
   const [interestRate, setInterestRate] = useState(calc.factors.monthlyInterestRate);
   const [dueDate, setDueDate] = useState<string>(calc.factors?.dueDate || '');
   const [exemptCurrentMonth, setExemptCurrentMonth] = useState<boolean>(calc.factors?.exemptCurrentMonth || false);
+  const [packagingValue, setPackagingValue] = useState<number>(calc.factors?.embalagem_valor || 0);
   const [unitaryPrice, setUnitaryPrice] = useState<number | ''>('');
 
   const [pricingSearch, setPricingSearch] = useState('');
@@ -55,6 +56,7 @@ export default function ProfitabilityModal({
       setInterestRate(calc.factors.monthlyInterestRate);
       setDueDate(calc.factors?.dueDate || '');
       setExemptCurrentMonth(calc.factors?.exemptCurrentMonth || false);
+      setPackagingValue(calc.factors?.embalagem_valor || 0);
       setUnitaryPrice('');
       setResult(null);
       setPricingSearch('');
@@ -117,6 +119,7 @@ export default function ProfitabilityModal({
       setTaxRate(f.taxRate ?? taxRate);
       setDueDate(f.dueDate || '');
       setExemptCurrentMonth(f.exemptCurrentMonth || false);
+      setPackagingValue(f.embalagem_valor ?? 0);
     }
 
     if (prod.summary?.finalPrice) {
@@ -137,6 +140,7 @@ export default function ProfitabilityModal({
       taxRate,
       dueDate,
       exemptCurrentMonth,
+      packagingValue,
     });
     setResult(res);
   };
@@ -172,6 +176,8 @@ export default function ProfitabilityModal({
       dueDate,
       exemptCurrentMonth,
       daysOfInterest: result.daysOfInterest,
+      packagingValue: packagingValue,
+      packagingDeduction: result.packagingDeduction,
       analyzedByUserId: currentUser.id,
       analyzedByName: currentUser.name,
       analyzedAt: new Date().toISOString(),
@@ -281,6 +287,16 @@ export default function ProfitabilityModal({
                   type="date"
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
+                  className="w-full px-2 py-1.5 text-sm border border-stone-300 rounded-lg focus:ring-1 focus:ring-orange-500 focus:border-orange-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">Embalagem (R$/ton)</label>
+                <input
+                  type="number" step="0.01"
+                  value={packagingValue}
+                  onChange={(e) => setPackagingValue(Number(e.target.value))}
+                  onFocus={handleNumericFocus}
                   className="w-full px-2 py-1.5 text-sm border border-stone-300 rounded-lg focus:ring-1 focus:ring-orange-500 focus:border-orange-500 outline-none"
                 />
               </div>
@@ -417,6 +433,16 @@ export default function ProfitabilityModal({
                   <span>(-) Juros ({interestRate}% a.m. × {result.daysOfInterest} dias):</span>
                   <span className="font-mono">- R$ {result.interestDeduction.toFixed(2)}</span>
                 </div>
+                {result.packagingDeduction !== 0 && (
+                  <div className={`flex justify-between ${result.packagingDeduction > 0 ? 'text-red-600' : 'text-emerald-600 font-medium'}`}>
+                    <span>
+                      {result.packagingDeduction > 0 ? '(-) Embalagem (Cobrança):' : '(+) Embalagem (Desconto):'}
+                    </span>
+                    <span className="font-mono">
+                      {result.packagingDeduction > 0 ? '-' : '+'} R$ {Math.abs(result.packagingDeduction).toFixed(2)}
+                    </span>
+                  </div>
+                )}
                 <div className="flex justify-between font-bold border-t border-stone-200 pt-2">
                   <span>= Receita Líquida:</span>
                   <span className="font-mono">R$ {result.netRevenue.toFixed(2)}</span>

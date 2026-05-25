@@ -50,6 +50,7 @@ export const generatePricingPDF = (record: PricingRecord, settings: AppSettings,
       
       const rowFreightPerTon = fCr?.freight ?? fGl?.freight ?? 0;
       const rowFreightType = fCr?.tipoFrete ?? fGl?.tipoFrete ?? (rowFreightPerTon > 0 ? 'CIF' : 'FOB');
+      const rowFreightText = rowFreightType === 'CIF' ? `CIF (R$ ${rowFreightPerTon.toFixed(2)}/t)` : 'FOB';
       
       const qty = fCr?.totalTons || fGl?.totalTons || 0;
       const finalPrice = calc.summary?.finalPrice || 0;
@@ -64,7 +65,7 @@ export const generatePricingPDF = (record: PricingRecord, settings: AppSettings,
             <tr style="background:${bg};border-bottom:1px solid #1a1a2e20;">
               <td style="padding:8px 6px;font-weight:700;font-size:11px;color:#1a1a2e;">${calc.formula}</td>
               <td style="padding:8px 6px;text-align:center;font-size:10px;color:#1a1a2e;">${rowDueDate}</td>
-              <td style="padding:8px 6px;text-align:center;font-size:10px;font-weight:700;color:#1a1a2e;">${rowFreightType}</td>
+              <td style="padding:8px 6px;text-align:center;font-size:10px;font-weight:700;color:#1a1a2e;">${rowFreightText}</td>
               <td style="padding:8px 6px;text-align:center;font-size:11px;font-weight:700;">${fmtN(qty)}</td>
               <td style="padding:8px 6px;text-align:right;font-size:10px;">${fmt(finalPrice)}</td>
               <td style="padding:8px 6px;text-align:right;font-weight:800;font-size:11px;color:#1a1a2e;background:#f0f4f8;">${fmt(totalRow)}</td>
@@ -75,6 +76,10 @@ export const generatePricingPDF = (record: PricingRecord, settings: AppSettings,
   if (productRows === '') {
     productRows = `<tr><td colspan="8" style="padding:24px;text-align:center;color:#aaa;font-style:italic;">Nenhum produto calculado</td></tr>`;
   }
+
+  const clientDeliveryCity = record.factors?.client?.deliveryAddress?.city || record.factors?.client?.address?.city || '';
+  const clientDeliveryState = record.factors?.client?.deliveryAddress?.state || record.factors?.client?.address?.state || '';
+  const clientDeliveryText = clientDeliveryCity && clientDeliveryState ? `${clientDeliveryCity}/${clientDeliveryState}` : '';
 
   el.innerHTML = `
     <!-- HEADER -->
@@ -108,9 +113,10 @@ export const generatePricingPDF = (record: PricingRecord, settings: AppSettings,
       <div style="background:#f9fafb;border-radius:10px;padding:12px 15px;border:1px solid #e5e7eb;border-left:6px solid #1a1a2e;">
         <div style="font-size:9px;font-weight:800;text-transform:uppercase;color:#666;margin-bottom:3px;letter-spacing:0.5px;">Informações do Cliente</div>
         <div style="font-size:16px;font-weight:950;color:#1a1a2e;">${clientName}</div>
-        <div style="display:flex;gap:20px;margin-top:6px;">
+        <div style="display:flex;gap:20px;margin-top:6px;flex-wrap:wrap;">
           ${clientFazenda ? `<div style="font-size:11px;color:#444;"><span style="color:#888;font-weight:600;">Fazenda:</span> ${clientFazenda}</div>` : ''}
           <div style="font-size:11px;color:#444;"><span style="color:#888;font-weight:600;">IE:</span> ${clientIE}</div>
+          ${clientDeliveryText ? `<div style="font-size:11px;color:#444;"><span style="color:#888;font-weight:600;">Entrega:</span> ${clientDeliveryText}</div>` : ''}
         </div>
       </div>
       ${showAgent ? `

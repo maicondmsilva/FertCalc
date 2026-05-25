@@ -28,6 +28,15 @@ import { getCalculationMode } from '../utils/calculationMode';
 import { getCotacoesAprovadasByCliente } from '../services/cotacaoSolicitadaService';
 import { CotacaoSolicitada } from '../types/carregamento';
 import { getEmbalagens } from '../services/embalagensService';
+import { getSavedFormulas } from '../services/db';
+import { getProdutosFormulados, ProdutoFormulado } from '../services/produtosFormuladosService';
+
+const addDaysToDate = (dateStr: string, days: number): string => {
+  if (!dateStr || !days) return '';
+  const date = new Date(dateStr + 'T12:00:00');
+  date.setDate(date.getDate() + days);
+  return date.toISOString().split('T')[0];
+};
 
 interface CalculatorProps {
   initialData?: PricingRecord | null;
@@ -140,10 +149,21 @@ export default function Calculator({
   const [formulaProductSearch, setFormulaProductSearch] = useState<Record<string, string>>({});
   const [activeProductSearchCalcId, setActiveProductSearchCalcId] = useState<string | null>(null);
 
+  // ─── Produtos Formulados e Batidas Salvas Autocomplete state ───
+  const [produtosFormulados, setProdutosFormulados] = useState<ProdutoFormulado[]>([]);
+  const [savedFormulas, setSavedFormulas] = useState<SavedFormula[]>([]);
+  const [activeSearchCalcId, setActiveSearchCalcId] = useState<string | null>(null);
+  const [formulaSearchTerm, setFormulaSearchTerm] = useState<Record<string, string>>({});
+
   useEffect(() => {
     getEmbalagens(true)
       .then(setEmbalagens)
       .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    getProdutosFormulados().then(setProdutosFormulados).catch(() => {});
+    getSavedFormulas().then(setSavedFormulas).catch(() => {});
   }, []);
 
   const openCotacaoModal = async (calcId: string) => {
@@ -549,21 +569,101 @@ export default function Calculator({
                               }
                               className="w-4 h-4 text-emerald-600 rounded border-stone-300 focus:ring-emerald-500"
                             />
-                            {/* Formula input */}
-                            <input
-                              type="text"
-                              value={calc.formula}
-                              onChange={(e) =>
-                                updateCalculation(calc.id, 'formula', e.target.value)
-                              }
-                              placeholder="Ex: 04-14-08 (opcional)"
-                              disabled={isProdutosLivresMode}
-                              className={`flex-1 min-w-[90px] px-2 py-1 text-sm border rounded focus:ring-2 focus:ring-emerald-500 ${
-                                isProdutosLivresMode
-                                  ? 'border-stone-200 bg-stone-100 text-stone-400 cursor-not-allowed'
-                                  : 'border-stone-300'
-                              }`}
-                            />
+                            {/* Formula input with autocomplete */}
+                            <div className="relative flex-1 min-w-[150px]">
+                              <input
+                                type="text"
+                                value={calc.formula}
+                                onChange={(e) => {
+                                  updateCalculation(calc.id, 'formula', e.target.value);
+                                  setFormulaSearchTerm((prev) => ({ ...prev, [calc.id]: e.target.value }));
+                                  setActiveSearchCalcId(calc.id);
+                                }}
+                                onFocus={() => {
+                                  setActiveSearchCalcId(calc.id);
+                                  setFormulaSearchTerm((prev) => ({ ...prev, [calc.id]: calc.formula }));
+                                }}
+                                onBlur={() => {
+                                  // small timeout to allow clicking options before closing
+                                  setTimeout(() => {
+                                    setActiveSearchCalcId((prev) => prev === calc.id ? null : prev);
+                                  }, 250);
+                                }}
+                                placeholder="Ex: 04-14-08 (opcional)"
+                                disabled={isProdutosLivresMode}
+                                className={`w-full px-2 py-1 text-sm border rounded focus:ring-2 focus:ring-emerald-500 ${
+                                  isProdutosLivresMode
+                                    ? 'border-stone-200 bg-stone-100 text-stone-400 cursor-not-allowed'
+                                    : 'border-stone-300'
+                                }`}
+                              />
+                              {!isProdutosLivresMode && activeSearchCalcId === calc.id && (formulaSearchTerm[calc.id] || '').trim() && (
+                                <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-stone-200 rounded-lg shadow-xl max-h-48 overflow-y-auto min-w-[220px]">
+                                  {(() => {
+                                    const term = (formulaSearchTerm[calc.id] || '').toLowerCase().trim();
+                                    const filteredProds = produtosFormulados.filter(
+                                      (p) => p.ativo && (p.nome.toLowerCase().includes(term) || (p.formula_npk || '').toLowerCase().includes(term))
+                                    );
+                                    if (filteredProds.length === 0) {
+                                      return <p className="p-2 text-xs text-stone-400">Nenhum produto/batida encontrado</p>;
+                                    }
+                                    return filteredProds.map((prod) => (
+                                      <button
+                                        key={prod.id}
+                                        type="button"
+                                        onClick={() => {
+                                          const formulaName = prod.formula_npk || prod.nome;
+                                          updateCalculation(calc.id, 'formula', formulaName);
+                                          
+                                          if (prod.saved_formula_id) {
+                                            const savedF = savedFormulas.find((sf) => sf.id === prod.saved_formula_id);
+                                            if (savedF) {
+                                              // Map macros
+                                              const updatedMacros = calc.macros.map((m) => {
+                                                const savedM = savedF.macros.find((sm) => sm.id === m.id || sm.name === m.name);
+                                                return {
+                                                  ...m,
+                                                  selected: savedM ? !!savedM.selected : false,
+                                                  minQty: savedM ? Number(savedM.minQty || 0) : 0,
+                                                  quantity: 0,
+                                                };
+                                              });
+                                              // Map micros
+                                              const updatedMicros = calc.micros.map((m) => {
+                                                const savedM = savedF.micros.find((sm) => sm.id === m.id || sm.name === m.name);
+                                                return {
+                                                  ...m,
+                                                  selected: savedM ? !!savedM.selected : false,
+                                                  minQty: savedM ? Number(savedM.minQty || 0) : 0,
+                                                  quantity: 0,
+                                                };
+                                              });
+                                              setCalculations((prev) =>
+                                                prev.map((c) =>
+                                                  c.id === calc.id
+                                                    ? {
+                                                        ...c,
+                                                        formula: formulaName,
+                                                        macros: updatedMacros,
+                                                        micros: updatedMicros,
+                                                      }
+                                                    : c
+                                                )
+                                              );
+                                            }
+                                          }
+                                          setActiveSearchCalcId(null);
+                                        }}
+                                        className="w-full text-left px-3 py-2 hover:bg-stone-50 border-b border-stone-100 last:border-0 text-xs flex flex-col"
+                                      >
+                                        <span className="font-bold text-stone-800">{prod.nome}</span>
+                                        <span className="text-[10px] text-emerald-600">Fórmula: {prod.formula_npk || 'Não especificada'}</span>
+                                      </button>
+                                    ));
+                                  })()}
+                                </div>
+                              )}
+                            </div>
                             {/* CA% input */}
                             <div className="flex items-center gap-0.5">
                               <span className="text-[10px] font-bold text-amber-600">CA%</span>
@@ -1246,18 +1346,103 @@ export default function Calculator({
                                 className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500"
                               />
                             </div>
-                            <div>
+                            {/* Payment Condition & Due Date */}
+                            <div className="col-span-2 lg:col-span-3">
                               <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">
-                                Vencimento
+                                Condição de Pagamento
                               </label>
-                              <input
-                                type="date"
-                                value={calc.factors.dueDate || ''}
-                                onChange={(e) =>
-                                  updateCalculationFactors(calc.id, 'dueDate', e.target.value)
-                                }
-                                className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500"
-                              />
+                              <div className="flex gap-4 mb-2">
+                                <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-stone-700">
+                                  <input
+                                    type="radio"
+                                    name={`pay-cond-${calc.id}`}
+                                    value="vencimento"
+                                    checked={(calc.factors.paymentCondition || 'vencimento') === 'vencimento'}
+                                    onChange={() => {
+                                      updateCalculationFactors(calc.id, 'paymentCondition', 'vencimento');
+                                    }}
+                                    className="accent-emerald-600"
+                                  />
+                                  Vencimento Direto
+                                </label>
+                                <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-stone-700">
+                                  <input
+                                    type="radio"
+                                    name={`pay-cond-${calc.id}`}
+                                    value="ddf"
+                                    checked={calc.factors.paymentCondition === 'ddf'}
+                                    onChange={() => {
+                                      updateCalculationFactors(calc.id, 'paymentCondition', 'ddf');
+                                      const defaultCarregamento = calc.factors.dataCarregamento || new Date().toISOString().split('T')[0];
+                                      const defaultDias = calc.factors.ddfDias || 30;
+                                      const calculated = addDaysToDate(defaultCarregamento, defaultDias);
+                                      updateCalculationFactors(calc.id, 'dataCarregamento', defaultCarregamento);
+                                      updateCalculationFactors(calc.id, 'ddfDias', defaultDias);
+                                      updateCalculationFactors(calc.id, 'dueDate', calculated);
+                                    }}
+                                    className="accent-emerald-600"
+                                  />
+                                  DDF (Dias Pós Carregamento)
+                                </label>
+                              </div>
+
+                              {(calc.factors.paymentCondition || 'vencimento') === 'vencimento' ? (
+                                <div>
+                                  <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">
+                                    Vencimento
+                                  </label>
+                                  <input
+                                    type="date"
+                                    value={calc.factors.dueDate || ''}
+                                    onChange={(e) =>
+                                      updateCalculationFactors(calc.id, 'dueDate', e.target.value)
+                                    }
+                                    className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500 outline-none"
+                                  />
+                                </div>
+                              ) : (
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">
+                                      Data Carregamento
+                                    </label>
+                                    <input
+                                      type="date"
+                                      value={calc.factors.dataCarregamento || ''}
+                                      onChange={(e) => {
+                                        const dateVal = e.target.value;
+                                        const days = calc.factors.ddfDias || 0;
+                                        updateCalculationFactors(calc.id, 'dataCarregamento', dateVal);
+                                        updateCalculationFactors(calc.id, 'dueDate', addDaysToDate(dateVal, days));
+                                      }}
+                                      className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500 outline-none"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">
+                                      Nro. Dias (DDF)
+                                    </label>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      value={calc.factors.ddfDias === 0 ? '' : (calc.factors.ddfDias || '')}
+                                      onChange={(e) => {
+                                        const daysVal = e.target.value === '' ? 0 : Number(e.target.value);
+                                        const date = calc.factors.dataCarregamento || '';
+                                        updateCalculationFactors(calc.id, 'ddfDias', daysVal);
+                                        updateCalculationFactors(calc.id, 'dueDate', addDaysToDate(date, daysVal));
+                                      }}
+                                      placeholder="Ex: 30"
+                                      className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500 outline-none"
+                                    />
+                                  </div>
+                                  <div className="col-span-2 mt-1">
+                                    <p className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-150">
+                                      Vencimento Calculado: {calc.factors.dueDate ? new Date(calc.factors.dueDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
+                                    </p>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                             <div className="flex items-center pt-4">
                               <input

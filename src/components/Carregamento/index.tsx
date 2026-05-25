@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { User, PricingRecord, PedidoVenda, PedidoVendaItem } from '../../types';
+import { User, PricingRecord, PedidoVenda, PedidoVendaItem, Client } from '../../types';
 import {
   Truck,
   Package,
@@ -64,7 +64,7 @@ import {
   notifyCarregamentoExcluido,
   notifyCarregamentoEditado,
 } from '../../services/notificationService';
-import { getPricingRecords } from '../../services/db';
+import { getPricingRecords, getClients } from '../../services/db';
 import { getPedidosVenda, getPedidoVendaItens } from '../../services/pedidosVendaService';
 import { getLocaisAtivos } from '../../services/locaisCarregamentoService';
 import { useToast } from '../Toast';
@@ -81,6 +81,14 @@ function canEditDeleteCarregamento(
   currentUser: User,
   criadoPor?: string
 ): { canEdit: boolean; canDelete: boolean } {
+  if (status === 'carregado') {
+    const isAdmin = ['admin', 'master'].includes(currentUser.role);
+    const isLogistica =
+      !!(currentUser.permissions as Record<string, unknown>)?.carregamento_aprovar ||
+      !!(currentUser.permissions as Record<string, unknown>)?.carregamento_logistica;
+    return { canEdit: isAdmin || isLogistica, canDelete: false };
+  }
+
   const isAdmin = ['admin', 'master'].includes(currentUser.role);
   const isLogistica =
     !!(currentUser.permissions as Record<string, unknown>)?.carregamento_aprovar ||
@@ -1518,6 +1526,8 @@ interface TabelaCarregamentosProps {
   onHistory?: (c: Carregamento) => void;
   canLiberar?: boolean;
   canAceitar?: boolean;
+  clients?: Client[];
+  pedidos?: PedidoVenda[];
 }
 
 function TabelaCarregamentos({
@@ -1531,6 +1541,8 @@ function TabelaCarregamentos({
   onHistory,
   canLiberar = true,
   canAceitar = true,
+  clients = [],
+  pedidos = [],
 }: TabelaCarregamentosProps) {
   const hasEditDelete = !!(onEdit || onDelete || onCancel || onHistory);
   if (carregamentos.length === 0) {
@@ -1551,6 +1563,7 @@ function TabelaCarregamentos({
             <th className="px-4 py-3">Tipo</th>
             <th className="px-4 py-3">Status</th>
             <th className="px-4 py-3">Pedido de Venda</th>
+            <th className="px-4 py-3">Cliente / Fazenda</th>
             <th className="px-4 py-3">Filial</th>
             <th className="px-4 py-3">Local</th>
             <th className="px-4 py-3">Qtd (ton)</th>
@@ -1590,6 +1603,26 @@ function TabelaCarregamentos({
                 ) : (
                   <span className="text-stone-400 text-xs">—</span>
                 )}
+              </td>
+              <td className="px-4 py-3">
+                {(() => {
+                  const ped = pedidos.find((p) => p.id === c.pedido_venda_id);
+                  const cli = clients.find((cl) => cl.id === ped?.cliente_id);
+                  const clientName = cli?.name || c.cliente_nome || ped?.cliente_nome || '—';
+                  const farmName = cli?.fazenda || '—';
+                  return (
+                    <div className="text-xs">
+                      <span className="font-semibold text-stone-800 block truncate max-w-[150px]" title={clientName}>
+                        {clientName}
+                      </span>
+                      {farmName !== '—' && (
+                        <span className="text-stone-400 text-[10px] block truncate max-w-[150px]" title={farmName}>
+                          {farmName}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
               </td>
               <td className="px-4 py-3 text-stone-600 text-xs">{c.filial?.nome ?? '—'}</td>
               <td className="px-4 py-3 text-stone-600 text-xs">
@@ -1776,6 +1809,8 @@ function VisaoGeral({
   onHistory,
   canLiberar,
   canAceitar,
+  clients = [],
+  pedidos = [],
 }: {
   carregamentos: Carregamento[];
   kpi: KPICarregamento;
@@ -1788,6 +1823,8 @@ function VisaoGeral({
   onHistory?: (c: Carregamento) => void;
   canLiberar?: boolean;
   canAceitar?: boolean;
+  clients?: Client[];
+  pedidos?: PedidoVenda[];
 }) {
   const pendentes = carregamentos.filter((c) =>
     [
@@ -1872,6 +1909,8 @@ function VisaoGeral({
             onHistory={onHistory}
             canLiberar={canLiberar}
             canAceitar={canAceitar}
+            clients={clients}
+            pedidos={pedidos}
           />
         )}
       </div>
@@ -1896,6 +1935,8 @@ function VisaoGeral({
             onDelete={onDelete}
             onCancel={onCancel}
             onHistory={onHistory}
+            clients={clients}
+            pedidos={pedidos}
           />
         )}
       </div>
@@ -2380,11 +2421,15 @@ function LiberacaoCarregamento({
   loading,
   onAction,
   canLiberar,
+  clients = [],
+  pedidos = [],
 }: {
   carregamentos: Carregamento[];
   loading: boolean;
   onAction: (c: Carregamento, action: string) => void;
   canLiberar?: boolean;
+  clients?: Client[];
+  pedidos?: PedidoVenda[];
 }) {
   const prontos = carregamentos.filter((c) =>
     ['cotacao_recebida', 'aguardando_liberacao'].includes(c.status)
@@ -2414,6 +2459,8 @@ function LiberacaoCarregamento({
             onAction={onAction}
             showActions={['liberar', 'execucoes']}
             canLiberar={canLiberar}
+            clients={clients}
+            pedidos={pedidos}
           />
         )}
       </div>
@@ -2422,7 +2469,7 @@ function LiberacaoCarregamento({
         <div className="p-4 border-b border-stone-100">
           <h3 className="font-bold text-stone-800 text-sm">Liberados ({liberados.length})</h3>
         </div>
-        <TabelaCarregamentos carregamentos={liberados} />
+        <TabelaCarregamentos carregamentos={liberados} clients={clients} pedidos={pedidos} />
       </div>
     </div>
   );
@@ -3760,6 +3807,8 @@ export default function CarregamentoModule({
   const [carregamentosLogistica, setCarregamentosLogistica] = useState<Carregamento[]>([]);
   const [filiais, setFiliais] = useState<Filial[]>([]);
   const [transportadoras, setTransportadoras] = useState<Transportadora[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [pedidos, setPedidos] = useState<PedidoVenda[]>([]);
   const [kpi, setKpi] = useState<KPICarregamento>({
     aguardando_cotacao: 0,
     em_carregamento: 0,
@@ -3830,18 +3879,22 @@ export default function CarregamentoModule({
         currentUser.role === 'admin' ||
         currentUser.permissions?.carregamento_all_filiais;
       const filtroPorFiliais = canSeeAll ? undefined : currentUser.filiais_permitidas;
-      const [cgs, cgsLogistica, fls, trs, kpiData] = await Promise.all([
+      const [cgs, cgsLogistica, fls, trs, kpiData, clientsData, pedidosData] = await Promise.all([
         getCarregamentos(undefined, filtroPorFiliais),
         getCarregamentosLogistica(filtroPorFiliais ?? undefined),
         getFiliais(),
         getTransportadoras(),
         getKPICarregamento(),
+        getClients(),
+        getPedidosVenda(),
       ]);
       setCarregamentos(cgs);
       setCarregamentosLogistica(cgsLogistica);
       setFiliais(fls);
       setTransportadoras(trs);
       setKpi(kpiData);
+      setClients(clientsData);
+      setPedidos(pedidosData);
     } catch (err) {
       console.error('Erro ao carregar dados de carregamento:', err);
       setLoadError('Erro ao carregar dados. Tente novamente.');
@@ -4241,6 +4294,8 @@ export default function CarregamentoModule({
           onHistory={(c) => setHistoricoCarregamento(c)}
           canLiberar={canLiberarCarregamento}
           canAceitar={canAceitarCarregamento}
+          clients={clients}
+          pedidos={pedidos}
         />
       )}
       {view === 'solicitacao' && <SolicitacaoCotacaoIndependente currentUser={currentUser} />}
@@ -4250,6 +4305,8 @@ export default function CarregamentoModule({
           loading={loading}
           onAction={handleAction}
           canLiberar={canLiberarCarregamento}
+          clients={clients}
+          pedidos={pedidos}
         />
       )}
       {view === 'logistica' && (
