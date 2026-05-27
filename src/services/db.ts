@@ -108,6 +108,7 @@ export async function createUser(user: Omit<User, 'id'> & { id?: string }): Prom
       permissions: user.permissions || {},
       filiais_permitidas: user.filiais_permitidas || [],
       requer_alteracao_senha: user.requer_alteracao_senha ?? false,
+      password: '', // satisfy legacy password column not-null constraint
     })
     .select()
     .single();

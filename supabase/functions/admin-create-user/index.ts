@@ -132,6 +132,7 @@ Deno.serve(async (req: Request) => {
       permissions: payload.permissions ?? {},
       filiais_permitidas: payload.filiais_permitidas ?? [],
       requer_alteracao_senha: payload.requer_alteracao_senha ?? true,
+      password: '', // satisfy legacy password column not-null constraint
     });
 
     if (appUserError) {
