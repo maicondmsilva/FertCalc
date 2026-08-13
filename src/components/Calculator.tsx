@@ -162,8 +162,12 @@ export default function Calculator({
   }, []);
 
   useEffect(() => {
-    getProdutosFormulados().then(setProdutosFormulados).catch(() => {});
-    getSavedFormulas().then(setSavedFormulas).catch(() => {});
+    getProdutosFormulados()
+      .then(setProdutosFormulados)
+      .catch(() => {});
+    getSavedFormulas()
+      .then(setSavedFormulas)
+      .catch(() => {});
   }, []);
 
   const openCotacaoModal = async (calcId: string) => {
@@ -576,17 +580,25 @@ export default function Calculator({
                                 value={calc.formula}
                                 onChange={(e) => {
                                   updateCalculation(calc.id, 'formula', e.target.value);
-                                  setFormulaSearchTerm((prev) => ({ ...prev, [calc.id]: e.target.value }));
+                                  setFormulaSearchTerm((prev) => ({
+                                    ...prev,
+                                    [calc.id]: e.target.value,
+                                  }));
                                   setActiveSearchCalcId(calc.id);
                                 }}
                                 onFocus={() => {
                                   setActiveSearchCalcId(calc.id);
-                                  setFormulaSearchTerm((prev) => ({ ...prev, [calc.id]: calc.formula }));
+                                  setFormulaSearchTerm((prev) => ({
+                                    ...prev,
+                                    [calc.id]: calc.formula,
+                                  }));
                                 }}
                                 onBlur={() => {
                                   // small timeout to allow clicking options before closing
                                   setTimeout(() => {
-                                    setActiveSearchCalcId((prev) => prev === calc.id ? null : prev);
+                                    setActiveSearchCalcId((prev) =>
+                                      prev === calc.id ? null : prev
+                                    );
                                   }, 250);
                                 }}
                                 placeholder="Ex: 04-14-08 (opcional)"
@@ -597,72 +609,93 @@ export default function Calculator({
                                     : 'border-stone-300'
                                 }`}
                               />
-                              {!isProdutosLivresMode && activeSearchCalcId === calc.id && (formulaSearchTerm[calc.id] || '').trim() && (
-                                <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-stone-200 rounded-lg shadow-xl max-h-48 overflow-y-auto min-w-[220px]">
-                                  {(() => {
-                                    const term = (formulaSearchTerm[calc.id] || '').toLowerCase().trim();
-                                    const filteredProds = produtosFormulados.filter(
-                                      (p) => p.ativo && (p.nome.toLowerCase().includes(term) || (p.formula_npk || '').toLowerCase().includes(term))
-                                    );
-                                    if (filteredProds.length === 0) {
-                                      return <p className="p-2 text-xs text-stone-400">Nenhum produto/batida encontrado</p>;
-                                    }
-                                    return filteredProds.map((prod) => (
-                                      <button
-                                        key={prod.id}
-                                        type="button"
-                                        onClick={() => {
-                                          const formulaName = prod.formula_npk || prod.nome;
-                                          updateCalculation(calc.id, 'formula', formulaName);
-                                          
-                                          if (prod.saved_formula_id) {
-                                            const savedF = savedFormulas.find((sf) => sf.id === prod.saved_formula_id);
-                                            if (savedF) {
-                                              // Map macros
-                                              const updatedMacros = calc.macros.map((m) => {
-                                                const savedM = savedF.macros.find((sm) => sm.id === m.id || sm.name === m.name);
-                                                return {
-                                                  ...m,
-                                                  selected: savedM ? !!savedM.selected : false,
-                                                  minQty: savedM ? Number(savedM.minQty || 0) : 0,
-                                                  quantity: 0,
-                                                };
-                                              });
-                                              // Map micros
-                                              const updatedMicros = calc.micros.map((m) => {
-                                                const savedM = savedF.micros.find((sm) => sm.id === m.id || sm.name === m.name);
-                                                return {
-                                                  ...m,
-                                                  selected: savedM ? !!savedM.selected : false,
-                                                  minQty: savedM ? Number(savedM.minQty || 0) : 0,
-                                                  quantity: 0,
-                                                };
-                                              });
-                                              setCalculations((prev) =>
-                                                prev.map((c) =>
-                                                  c.id === calc.id
-                                                    ? {
-                                                        ...c,
-                                                        formula: formulaName,
-                                                        macros: updatedMacros,
-                                                        micros: updatedMicros,
-                                                      }
-                                                    : c
-                                                )
+                              {!isProdutosLivresMode &&
+                                activeSearchCalcId === calc.id &&
+                                (formulaSearchTerm[calc.id] || '').trim() && (
+                                  <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-stone-200 rounded-lg shadow-xl max-h-48 overflow-y-auto min-w-[220px]">
+                                    {(() => {
+                                      const term = (formulaSearchTerm[calc.id] || '')
+                                        .toLowerCase()
+                                        .trim();
+                                      const filteredProds = produtosFormulados.filter(
+                                        (p) =>
+                                          p.ativo &&
+                                          (p.nome.toLowerCase().includes(term) ||
+                                            (p.formula_npk || '').toLowerCase().includes(term))
+                                      );
+                                      if (filteredProds.length === 0) {
+                                        return (
+                                          <p className="p-2 text-xs text-stone-400">
+                                            Nenhum produto/batida encontrado
+                                          </p>
+                                        );
+                                      }
+                                      return filteredProds.map((prod) => (
+                                        <button
+                                          key={prod.id}
+                                          type="button"
+                                          onClick={() => {
+                                            const formulaName = prod.formula_npk || prod.nome;
+                                            updateCalculation(calc.id, 'formula', formulaName);
+
+                                            if (prod.saved_formula_id) {
+                                              const savedF = savedFormulas.find(
+                                                (sf) => sf.id === prod.saved_formula_id
                                               );
+                                              if (savedF) {
+                                                // Map macros
+                                                const updatedMacros = calc.macros.map((m) => {
+                                                  const savedM = savedF.macros.find(
+                                                    (sm) => sm.id === m.id || sm.name === m.name
+                                                  );
+                                                  return {
+                                                    ...m,
+                                                    selected: savedM ? !!savedM.selected : false,
+                                                    minQty: savedM ? Number(savedM.minQty || 0) : 0,
+                                                    quantity: 0,
+                                                  };
+                                                });
+                                                // Map micros
+                                                const updatedMicros = calc.micros.map((m) => {
+                                                  const savedM = savedF.micros.find(
+                                                    (sm) => sm.id === m.id || sm.name === m.name
+                                                  );
+                                                  return {
+                                                    ...m,
+                                                    selected: savedM ? !!savedM.selected : false,
+                                                    minQty: savedM ? Number(savedM.minQty || 0) : 0,
+                                                    quantity: 0,
+                                                  };
+                                                });
+                                                setCalculations((prev) =>
+                                                  prev.map((c) =>
+                                                    c.id === calc.id
+                                                      ? {
+                                                          ...c,
+                                                          formula: formulaName,
+                                                          macros: updatedMacros,
+                                                          micros: updatedMicros,
+                                                        }
+                                                      : c
+                                                  )
+                                                );
+                                              }
                                             }
-                                          }
-                                          setActiveSearchCalcId(null);
-                                        }}
-                                        className="w-full text-left px-3 py-2 hover:bg-stone-50 border-b border-stone-100 last:border-0 text-xs flex flex-col"
-                                      >
-                                        <span className="font-bold text-stone-800">{prod.nome}</span>
-                                        <span className="text-[10px] text-emerald-600">Fórmula: {prod.formula_npk || 'Não especificada'}</span>
-                                      </button>
-                                    ));
-                                  })()}
-                                </div>
-                              )}
+                                            setActiveSearchCalcId(null);
+                                          }}
+                                          className="w-full text-left px-3 py-2 hover:bg-stone-50 border-b border-stone-100 last:border-0 text-xs flex flex-col"
+                                        >
+                                          <span className="font-bold text-stone-800">
+                                            {prod.nome}
+                                          </span>
+                                          <span className="text-[10px] text-emerald-600">
+                                            Fórmula: {prod.formula_npk || 'Não especificada'}
+                                          </span>
+                                        </button>
+                                      ));
+                                    })()}
+                                  </div>
+                                )}
                             </div>
                             {/* CA% input */}
                             <div className="flex items-center gap-0.5">
@@ -1357,9 +1390,16 @@ export default function Calculator({
                                     type="radio"
                                     name={`pay-cond-${calc.id}`}
                                     value="vencimento"
-                                    checked={(calc.factors.paymentCondition || 'vencimento') === 'vencimento'}
+                                    checked={
+                                      (calc.factors.paymentCondition || 'vencimento') ===
+                                      'vencimento'
+                                    }
                                     onChange={() => {
-                                      updateCalculationFactors(calc.id, 'paymentCondition', 'vencimento');
+                                      updateCalculationFactors(
+                                        calc.id,
+                                        'paymentCondition',
+                                        'vencimento'
+                                      );
                                     }}
                                     className="accent-emerald-600"
                                   />
@@ -1373,10 +1413,19 @@ export default function Calculator({
                                     checked={calc.factors.paymentCondition === 'ddf'}
                                     onChange={() => {
                                       updateCalculationFactors(calc.id, 'paymentCondition', 'ddf');
-                                      const defaultCarregamento = calc.factors.dataCarregamento || new Date().toISOString().split('T')[0];
+                                      const defaultCarregamento =
+                                        calc.factors.dataCarregamento ||
+                                        new Date().toISOString().split('T')[0];
                                       const defaultDias = calc.factors.ddfDias || 30;
-                                      const calculated = addDaysToDate(defaultCarregamento, defaultDias);
-                                      updateCalculationFactors(calc.id, 'dataCarregamento', defaultCarregamento);
+                                      const calculated = addDaysToDate(
+                                        defaultCarregamento,
+                                        defaultDias
+                                      );
+                                      updateCalculationFactors(
+                                        calc.id,
+                                        'dataCarregamento',
+                                        defaultCarregamento
+                                      );
                                       updateCalculationFactors(calc.id, 'ddfDias', defaultDias);
                                       updateCalculationFactors(calc.id, 'dueDate', calculated);
                                     }}
@@ -1412,8 +1461,16 @@ export default function Calculator({
                                       onChange={(e) => {
                                         const dateVal = e.target.value;
                                         const days = calc.factors.ddfDias || 0;
-                                        updateCalculationFactors(calc.id, 'dataCarregamento', dateVal);
-                                        updateCalculationFactors(calc.id, 'dueDate', addDaysToDate(dateVal, days));
+                                        updateCalculationFactors(
+                                          calc.id,
+                                          'dataCarregamento',
+                                          dateVal
+                                        );
+                                        updateCalculationFactors(
+                                          calc.id,
+                                          'dueDate',
+                                          addDaysToDate(dateVal, days)
+                                        );
                                       }}
                                       className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500 outline-none"
                                     />
@@ -1425,12 +1482,19 @@ export default function Calculator({
                                     <input
                                       type="number"
                                       min="0"
-                                      value={calc.factors.ddfDias === 0 ? '' : (calc.factors.ddfDias || '')}
+                                      value={
+                                        calc.factors.ddfDias === 0 ? '' : calc.factors.ddfDias || ''
+                                      }
                                       onChange={(e) => {
-                                        const daysVal = e.target.value === '' ? 0 : Number(e.target.value);
+                                        const daysVal =
+                                          e.target.value === '' ? 0 : Number(e.target.value);
                                         const date = calc.factors.dataCarregamento || '';
                                         updateCalculationFactors(calc.id, 'ddfDias', daysVal);
-                                        updateCalculationFactors(calc.id, 'dueDate', addDaysToDate(date, daysVal));
+                                        updateCalculationFactors(
+                                          calc.id,
+                                          'dueDate',
+                                          addDaysToDate(date, daysVal)
+                                        );
                                       }}
                                       placeholder="Ex: 30"
                                       className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500 outline-none"
@@ -1438,7 +1502,12 @@ export default function Calculator({
                                   </div>
                                   <div className="col-span-2 mt-1">
                                     <p className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-150">
-                                      Vencimento Calculado: {calc.factors.dueDate ? new Date(calc.factors.dueDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
+                                      Vencimento Calculado:{' '}
+                                      {calc.factors.dueDate
+                                        ? new Date(
+                                            calc.factors.dueDate + 'T12:00:00'
+                                          ).toLocaleDateString('pt-BR')
+                                        : '—'}
                                     </p>
                                   </div>
                                 </div>
@@ -1735,16 +1804,14 @@ export default function Calculator({
 
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <p className="text-[10px] text-stone-500 uppercase font-bold">
-                          Preço Final
-                        </p>
-                        <p className="text-lg font-bold text-white">
+                        <p className="text-xs text-stone-500 uppercase font-bold">Preço Final</p>
+                        <p className="text-2xl font-bold text-white">
                           R$ {calc.summary?.finalPrice.toFixed(2)}
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="text-[10px] text-stone-500 uppercase font-bold">N-P-K Real</p>
-                        <p className="text-sm font-mono text-emerald-400">
+                        <p className="text-xs text-stone-500 uppercase font-bold">N-P-K Real</p>
+                        <p className="text-lg font-mono text-emerald-400 font-bold">
                           {formatNPK(
                             calc.formula,
                             calc.summary?.resultingN || 0,
@@ -1753,28 +1820,28 @@ export default function Calculator({
                           )}
                         </p>
                         {(calc.summary?.resultingCa || 0) > 0 && (
-                          <p className="text-[10px] font-mono text-amber-400 mt-1">
+                          <p className="text-xs font-mono text-amber-400 mt-1">
                             CA: {calc.summary!.resultingCa.toFixed(2)}%
                           </p>
                         )}
                         {(calc.summary?.resultingS || 0) > 0 && (
-                          <p className="text-[10px] font-mono text-yellow-500">
+                          <p className="text-xs font-mono text-yellow-500">
                             S: {calc.summary!.resultingS.toFixed(2)}%
                           </p>
                         )}
                       </div>
                     </div>
 
-                    <div className="pt-2 border-t border-stone-700 space-y-1">
-                      <div className="flex justify-between text-[10px]">
+                    <div className="pt-3 border-t border-stone-700 space-y-2">
+                      <div className="flex justify-between text-xs">
                         <span className="text-stone-500">Custo Base:</span>
-                        <span className="text-stone-300">
+                        <span className="text-stone-300 font-medium">
                           R$ {calc.summary?.baseCost.toFixed(2)}
                         </span>
                       </div>
-                      <div className="flex justify-between text-[10px]">
-                        <span className="text-stone-500">Venda Total:</span>
-                        <span className="text-stone-300">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-stone-500 font-bold">Venda Total:</span>
+                        <span className="text-emerald-400 font-bold">
                           R${' '}
                           {calc.summary?.totalSaleValue.toLocaleString('pt-BR', {
                             minimumFractionDigits: 2,
@@ -1784,17 +1851,17 @@ export default function Calculator({
                     </div>
 
                     {/* Materials List in Summary */}
-                    <div className="pt-2 border-t border-stone-700">
-                      <p className="text-[9px] text-stone-500 uppercase font-bold mb-1">
+                    <div className="pt-3 border-t border-stone-700 mt-3">
+                      <p className="text-xs text-stone-500 uppercase font-bold mb-2">
                         Composição (kg)
                       </p>
-                      <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-1">
                         {[...calc.macros, ...calc.micros]
                           .filter((m) => m.quantity > 0)
                           .map((m) => (
-                            <div key={m.id} className="flex justify-between text-[9px]">
+                            <div key={m.id} className="flex justify-between text-xs">
                               <span className="text-stone-400 truncate pr-1">{m.name}</span>
-                              <span className="text-emerald-500 font-mono">
+                              <span className="text-emerald-500 font-mono font-medium">
                                 {m.quantity.toFixed(2)}
                               </span>
                             </div>
