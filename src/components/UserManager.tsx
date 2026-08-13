@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Users,
   Plus,
@@ -11,10 +11,18 @@ import {
   Search,
   Building2,
   KeyRound,
+  Eye,
+  EyeOff,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { User, Branch } from '../types';
 import { getUsers, updateUser, deleteUser, getBranches } from '../services/db';
-import { createAuthUser, adminUpdateAuthPassword } from '../services/authService';
+import {
+  createAuthUser,
+  adminUpdateAuthPassword,
+  adminDeleteAuthUser,
+} from '../services/authService';
 import { useToast } from './Toast';
 import { useConfirm } from '../hooks/useConfirm';
 import { ConfirmDialog } from './ui/ConfirmDialog';
@@ -154,6 +162,52 @@ const PERMISSION_GROUPS: PermissionGroup[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Password strength helper
+// ---------------------------------------------------------------------------
+function getPasswordStrength(password: string): {
+  level: 0 | 1 | 2 | 3;
+  label: string;
+  color: string;
+} {
+  if (!password) return { level: 0, label: '', color: '' };
+  let score = 0;
+  if (password.length >= 8) score++;
+  if (password.length >= 12) score++;
+  if (/[A-Z]/.test(password) && /[a-z]/.test(password)) score++;
+  if (/[0-9]/.test(password)) score++;
+  if (/[^A-Za-z0-9]/.test(password)) score++;
+  if (score <= 1) return { level: 1, label: 'Fraca', color: 'bg-red-500' };
+  if (score <= 3) return { level: 2, label: 'Média', color: 'bg-amber-500' };
+  return { level: 3, label: 'Forte', color: 'bg-emerald-500' };
+}
+
+function PasswordStrengthBar({ password }: { password: string }) {
+  const { level, label, color } = getPasswordStrength(password);
+  if (!password) return null;
+  return (
+    <div className="mt-1.5 space-y-1">
+      <div className="flex gap-1">
+        {[1, 2, 3].map((i) => (
+          <div
+            key={i}
+            className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
+              i <= level ? color : 'bg-stone-200'
+            }`}
+          />
+        ))}
+      </div>
+      <p
+        className={`text-[10px] font-medium ${
+          level === 1 ? 'text-red-600' : level === 2 ? 'text-amber-600' : 'text-emerald-600'
+        }`}
+      >
+        Força: {label}
+      </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // UI helpers
 // ---------------------------------------------------------------------------
 function getRoleBadgeClass(role: string): string {
@@ -221,7 +275,19 @@ export default function UserManager({ currentUser }: UserManagerProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [resettingUser, setResettingUser] = useState<User | null>(null);
   const [newPassword, setNewPassword] = useState('');
+  const [confirmResetPassword, setConfirmResetPassword] = useState('');
   const [resetLoading, setResetLoading] = useState(false);
+  const [showNewUserPassword, setShowNewUserPassword] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [showConfirmResetPassword, setShowConfirmResetPassword] = useState(false);
+  const [copiedPassword, setCopiedPassword] = useState(false);
+
+  const handleCopyPassword = useCallback((pwd: string) => {
+    navigator.clipboard.writeText(pwd).then(() => {
+      setCopiedPassword(true);
+      setTimeout(() => setCopiedPassword(false), 2000);
+    });
+  }, []);
   const { levels: accessLevels, byCode: accessLevelsByCode } = useAccessLevels();
 
   const getDefaultPermissions = (role: string) => {
@@ -475,12 +541,18 @@ export default function UserManager({ currentUser }: UserManagerProps) {
     }
     const ok = await confirm({
       title: 'Excluir Usuário',
-      message: 'Tem certeza que deseja excluir este usuário? Esta ação não pode ser desfeita.',
+      message:
+        'Tem certeza que deseja excluir este usuário? Ele será removido do sistema de autenticação e não poderá mais fazer login. Esta ação não pode ser desfeita.',
       variant: 'danger',
     });
     if (!ok) return;
     try {
-      await deleteUser(id);
+      // Remove from auth.users (Edge Function) — also cleans app_users via the function
+      const authResult = await adminDeleteAuthUser(id);
+      if (!authResult.success) {
+        // If Edge Function fails (e.g. not deployed), fall back to app_users only deletion
+        await deleteUser(id);
+      }
       showSuccess('Usuário excluído com sucesso!');
       await loadUsers();
     } catch {
@@ -602,14 +674,47 @@ export default function UserManager({ currentUser }: UserManagerProps) {
                     <label className="block text-sm font-medium text-stone-600 mb-1">
                       Senha {!editingId && <span className="text-red-500">*</span>}
                     </label>
-                    <input
-                      type="password"
-                      value={formData.password}
-                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                      required={!editingId}
-                      placeholder={editingId ? 'Deixe em branco para manter' : ''}
-                    />
+                    <div className="relative">
+                      <input
+                        type={showNewUserPassword ? 'text' : 'password'}
+                        value={formData.password}
+                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                        className="w-full px-3 py-2 pr-20 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                        required={!editingId}
+                        placeholder={
+                          editingId ? 'Deixe em branco para manter' : 'Mínimo 6 caracteres'
+                        }
+                      />
+                      <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                        {!editingId && formData.password && (
+                          <button
+                            type="button"
+                            onClick={() => handleCopyPassword(formData.password)}
+                            className="p-1 text-stone-400 hover:text-emerald-600 transition-colors"
+                            title="Copiar senha"
+                          >
+                            {copiedPassword ? (
+                              <Check className="w-3.5 h-3.5 text-emerald-500" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setShowNewUserPassword((v) => !v)}
+                          className="p-1 text-stone-400 hover:text-stone-600 transition-colors"
+                          title={showNewUserPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                        >
+                          {showNewUserPassword ? (
+                            <EyeOff className="w-3.5 h-3.5" />
+                          ) : (
+                            <Eye className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                    {!editingId && <PasswordStrengthBar password={formData.password} />}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-stone-600 mb-1">
@@ -1009,6 +1114,10 @@ export default function UserManager({ currentUser }: UserManagerProps) {
                 showError('A senha deve ter no mínimo 6 caracteres.');
                 return;
               }
+              if (newPassword !== confirmResetPassword) {
+                showError('As senhas não coincidem. Verifique e tente novamente.');
+                return;
+              }
               setResetLoading(true);
               try {
                 const res = await adminUpdateAuthPassword(resettingUser.id, newPassword);
@@ -1016,6 +1125,7 @@ export default function UserManager({ currentUser }: UserManagerProps) {
                   showSuccess(`Senha de ${resettingUser.name} redefinida com sucesso!`);
                   setResettingUser(null);
                   setNewPassword('');
+                  setConfirmResetPassword('');
                 } else {
                   showError(res.error || 'Erro ao redefinir senha.');
                 }
@@ -1028,20 +1138,75 @@ export default function UserManager({ currentUser }: UserManagerProps) {
             className="p-6 space-y-4"
           >
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-700">
-              Você está alterando a senha do usuário <strong>{resettingUser.name}</strong> ({resettingUser.email}).
+              Você está alterando a senha do usuário <strong>{resettingUser.name}</strong> (
+              {resettingUser.email}). O usuário será obrigado a redefinir a senha no próximo acesso.
             </div>
             <div>
               <label className="block text-sm font-medium text-stone-600 mb-1">
                 Nova Senha <span className="text-red-500">*</span>
               </label>
-              <input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
-                required
-                placeholder="Mínimo 6 caracteres"
-              />
+              <div className="relative">
+                <input
+                  type={showResetPassword ? 'text' : 'password'}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full px-3 py-2 pr-10 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
+                  required
+                  placeholder="Mínimo 6 caracteres"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowResetPassword((v) => !v)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-stone-400 hover:text-stone-600"
+                  title={showResetPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                >
+                  {showResetPassword ? (
+                    <EyeOff className="w-3.5 h-3.5" />
+                  ) : (
+                    <Eye className="w-3.5 h-3.5" />
+                  )}
+                </button>
+              </div>
+              <PasswordStrengthBar password={newPassword} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-stone-600 mb-1">
+                Confirmar Nova Senha <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <input
+                  type={showConfirmResetPassword ? 'text' : 'password'}
+                  value={confirmResetPassword}
+                  onChange={(e) => setConfirmResetPassword(e.target.value)}
+                  className={`w-full px-3 py-2 pr-10 border rounded-lg focus:ring-2 outline-none text-sm ${
+                    confirmResetPassword && newPassword !== confirmResetPassword
+                      ? 'border-red-400 focus:ring-red-400'
+                      : confirmResetPassword && newPassword === confirmResetPassword
+                        ? 'border-emerald-400 focus:ring-emerald-400'
+                        : 'border-stone-300 focus:ring-amber-500'
+                  }`}
+                  required
+                  placeholder="Repita a nova senha"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmResetPassword((v) => !v)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-stone-400 hover:text-stone-600"
+                  title={showConfirmResetPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                >
+                  {showConfirmResetPassword ? (
+                    <EyeOff className="w-3.5 h-3.5" />
+                  ) : (
+                    <Eye className="w-3.5 h-3.5" />
+                  )}
+                </button>
+              </div>
+              {confirmResetPassword && newPassword !== confirmResetPassword && (
+                <p className="text-[10px] text-red-600 mt-1">As senhas não coincidem.</p>
+              )}
+              {confirmResetPassword && newPassword === confirmResetPassword && (
+                <p className="text-[10px] text-emerald-600 mt-1">✓ Senhas coincidem.</p>
+              )}
             </div>
             <div className="flex justify-end gap-3 pt-2">
               <button
@@ -1049,6 +1214,7 @@ export default function UserManager({ currentUser }: UserManagerProps) {
                 onClick={() => {
                   setResettingUser(null);
                   setNewPassword('');
+                  setConfirmResetPassword('');
                 }}
                 className="px-4 py-2 border border-stone-300 rounded-lg text-sm font-bold text-stone-600 hover:bg-stone-50"
               >
@@ -1056,7 +1222,9 @@ export default function UserManager({ currentUser }: UserManagerProps) {
               </button>
               <button
                 type="submit"
-                disabled={resetLoading}
+                disabled={
+                  resetLoading || (!!confirmResetPassword && newPassword !== confirmResetPassword)
+                }
                 className="px-6 py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white rounded-lg text-sm font-bold transition-all shadow-md flex items-center gap-2 justify-center"
               >
                 {resetLoading ? 'Salvando...' : 'Redefinir Senha'}

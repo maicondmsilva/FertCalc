@@ -17,17 +17,19 @@ if (!supabaseAnonKey) {
 /**
  * Supabase client configurado para usar sessão de navegador:
  * - persistSession: true (mantém sessão ativa durante o uso)
- * - storage: sessionStorage (sessão expira ao fechar o navegador)
+ * - storage: localStorage (necessário para links de redefinição de senha via e-mail
+ *   funcionarem corretamente, pois o link abre em nova aba onde sessionStorage não
+ *   seria acessível)
  *
  * Isso garante que:
  * - Usuário não precisa fazer login a cada reload/navegação
- * - Sessão encerra automaticamente ao fechar o navegador
- * - Não há timeout por inatividade
+ * - Links de recuperação de senha enviados por e-mail funcionam corretamente
+ * - Sessão persiste entre abas do mesmo navegador
  */
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
-    storage: window.sessionStorage,
+    storage: window.localStorage,
     autoRefreshToken: true,
     detectSessionInUrl: true,
   },

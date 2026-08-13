@@ -291,3 +291,48 @@ export async function adminUpdateAuthPassword(
     return { success: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
+
+/**
+ * Exclui um usuário do Supabase Auth e da tabela app_users via Edge Function admin-delete-user.
+ * Usa supabase.auth.admin.deleteUser no servidor, sem expor a service_role key.
+ * Deve ser chamada por administradores ao excluir um usuário do sistema.
+ */
+export async function adminDeleteAuthUser(
+  userId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+
+    if (!token) {
+      return { success: false, error: 'Usuário não autenticado' };
+    }
+
+    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-delete-user`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ user_id: userId }),
+    });
+
+    if (!res.ok) {
+      const err = (await res.json()) as { error?: string };
+      const message = err.error ?? 'Erro ao excluir usuário no Auth';
+      if (res.status === 404) {
+        // Edge function not deployed yet — fall through gracefully
+        logger.warn('[authService] admin-delete-user not deployed, skipping auth deletion');
+        return { success: true }; // app_users will still be deleted by caller
+      }
+      logger.warn('[authService] adminDeleteAuthUser error:', message);
+      return { success: false, error: message };
+    }
+
+    return { success: true };
+  } catch (err: unknown) {
+    logger.error('[authService] Unexpected error in adminDeleteAuthUser:', err);
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}

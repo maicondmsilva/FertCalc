@@ -47,7 +47,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Verify the caller has admin (master) privileges in the app_users table
+    // Verify the caller has admin privileges in the app_users table
     // Use callerUser.id to match auth.uid() — more reliable than email matching
     const { data: callerProfile, error: profileError } = await supabaseAdmin
       .from('app_users')
@@ -55,8 +55,28 @@ Deno.serve(async (req: Request) => {
       .eq('id', callerUser.id)
       .single();
 
-    const allowedRoles = ['master', 'admin'];
-    if (profileError || !callerProfile || !allowedRoles.includes(callerProfile.role)) {
+    if (profileError || !callerProfile) {
+      return new Response(JSON.stringify({ error: 'Forbidden: perfil não encontrado' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Check static admin roles OR dynamic hierarchy level (mirrors admin-create-user)
+    let callerHierarchy = 0;
+    const { data: hierarchyData, error: hierarchyError } = await supabaseAdmin
+      .from('access_levels')
+      .select('hierarchy_level')
+      .eq('code', callerProfile.role)
+      .maybeSingle();
+
+    if (!hierarchyError && hierarchyData?.hierarchy_level != null) {
+      callerHierarchy = Number(hierarchyData.hierarchy_level);
+    }
+
+    const hasStaticAdminRole =
+      callerProfile.role === 'master' || callerProfile.role === 'admin';
+    if (!hasStaticAdminRole && callerHierarchy < 80) {
       return new Response(JSON.stringify({ error: 'Forbidden: admin privileges required' }), {
         status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
