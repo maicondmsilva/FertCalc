@@ -361,7 +361,12 @@ function mapAgent(data: Record<string, unknown>): Agent {
 export async function getBrands(): Promise<Brand[]> {
   const { data, error } = await supabase.from('brands').select('*').order('name');
   if (error || !data) return [];
-  return data.map((d) => ({ id: d.id, code: d.code, name: d.name }));
+  return data.map((d) => ({
+    id: d.id,
+    organizationId: d.organization_id,
+    code: d.code,
+    name: d.name,
+  }));
 }
 
 export async function createBrand(brand: Omit<Brand, 'id'>): Promise<Brand> {
@@ -371,7 +376,12 @@ export async function createBrand(brand: Omit<Brand, 'id'>): Promise<Brand> {
     .select()
     .single();
   if (error) throw error;
-  return { id: data.id, code: data.code, name: data.name };
+  return {
+    id: data.id,
+    organizationId: data.organization_id,
+    code: data.code,
+    name: data.name,
+  };
 }
 
 export async function updateBrand(id: string, brand: Partial<Brand>): Promise<void> {
@@ -449,6 +459,7 @@ function macroToDb(m: Partial<MacroMaterial>) {
 function mapMacro(data: Record<string, unknown>): MacroMaterial {
   return {
     id: data.id,
+    organizationId: data.organization_id,
     code: data.code,
     name: data.name,
     n: Number(data.n),
@@ -555,6 +566,7 @@ function microToDb(m: Partial<MicroMaterial>) {
 function mapMicro(data: Record<string, unknown>): MicroMaterial {
   return {
     id: data.id,
+    organizationId: data.organization_id,
     code: data.code,
     name: data.name,
     microGuarantees: data.micro_guarantees || [],
