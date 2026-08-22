@@ -563,6 +563,7 @@ export interface FertigranPFormula {
 
 export interface PedidoVendaItem {
   id?: string;
+  organization_id?: string;
   pedido_venda_id?: string;
   produto_nome: string;
   formulacao?: string;
@@ -588,6 +589,7 @@ export interface AccessLevel {
 
 export interface PedidoVenda {
   id: string;
+  organization_id?: string;
   precificacao_id?: string;
   numero_pedido?: string;
   barra_pedido?: string;
@@ -629,6 +631,7 @@ export interface PedidoVenda {
 
 export interface CancelamentoPedido {
   id: string;
+  organization_id?: string;
   pedido_origem_id: string;
   pedido_destino_id?: string;
   tipo: 'canc_substitui' | 'definitivo';

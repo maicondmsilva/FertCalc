@@ -6,6 +6,7 @@ export type StatusPedidoVenda = 'pendente' | 'em_carregamento' | 'concluido' | '
 
 export interface PedidoVenda {
   id: string;
+  organization_id?: string;
   precificacao_id: string;
   numero_pedido?: string;
   barra_pedido?: string;

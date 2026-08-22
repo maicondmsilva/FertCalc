@@ -33,6 +33,7 @@ export interface Filial {
 // ── Transportadora ────────────────────────────────────────────
 export interface Transportadora {
   id: string;
+  organization_id?: string;
   id_numeric?: number;
   nome: string;
   cnpj?: string;
@@ -46,6 +47,7 @@ export interface Transportadora {
 // ── Carregamento ──────────────────────────────────────────────
 export interface Carregamento {
   id: string;
+  organization_id?: string;
   pedido_precificacao_id?: string;
   numero_carregamento: string;
   numero?: number;
@@ -100,6 +102,7 @@ export type StatusExecucaoCarregamento = 'agendado' | 'em_carregamento' | 'concl
 
 export interface ExecucaoCarregamento {
   id: string;
+  organization_id?: string;
   id_numeric?: number;
   carregamento_id: string;
   motorista_nome: string;
@@ -122,6 +125,7 @@ export interface ExecucaoCarregamento {
 // ── Cotação de Frete ──────────────────────────────────────────
 export interface CotacaoFrete {
   id: string;
+  organization_id?: string;
   carregamento_id: string;
   transportadora_id?: string;
   transportadora?: Transportadora;
@@ -144,6 +148,7 @@ export interface CotacaoFrete {
 // ── Alerta de Carregamento ────────────────────────────────────
 export interface AlertaCarregamento {
   id: string;
+  organization_id?: string;
   carregamento_id: string;
   tipo: string;
   mensagem: string;
@@ -155,6 +160,7 @@ export interface AlertaCarregamento {
 // ── Histórico de Status ───────────────────────────────────────
 export interface HistoricoCarregamento {
   id: string;
+  organization_id?: string;
   carregamento_id: string;
   status_anterior?: string;
   status_novo?: string;
@@ -205,6 +211,7 @@ export type StatusCotacaoSolicitada =
 
 export interface CotacaoSolicitada {
   id: string;
+  organization_id?: string;
   numero_cotacao: string;
   solicitado_por?: string;
   solicitante_nome?: string;
