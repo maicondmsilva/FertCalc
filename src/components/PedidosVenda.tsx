@@ -702,7 +702,7 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                             <div>
                               <p className="font-bold text-stone-400 uppercase mb-0.5">Precificação</p>
                               <p className="text-stone-700 font-mono font-bold">
-                                {pricingRecords.find((x) => x.id === p.precificacao_id)?.code || p.precificacao_id.slice(0, 8)}
+                                {pricingRecords.find((x) => x.id === p.precificacao_id)?.cod || p.precificacao_id.slice(0, 8)}
                               </p>
                             </div>
                           )}
