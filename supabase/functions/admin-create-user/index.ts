@@ -30,6 +30,10 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
+  if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
+  if (!req.headers.get('content-type')?.toLowerCase().includes('application/json')) {
+    return jsonResponse({ error: 'Content-Type must be application/json' }, 415);
+  }
 
   try {
     const authHeader = req.headers.get('Authorization');
@@ -53,11 +57,20 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: 'E-mail inválido' }, 422);
     }
 
-    if (password.length < 6) {
+    if (password.length < 8 || password.length > 128) {
       return jsonResponse(
-        { error: 'Senha fraca', code: 'weak_password', details: 'mínimo de 6 caracteres' },
+        { error: 'Senha fraca', code: 'weak_password', details: 'entre 8 e 128 caracteres' },
         422
       );
+    }
+    if (name.length > 120 || nickname.length > 80 || email.length > 254) {
+      return jsonResponse({ error: 'Payload exceeds allowed field limits' }, 422);
+    }
+    if (
+      (payload.managed_user_ids?.length ?? 0) > 200 ||
+      (payload.filiais_permitidas?.length ?? 0) > 200
+    ) {
+      return jsonResponse({ error: 'Payload exceeds allowed collection limits' }, 422);
     }
 
     const supabaseAdmin = createClient(
@@ -106,7 +119,7 @@ Deno.serve(async (req: Request) => {
       if (isWeakPassword(message)) {
         return jsonResponse({ error: 'Senha fraca', code: 'weak_password' }, 422);
       }
-      return jsonResponse({ error: message }, 400);
+      return jsonResponse({ error: 'Unable to create authentication user' }, 400);
     }
 
     const createdUserId = createdAuth.user.id;
@@ -128,7 +141,7 @@ Deno.serve(async (req: Request) => {
       await supabaseAdmin.auth.admin.deleteUser(createdUserId);
       return jsonResponse(
         {
-          error: `Falha ao salvar app_users: ${appUserError.message}`,
+          error: 'Falha ao salvar perfil do usuário',
           code: 'app_user_create_failed',
         },
         500

@@ -6,6 +6,18 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      status: 405,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+  if (!req.headers.get('content-type')?.toLowerCase().includes('application/json')) {
+    return new Response(JSON.stringify({ error: 'Content-Type must be application/json' }), {
+      status: 415,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
 
   try {
     // Verify the caller is authenticated
@@ -23,11 +35,26 @@ Deno.serve(async (req: Request) => {
       new_password: string;
     };
 
-    if (!user_id?.trim() || !new_password?.trim()) {
+    if (
+      !user_id?.trim() ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(user_id)
+    ) {
+      return new Response(JSON.stringify({ error: 'valid user_id is required' }), {
+        status: 422,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    if (!new_password?.trim()) {
       return new Response(JSON.stringify({ error: 'user_id and new_password are required' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
+    }
+    if (new_password.length < 8 || new_password.length > 128) {
+      return new Response(
+        JSON.stringify({ error: 'Password must contain between 8 and 128 characters' }),
+        { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     // Create admin Supabase client using service role key (available automatically in Edge Functions)
@@ -72,7 +99,7 @@ Deno.serve(async (req: Request) => {
     });
 
     if (error) {
-      return new Response(JSON.stringify({ error: error.message }), {
+      return new Response(JSON.stringify({ error: 'Unable to update password' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
