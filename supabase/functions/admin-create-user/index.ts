@@ -65,6 +65,11 @@ Deno.serve(async (req: Request) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
+    const supabaseUser = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: authHeader } } }
+    );
 
     const token = authHeader.replace('Bearer ', '');
     const {
@@ -76,38 +81,22 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: 'Unauthorized' }, 401);
     }
 
-    const { data: callerProfile, error: profileError } = await supabaseAdmin
-      .from('app_users')
-      .select('role')
-      .eq('id', callerUser.id)
-      .single();
-
-    if (profileError || !callerProfile) {
-      return jsonResponse({ error: 'Forbidden: perfil não encontrado' }, 403);
-    }
-
-    let callerHierarchy = 0;
-    const { data: hierarchyData, error: hierarchyError } = await supabaseAdmin
-      .from('access_levels')
-      .select('hierarchy_level')
-      .eq('code', callerProfile.role)
-      .maybeSingle();
-
-    if (!hierarchyError && hierarchyData?.hierarchy_level != null) {
-      callerHierarchy = Number(hierarchyData.hierarchy_level);
-    }
-
-    const hasStaticAdminRole = callerProfile.role === 'master' || callerProfile.role === 'admin';
-    if (!hasStaticAdminRole && callerHierarchy < 80) {
+    const { data: canAssignRole, error: authorizationError } = await supabaseUser.rpc(
+      'can_assign_role',
+      { new_role: role }
+    );
+    if (authorizationError || !canAssignRole) {
       return jsonResponse({ error: 'Forbidden: admin privileges required' }, 403);
     }
 
-    const { data: createdAuth, error: createAuthError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: { name, nickname, role },
-    });
+    const { data: createdAuth, error: createAuthError } = await supabaseAdmin.auth.admin.createUser(
+      {
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { name, nickname, role },
+      }
+    );
 
     if (createAuthError || !createdAuth.user) {
       const message = createAuthError?.message ?? 'Erro ao criar usuário no autenticador';

@@ -18,7 +18,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Parse request body
-    const { user_id, new_password } = await req.json() as {
+    const { user_id, new_password } = (await req.json()) as {
       user_id: string;
       new_password: string;
     };
@@ -36,10 +36,18 @@ Deno.serve(async (req: Request) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
+    const supabaseUser = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: authHeader } } }
+    );
 
     // Verify the caller's token is valid and retrieve their identity
     const token = authHeader.replace('Bearer ', '');
-    const { data: { user: callerUser }, error: callerError } = await supabaseAdmin.auth.getUser(token);
+    const {
+      data: { user: callerUser },
+      error: callerError,
+    } = await supabaseAdmin.auth.getUser(token);
     if (callerError || !callerUser) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
@@ -47,36 +55,11 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Verify the caller has admin privileges in the app_users table
-    // Use callerUser.id to match auth.uid() — more reliable than email matching
-    const { data: callerProfile, error: profileError } = await supabaseAdmin
-      .from('app_users')
-      .select('role')
-      .eq('id', callerUser.id)
-      .single();
-
-    if (profileError || !callerProfile) {
-      return new Response(JSON.stringify({ error: 'Forbidden: perfil não encontrado' }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // Check static admin roles OR dynamic hierarchy level (mirrors admin-create-user)
-    let callerHierarchy = 0;
-    const { data: hierarchyData, error: hierarchyError } = await supabaseAdmin
-      .from('access_levels')
-      .select('hierarchy_level')
-      .eq('code', callerProfile.role)
-      .maybeSingle();
-
-    if (!hierarchyError && hierarchyData?.hierarchy_level != null) {
-      callerHierarchy = Number(hierarchyData.hierarchy_level);
-    }
-
-    const hasStaticAdminRole =
-      callerProfile.role === 'master' || callerProfile.role === 'admin';
-    if (!hasStaticAdminRole && callerHierarchy < 80) {
+    const { data: canManage, error: authorizationError } = await supabaseUser.rpc(
+      'can_manage_user',
+      { target_user_id: user_id }
+    );
+    if (authorizationError || !canManage) {
       return new Response(JSON.stringify({ error: 'Forbidden: admin privileges required' }), {
         status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
