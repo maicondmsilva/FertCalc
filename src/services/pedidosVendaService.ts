@@ -571,7 +571,7 @@ export async function syncPedidoVendaStatus(pedidoVendaId: string): Promise<void
       if (saldo <= 0) {
         newStatus = 'concluido';
       } else {
-        newStatus = 'carregando';
+        newStatus = 'em_carregamento';
       }
     } else {
       // Verificar se há carregamentos agendados, liberados ou em andamento
@@ -579,7 +579,7 @@ export async function syncPedidoVendaStatus(pedidoVendaId: string): Promise<void
         (c) => c.status === 'agendado' || c.status === 'em_carregamento' || c.status === 'liberado'
       );
       if (hasActive) {
-        newStatus = 'carregando';
+        newStatus = 'em_carregamento';
       } else {
         newStatus = 'pendente';
       }
