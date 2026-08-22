@@ -1,0 +1,25 @@
+-- Cover tenant-aware and legacy foreign keys used by the orders/loading workflow.
+create index idx_alertas_carregamento_parent_org on public.alertas_carregamento(carregamento_id,organization_id);
+create index idx_cancelamentos_origem_org on public.cancelamentos_pedido(pedido_origem_id,organization_id);
+create index idx_cancelamentos_destino_org on public.cancelamentos_pedido(pedido_destino_id,organization_id);
+create index idx_execucoes_carregamento_org on public.carregamento_execucoes(carregamento_id,organization_id);
+create index idx_execucoes_criado_por on public.carregamento_execucoes(criado_por);
+create index idx_carregamento_itens_parent_org on public.carregamento_itens(carregamento_id,organization_id);
+create index idx_carregamento_itens_pedido_item_org on public.carregamento_itens(pedido_venda_item_id,organization_id);
+create index idx_carregamentos_pedido_org on public.carregamentos(pedido_venda_id,organization_id);
+create index idx_carregamentos_cotacao_org on public.carregamentos(cotacao_id,organization_id);
+create index idx_carregamentos_transportadora_org on public.carregamentos(transportadora_id,organization_id);
+create index idx_carregamentos_cancelado_por on public.carregamentos(cancelado_por_id);
+create index idx_carregamentos_local on public.carregamentos(local_carregamento_id);
+create index idx_cotacoes_frete_carregamento_org on public.cotacoes_frete(carregamento_id,organization_id);
+create index idx_cotacoes_frete_transportadora_org on public.cotacoes_frete(transportadora_id,organization_id);
+create index idx_cotacoes_solicitadas_local on public.cotacoes_solicitadas(local_carregamento_id);
+create index idx_cotacoes_solicitadas_recusado_por on public.cotacoes_solicitadas(recusado_por_id);
+create index idx_cotacoes_solicitadas_transportadora on public.cotacoes_solicitadas(transportadora_id);
+create index idx_historico_carregamento_parent_org on public.historico_carregamento(carregamento_id,organization_id);
+create index idx_pedidos_venda_cliente on public.pedidos_venda(cliente_id);
+create index idx_pedidos_venda_cliente_novo on public.pedidos_venda(cliente_id_novo);
+create index idx_pedidos_venda_filial on public.pedidos_venda(filial_id);
+create index idx_pedidos_venda_pai on public.pedidos_venda(pedido_pai_id);
+create index idx_pedidos_venda_itens_parent_org on public.pedidos_venda_itens(pedido_venda_id,organization_id);
+create index idx_pedidos_venda_itens_precificacao on public.pedidos_venda_itens(precificacao_id);
