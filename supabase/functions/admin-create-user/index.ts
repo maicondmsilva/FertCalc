@@ -102,6 +102,13 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: 'Forbidden: admin privileges required' }, 403);
     }
 
+    const { data: organizationId, error: organizationError } = await supabaseUser.rpc(
+      'get_current_organization_id'
+    );
+    if (organizationError || !organizationId) {
+      return jsonResponse({ error: 'Unable to resolve caller organization' }, 403);
+    }
+
     const { data: createdAuth, error: createAuthError } = await supabaseAdmin.auth.admin.createUser(
       {
         email,
@@ -125,6 +132,7 @@ Deno.serve(async (req: Request) => {
     const createdUserId = createdAuth.user.id;
     const { error: appUserError } = await supabaseAdmin.from('app_users').insert({
       id: createdUserId,
+      organization_id: organizationId,
       email,
       name,
       nickname,

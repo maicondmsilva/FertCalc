@@ -126,7 +126,8 @@ export async function updateUser(id: string, user: Partial<User>): Promise<void>
   if (user.managedUserIds !== undefined) payload.managed_user_ids = user.managedUserIds;
   if (user.permissions !== undefined) payload.permissions = user.permissions;
   if (user.filiais_permitidas !== undefined) payload.filiais_permitidas = user.filiais_permitidas;
-  if (user.requer_alteracao_senha !== undefined) payload.requer_alteracao_senha = user.requer_alteracao_senha;
+  if (user.requer_alteracao_senha !== undefined)
+    payload.requer_alteracao_senha = user.requer_alteracao_senha;
   const { error } = await supabase.from('app_users').update(payload).eq('id', id);
   if (error) throw error;
 }
@@ -139,6 +140,7 @@ export async function deleteUser(id: string): Promise<void> {
 function mapUser(data: Record<string, unknown>): User {
   return {
     id: data.id,
+    organizationId: data.organization_id,
     idNumeric: data.id_numeric,
     email: data.email,
     name: data.name,
@@ -941,9 +943,7 @@ const EMPTY_PRICING_SUMMARY: PricingRecord['summary'] = {
 };
 const FREE_PRODUCTS_FORMULA_LABEL = 'Produtos Livres';
 type CalculationDbInput =
-  | Partial<NonNullable<PricingRecord['calculations']>[number]>
-  | null
-  | undefined;
+  Partial<NonNullable<PricingRecord['calculations']>[number]> | null | undefined;
 
 const parseFiniteNumber = (value: unknown, fallback = 0) => {
   const parsed = Number(value);

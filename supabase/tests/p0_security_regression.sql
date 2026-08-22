@@ -4,13 +4,13 @@
 begin;
 
 insert into public.app_users (
-  id, email, name, password, role, permissions, managed_user_ids, filiais_permitidas, ativo
+  id, organization_id, email, name, password, role, permissions, managed_user_ids, filiais_permitidas, ativo
 ) values
-  ('a0000000-0000-4000-8000-000000000001', 'p07-user@example.test', 'P07 User', '', 'user', '{}'::jsonb, '{}'::text[], '{}'::uuid[], true),
-  ('a0000000-0000-4000-8000-000000000002', 'p07-peer@example.test', 'P07 Peer', '', 'user', '{}'::jsonb, '{}'::text[], '{}'::uuid[], true),
-  ('a0000000-0000-4000-8000-000000000003', 'p07-manager@example.test', 'P07 Manager', '', 'manager', '{}'::jsonb, '{}'::text[], '{}'::uuid[], true),
-  ('a0000000-0000-4000-8000-000000000004', 'p07-admin@example.test', 'P07 Admin', '', 'admin', '{}'::jsonb, '{}'::text[], '{}'::uuid[], true),
-  ('a0000000-0000-4000-8000-000000000005', 'p07-master@example.test', 'P07 Master', '', 'master', '{}'::jsonb, '{}'::text[], '{}'::uuid[], true);
+  ('a0000000-0000-4000-8000-000000000001', 'f0000000-0000-4000-8000-000000000001', 'p07-user@example.test', 'P07 User', '', 'user', '{}'::jsonb, '{}'::text[], '{}'::uuid[], true),
+  ('a0000000-0000-4000-8000-000000000002', 'f0000000-0000-4000-8000-000000000001', 'p07-peer@example.test', 'P07 Peer', '', 'user', '{}'::jsonb, '{}'::text[], '{}'::uuid[], true),
+  ('a0000000-0000-4000-8000-000000000003', 'f0000000-0000-4000-8000-000000000001', 'p07-manager@example.test', 'P07 Manager', '', 'manager', '{}'::jsonb, '{}'::text[], '{}'::uuid[], true),
+  ('a0000000-0000-4000-8000-000000000004', 'f0000000-0000-4000-8000-000000000001', 'p07-admin@example.test', 'P07 Admin', '', 'admin', '{}'::jsonb, '{}'::text[], '{}'::uuid[], true),
+  ('a0000000-0000-4000-8000-000000000005', 'f0000000-0000-4000-8000-000000000001', 'p07-master@example.test', 'P07 Master', '', 'master', '{}'::jsonb, '{}'::text[], '{}'::uuid[], true);
 
 do $$
 begin
