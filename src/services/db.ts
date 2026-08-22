@@ -1313,19 +1313,18 @@ export async function createNotification(
   const validDataId =
     notification.dataId && uuidRegex.test(notification.dataId) ? notification.dataId : null;
 
-  const { data, error } = await supabase
-    .from('notifications')
-    .insert({
-      user_id: validUserId,
-      title: notification.title,
-      message: notification.message,
-      date: notification.date,
-      read: notification.read,
-      type: notification.type,
-      data_id: validDataId,
-    })
-    .select()
-    .single();
+  if (!validUserId) throw new Error('Destinatário inválido para notificação.');
+
+  const { data, error } = await supabase.rpc('send_notification', {
+    p_user_id: validUserId,
+    p_type: notification.type,
+    p_group_type: notification.type === 'pricing_transfer' ? 'TRANSFER' : 'SYSTEM',
+    p_title: notification.title,
+    p_message: notification.message,
+    p_action_url: null,
+    p_data_id: validDataId,
+    p_metadata: validDataId ? { entityId: validDataId } : null,
+  });
   if (error) throw error;
   return {
     id: data.id,

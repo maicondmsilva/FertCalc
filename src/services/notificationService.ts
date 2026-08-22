@@ -75,20 +75,16 @@ export const saveNotification = async (
   notification: Omit<Notification, 'id' | 'created_at' | 'user_id'>,
   userId: string
 ): Promise<Notification> => {
-  const { data, error } = await supabase
-    .from('notifications')
-    .insert({
-      user_id: userId,
-      type: notification.type,
-      group_type: notification.group_type,
-      title: notification.title,
-      message: notification.message,
-      action_url: notification.action_url ?? null,
-      is_read: false,
-      metadata: notification.metadata ?? null,
-    })
-    .select()
-    .single();
+  const { data, error } = await supabase.rpc('send_notification', {
+    p_user_id: userId,
+    p_type: notification.type,
+    p_group_type: notification.group_type,
+    p_title: notification.title,
+    p_message: notification.message,
+    p_action_url: notification.action_url ?? null,
+    p_data_id: getNotificationEntityId(notification.metadata),
+    p_metadata: notification.metadata ?? null,
+  });
 
   if (error) {
     console.error('Error saving notification:', error);
@@ -100,12 +96,26 @@ export const saveNotification = async (
 
 export const createNotification = async (payload: NotificationPayload) => {
   try {
-    const { error } = await supabase.from('notifications').insert(payload);
+    const { error } = await supabase.rpc('send_notification', {
+      p_user_id: payload.user_id,
+      p_type: payload.type,
+      p_group_type: payload.group_type,
+      p_title: payload.title,
+      p_message: payload.message,
+      p_action_url: payload.action_url ?? null,
+      p_data_id: getNotificationEntityId(payload.metadata),
+      p_metadata: payload.metadata ?? null,
+    });
     if (error) console.error('Error creating notification:', error);
   } catch (err) {
     console.error('Exception creating notification:', err);
   }
 };
+
+function getNotificationEntityId(metadata?: Record<string, unknown>): string | null {
+  const value = metadata?.pricingId ?? metadata?.cotacaoId ?? metadata?.carregamentoId;
+  return typeof value === 'string' && value.trim() ? value : null;
+}
 
 export const notifyPricingCreated = async (pricing: PricingRecord, vendedor: User) => {
   const managers = await getManagersOfUser(vendedor.id);
