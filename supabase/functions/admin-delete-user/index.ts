@@ -29,6 +29,11 @@ Deno.serve(async (req: Request) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
+    const supabaseUser = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: authHeader } } }
+    );
 
     // Verify caller identity
     const token = authHeader.replace('Bearer ', '');
@@ -41,52 +46,12 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: 'Unauthorized' }, 401);
     }
 
-    // Verify caller role in app_users
-    const { data: callerProfile, error: profileError } = await supabaseAdmin
-      .from('app_users')
-      .select('role')
-      .eq('id', callerUser.id)
-      .single();
-
-    if (profileError || !callerProfile) {
-      return jsonResponse({ error: 'Forbidden: perfil não encontrado' }, 403);
-    }
-
-    // Check static admin roles OR dynamic hierarchy level
-    let callerHierarchy = 0;
-    const { data: hierarchyData, error: hierarchyError } = await supabaseAdmin
-      .from('access_levels')
-      .select('hierarchy_level')
-      .eq('code', callerProfile.role)
-      .maybeSingle();
-
-    if (!hierarchyError && hierarchyData?.hierarchy_level != null) {
-      callerHierarchy = Number(hierarchyData.hierarchy_level);
-    }
-
-    const hasStaticAdminRole =
-      callerProfile.role === 'master' || callerProfile.role === 'admin';
-    if (!hasStaticAdminRole && callerHierarchy < 80) {
-      return jsonResponse({ error: 'Forbidden: admin privileges required' }, 403);
-    }
-
-    // Prevent self-deletion
-    if (callerUser.id === user_id) {
-      return jsonResponse({ error: 'Você não pode excluir sua própria conta.' }, 400);
-    }
-
-    // Verify target user exists and check hierarchy protection
-    const { data: targetProfile } = await supabaseAdmin
-      .from('app_users')
-      .select('role')
-      .eq('id', user_id)
-      .single();
-
-    if (targetProfile?.role === 'master' && callerProfile.role !== 'master') {
-      return jsonResponse(
-        { error: 'Apenas usuários Master podem excluir outros usuários Master.' },
-        403
-      );
+    const { data: canDelete, error: authorizationError } = await supabaseUser.rpc(
+      'can_delete_user',
+      { target_user_id: user_id }
+    );
+    if (authorizationError || !canDelete) {
+      return jsonResponse({ error: 'Forbidden: sem permissão para excluir este usuário' }, 403);
     }
 
     // Delete from auth.users (this cascades or we handle app_users separately)

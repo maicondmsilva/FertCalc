@@ -28,6 +28,11 @@ import { useConfirm } from '../hooks/useConfirm';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { AccessProfile, getAccessProfiles } from '../services/accessProfileService';
 import { useAccessLevels } from '../hooks/useAccessLevels';
+import {
+  canChangeUserRole,
+  getUserManagementCapabilities,
+  UserManagementCapabilities,
+} from '../services/hierarchyService';
 
 interface UserManagerProps {
   currentUser: User;
@@ -265,6 +270,9 @@ export default function UserManager({ currentUser }: UserManagerProps) {
   const { showSuccess, showError } = useToast();
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
   const [users, setUsers] = useState<User[]>([]);
+  const [managementCapabilities, setManagementCapabilities] = useState<
+    Record<string, UserManagementCapabilities>
+  >({});
   const [branches, setBranches] = useState<Branch[]>([]);
   const [accessProfiles, setAccessProfiles] = useState<AccessProfile[]>([]);
   const [appliedProfileId, setAppliedProfileId] = useState<string>('');
@@ -389,6 +397,7 @@ export default function UserManager({ currentUser }: UserManagerProps) {
     setLoading(true);
     const data = await getUsers();
     setUsers(data);
+    setManagementCapabilities(await getUserManagementCapabilities(data.map((user) => user.id)));
     setLoading(false);
   };
 
@@ -446,6 +455,13 @@ export default function UserManager({ currentUser }: UserManagerProps) {
     setLoading(true);
     try {
       if (editingId) {
+        const existingUser = users.find((user) => user.id === editingId);
+        if (
+          existingUser?.role !== formData.role &&
+          !(await canChangeUserRole(editingId, formData.role))
+        ) {
+          throw new Error('Você não tem permissão para atribuir este nível de acesso.');
+        }
         await updateUser(editingId, {
           name: formData.name,
           email: normalizedEmail,
@@ -495,14 +511,11 @@ export default function UserManager({ currentUser }: UserManagerProps) {
   };
 
   const canEditUser = (targetUser: User): boolean => {
-    if (targetUser.role === 'master' && currentUser.role !== 'master') return false;
-    return true;
+    return managementCapabilities[targetUser.id]?.canManage === true;
   };
 
   const canDeleteUser = (targetUser: User): boolean => {
-    if (targetUser.role === 'master' && currentUser.role !== 'master') return false;
-    if (targetUser.id === currentUser.id) return false;
-    return true;
+    return managementCapabilities[targetUser.id]?.canDelete === true;
   };
 
   const startEdit = (user: User) => {
