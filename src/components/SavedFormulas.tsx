@@ -29,6 +29,7 @@ import {
   Square,
   FileText,
   Star,
+  Search,
 } from 'lucide-react';
 import { useToast } from './Toast';
 import { useConfirm } from '../hooks/useConfirm';
@@ -985,3 +986,4 @@ export default function SavedFormulas({ currentUser, onSendToCalculator }: Saved
     </React.Fragment>
   );
 }
+
