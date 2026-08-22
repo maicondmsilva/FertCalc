@@ -50,9 +50,15 @@ describe('execucaoCarregamentoService', () => {
   });
 
   it('inicia e conclui execução', async () => {
-    const eq = vi.fn().mockResolvedValue({ error: null });
-    const update = vi.fn(() => ({ eq }));
-    fromMock.mockReturnValue({ update });
+    const updateEq = vi.fn().mockResolvedValue({ error: null });
+    const update = vi.fn(() => ({ eq: updateEq }));
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: { carregamento_id: 'car-1' },
+      error: null,
+    });
+    const selectEq = vi.fn(() => ({ maybeSingle }));
+    const select = vi.fn(() => ({ eq: selectEq }));
+    fromMock.mockReturnValue({ update, select });
 
     const started = await updateExecucaoStatus('exec-1', 'em_carregamento');
     const done = await concluirExecucao('exec-1', 28);
@@ -62,3 +68,4 @@ describe('execucaoCarregamentoService', () => {
     expect(update).toHaveBeenCalled();
   });
 });
+
