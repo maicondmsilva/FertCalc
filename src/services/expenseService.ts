@@ -15,6 +15,7 @@ import {
 function mapExpense(d: Record<string, unknown>): CreditCardExpense {
   return {
     id: d.id as string,
+    organizationId: d.organization_id as string | undefined,
     description: d.description as string,
     amount: Number(d.amount),
     date: d.date as string,
@@ -39,6 +40,7 @@ function mapExpense(d: Record<string, unknown>): CreditCardExpense {
 function mapCategory(d: Record<string, unknown>): ExpenseCategory {
   return {
     id: d.id as string,
+    organizationId: d.organization_id as string | undefined,
     name: d.name as string,
     budgetLimit: d.budget_limit != null ? Number(d.budget_limit) : undefined,
     color: d.color as string | undefined,
@@ -52,6 +54,7 @@ function mapCategory(d: Record<string, unknown>): ExpenseCategory {
 function mapAudit(d: Record<string, unknown>): ExpenseAudit {
   return {
     id: d.id as string,
+    organizationId: d.organization_id as string | undefined,
     expenseId: d.expense_id as string,
     action: d.action as AuditAction,
     userId: d.user_id as string,

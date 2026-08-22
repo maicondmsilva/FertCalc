@@ -4,6 +4,7 @@ import { CreditCard } from '../types/expense.types';
 function mapCard(d: Record<string, unknown>): CreditCard {
   return {
     id: d.id as string,
+    organizationId: d.organization_id as string | undefined,
     name: d.name as string,
     lastFour: d.last_four as string | undefined,
     userId: d.user_id as string,
