@@ -12,6 +12,10 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
+  if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
+  if (!req.headers.get('content-type')?.toLowerCase().includes('application/json')) {
+    return jsonResponse({ error: 'Content-Type must be application/json' }, 415);
+  }
 
   try {
     const authHeader = req.headers.get('Authorization');
@@ -20,8 +24,11 @@ Deno.serve(async (req: Request) => {
     }
 
     const { user_id } = (await req.json()) as { user_id?: string };
-    if (!user_id?.trim()) {
-      return jsonResponse({ error: 'user_id is required' }, 400);
+    if (
+      !user_id?.trim() ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(user_id)
+    ) {
+      return jsonResponse({ error: 'valid user_id is required' }, 422);
     }
 
     const supabaseAdmin = createClient(
@@ -57,7 +64,7 @@ Deno.serve(async (req: Request) => {
     // Delete from auth.users (this cascades or we handle app_users separately)
     const { error: deleteAuthError } = await supabaseAdmin.auth.admin.deleteUser(user_id);
     if (deleteAuthError) {
-      return jsonResponse({ error: deleteAuthError.message }, 400);
+      return jsonResponse({ error: 'Unable to delete user' }, 400);
     }
 
     // Also ensure app_users row is removed (in case there's no cascade)
