@@ -29,7 +29,7 @@ export default function Login({ onLogin, forceChangePasswordUserId, onPasswordCh
     setLoading(true);
     setError('');
 
-    const { user, error: authError } = await signIn(emailOrNickname.trim(), password);
+    const { user, error: authError } = await signIn(emailOrNickname, password);
 
     if (authError) {
       setError(authError);
@@ -235,7 +235,7 @@ export default function Login({ onLogin, forceChangePasswordUserId, onPasswordCh
                 htmlFor="login-email"
                 className="block text-sm font-medium text-stone-700 mb-1"
               >
-                E-mail ou Usuário (Nickname)
+                E-mail ou usuário
               </label>
               <div className="relative">
                 <Mail

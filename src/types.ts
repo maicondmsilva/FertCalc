@@ -393,6 +393,7 @@ export interface TargetFormula {
 
 export interface SavedFormula {
   id: string;
+  organizationId?: string;
   id_numeric?: number;
   userId: string;
   userName: string;
@@ -476,6 +477,7 @@ export interface PricingHistoryEntry {
 
 export interface PricingRecord {
   id: string;
+  organizationId?: string;
   cod?: number;
   modo_calculo?: 'formulacao' | 'produtos_livres';
   userId: string;
@@ -506,6 +508,7 @@ export interface PricingRecord {
 
 export interface Goal {
   id: string;
+  organizationId?: string;
   userId: string;
   userName: string;
   type: 'monthly' | 'annual';

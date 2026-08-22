@@ -4,16 +4,26 @@ const { getSessionMock } = vi.hoisted(() => ({
   getSessionMock: vi.fn(),
 }));
 
+const { signInWithPasswordMock, setSessionMock, signOutMock, getUserByEmailMock } = vi.hoisted(() => ({
+  signInWithPasswordMock: vi.fn(),
+  setSessionMock: vi.fn(),
+  signOutMock: vi.fn(),
+  getUserByEmailMock: vi.fn(),
+}));
+
 vi.mock('./supabase', () => ({
   supabase: {
     auth: {
       getSession: getSessionMock,
+      signInWithPassword: signInWithPasswordMock,
+      setSession: setSessionMock,
+      signOut: signOutMock,
     },
   },
 }));
 
 vi.mock('./db', () => ({
-  getUserByEmail: vi.fn(),
+  getUserByEmail: getUserByEmailMock,
 }));
 
 vi.mock('../utils/logger', () => ({
@@ -23,7 +33,59 @@ vi.mock('../utils/logger', () => ({
   },
 }));
 
-import { createAuthUser } from './authService';
+import { createAuthUser, signIn } from './authService';
+
+describe('signIn', () => {
+  beforeEach(() => {
+    signInWithPasswordMock.mockReset();
+    setSessionMock.mockReset();
+    signOutMock.mockReset();
+    getUserByEmailMock.mockReset();
+    vi.unstubAllGlobals();
+  });
+
+  it('autentica por e-mail antes de consultar o perfil protegido', async () => {
+    const profile = { id: 'user-1', email: 'usuario@example.com', ativo: true, role: 'user' };
+    signInWithPasswordMock.mockResolvedValue({
+      data: { user: { id: 'user-1', email: 'usuario@example.com' } },
+      error: null,
+    });
+    getUserByEmailMock.mockResolvedValue(profile);
+
+    const result = await signIn(' Usuario@Example.com ', 'senha-segura');
+
+    expect(signInWithPasswordMock).toHaveBeenCalledWith({
+      email: 'usuario@example.com',
+      password: 'senha-segura',
+    });
+    expect(getUserByEmailMock).toHaveBeenCalledAfter(signInWithPasswordMock);
+    expect(result).toEqual({ user: profile, error: null });
+  });
+
+  it('autentica nickname no servidor sem consultar perfis pelo cliente anônimo', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ access_token: 'access', refresh_token: 'refresh' }),
+      })
+    );
+    setSessionMock.mockResolvedValue({
+      data: { user: { id: 'user-1', email: 'usuario@example.com' } },
+      error: null,
+    });
+    getUserByEmailMock.mockResolvedValue({
+      id: 'user-1', email: 'usuario@example.com', ativo: true, role: 'user',
+    });
+
+    const result = await signIn('apelido', 'senha-segura');
+
+    expect(signInWithPasswordMock).not.toHaveBeenCalled();
+    expect(setSessionMock).toHaveBeenCalledWith({ access_token: 'access', refresh_token: 'refresh' });
+    expect(getUserByEmailMock).toHaveBeenCalledWith('usuario@example.com');
+    expect(result.error).toBeNull();
+  });
+});
 
 describe('createAuthUser', () => {
   beforeEach(() => {
