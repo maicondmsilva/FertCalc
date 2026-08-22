@@ -4,6 +4,7 @@ import { LocalCarregamento } from '../types/carregamento';
 function mapLocal(d: Record<string, unknown>): LocalCarregamento {
   return {
     id: d.id as string,
+    organizationId: d.organization_id as string | undefined,
     id_numeric: Number(d.id_numeric),
     nome: d.nome as string,
     filial_id: d.filial_id as string | undefined,

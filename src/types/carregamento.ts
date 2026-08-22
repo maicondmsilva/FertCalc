@@ -185,6 +185,7 @@ export interface KPICarregamento {
 // ── Local de Carregamento ─────────────────────────────────────
 export interface LocalCarregamento {
   id: string;
+  organizationId?: string;
   id_numeric: number;
   nome: string;
   filial_id?: string;
@@ -200,11 +201,7 @@ export interface LocalCarregamento {
 
 // ── Cotação Solicitada (independente) ─────────────────────────
 export type StatusCotacaoSolicitada =
-  | 'aguardando'
-  | 'em_analise'
-  | 'cotado'
-  | 'aprovado'
-  | 'cancelado';
+  'aguardando' | 'em_analise' | 'cotado' | 'aprovado' | 'cancelado';
 
 export interface CotacaoSolicitada {
   id: string;

@@ -163,6 +163,7 @@ export async function getBranches(): Promise<Branch[]> {
   if (error || !data) return [];
   return data.map((d) => ({
     id: d.id,
+    organizationId: d.organization_id,
     id_numeric: d.id_numeric,
     name: d.name,
     ativo: d.ativo ?? true,
@@ -176,7 +177,13 @@ export async function createBranch(branch: Omit<Branch, 'id'>): Promise<Branch> 
     .select()
     .single();
   if (error) throw error;
-  return { id: data.id, id_numeric: data.id_numeric, name: data.name, ativo: data.ativo };
+  return {
+    id: data.id,
+    organizationId: data.organization_id,
+    id_numeric: data.id_numeric,
+    name: data.name,
+    ativo: data.ativo,
+  };
 }
 
 export async function updateBranch(id: string, branch: Partial<Branch>): Promise<void> {
@@ -262,6 +269,7 @@ function clientToDb(client: Partial<Client>) {
 function mapClient(data: Record<string, unknown>): Client {
   return {
     id: data.id,
+    organizationId: data.organization_id,
     code: data.code,
     name: data.name,
     document: data.document,
@@ -336,6 +344,7 @@ function agentToDb(agent: Partial<Agent>) {
 function mapAgent(data: Record<string, unknown>): Agent {
   return {
     id: data.id,
+    organizationId: data.organization_id,
     code: data.code,
     name: data.name,
     document: data.document,
@@ -780,6 +789,7 @@ export async function getPriceLists(): Promise<PriceList[]> {
   if (error || !data) return [];
   return data.map((d) => ({
     id: d.id,
+    organizationId: d.organization_id,
     name: d.name,
     branchId: d.branch_id,
     local_carregamento_id: d.local_carregamento_id ?? undefined,
@@ -812,6 +822,7 @@ export async function createPriceList(pl: Omit<PriceList, 'id'>): Promise<PriceL
   if (error) throw error;
   return {
     id: data.id,
+    organizationId: data.organization_id,
     name: data.name,
     branchId: data.branch_id,
     local_carregamento_id: data.local_carregamento_id ?? undefined,
