@@ -309,12 +309,14 @@ export interface Branch {
 
 export interface Brand {
   id: string;
+  organizationId?: string;
   code: string;
   name: string;
 }
 
 export interface MacroMaterial {
   id: string;
+  organizationId?: string;
   code: string;
   name: string;
   n: number;
@@ -332,6 +334,7 @@ export interface MacroMaterial {
 
 export interface MicroMaterial {
   id: string;
+  organizationId?: string;
   code: string;
   name: string;
   microGuarantees: MicroGuarantee[];
