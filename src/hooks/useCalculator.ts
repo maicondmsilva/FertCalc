@@ -4,7 +4,6 @@ import {
   RawMaterial,
   PricingFactors,
   PricingRecord,
-  PricingSummary,
   Branch,
   PriceList,
   Client,
@@ -54,6 +53,11 @@ import {
   getProdutoFormuladoBySavedFormulaId,
 } from '../services/produtosFormuladosService';
 import { addHistoricoPreco } from '../services/historicoPrecoService';
+import {
+  calculatePricingSummary,
+  hasFormulaTarget,
+  parseFormulaTarget,
+} from '../domain/pricing-engine';
 
 interface UseCalculatorProps {
   initialData?: PricingRecord | null;
@@ -491,112 +495,7 @@ export function useCalculator({
   const removeMacro = (id: string) => setMacros(macros.filter((m) => m.id !== id));
   const removeMicro = (id: string) => setMicros(micros.filter((m) => m.id !== id));
 
-  const calculateSummary = (
-    currentMacros: RawMaterial[],
-    currentMicros: RawMaterial[],
-    currentFactors: PricingFactors
-  ): PricingSummary => {
-    const selectedMacros = currentMacros.filter((m) => m.selected);
-    const selectedMicros = currentMicros.filter((m) => m.selected);
-    const allSelected = [...selectedMacros, ...selectedMicros];
-
-    let totalWeight = 0;
-    let baseCost = 0;
-    let totalN_kg = 0;
-    let totalP_kg = 0;
-    let totalK_kg = 0;
-    let totalS_kg = 0;
-    let totalCa_kg = 0;
-    let resultingMicros: Record<string, number> = {};
-
-    allSelected.forEach((m) => {
-      const qty = Number(m.quantity) || 0;
-      totalWeight += qty;
-      baseCost += (qty / 1000) * (Number(m.price) || 0);
-
-      totalN_kg += qty * ((Number(m.n) || 0) / 100);
-      totalP_kg += qty * ((Number(m.p) || 0) / 100);
-      totalK_kg += qty * ((Number(m.k) || 0) / 100);
-      totalS_kg += qty * ((Number(m.s) || 0) / 100);
-      totalCa_kg += qty * ((Number(m.ca) || 0) / 100);
-
-      if (m.microGuarantees) {
-        m.microGuarantees.forEach((g) => {
-          const micro_kg = qty * ((Number(g.value) || 0) / 100);
-          resultingMicros[g.name] = (resultingMicros[g.name] || 0) + micro_kg;
-        });
-      }
-    });
-
-    const resultingN = totalWeight > 0 ? (totalN_kg / totalWeight) * 100 : 0;
-    const resultingP = totalWeight > 0 ? (totalP_kg / totalWeight) * 100 : 0;
-    const resultingK = totalWeight > 0 ? (totalK_kg / totalWeight) * 100 : 0;
-    const resultingS = totalWeight > 0 ? (totalS_kg / totalWeight) * 100 : 0;
-    const resultingCa = totalWeight > 0 ? (totalCa_kg / totalWeight) * 100 : 0;
-
-    const finalMicros: Record<string, number> = {};
-    Object.keys(resultingMicros).forEach((name) => {
-      finalMicros[name] = totalWeight > 0 ? (resultingMicros[name] / totalWeight) * 100 : 0;
-    });
-
-    const factoredPrice = baseCost * (Number(currentFactors.factor) || 1);
-    const basePrice = factoredPrice - (Number(currentFactors.discount) || 0);
-
-    let days = 0;
-    if (currentFactors.dueDate) {
-      const due = new Date(currentFactors.dueDate);
-      const today = new Date();
-
-      if (currentFactors.exemptCurrentMonth) {
-        const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-        if (due > endOfMonth) {
-          const diffTime = due.getTime() - endOfMonth.getTime();
-          days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        }
-      } else {
-        const diffTime = due.getTime() - today.getTime();
-        days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      }
-      if (days < 0) days = 0;
-    }
-
-    const dailyInterest = (Number(currentFactors.monthlyInterestRate) || 0) / 30;
-    const interestValue = basePrice * (dailyInterest / 100) * days;
-    const taxValue = basePrice * ((Number(currentFactors.taxRate) || 0) / 100);
-    const commissionValue = basePrice * ((Number(currentFactors.commission) || 0) / 100);
-    // Explicit CIF/FOB: older records without tipoFrete default to CIF when freight > 0
-    const tipoFrete =
-      currentFactors.tipoFrete ?? (Number(currentFactors.freight) > 0 ? 'CIF' : 'FOB');
-    const freightValue = tipoFrete === 'CIF' ? Number(currentFactors.freight) || 0 : 0;
-    const embalagemValor = Number(currentFactors.embalagem_valor || 0);
-
-    const finalPrice =
-      basePrice + interestValue + taxValue + commissionValue + freightValue + embalagemValor;
-    const totalSaleValue = finalPrice * (Number(currentFactors.totalTons) || 0);
-
-    return {
-      totalWeight,
-      baseCost,
-      basePrice,
-      interestValue,
-      taxValue,
-      commissionValue,
-      freightValue,
-      finalPrice,
-      totalSaleValue,
-      resultingN,
-      resultingP,
-      resultingK,
-      resultingS,
-      resultingCa,
-      resultingMicros: finalMicros,
-    };
-  };
-
-  const targetFormulaPattern = /(\d+(?:[.,]\d+)?)[^\d]+(\d+(?:[.,]\d+)?)[^\d]+(\d+(?:[.,]\d+)?)/;
-
-  const hasTargetFormula = (formula?: string) =>
-    !!formula && targetFormulaPattern.test(formula.trim());
+  const calculateSummary = calculatePricingSummary;
 
   const applyFreeCompositionSummary = (
     calc: TargetFormula,
@@ -688,7 +587,7 @@ export function useCalculator({
         return;
       }
 
-      if (!hasTargetFormula(calc.formula)) {
+      if (!hasFormulaTarget(calc.formula)) {
         const calcIndex = updatedCalculations.findIndex((item) => item.id === calc.id);
         if (calcIndex !== -1) {
           updatedCalculations[calcIndex] = applyFreeCompositionSummary(
@@ -700,12 +599,12 @@ export function useCalculator({
         return;
       }
 
-      const match = calc.formula.match(targetFormulaPattern);
-      if (!match) return;
+      const target = parseFormulaTarget(calc.formula);
+      if (!target) return;
 
-      const targetN = parseFloat(match[1].replace(',', '.'));
-      const targetP = parseFloat(match[2].replace(',', '.'));
-      const targetK = parseFloat(match[3].replace(',', '.'));
+      const targetN = target.n;
+      const targetP = target.p;
+      const targetK = target.k;
 
       const reqN = targetN * 10;
       const reqP = targetP * 10;

@@ -77,20 +77,25 @@ describe('calculateSummary', () => {
   });
 
   it('calcula preço final com fator de custo diferente de 1', () => {
-    // factor = 0.8 => basePrice = baseCost / 0.8
+    // O fator comercial multiplica o custo na calculadora atual.
     const macro = makeMacro({ quantity: 400, price: 2000 });
     const factors = makeFactors({ factor: 0.8 });
     const result = calculateSummary([macro], [], factors);
     expect(result.baseCost).toBeCloseTo(800);
-    expect(result.basePrice).toBeCloseTo(1000); // 800 / 0.8
+    expect(result.basePrice).toBeCloseTo(640);
   });
 
   it('aplica taxa de juros corretamente', () => {
     const macro = makeMacro({ quantity: 1000, price: 1000 });
-    const factors = makeFactors({ factor: 1, monthlyInterestRate: 0.02 }); // 2% ao mês
-    const result = calculateSummary([macro], [], factors);
-    // baseCost = (1000/1000) * 1000 = 1000; basePrice = 1000
-    // interestValue = 1000 * 0.02 = 20
+    const factors = makeFactors({
+      factor: 1,
+      monthlyInterestRate: 2,
+      dueDate: '2026-02-15T12:00:00Z',
+    });
+    const result = calculateSummary([macro], [], factors, {
+      today: new Date('2026-01-16T12:00:00Z'),
+    });
+    // 2% ao mês durante 30 dias sobre R$ 1.000.
     expect(result.interestValue).toBeCloseTo(20);
   });
 
@@ -98,8 +103,8 @@ describe('calculateSummary', () => {
     const macro = makeMacro({ quantity: 1000, price: 1000 });
     const factors = makeFactors({
       factor: 1,
-      taxRate: 0.05, // 5%
-      commission: 0.03, // 3%
+      taxRate: 5,
+      commission: 3,
       freight: 50, // R$ fixo
     });
     const result = calculateSummary([macro], [], factors);
