@@ -29,26 +29,45 @@ export interface CreateAuthUserPayload {
 
 /**
  * Login seguro: autentica via Supabase Auth e carrega o perfil do usuário.
- * Suporta login por e-mail ou por nickname (busca o e-mail correspondente).
+ * Autentica diretamente por e-mail. O perfil só é consultado depois que a
+ * sessão existe, para não expor a tabela de usuários a visitantes anônimos.
  */
-export async function signIn(emailOrNickname: string, password: string): Promise<AuthResult> {
+export async function signIn(email: string, password: string): Promise<AuthResult> {
   try {
-    let emailToUse = emailOrNickname;
+    const identifier = email.trim().toLowerCase();
+    let data;
+    let error;
 
-    // Se não parece um e-mail, busca pelo nickname para obter o e-mail real
-    if (!emailOrNickname.includes('@')) {
-      const profile = await getUserByEmail(emailOrNickname);
-      if (!profile) {
-        return { user: null, error: 'Usuário não encontrado. Verifique seu e-mail/usuário.' };
+    if (identifier.includes('@')) {
+      ({ data, error } = await supabase.auth.signInWithPassword({ email: identifier, password }));
+    } else {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/login-with-identifier`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({ identifier, password }),
+        }
+      );
+      const body = (await response.json()) as {
+        access_token?: string;
+        refresh_token?: string;
+        error?: string;
+      };
+      if (!response.ok || !body.access_token || !body.refresh_token) {
+        return { user: null, error: 'E-mail/usuário ou senha incorretos.' };
       }
-      emailToUse = profile.email;
+      const sessionResult = await supabase.auth.setSession({
+        access_token: body.access_token,
+        refresh_token: body.refresh_token,
+      });
+      data = sessionResult.data;
+      error = sessionResult.error;
     }
-
-    // Autenticação via Supabase Auth (senhas com hash bcrypt)
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: emailToUse,
-      password,
-    });
 
     if (error) {
       logger.warn('[authService] signIn error:', error.message);
@@ -66,7 +85,12 @@ export async function signIn(emailOrNickname: string, password: string): Promise
     }
 
     // Carrega perfil completo da tabela app_users
-    const profile = await getUserByEmail(emailToUse);
+    const profileEmail = data.user.email;
+    if (!profileEmail) {
+      await supabase.auth.signOut();
+      return { user: null, error: 'Perfil de usuário não encontrado. Contate o administrador.' };
+    }
+    const profile = await getUserByEmail(profileEmail);
     if (!profile) {
       return { user: null, error: 'Perfil de usuário não encontrado. Contate o administrador.' };
     }

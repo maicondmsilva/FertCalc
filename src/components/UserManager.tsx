@@ -448,8 +448,8 @@ export default function UserManager({ currentUser }: UserManagerProps) {
       showError('A senha é obrigatória para um novo usuário.');
       return;
     }
-    if (!editingId && formData.password.length < 6) {
-      showError('A senha deve ter no mínimo 6 caracteres.');
+    if (!editingId && formData.password.length < 8) {
+      showError('A senha deve ter no mínimo 8 caracteres.');
       return;
     }
     setLoading(true);

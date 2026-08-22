@@ -1035,6 +1035,7 @@ export function formatPricingCod(cod?: number): string {
 function mapPricingRecord(d: Record<string, unknown>): PricingRecord {
   return {
     id: d.id,
+    organizationId: d.organization_id,
     cod: d.cod,
     formattedCod: formatPricingCod(d.cod as number),
     userId: d.user_id,
@@ -1151,6 +1152,7 @@ export async function getSavedFormulas(): Promise<SavedFormula[]> {
   if (error || !data) return [];
   return data.map((d) => ({
     id: d.id,
+    organizationId: d.organization_id,
     id_numeric: d.id_numeric != null ? Number(d.id_numeric) : undefined,
     userId: d.user_id,
     userName: d.user_name,
@@ -1232,6 +1234,7 @@ export async function getGoals(): Promise<Goal[]> {
   if (error || !data) return [];
   return data.map((d) => ({
     id: d.id,
+    organizationId: d.organization_id,
     userId: d.user_id,
     userName: d.user_name,
     type: d.type,
