@@ -33,13 +33,11 @@ export interface AuditLogEntry {
  */
 export async function logAudit(entry: AuditLogEntry): Promise<void> {
   try {
-    const { error } = await supabase.from('audit_logs').insert({
-      user_id: entry.user_id,
-      user_name: entry.user_name,
-      action: entry.action,
-      entity_type: entry.entity_type,
-      entity_id: entry.entity_id,
-      metadata: entry.metadata ?? null,
+    const { error } = await supabase.rpc('write_audit_logs_entry', {
+      p_action: entry.action,
+      p_entity_type: entry.entity_type,
+      p_entity_id: entry.entity_id,
+      p_metadata: entry.metadata ?? null,
     });
 
     if (error) {
