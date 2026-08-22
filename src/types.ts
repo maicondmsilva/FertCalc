@@ -80,6 +80,7 @@ export interface CompatibilityCategory {
 
 export interface User {
   id: string;
+  organizationId?: string;
   idNumeric: number;
   email: string;
   name: string;
