@@ -259,6 +259,7 @@ export interface Address {
 
 export interface Client {
   id: string;
+  organizationId?: string;
   code: string;
   name: string;
   document: string; // CPF or CNPJ
@@ -274,6 +275,7 @@ export interface Client {
 
 export interface Agent {
   id: string;
+  organizationId?: string;
   code: string;
   name: string;
   document: string;
@@ -285,6 +287,7 @@ export interface Agent {
 
 export interface PriceList {
   id: string;
+  organizationId?: string;
   name: string;
   branchId?: string;
   local_carregamento_id?: string;
@@ -298,6 +301,7 @@ export interface PriceList {
 
 export interface Branch {
   id: string;
+  organizationId?: string;
   id_numeric?: number;
   name: string;
   ativo?: boolean;
