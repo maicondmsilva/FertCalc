@@ -1,9 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { PricingRecord, Goal, User } from '../types';
-import { TrendingUp, TrendingDown, DollarSign, FileText, Target, Clock, CheckCircle, XCircle, BarChart3 } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
+import { TrendingUp, DollarSign, FileText, Target, Clock, BarChart3 } from 'lucide-react';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+  PieChart,
+  Pie,
+} from 'recharts';
 import { getPricingRecords, getGoals } from '../services/db';
 import { getPricingTotalTons, getPricingTotalSaleValue } from '../utils/pricingMetrics';
+import {
+  calculatePricingDashboardStats,
+  filterPricingsByPeriod,
+  getPricingPeriodKey,
+  getSixPeriodsEndingAt,
+  toPeriodKey,
+} from '../utils/pricingDashboard';
 
 interface DashboardProps {
   currentUser: User;
@@ -12,66 +30,67 @@ interface DashboardProps {
 export default function Dashboard({ currentUser }: DashboardProps) {
   const [pricings, setPricings] = useState<PricingRecord[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [selectedPeriod, setSelectedPeriod] = useState(() => toPeriodKey(new Date()));
 
   useEffect(() => {
     const loadData = async () => {
       const [allPricings, allGoals] = await Promise.all([getPricingRecords(), getGoals()]);
-      setPricings(allPricings.filter(p => p.userId === currentUser.id));
-      setGoals(allGoals.filter(g => g.userId === currentUser.id));
+      setPricings(allPricings.filter((p) => p.userId === currentUser.id));
+      setGoals(allGoals.filter((g) => g.userId === currentUser.id));
     };
     loadData();
   }, [currentUser]);
 
-  const stats = {
-    totalValue: pricings.filter(p => p.status === 'Fechada').reduce((sum, p) => sum + getPricingTotalSaleValue(p), 0),
-    totalValueInProgress: pricings.filter(p => p.status === 'Em Andamento').reduce((sum, p) => sum + getPricingTotalSaleValue(p), 0),
-    count: pricings.length,
-    closedCount: pricings.filter(p => p.status === 'Fechada').length,
-    inProgressCount: pricings.filter(p => p.status === 'Em Andamento').length,
-    lostCount: pricings.filter(p => p.status === 'Perdida').length,
-    avgMargin: pricings.length > 0 ? pricings.reduce((sum, p) => sum + ((p.factors?.margin || 0) - (p.factors?.discount || 0)), 0) / pricings.length : 0
-  };
+  const filteredPricings = useMemo(
+    () => filterPricingsByPeriod(pricings, selectedPeriod),
+    [pricings, selectedPeriod]
+  );
+  const stats = useMemo(() => calculatePricingDashboardStats(filteredPricings), [filteredPricings]);
+  const [selectedYear, selectedMonth] = selectedPeriod.split('-').map(Number);
+  const monthlyGoal = goals.find(
+    (g) =>
+      g.type === 'monthly' &&
+      g.month === selectedMonth &&
+      g.year === selectedYear &&
+      g.status === 'Aprovada'
+  );
 
-  const currentMonth = new Date().getMonth() + 1;
-  const currentYear = new Date().getFullYear();
-  const monthlyGoal = goals.find(g => g.type === 'monthly' && g.month === currentMonth && g.year === currentYear && g.status === 'Aprovada');
-
-  const monthlySales = pricings
-    .filter(p => {
-      const d = new Date(p.date);
-      return p.status === 'Fechada' && p.approvalStatus === 'Aprovada' &&
-        d.getMonth() + 1 === monthlyGoal?.month &&
-        d.getFullYear() === monthlyGoal?.year;
-    })
+  const monthlySales = filteredPricings
+    .filter((p) => p.status === 'Fechada' && p.approvalStatus === 'Aprovada')
     .reduce((sum, p) => sum + getPricingTotalTons(p), 0);
 
   const goalProgress = monthlyGoal ? (monthlySales / monthlyGoal.targetValue) * 100 : 0;
 
   const statusData = [
-    { name: 'Fechada', value: stats.closedCount, color: '#10b981' },
+    {
+      name: 'Fechada',
+      value: filteredPricings.filter((p) => p.status === 'Fechada').length,
+      color: '#10b981',
+    },
     { name: 'Em Andamento', value: stats.inProgressCount, color: '#3b82f6' },
-    { name: 'Perdida', value: stats.lostCount, color: '#ef4444' }
-  ].filter(d => d.value > 0);
+    { name: 'Perdida', value: stats.lostCount, color: '#ef4444' },
+  ].filter((d) => d.value > 0);
 
-  const last6Months = Array.from({ length: 6 }, (_, i) => {
-    const d = new Date();
-    d.setMonth(d.getMonth() - i);
-    return {
-      month: d.toLocaleString('pt-BR', { month: 'short' }),
-      monthNum: d.getMonth() + 1,
-      year: d.getFullYear(),
-      value: 0
-    };
-  }).reverse();
+  const availablePeriods = useMemo(() => {
+    const periods = new Set([toPeriodKey(new Date())]);
+    pricings.forEach((p) => {
+      const period = getPricingPeriodKey(p.date);
+      if (period) periods.add(period);
+    });
+    return [...periods].sort().reverse();
+  }, [pricings]);
 
-  last6Months.forEach(m => {
-    m.value = pricings
-      .filter(p => {
-        const d = new Date(p.date);
-        return p.status === 'Fechada' && (d.getMonth() + 1) === m.monthNum && d.getFullYear() === m.year;
-      })
-      .reduce((sum, p) => sum + getPricingTotalSaleValue(p), 0);
-  });
+  const last6Months = getSixPeriodsEndingAt(selectedPeriod).map((month) => ({
+    ...month,
+    value: pricings
+      .filter(
+        (p) =>
+          p.status === 'Fechada' &&
+          p.approvalStatus === 'Aprovada' &&
+          getPricingPeriodKey(p.date) === month.period
+      )
+      .reduce((sum, p) => sum + getPricingTotalSaleValue(p), 0),
+  }));
 
   return (
     <div className="space-y-8 pb-12">
@@ -80,12 +99,29 @@ export default function Dashboard({ currentUser }: DashboardProps) {
           <h1 className="text-3xl font-black text-stone-800">Meu Progresso</h1>
           <p className="text-stone-500">Acompanhe seu desempenho e metas de vendas.</p>
         </div>
-        <div className="bg-white px-4 py-2 rounded-xl shadow-sm border border-stone-200 flex items-center gap-2">
+        <label className="bg-white px-4 py-2 rounded-xl shadow-sm border border-stone-200 flex items-center gap-2">
           <Clock className="w-4 h-4 text-stone-400" />
-          <span className="text-sm font-bold text-stone-600 uppercase tracking-wider">
-            {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
-          </span>
-        </div>
+          <span className="sr-only">Mês de referência</span>
+          <select
+            value={selectedPeriod}
+            onChange={(event) => setSelectedPeriod(event.target.value)}
+            className="bg-transparent text-sm font-bold text-stone-600 uppercase tracking-wider outline-none cursor-pointer"
+            aria-label="Mês de referência"
+          >
+            {availablePeriods.map((period) => {
+              const [year, month] = period.split('-').map(Number);
+              const label = new Date(year, month - 1, 1).toLocaleDateString('pt-BR', {
+                month: 'long',
+                year: 'numeric',
+              });
+              return (
+                <option key={period} value={period}>
+                  {label}
+                </option>
+              );
+            })}
+          </select>
+        </label>
       </div>
 
       {/* Top Stats */}
@@ -97,8 +133,12 @@ export default function Dashboard({ currentUser }: DashboardProps) {
             </div>
             <TrendingUp className="w-4 h-4 text-emerald-500" />
           </div>
-          <p className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-1">Vendas Fechadas</p>
-          <p className="text-2xl font-black text-stone-800">R$ {stats.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+          <p className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-1">
+            Vendas Fechadas
+          </p>
+          <p className="text-2xl font-black text-stone-800">
+            R$ {stats.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          </p>
         </div>
 
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
@@ -108,8 +148,12 @@ export default function Dashboard({ currentUser }: DashboardProps) {
             </div>
             <BarChart3 className="w-4 h-4 text-blue-500" />
           </div>
-          <p className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-1">Em Negociação</p>
-          <p className="text-2xl font-black text-stone-800">R$ {stats.totalValueInProgress.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+          <p className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-1">
+            Em Negociação
+          </p>
+          <p className="text-2xl font-black text-stone-800">
+            R$ {stats.totalValueInProgress.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          </p>
         </div>
 
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
@@ -119,8 +163,12 @@ export default function Dashboard({ currentUser }: DashboardProps) {
             </div>
             <span className="text-xs font-bold text-stone-400">{stats.count} total</span>
           </div>
-          <p className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-1">Precificações</p>
-          <p className="text-2xl font-black text-stone-800">{stats.closedCount} <span className="text-sm font-medium text-stone-400">Sucessos</span></p>
+          <p className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-1">
+            Precificações
+          </p>
+          <p className="text-2xl font-black text-stone-800">
+            {stats.closedCount} <span className="text-sm font-medium text-stone-400">Sucessos</span>
+          </p>
         </div>
 
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
@@ -129,8 +177,16 @@ export default function Dashboard({ currentUser }: DashboardProps) {
               <TrendingUp className="w-5 h-5 text-purple-600" />
             </div>
           </div>
-          <p className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-1">Margem Média</p>
-          <p className="text-2xl font-black text-stone-800">R$ {stats.avgMargin.toFixed(2)} <span className="text-sm font-medium text-stone-400">/ton</span></p>
+          <p className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-1">
+            Volume Fechado
+          </p>
+          <p className="text-2xl font-black text-stone-800">
+            {stats.closedTons.toLocaleString('pt-BR', {
+              minimumFractionDigits: 1,
+              maximumFractionDigits: 1,
+            })}{' '}
+            <span className="text-sm font-medium text-stone-400">t</span>
+          </p>
         </div>
       </div>
 
@@ -168,15 +224,29 @@ export default function Dashboard({ currentUser }: DashboardProps) {
                   />
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-4xl font-black text-stone-800">{Math.round(goalProgress)}%</span>
-                  <span className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">Atingido</span>
+                  <span className="text-4xl font-black text-stone-800">
+                    {Math.round(goalProgress)}%
+                  </span>
+                  <span className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">
+                    Atingido
+                  </span>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <p className="text-xs font-bold text-stone-400 uppercase tracking-widest">Volume no Mês</p>
-                <p className="text-2xl font-black text-emerald-600">{monthlySales.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} t</p>
-                <p className="text-xs text-stone-500">De uma meta de {monthlyGoal.targetValue.toLocaleString('pt-BR')} toneladas</p>
+                <p className="text-xs font-bold text-stone-400 uppercase tracking-widest">
+                  Volume no Mês
+                </p>
+                <p className="text-2xl font-black text-emerald-600">
+                  {monthlySales.toLocaleString('pt-BR', {
+                    minimumFractionDigits: 1,
+                    maximumFractionDigits: 1,
+                  })}{' '}
+                  t
+                </p>
+                <p className="text-xs text-stone-500">
+                  De uma meta de {monthlyGoal.targetValue.toLocaleString('pt-BR')} toneladas
+                </p>
               </div>
             </div>
           ) : (
@@ -190,7 +260,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
         {/* Charts */}
         <div className="lg:col-span-2 space-y-8">
           <div className="bg-white p-8 rounded-3xl shadow-sm border border-stone-200">
-            <h3 className="text-lg font-black text-stone-800 mb-6">Vendas nos Últimos 6 Meses</h3>
+            <h3 className="text-lg font-black text-stone-800 mb-6">Vendas Aprovadas — 6 Meses</h3>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={last6Months}>
@@ -205,16 +275,25 @@ export default function Dashboard({ currentUser }: DashboardProps) {
                     axisLine={false}
                     tickLine={false}
                     tick={{ fill: '#a8a29e', fontSize: 10 }}
-                    tickFormatter={(value) => `R$ ${value >= 1000 ? (value / 1000).toFixed(0) + 'k' : value}`}
+                    tickFormatter={(value) =>
+                      `R$ ${value >= 1000 ? (value / 1000).toFixed(0) + 'k' : value}`
+                    }
                   />
                   <Tooltip
                     cursor={{ fill: '#f5f5f4' }}
-                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                    contentStyle={{
+                      borderRadius: '12px',
+                      border: 'none',
+                      boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
+                    }}
                     formatter={(value: number) => [`R$ ${value.toLocaleString('pt-BR')}`, 'Vendas']}
                   />
                   <Bar dataKey="value" radius={[6, 6, 0, 0]}>
                     {last6Months.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={index === last6Months.length - 1 ? '#10b981' : '#d6d3d1'} />
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={index === last6Months.length - 1 ? '#10b981' : '#d6d3d1'}
+                      />
                     ))}
                   </Bar>
                 </BarChart>
@@ -224,7 +303,9 @@ export default function Dashboard({ currentUser }: DashboardProps) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="bg-white p-6 rounded-3xl shadow-sm border border-stone-200">
-              <h3 className="text-sm font-black text-stone-800 mb-4 uppercase tracking-wider">Status das Propostas</h3>
+              <h3 className="text-sm font-black text-stone-800 mb-4 uppercase tracking-wider">
+                Status das Propostas
+              </h3>
               <div className="h-48">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -254,20 +335,37 @@ export default function Dashboard({ currentUser }: DashboardProps) {
             </div>
 
             <div className="bg-stone-900 p-6 rounded-3xl shadow-xl text-white">
-              <h3 className="text-sm font-bold text-stone-400 mb-4 uppercase tracking-wider">Últimas Atividades</h3>
+              <h3 className="text-sm font-bold text-stone-400 mb-4 uppercase tracking-wider">
+                Últimas Atividades
+              </h3>
               <div className="space-y-4">
-                {pricings.slice(0, 3).map(p => (
-                  <div key={p.id} className="flex items-start gap-3 pb-3 border-b border-stone-800 last:border-0">
-                    <div className={`mt-1 w-2 h-2 rounded-full flex-shrink-0 ${p.status === 'Fechada' ? 'bg-emerald-500' :
-                      p.status === 'Perdida' ? 'bg-red-500' : 'bg-blue-500'
-                      }`} />
+                {filteredPricings.slice(0, 3).map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex items-start gap-3 pb-3 border-b border-stone-800 last:border-0"
+                  >
+                    <div
+                      className={`mt-1 w-2 h-2 rounded-full flex-shrink-0 ${
+                        p.status === 'Fechada'
+                          ? 'bg-emerald-500'
+                          : p.status === 'Perdida'
+                            ? 'bg-red-500'
+                            : 'bg-blue-500'
+                      }`}
+                    />
                     <div>
-                      <p className="text-xs font-bold">{p.factors?.client?.name || 'Cliente não identificado'}</p>
-                      <p className="text-[10px] text-stone-500">#{p.id.slice(0, 8)} • {new Date(p.date).toLocaleDateString('pt-BR')}</p>
+                      <p className="text-xs font-bold">
+                        {p.factors?.client?.name || 'Cliente não identificado'}
+                      </p>
+                      <p className="text-[10px] text-stone-500">
+                        #{p.id.slice(0, 8)} • {new Date(p.date).toLocaleDateString('pt-BR')}
+                      </p>
                     </div>
                   </div>
                 ))}
-                {pricings.length === 0 && <p className="text-xs text-stone-500 italic">Nenhuma atividade recente.</p>}
+                {filteredPricings.length === 0 && (
+                  <p className="text-xs text-stone-500 italic">Nenhuma atividade neste mês.</p>
+                )}
               </div>
             </div>
           </div>
