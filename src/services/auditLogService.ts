@@ -39,19 +39,15 @@ export async function registrarAuditLog(
     const camposAlterados =
       entry.campos_alterados ?? calcularCamposAlterados(entry.dados_anteriores, entry.dados_novos);
 
-    const { error } = await supabase.from('audit_log').insert([
-      {
-        tabela: entry.tabela,
-        registro_id: entry.registro_id,
-        acao: entry.acao,
-        dados_anteriores: entry.dados_anteriores ?? null,
-        dados_novos: entry.dados_novos ?? null,
-        campos_alterados: camposAlterados.length > 0 ? camposAlterados : null,
-        motivo: entry.motivo ?? null,
-        usuario_id: entry.usuario_id,
-        usuario_nome: entry.usuario_nome,
-      },
-    ]);
+    const { error } = await supabase.rpc('write_audit_log_entry', {
+      p_tabela: entry.tabela,
+      p_registro_id: entry.registro_id,
+      p_acao: entry.acao,
+      p_dados_anteriores: entry.dados_anteriores ?? null,
+      p_dados_novos: entry.dados_novos ?? null,
+      p_campos_alterados: camposAlterados.length > 0 ? camposAlterados : null,
+      p_motivo: entry.motivo ?? null,
+    });
 
     if (error) {
       console.error('[auditLogService] Erro ao registrar audit log:', error);
