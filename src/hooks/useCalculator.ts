@@ -409,7 +409,7 @@ export function useCalculator({
         const updatedCalcMacros = (calc.macros.length > 0 ? calc.macros : nextMacros).map((m) =>
           m.id === id ? { ...m, [field]: value } : m
         );
-        if (hasTargetFormula(calc.formula)) {
+        if (hasFormulaTarget(calc.formula)) {
           return {
             ...calc,
             macros: updatedCalcMacros,
@@ -433,7 +433,7 @@ export function useCalculator({
         const updatedCalcMicros = (calc.micros.length > 0 ? calc.micros : nextMicros).map((m) =>
           m.id === id ? { ...m, [field]: value } : m
         );
-        if (hasTargetFormula(calc.formula)) {
+        if (hasFormulaTarget(calc.formula)) {
           return {
             ...calc,
             micros: updatedCalcMicros,
@@ -788,7 +788,7 @@ export function useCalculator({
             setMicros(newMicros);
           }
 
-          if (!hasTargetFormula(updatedFormula.formula)) {
+          if (!hasFormulaTarget(updatedFormula.formula)) {
             return applyFreeCompositionSummary(
               updatedFormula,
               updatedFormula.macros.length > 0 ? updatedFormula.macros : macros,
@@ -980,7 +980,7 @@ export function useCalculator({
             ...c,
             micros: c.micros.map((m) => (m.id === microId ? { ...m, [field]: value } : m)),
           };
-          if (!hasTargetFormula(updated.formula)) {
+          if (!hasFormulaTarget(updated.formula)) {
             return applyFreeCompositionSummary(updated, updated.macros, updated.micros);
           }
           return updated;
