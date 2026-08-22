@@ -45,7 +45,8 @@ function mapCotacaoSolicitada(d: Record<string, unknown>): CotacaoSolicitada {
   const transpRaw = d.transportadoras as Record<string, unknown> | null | undefined;
   const transportadora: Transportadora | undefined = transpRaw
     ? {
-        id: transpRaw.id as string,
+      id: transpRaw.id as string,
+      organization_id: transpRaw.organization_id as string | undefined,
         id_numeric: transpRaw.id_numeric != null ? Number(transpRaw.id_numeric) : undefined,
         nome: transpRaw.nome as string,
         cnpj: transpRaw.cnpj as string | undefined,
@@ -59,6 +60,7 @@ function mapCotacaoSolicitada(d: Record<string, unknown>): CotacaoSolicitada {
 
   return {
     id: d.id as string,
+    organization_id: d.organization_id as string | undefined,
     numero_cotacao: d.numero_cotacao as string,
     solicitado_por: d.solicitado_por as string | undefined,
     solicitante_nome: d.solicitante_nome as string | undefined,

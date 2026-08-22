@@ -21,6 +21,7 @@ import {
 function mapCarregamento(d: Record<string, unknown>): Carregamento {
   return {
     id: d.id as string,
+    organization_id: d.organization_id as string,
     pedido_precificacao_id: d.pedido_precificacao_id as string | undefined,
     numero_carregamento: d.numero_carregamento as string,
     numero: d.numero != null ? Number(d.numero) : undefined,
@@ -71,6 +72,7 @@ function mapCarregamento(d: Record<string, unknown>): Carregamento {
 function mapCotacao(d: Record<string, unknown>): CotacaoFrete {
   return {
     id: d.id as string,
+    organization_id: d.organization_id as string,
     carregamento_id: d.carregamento_id as string,
     transportadora_id: d.transportadora_id as string | undefined,
     transportadora: (d.transportadoras as Transportadora | undefined) ?? undefined,
@@ -93,6 +95,7 @@ function mapCotacao(d: Record<string, unknown>): CotacaoFrete {
 function mapTransportadora(d: Record<string, unknown>): Transportadora {
   return {
     id: d.id as string,
+    organization_id: d.organization_id as string,
     id_numeric: d.id_numeric != null ? Number(d.id_numeric) : undefined,
     nome: d.nome as string,
     cnpj: d.cnpj as string | undefined,

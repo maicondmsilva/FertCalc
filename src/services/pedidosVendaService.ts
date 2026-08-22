@@ -22,6 +22,7 @@ function computeSaldoDisponivel(d: Record<string, unknown>): number | undefined 
 function mapPedido(d: Record<string, unknown>): PedidoVenda {
   return {
     id: d.id as string,
+    organization_id: d.organization_id as string,
     precificacao_id: d.precificacao_id as string,
     numero_pedido: d.numero_pedido as string | undefined,
     barra_pedido: d.barra_pedido as string | undefined,
