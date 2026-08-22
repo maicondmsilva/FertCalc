@@ -6,6 +6,7 @@ export type ExpenseRole = 'none' | 'viewer' | 'launcher' | 'checker' | 'approver
 
 export interface CreditCard {
   id: string;
+  organizationId?: string;
   name: string;
   lastFour?: string;
   userId: string;
@@ -17,6 +18,7 @@ export interface CreditCard {
 
 export interface ExpenseCategory {
   id: string;
+  organizationId?: string;
   name: string;
   budgetLimit?: number;
   color?: string;
@@ -28,6 +30,7 @@ export interface ExpenseCategory {
 
 export interface CreditCardExpense {
   id: string;
+  organizationId?: string;
   description: string;
   amount: number;
   date: string;
@@ -49,6 +52,7 @@ export interface CreditCardExpense {
 
 export interface ExpenseAudit {
   id: string;
+  organizationId?: string;
   expenseId: string;
   action: AuditAction;
   userId: string;
