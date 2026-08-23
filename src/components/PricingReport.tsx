@@ -2,12 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { PricingRecord, User, AppSettings, Branch } from '../types';
 import { getPricingRecords, getAppSettings, getBranches, getUsers } from '../services/db';
 import { BarChart3, FileText, Search, Filter, TrendingUp, TrendingDown, DollarSign, Package, CheckCircle, XCircle, Clock, Trash2, Download } from 'lucide-react';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import * as XLSX from 'xlsx';
 import { getPricingTotalTons, getPricingTotalSaleValue, getPricingAverageCommissionRate } from '../utils/pricingMetrics';
-import PricingDetailModal from './PricingDetailModal';
 import { formatPricingCode } from './CommissionReport';
+
+const PricingDetailModal = React.lazy(() => import('./PricingDetailModal'));
 
 interface PricingReportProps {
   currentUser: User;
@@ -32,6 +30,7 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
   const [endDate, setEndDate] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [selectedPricing, setSelectedPricing] = useState<PricingRecord | null>(null);
+  const [exporting, setExporting] = useState<'pdf' | 'excel' | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -116,7 +115,13 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
     }
   };
 
-  const exportToPDF = () => {
+  const exportToPDF = async () => {
+    setExporting('pdf');
+    try {
+      const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+      import('jspdf'),
+      import('jspdf-autotable'),
+    ]);
     const doc = new jsPDF({ orientation: 'landscape' });
     const pageWidth = doc.internal.pageSize.getWidth();
 
@@ -169,11 +174,17 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
       columnStyles: { 0: { cellWidth: 15 } }
     });
 
-    doc.save(`Relatorio_Precificacao_${new Date().getTime()}.pdf`);
+      doc.save(`Relatorio_Precificacao_${new Date().getTime()}.pdf`);
+    } finally {
+      setExporting(null);
+    }
   };
 
-  const exportToExcel = () => {
-    const wsData = [
+  const exportToExcel = async () => {
+    setExporting('excel');
+    try {
+      const XLSX = await import('xlsx');
+      const wsData = [
       ['RELATÓRIO DE PRECIFICAÇÃO', appSettings.companyName],
       ['Gerado em', new Date().toLocaleString('pt-BR'), 'Por', currentUser.name],
       [],
@@ -197,7 +208,10 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
     const ws = XLSX.utils.aoa_to_sheet(wsData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Precificações');
-    XLSX.writeFile(wb, `Relatorio_Precificacao_${new Date().getTime()}.xlsx`);
+      XLSX.writeFile(wb, `Relatorio_Precificacao_${new Date().getTime()}.xlsx`);
+    } finally {
+      setExporting(null);
+    }
   };
 
   const clearFilters = () => {
@@ -226,16 +240,18 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={exportToExcel}
+            onClick={() => void exportToExcel()}
+            disabled={exporting !== null}
             className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition-colors text-sm"
           >
-            <Download className="w-4 h-4" /> Excel
+            <Download className="w-4 h-4" /> {exporting === 'excel' ? 'Preparando…' : 'Excel'}
           </button>
           <button
-            onClick={exportToPDF}
+            onClick={() => void exportToPDF()}
+            disabled={exporting !== null}
             className="flex items-center gap-2 px-4 py-2 bg-stone-800 text-white font-bold rounded-lg hover:bg-stone-900 transition-colors text-sm"
           >
-            <FileText className="w-4 h-4" /> PDF
+            <FileText className="w-4 h-4" /> {exporting === 'pdf' ? 'Preparando…' : 'PDF'}
           </button>
         </div>
       </div>
@@ -450,14 +466,25 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
         )}
       </div>
 
-      {selectedPricing && (
-        <PricingDetailModal
-          selectedPricing={selectedPricing}
-          currentUser={currentUser}
-          onClose={() => setSelectedPricing(null)}
-          onUpdateStatus={() => {}}
-        />
-      )}
+      <React.Suspense
+        fallback={
+          <div
+            role="status"
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30 text-sm font-bold text-white"
+          >
+            Carregando detalhes...
+          </div>
+        }
+      >
+        {selectedPricing && (
+          <PricingDetailModal
+            selectedPricing={selectedPricing}
+            currentUser={currentUser}
+            onClose={() => setSelectedPricing(null)}
+            onUpdateStatus={() => {}}
+          />
+        )}
+      </React.Suspense>
     </div>
   );
 }
