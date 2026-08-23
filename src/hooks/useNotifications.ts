@@ -3,23 +3,36 @@ import { useNotificationStore } from '../store/notificationStore';
 import { subscribeToNotifications } from '../services/notificationSubscription';
 import { useNotificationPreferences } from './useNotificationPreferences';
 import { useNotificationSound } from './useNotificationSound';
-import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead, deleteAllNotifications } from '../services/notificationService';
+import {
+  getNotifications,
+  markNotificationAsRead,
+  markAllNotificationsAsRead,
+  deleteAllNotifications,
+} from '../services/notificationService';
 
 export function useNotifications(userId: string) {
-  const store = useNotificationStore();
+  const notifications = useNotificationStore((state) => state.notifications);
+  const unreadCount = useNotificationStore((state) => state.unreadCount);
+  const activeToasts = useNotificationStore((state) => state.activeToasts);
+  const addNotification = useNotificationStore((state) => state.addNotification);
+  const removeToast = useNotificationStore((state) => state.removeToast);
+  const markAsRead = useNotificationStore((state) => state.markAsRead);
+  const markAllAsRead = useNotificationStore((state) => state.markAllAsRead);
+  const clearAll = useNotificationStore((state) => state.clearAll);
+  const setNotifications = useNotificationStore((state) => state.setNotifications);
   const { preferences, isLoading: prefsLoading } = useNotificationPreferences(userId);
   const { playSound } = useNotificationSound();
 
   const loadNotifications = useCallback(async () => {
     if (!userId) return;
-    
+
     try {
       const data = await getNotifications(userId, 20);
-      store.setNotifications(data);
+      setNotifications(data);
     } catch (error) {
       console.error('Failed to load notifications:', error);
     }
-  }, [userId, store]);
+  }, [setNotifications, userId]);
 
   useEffect(() => {
     loadNotifications();
@@ -34,12 +47,14 @@ export function useNotifications(userId: string) {
       if (!inAppEnabled) return;
 
       // Check if this specific group/type is disabled
-      if (preferences?.disabled_types?.includes(notification.group_type) || 
-          preferences?.disabled_types?.includes(notification.type)) {
+      if (
+        preferences?.disabled_types?.includes(notification.group_type) ||
+        preferences?.disabled_types?.includes(notification.type)
+      ) {
         return;
       }
 
-      store.addNotification(notification);
+      addNotification(notification);
 
       // Play sound
       const soundEnabled = preferences?.sound_enabled ?? true;
@@ -47,51 +62,54 @@ export function useNotifications(userId: string) {
         playSound(notification.group_type);
       }
     });
-    
+
     return () => {
       unsubscribe();
     };
-  }, [userId, preferences, prefsLoading, store, playSound]);
+  }, [addNotification, playSound, preferences, prefsLoading, userId]);
 
   // Optionally extend markAsRead to also update Supabase
-  const markAsReadDb = async (id: string) => {
-    try {
-      store.markAsRead(id);
-      if (!userId) return;
-      await markNotificationAsRead(id, userId);
-    } catch (error) {
-      console.error('Error marking notification as read:', error);
-    }
-  };
+  const markAsReadDb = useCallback(
+    async (id: string) => {
+      try {
+        markAsRead(id);
+        if (!userId) return;
+        await markNotificationAsRead(id, userId);
+      } catch (error) {
+        console.error('Error marking notification as read:', error);
+      }
+    },
+    [markAsRead, userId]
+  );
 
-  const clearAllDb = async () => {
+  const clearAllDb = useCallback(async () => {
     try {
-      store.clearAll();
+      clearAll();
       if (!userId) return;
       await deleteAllNotifications(userId);
     } catch (error) {
       console.error('Error clearing notifications:', error);
     }
-  };
+  }, [clearAll, userId]);
 
-  const markAllReadDb = async () => {
+  const markAllReadDb = useCallback(async () => {
     try {
-      store.markAllAsRead();
+      markAllAsRead();
       if (!userId) return;
       await markAllNotificationsAsRead(userId);
     } catch (error) {
       console.error('Error marking all notifications as read:', error);
     }
-  };
+  }, [markAllAsRead, userId]);
 
   return {
-    notifications: store.notifications,
-    unreadCount: store.unreadCount,
-    activeToasts: store.activeToasts,
-    addNotification: store.addNotification,
-    removeToast: store.removeToast,
+    notifications,
+    unreadCount,
+    activeToasts,
+    addNotification,
+    removeToast,
     markAsRead: markAsReadDb,
     markAllRead: markAllReadDb,
-    clearAll: clearAllDb
+    clearAll: clearAllDb,
   };
 }
