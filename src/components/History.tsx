@@ -46,6 +46,9 @@ import { logAudit } from '../services/auditService';
 import { getLocaisAtivos } from '../services/locaisCarregamentoService';
 import { LocalCarregamento } from '../types/carregamento';
 import { addPricingHistory } from '../services/pricingHistoryService';
+import { getTotalPages, paginateItems } from '../utils/pagination';
+
+const HISTORY_PAGE_SIZE = 12;
 
 interface HistoryProps {
   onEdit?: (pricing: PricingRecord) => void;
@@ -114,6 +117,7 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
   const [isSubmittingDeletion, setIsSubmittingDeletion] = useState(false);
   const [showDeleted, setShowDeleted] = useState(false);
   const [activeTab, setActiveTab] = useState<'active' | 'deleted'>('active');
+  const [currentPage, setCurrentPage] = useState(1);
 
   const filteredPricings = pricings.filter((p) => {
     const clientName = p.factors?.client?.name || '';
@@ -133,6 +137,16 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
 
     return matchesName && matchesStatus && matchesDate;
   });
+  const tabPricings = filteredPricings.filter((p) =>
+    activeTab === 'deleted' ? p.status === 'Excluída' : p.status !== 'Excluída'
+  );
+  const totalPages = getTotalPages(tabPricings.length, HISTORY_PAGE_SIZE);
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const visiblePricings = paginateItems(tabPricings, safeCurrentPage, HISTORY_PAGE_SIZE);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, endDate, filter, startDate, statusFilter]);
 
   const stats = {
     total: pricings.length,
@@ -575,11 +589,7 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredPricings
-          .filter((p) =>
-            activeTab === 'deleted' ? p.status === 'Excluída' : p.status !== 'Excluída'
-          )
-          .map((p) => (
+        {visiblePricings.map((p) => (
             <div
               key={p.id}
               id={`pricing-card-${p.id}`}
@@ -847,9 +857,9 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                 </div>
               </div>
             </div>
-          ))}
+        ))}
 
-        {filteredPricings.length === 0 && (
+        {tabPricings.length === 0 && (
           <div className="col-span-full bg-white p-12 text-center rounded-xl border border-stone-200 border-dashed">
             <FileText className="w-12 h-12 text-stone-300 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-stone-900 mb-1">
@@ -861,6 +871,36 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
           </div>
         )}
       </div>
+
+      {tabPricings.length > HISTORY_PAGE_SIZE && (
+        <nav
+          className="flex items-center justify-between rounded-xl border border-stone-200 bg-white px-4 py-3"
+          aria-label="Paginação do histórico"
+        >
+          <p className="text-sm text-stone-500">
+            Página <strong>{safeCurrentPage}</strong> de <strong>{totalPages}</strong> ·{' '}
+            {tabPricings.length} registros
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+              disabled={safeCurrentPage === 1}
+              className="rounded-lg border border-stone-200 px-4 py-2 text-sm font-bold text-stone-600 transition-colors hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Anterior
+            </button>
+            <button
+              type="button"
+              onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+              disabled={safeCurrentPage === totalPages}
+              className="rounded-lg border border-stone-200 px-4 py-2 text-sm font-bold text-stone-600 transition-colors hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Próxima
+            </button>
+          </div>
+        </nav>
+      )}
 
       {/* Detail Modal */}
       {selectedPricing && (
