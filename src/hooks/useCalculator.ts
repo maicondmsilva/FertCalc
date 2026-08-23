@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import solver from 'javascript-lp-solver';
 import {
   RawMaterial,
   PricingFactors,
@@ -56,6 +55,7 @@ import { addHistoricoPreco } from '../services/historicoPrecoService';
 import {
   calculatePricingSummary,
   hasFormulaTarget,
+  optimizeFormula,
   parseFormulaTarget,
 } from '../domain/pricing-engine';
 
@@ -602,108 +602,20 @@ export function useCalculator({
       const target = parseFormulaTarget(calc.formula);
       if (!target) return;
 
-      const targetN = target.n;
-      const targetP = target.p;
-      const targetK = target.k;
-
-      const reqN = targetN * 10;
-      const reqP = targetP * 10;
-      const reqK = targetK * 10;
-
-      interface LPModel {
-        optimize: string;
-        opType: string;
-        constraints: Record<string, Record<string, number>>;
-        variables: Record<string, Record<string, number>>;
-        ints: Record<string, number>;
-      }
-
-      const model: LPModel = {
-        optimize: 'cost',
-        opType: 'min',
-        constraints: {
-          n_eq: { min: reqN, max: reqN + 9 },
-          p_eq: { min: reqP, max: reqP + 9 },
-          k_eq: { min: reqK, max: reqK + 9 },
-
-          ...((calc.targetS || 0) > 0
-            ? { s_eq: { min: calc.targetS! * 10, max: calc.targetS! * 10 + 9 } }
-            : {}),
-          ...((calc.targetCa || 0) > 0
-            ? { ca_eq: { min: calc.targetCa! * 10, max: calc.targetCa! * 10 + 9 } }
-            : {}),
-          weight: { equal: 1000 },
-        },
-        variables: {},
-        ints: {},
-      };
-
-      let availableMaterials = [...currentMacros, ...currentMicros].filter((m) => m.selected);
-
-      availableMaterials.forEach((m) => {
-        const useVar = `use_${m.id}`;
-        const minLiner = `link_min_${m.id}`;
-        const maxLiner = `link_max_${m.id}`;
-
-        model.variables[m.id] = {
-          cost: Number(m.price) || 0,
-          n_eq: (Number(m.n) || 0) / 100,
-          p_eq: (Number(m.p) || 0) / 100,
-          k_eq: (Number(m.k) || 0) / 100,
-          s_eq: (Number(m.s) || 0) / 100,
-          ca_eq: (Number(m.ca) || 0) / 100,
-          weight: 1,
-          [minLiner]: 1,
-          [maxLiner]: 1,
-        };
-
-        model.variables[useVar] = {
-          cost: 0.01,
-          [minLiner]: -(Number(m.minQty) || 0),
-          [maxLiner]: -(Number(m.maxQty) || 1000),
-        };
-        model.ints[useVar] = 1;
-
-        model.constraints[minLiner] = { min: 0 };
-        model.constraints[maxLiner] = { max: 0 };
-
-        // Forçar a entrada na fórmula quando o usuário definir Fixo (mínimo igual ao máximo e > 0)
-        if (Number(m.minQty) === Number(m.maxQty) && Number(m.minQty) > 0) {
-          model.constraints[`force_${m.id}`] = { equal: Number(m.minQty) };
-          model.variables[m.id][`force_${m.id}`] = 1;
-        }
+      const optimization = optimizeFormula({
+        target,
+        targetS: calc.targetS,
+        targetCa: calc.targetCa,
+        macros: currentMacros,
+        micros: currentMicros,
+        incompatibilityRules,
       });
 
-      // Constraints de incompatibilidade
-      incompatibilityRules.forEach((rule, idx) => {
-        const matA = availableMaterials.find((m) => m.id === rule.materialAId);
-        const matB = availableMaterials.find((m) => m.id === rule.materialBId);
-
-        if (matA && matB) {
-          const constraintName = `incomp_${idx}`;
-          model.constraints[constraintName] = { max: 1 };
-          if (model.variables[`use_${matA.id}`])
-            model.variables[`use_${matA.id}`][constraintName] = 1;
-          if (model.variables[`use_${matB.id}`])
-            model.variables[`use_${matB.id}`][constraintName] = 1;
-        }
-      });
-
-      const results = solver.Solve(
-        model as unknown as Parameters<typeof solver.Solve>[0]
-      ) as unknown as Record<string, number>;
-
-      if (results.feasible) {
+      if (optimization.feasible) {
         const calcIndex = updatedCalculations.findIndex((c) => c.id === calc.id);
         if (calcIndex !== -1) {
-          const newMacros = currentMacros.map((m) => ({
-            ...m,
-            quantity: m.selected ? results[m.id] || 0 : 0,
-          }));
-          const newMicros = currentMicros.map((m) => ({
-            ...m,
-            quantity: m.selected ? results[m.id] || 0 : 0,
-          }));
+          const newMacros = optimization.macros;
+          const newMicros = optimization.micros;
 
           updatedCalculations[calcIndex] = {
             ...updatedCalculations[calcIndex],
