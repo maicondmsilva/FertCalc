@@ -1,40 +1,41 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import type { PricingRecord, SavedFormula, User } from '../types';
 import type { ActiveModule } from '../navigation/appNavigation';
-import AccessLevelManager from './AccessLevelManager';
-import AccessProfileManager from './AccessProfileManager';
-import AgentManager from './AgentManager';
-import AlertCenter from './AlertCenter';
-import Approvals from './Approvals';
-import BranchManager from './BranchManager';
-import BrandManager from './BrandManager';
-import Calculator from './Calculator';
-import CarregamentoModule from './Carregamento';
-import ClientManager from './ClientManager';
-import CommissionReport from './CommissionReport';
 import Dashboard from './Dashboard';
-import ApproveExpenses from './ExpenseManagement/ApproveExpenses';
-import CardManager from './ExpenseManagement/CardManager';
-import CheckExpenses from './ExpenseManagement/CheckExpenses';
-import ExpenseCategoryManager from './ExpenseManagement/ExpenseCategoryManager';
-import ExpenseDashboard from './ExpenseManagement/ExpenseDashboard';
-import Goals from './Goals';
-import History from './History';
 import Home from './Home';
-import IncompatibilityManager from './IncompatibilityManager';
-import ManagementReportsModule from './ManagementReportsModule';
-import PedidosVenda from './PedidosVenda';
-import PriceListManager from './PriceListManager';
-import PricingBySeller from './PricingBySeller';
-import PricingReport from './PricingReport';
-import PrdModule from './PrdModule';
-import ProductManager from './ProductManager';
-import ProdutosFormulados from './ProdutosFormulados';
-import Relatorios from './Relatorios';
-import Reports from './Reports';
-import SavedFormulas from './SavedFormulas';
-import SettingsManager from './SettingsManager';
-import UserManager from './UserManager';
+
+const AccessLevelManager = lazy(() => import('./AccessLevelManager'));
+const AccessProfileManager = lazy(() => import('./AccessProfileManager'));
+const AgentManager = lazy(() => import('./AgentManager'));
+const AlertCenter = lazy(() => import('./AlertCenter'));
+const Approvals = lazy(() => import('./Approvals'));
+const BranchManager = lazy(() => import('./BranchManager'));
+const BrandManager = lazy(() => import('./BrandManager'));
+const Calculator = lazy(() => import('./Calculator'));
+const CarregamentoModule = lazy(() => import('./Carregamento'));
+const ClientManager = lazy(() => import('./ClientManager'));
+const CommissionReport = lazy(() => import('./CommissionReport'));
+const ApproveExpenses = lazy(() => import('./ExpenseManagement/ApproveExpenses'));
+const CardManager = lazy(() => import('./ExpenseManagement/CardManager'));
+const CheckExpenses = lazy(() => import('./ExpenseManagement/CheckExpenses'));
+const ExpenseCategoryManager = lazy(() => import('./ExpenseManagement/ExpenseCategoryManager'));
+const ExpenseDashboard = lazy(() => import('./ExpenseManagement/ExpenseDashboard'));
+const Goals = lazy(() => import('./Goals'));
+const History = lazy(() => import('./History'));
+const IncompatibilityManager = lazy(() => import('./IncompatibilityManager'));
+const ManagementReportsModule = lazy(() => import('./ManagementReportsModule'));
+const PedidosVenda = lazy(() => import('./PedidosVenda'));
+const PriceListManager = lazy(() => import('./PriceListManager'));
+const PricingBySeller = lazy(() => import('./PricingBySeller'));
+const PricingReport = lazy(() => import('./PricingReport'));
+const PrdModule = lazy(() => import('./PrdModule'));
+const ProductManager = lazy(() => import('./ProductManager'));
+const ProdutosFormulados = lazy(() => import('./ProdutosFormulados'));
+const Relatorios = lazy(() => import('./Relatorios'));
+const Reports = lazy(() => import('./Reports'));
+const SavedFormulas = lazy(() => import('./SavedFormulas'));
+const SettingsManager = lazy(() => import('./SettingsManager'));
+const UserManager = lazy(() => import('./UserManager'));
 
 interface FormulaContext {
   formula: SavedFormula | null;
@@ -56,7 +57,7 @@ interface AppContentProps {
   onSendFormulaToCalculator: (formula: SavedFormula, branchId: string, priceListId: string) => void;
 }
 
-export default function AppContent({
+function AppContentRoute({
   activeModule,
   activeTab,
   currentUser,
@@ -221,4 +222,18 @@ export default function AppContent({
   }
 
   return null;
+}
+
+export default function AppContent(props: AppContentProps) {
+  return (
+    <Suspense
+      fallback={
+        <div role="status" className="flex min-h-48 items-center justify-center text-stone-500">
+          Carregando módulo...
+        </div>
+      }
+    >
+      <AppContentRoute {...props} />
+    </Suspense>
+  );
 }

@@ -92,17 +92,17 @@ describe('AppContent', () => {
     expect(screen.getByText('Dashboard de precificação')).toBeDefined();
   });
 
-  it('distingue as duas apresentações da calculadora', () => {
+  it('distingue as duas apresentações da calculadora', async () => {
     renderContent('pricing', 'simplified_calculator', ['calculator']);
-    expect(screen.getByText('Calculadora simplificada')).toBeDefined();
+    expect(await screen.findByText('Calculadora simplificada')).toBeDefined();
   });
 
-  it('mapeia a rota logística para a visualização correta', () => {
+  it('mapeia a rota logística para a visualização correta', async () => {
     renderContent('carregamento', 'carregamento_logistica', ['carregamento']);
-    expect(screen.getByText('Carregamento: logistica')).toBeDefined();
+    expect(await screen.findByText('Carregamento: logistica')).toBeDefined();
   });
 
-  it('preserva o contrato da jornada entre cálculo, histórico, aprovação e relatório', () => {
+  it('preserva o contrato da jornada entre cálculo, histórico, aprovação e relatório', async () => {
     const onCalculatorSaved = vi.fn();
     const onEditPricing = vi.fn();
     const commonProps = {
@@ -119,11 +119,11 @@ describe('AppContent', () => {
     };
 
     const view = render(<AppContent {...commonProps} activeTab="calculator" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Salvar precificação' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Salvar precificação' }));
     expect(onCalculatorSaved).toHaveBeenCalledWith(expect.objectContaining({ id: 'pricing-1' }));
 
     view.rerender(<AppContent {...commonProps} activeTab="history" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Editar precificação pricing-1' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Editar precificação pricing-1' }));
     expect(onEditPricing).toHaveBeenCalledWith(expect.objectContaining({ id: 'pricing-1' }));
 
     view.rerender(
@@ -133,12 +133,12 @@ describe('AppContent', () => {
         editingPricing={{ id: 'pricing-1' } as PricingRecord}
       />
     );
-    expect(screen.getByText('Precificação em edição: pricing-1')).toBeInTheDocument();
+    expect(await screen.findByText('Precificação em edição: pricing-1')).toBeInTheDocument();
 
     view.rerender(<AppContent {...commonProps} activeTab="approvals" />);
-    expect(screen.getByText('Aprovações de precificação')).toBeInTheDocument();
+    expect(await screen.findByText('Aprovações de precificação')).toBeInTheDocument();
 
     view.rerender(<AppContent {...commonProps} activeTab="pricingReport" />);
-    expect(screen.getByText('Relatório de precificação')).toBeInTheDocument();
+    expect(await screen.findByText('Relatório de precificação')).toBeInTheDocument();
   });
 });
