@@ -4,10 +4,9 @@
  */
 
 import React, { useMemo } from 'react';
-import Login from './components/Login';
-import ResetPassword from './components/ResetPassword';
 import AppContent from './components/AppContent';
 import AppShell from './components/AppShell';
+import AppAccessGate from './app/AppAccessGate';
 import { getNavigationItems, hasUserPermission } from './navigation/appNavigation';
 import { useNavigate } from 'react-router-dom';
 
@@ -58,60 +57,50 @@ export default function App() {
     [activeModule, checkedExpenseCount, hasPermission, pendingExpenseCount]
   );
 
-  // Rota de redefinição de senha (acessível sem autenticação)
-  if (isPasswordReset) {
-    return <ResetPassword />;
-  }
-
-  if (!currentUser) {
-    return <Login onLogin={login} />;
-  }
-
-  if (currentUser.requer_alteracao_senha) {
-    return (
-      <Login
-        onLogin={login}
-        forceChangePasswordUserId={currentUser.id}
-        onPasswordChanged={updateCurrentUser}
-      />
-    );
-  }
-
   return (
-    <AppShell
-      activeModule={activeModule}
-      activeTab={activeTab}
-      appSettings={appSettings}
+    <AppAccessGate
       currentUser={currentUser}
-      isStandalone={isStandalone}
-      navItems={navItems}
-      hasPermission={hasPermission}
-      notifications={notifications}
-      unreadCount={unreadCount}
-      activeToasts={activeToasts}
-      canInstall={canInstall}
-      onClearNotifications={clearAll}
-      onInstall={handleInstall}
-      onLogout={logout}
-      onMarkAllNotificationsRead={markAllRead}
-      onMarkNotificationRead={markAsRead}
-      onNavigate={pricingWorkspace.navigateFromShell}
-      onOpenNotificationSettings={() => navigate('/settings')}
-      onRemoveToast={removeToast}
+      isPasswordReset={isPasswordReset}
+      onLogin={login}
+      onPasswordChanged={updateCurrentUser}
     >
-      <AppContent
-        activeModule={activeModule}
-        activeTab={activeTab}
-        currentUser={currentUser}
-        editingPricing={pricingWorkspace.editingPricing}
-        initialFormulaContext={pricingWorkspace.initialFormulaContext}
-        hasPermission={hasPermission}
-        onSelectModule={pricingWorkspace.selectModule}
-        onEditPricing={pricingWorkspace.editPricing}
-        onCalculatorSaved={pricingWorkspace.calculatorSaved}
-        onClearCalculator={pricingWorkspace.clearCalculator}
-        onSendFormulaToCalculator={pricingWorkspace.sendFormulaToCalculator}
-      />
-    </AppShell>
+      {(authenticatedUser) => (
+        <AppShell
+          activeModule={activeModule}
+          activeTab={activeTab}
+          appSettings={appSettings}
+          currentUser={authenticatedUser}
+          isStandalone={isStandalone}
+          navItems={navItems}
+          hasPermission={hasPermission}
+          notifications={notifications}
+          unreadCount={unreadCount}
+          activeToasts={activeToasts}
+          canInstall={canInstall}
+          onClearNotifications={clearAll}
+          onInstall={handleInstall}
+          onLogout={logout}
+          onMarkAllNotificationsRead={markAllRead}
+          onMarkNotificationRead={markAsRead}
+          onNavigate={pricingWorkspace.navigateFromShell}
+          onOpenNotificationSettings={() => navigate('/settings')}
+          onRemoveToast={removeToast}
+        >
+          <AppContent
+            activeModule={activeModule}
+            activeTab={activeTab}
+            currentUser={authenticatedUser}
+            editingPricing={pricingWorkspace.editingPricing}
+            initialFormulaContext={pricingWorkspace.initialFormulaContext}
+            hasPermission={hasPermission}
+            onSelectModule={pricingWorkspace.selectModule}
+            onEditPricing={pricingWorkspace.editPricing}
+            onCalculatorSaved={pricingWorkspace.calculatorSaved}
+            onClearCalculator={pricingWorkspace.clearCalculator}
+            onSendFormulaToCalculator={pricingWorkspace.sendFormulaToCalculator}
+          />
+        </AppShell>
+      )}
+    </AppAccessGate>
   );
 }
