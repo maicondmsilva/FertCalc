@@ -35,7 +35,12 @@ describe('execucaoCarregamentoService', () => {
     });
     const select = vi.fn(() => ({ single }));
     const insert = vi.fn(() => ({ select }));
-    fromMock.mockReturnValue({ insert });
+    const maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+    const syncEq = vi.fn(() => ({ maybeSingle }));
+    const syncSelect = vi.fn(() => ({ eq: syncEq }));
+    fromMock.mockImplementation((table: string) =>
+      table === 'carregamentos' ? { select: syncSelect } : { insert }
+    );
 
     const result = await createExecucao({
       carregamento_id: 'car-1',
@@ -47,6 +52,7 @@ describe('execucaoCarregamentoService', () => {
 
     expect(result.status).toBe('agendado');
     expect(result.quantidade_agendada).toBe(30);
+    expect(syncSelect).toHaveBeenCalledWith('pedido_venda_id');
   });
 
   it('inicia e conclui execução', async () => {

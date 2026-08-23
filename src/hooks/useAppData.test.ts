@@ -53,8 +53,10 @@ describe('useAppData', () => {
     expect(result.current.checkedExpenseCount).toBe(3);
   });
 
-  it('não consulta despesas fora do módulo correspondente', () => {
+  it('não consulta despesas fora do módulo correspondente', async () => {
     renderHook(() => useAppData('pricing', 'user-1'));
+
+    await waitFor(() => expect(getAppSettings).toHaveBeenCalledTimes(1));
     expect(getPendingCount).not.toHaveBeenCalled();
     expect(getCheckedCount).not.toHaveBeenCalled();
   });
