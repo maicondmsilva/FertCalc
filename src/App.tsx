@@ -8,20 +8,20 @@ import Login from './components/Login';
 import ResetPassword from './components/ResetPassword';
 import AppContent from './components/AppContent';
 import AppShell from './components/AppShell';
-import { PricingRecord, User, AppSettings, SavedFormula } from './types';
+import { PricingRecord, AppSettings, SavedFormula } from './types';
 import {
   getActiveModule,
   getNavigationItems,
   hasUserPermission,
 } from './navigation/appNavigation';
 import { getAppSettings } from './services/db';
-import { signOut, restoreSession } from './services/authService';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 import { getPendingCount, getCheckedCount } from './services/expenseService';
 
 import { useNotifications } from './hooks/useNotifications';
 import { usePWAInstall } from './hooks/usePWAInstall';
+import { useAuthSession } from './hooks/useAuthSession';
 
 export default function App() {
   const location = useLocation();
@@ -32,6 +32,8 @@ export default function App() {
   const activeTab = pathParts[0] || '';
 
   const activeModule = getActiveModule(activeTab);
+  const navigateHome = React.useCallback(() => navigate('/'), [navigate]);
+  const { currentUser, login, logout, updateCurrentUser } = useAuthSession(navigateHome);
 
   const [editingPricing, setEditingPricing] = useState<PricingRecord | null>(null);
   const [initialFormulaContext, setInitialFormulaContext] = useState<{
@@ -39,7 +41,6 @@ export default function App() {
     branchId: string;
     priceListId: string;
   }>({ formula: null, branchId: '', priceListId: '' });
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   // Custom Hook replaces local state and intervals
   const {
@@ -59,11 +60,6 @@ export default function App() {
   const [checkedExpenseCount, setCheckedExpenseCount] = useState(0);
 
   useEffect(() => {
-    // Restaura sessão via Supabase Auth (seguro — não usa localStorage manual)
-    restoreSession().then((user) => {
-      if (user) setCurrentUser(user);
-    });
-
     getAppSettings().then((savedSettings) => {
       if (savedSettings?.companyName) {
         setAppSettings(savedSettings);
@@ -72,30 +68,6 @@ export default function App() {
   }, []);
 
   const { canInstall, handleInstall } = usePWAInstall();
-
-  // ── Logout ───────────────────────────────────────────────────────────────
-  const handleLogout = React.useCallback(() => {
-    setCurrentUser(null);
-    signOut();
-    navigate('/');
-  }, [navigate]);
-
-  // Sincronizar logout entre abas
-  useEffect(() => {
-    if (!currentUser) return;
-
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key && e.key.includes('supabase') && !e.newValue) {
-        setCurrentUser(null);
-        navigate('/');
-      }
-    };
-    window.addEventListener('storage', handleStorageChange);
-
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-    };
-  }, [currentUser, navigate]);
 
   // Load expense badge counts when entering the expenses module
   useEffect(() => {
@@ -109,17 +81,6 @@ export default function App() {
   }, [activeModule, currentUser]);
 
   // handleInstall e canInstall agora vêm do hook usePWAInstall (acima)
-
-  const handleLogin = React.useCallback(
-    (user: User) => {
-      setCurrentUser(user);
-      navigate('/');
-      // Sessão gerenciada pelo Supabase Auth — não persiste dados sensíveis no localStorage
-    },
-    [navigate]
-  );
-
-  // handleLogout definido acima (junto ao useInactivityTimer)
 
   const handleEditPricing = React.useCallback(
     (pricing: PricingRecord) => {
@@ -158,15 +119,15 @@ export default function App() {
   }
 
   if (!currentUser) {
-    return <Login onLogin={handleLogin} />;
+    return <Login onLogin={login} />;
   }
 
   if (currentUser.requer_alteracao_senha) {
     return (
       <Login
-        onLogin={handleLogin}
+        onLogin={login}
         forceChangePasswordUserId={currentUser.id}
-        onPasswordChanged={(updatedUser) => setCurrentUser(updatedUser)}
+        onPasswordChanged={updateCurrentUser}
       />
     );
   }
@@ -186,7 +147,7 @@ export default function App() {
       canInstall={canInstall}
       onClearNotifications={clearAll}
       onInstall={handleInstall}
-      onLogout={handleLogout}
+      onLogout={logout}
       onMarkAllNotificationsRead={markAllRead}
       onMarkNotificationRead={markAsRead}
       onNavigate={(routeId, clearFormulaContext) => {
