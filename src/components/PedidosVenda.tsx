@@ -9,17 +9,21 @@ import {
   GitBranch,
   Ban,
   FileText,
+  X,
 } from 'lucide-react';
 import {
   getPedidosVenda,
-  updatePedidoVenda,
   getPedidoVendaItens,
   getCancelamentos,
+  getPedidoSaldoAlertaPreferencia,
+  savePedidoSaldoAlertaPreferencia,
+  PedidoSaldoAlertaPreferencia,
 } from '../services/pedidosVendaService';
 import {
   createCarregamento,
   gerarNumeroCarregamento,
   getFiliais,
+  getQuantidadeCarregadaPorItem,
 } from '../services/carregamentoService';
 import { getBranches, getClients, getPricingRecords } from '../services/db';
 import { useToast } from './Toast';
@@ -64,6 +68,8 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [filialFilter, setFilialFilter] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [selectedPedidoId, setSelectedPedidoId] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [showNovoPedido, setShowNovoPedido] = useState(false);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -71,6 +77,11 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
   const [pedidoParaCarregamento, setPedidoParaCarregamento] = useState<PedidoVenda | null>(null);
   const [modalCarregamentoAberto, setModalCarregamentoAberto] = useState(false);
   const [itensPorPedido, setItensPorPedido] = useState<Record<string, PedidoVendaItem[]>>({});
+  const [carregadoPorItem, setCarregadoPorItem] = useState<Record<string, number>>({});
+  const [alertaSaldo, setAlertaSaldo] = useState<PedidoSaldoAlertaPreferencia>({
+    dias_limite: 30,
+    desativado: false,
+  });
   const [pedidoCancSubstitui, setPedidoCancSubstitui] = useState<PedidoVenda | null>(null);
   const [pedidoCancelamentoDefinitivo, setPedidoCancelamentoDefinitivo] =
     useState<PedidoVenda | null>(null);
@@ -98,12 +109,30 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
       setBranches(branchesData);
       setClients(clientsData);
       setPricingRecords(pricingData);
+      const firstPedido = pedidosData[pedidosData.length - 1];
+      if (firstPedido) {
+        setSelectedPedidoId(firstPedido.id);
+        setExpandedIds(new Set([firstPedido.id]));
+        const [itens, progresso, preferencia] = await Promise.all([
+          getPedidoVendaItens(firstPedido.id),
+          getQuantidadeCarregadaPorItem(firstPedido.id),
+          getPedidoSaldoAlertaPreferencia(firstPedido.id, currentUser.id),
+        ]);
+        setItensPorPedido({ [firstPedido.id]: itens });
+        setCarregadoPorItem(progresso);
+        setAlertaSaldo(preferencia);
+      } else {
+        setSelectedPedidoId(null);
+        setExpandedIds(new Set());
+        setItensPorPedido({});
+        setCarregadoPorItem({});
+      }
     } catch {
       showError('Erro ao carregar pedidos de venda.');
     } finally {
       setLoading(false);
     }
-  }, [showError]);
+  }, [currentUser.id, showError]);
 
   const loadCancelamentos = useCallback(async () => {
     setLoadingCancelamentos(true);
@@ -152,16 +181,6 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
     });
   };
 
-  const handleStatusChange = async (id: string, status: PedidoVenda['status']) => {
-    try {
-      await updatePedidoVenda(id, { status });
-      showSuccess('Status atualizado!');
-      setPedidos((prev) => prev.map((p) => (p.id === id ? { ...p, status } : p)));
-    } catch {
-      showError('Erro ao atualizar status.');
-    }
-  };
-
   const handleSolicitarCarregamento = async (form: CarregamentoFormData) => {
     try {
       const numero = await gerarNumeroCarregamento();
@@ -200,14 +219,49 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
   };
 
   const filtered = pedidos.filter((p) => {
+    const client = clients.find((c) => c.id === p.cliente_id);
+    const normalizedSearch = searchTerm.trim().toLowerCase();
     const matchSearch =
-      !searchTerm ||
-      p.numero_pedido?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.cliente_nome?.toLowerCase().includes(searchTerm.toLowerCase());
+      !normalizedSearch ||
+      p.numero_pedido?.toLowerCase().includes(normalizedSearch) ||
+      p.barra_pedido?.toLowerCase().includes(normalizedSearch) ||
+      p.cliente_nome?.toLowerCase().includes(normalizedSearch) ||
+      client?.name.toLowerCase().includes(normalizedSearch) ||
+      client?.stateRegistration?.toLowerCase().includes(normalizedSearch);
     const matchStatus = !statusFilter || p.status === statusFilter;
     const matchFilial = !filialFilter || p.filial_id === filialFilter;
     return matchSearch && matchStatus && matchFilial;
   });
+  const selectedPedido = pedidos.find((pedido) => pedido.id === selectedPedidoId) ?? null;
+
+  const selectPedido = async (pedido: PedidoVenda) => {
+    setSelectedPedidoId(pedido.id);
+    setExpandedIds(new Set([pedido.id]));
+    setSearchOpen(false);
+    if (!itensPorPedido[pedido.id]) {
+      const [itens, progresso, preferencia] = await Promise.all([
+        getPedidoVendaItens(pedido.id),
+        getQuantidadeCarregadaPorItem(pedido.id),
+        getPedidoSaldoAlertaPreferencia(pedido.id, currentUser.id),
+      ]);
+      setItensPorPedido((current) => ({ ...current, [pedido.id]: itens }));
+      setCarregadoPorItem((current) => ({ ...current, ...progresso }));
+      setAlertaSaldo(preferencia);
+    } else {
+      setAlertaSaldo(await getPedidoSaldoAlertaPreferencia(pedido.id, currentUser.id));
+    }
+  };
+
+  const saveAlertaSaldo = async (preferencia: PedidoSaldoAlertaPreferencia) => {
+    if (!selectedPedido) return;
+    try {
+      await savePedidoSaldoAlertaPreferencia(selectedPedido.id, currentUser.id, preferencia);
+      setAlertaSaldo(preferencia);
+      showSuccess('Preferência do alerta salva.');
+    } catch {
+      showError('Não foi possível salvar a preferência do alerta.');
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -412,14 +466,25 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
         </div>
       ) : (
         <>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => setSearchOpen((open) => !open)}
+              className="inline-flex items-center gap-2 rounded-lg bg-stone-800 px-4 py-2 text-sm font-bold text-white hover:bg-stone-700"
+            >
+              {searchOpen ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
+              {searchOpen ? 'Fechar pesquisa' : 'Pesquisar pedido'}
+            </button>
+          </div>
+
           {/* Filters */}
-          <div className="bg-white rounded-xl border border-stone-200 shadow-sm p-4">
+          {searchOpen && <div className="bg-white rounded-xl border border-stone-200 shadow-sm p-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
                 <input
                   type="text"
-                  placeholder="Buscar por nº pedido ou cliente..."
+                  placeholder="Pedido, nome do cliente ou I.E."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full pl-9 pr-4 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
@@ -450,14 +515,46 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                 ))}
               </select>
             </div>
-          </div>
+            <div className="mt-4 max-h-72 divide-y divide-stone-100 overflow-y-auto rounded-lg border border-stone-200">
+              {filtered.map((pedido) => {
+                const client = clients.find((item) => item.id === pedido.cliente_id);
+                return (
+                  <button
+                    key={pedido.id}
+                    type="button"
+                    onClick={() => void selectPedido(pedido)}
+                    className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left hover:bg-emerald-50"
+                  >
+                    <span>
+                      <strong className="block font-mono text-sm text-stone-800">
+                        {pedido.numero_pedido
+                          ? `${pedido.numero_pedido}/${pedido.emitente ?? 1}`
+                          : pedido.barra_pedido || 'Sem número'}
+                      </strong>
+                      <span className="text-sm text-stone-500">
+                        {client?.name || pedido.cliente_nome || 'Cliente não identificado'}
+                      </span>
+                    </span>
+                    <span className="text-xs text-stone-400">
+                      I.E. {client?.stateRegistration || 'não informada'}
+                    </span>
+                  </button>
+                );
+              })}
+              {filtered.length === 0 && (
+                <p className="px-4 py-6 text-center text-sm text-stone-400">
+                  Nenhum pedido encontrado.
+                </p>
+              )}
+            </div>
+          </div>}
 
           {/* Cards */}
           {loading ? (
             <div className="flex justify-center py-12">
               <RefreshCw className="w-6 h-6 animate-spin text-stone-300" />
             </div>
-          ) : filtered.length === 0 ? (
+          ) : !selectedPedido ? (
             <div className="text-center py-12 text-stone-400">
               <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-30" />
               <p className="text-sm">Nenhum pedido de venda encontrado</p>
@@ -467,11 +564,60 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
             </div>
           ) : (
             <div className="space-y-3">
-              <p className="text-xs text-stone-500 font-medium">
-                {filtered.length} pedido{filtered.length !== 1 ? 's' : ''} encontrado
-                {filtered.length !== 1 ? 's' : ''}
-              </p>
-              {filtered.map((p) => {
+              {(() => {
+                const idadeDias = selectedPedido.criado_em
+                  ? Math.floor((Date.now() - new Date(selectedPedido.criado_em).getTime()) / 86400000)
+                  : 0;
+                const itens = itensPorPedido[selectedPedido.id] ?? [];
+                const saldoReal = itens.reduce(
+                  (total, item) =>
+                    total +
+                    Math.max(
+                      0,
+                      Number(item.quantidade_ton || 0) -
+                        (item.id ? (carregadoPorItem[item.id] ?? 0) : 0)
+                    ),
+                  0
+                );
+                if (alertaSaldo.desativado || saldoReal <= 0 || idadeDias < alertaSaldo.dias_limite)
+                  return null;
+                return (
+                  <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p>
+                        <strong>Atenção:</strong> este pedido ainda possui {saldoReal.toFixed(3)} t
+                        para carregar há {idadeDias} dias.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => void saveAlertaSaldo({ ...alertaSaldo, desativado: true })}
+                        className="font-bold underline"
+                      >
+                        Desativar neste pedido
+                      </button>
+                    </div>
+                    <label className="mt-3 flex items-center gap-2 text-xs">
+                      Alertar após
+                      <input
+                        type="number"
+                        min="1"
+                        max="365"
+                        value={alertaSaldo.dias_limite}
+                        onChange={(event) =>
+                          setAlertaSaldo((current) => ({
+                            ...current,
+                            dias_limite: Math.max(1, Number(event.target.value) || 1),
+                          }))
+                        }
+                        onBlur={() => void saveAlertaSaldo(alertaSaldo)}
+                        className="w-20 rounded border border-amber-300 bg-white px-2 py-1"
+                      />
+                      dias
+                    </label>
+                  </div>
+                );
+              })()}
+              {[selectedPedido].map((p) => {
                 const isExpanded = expandedIds.has(p.id);
                 const saldo = p.saldo_disponivel ?? null;
                 const itensPedido = itensPorPedido[p.id] ?? [];
@@ -516,6 +662,12 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                             >
                               {STATUS_LABEL[p.status]}
                             </span>
+                            {(p.quantidade_cancelada_definitiva ?? 0) > 0 &&
+                              p.status !== 'cancelado' && (
+                                <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                                  Cancelamento parcial
+                                </span>
+                              )}
                             {p.embalagem && (
                               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-600">
                                 📦 {p.embalagem}
@@ -609,32 +761,43 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                               Produtos do Pedido
                             </p>
                             <div className="space-y-1">
-                              {itensPorPedido[p.id].map((item, i) => (
+                              {itensPorPedido[p.id].map((item, i) => {
+                                const total = Number(item.quantidade_ton || 0);
+                                const carregado = Math.min(
+                                  total,
+                                  Math.max(0, item.id ? (carregadoPorItem[item.id] ?? 0) : 0)
+                                );
+                                const saldoItem = Math.max(0, total - carregado);
+                                const progresso =
+                                  total > 0 ? Math.min(100, (carregado / total) * 100) : 0;
+                                return (
                                 <div
                                   key={item.id ?? i}
-                                  className="flex justify-between items-center text-sm"
+                                  className="space-y-2 rounded-lg border border-stone-100 p-3 text-sm"
                                 >
-                                  <span className="text-stone-700">{item.produto_nome}</span>
-                                  <span className="text-stone-500 font-mono text-xs flex items-center gap-2">
-                                    {item.quantidade_ton.toFixed(3)} ton
-                                    {item.preco_unitario
-                                      ? ` · R$ ${item.preco_unitario.toFixed(2)}/ton`
-                                      : ''}
-                                    <span
-                                      className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                        Number(item.saldo_disponivel ?? item.quantidade_ton ?? 0) >
-                                        0
-                                          ? 'bg-emerald-100 text-emerald-700'
-                                          : 'bg-red-100 text-red-700'
-                                      }`}
-                                    >
-                                      {Number(item.saldo_disponivel ?? item.quantidade_ton ?? 0) > 0
-                                        ? `Saldo: ${Number(item.saldo_disponivel ?? item.quantidade_ton ?? 0).toFixed(3)} ton`
-                                        : '❌ Esgotado'}
+                                  <div className="flex items-center justify-between gap-3">
+                                    <span className="font-bold text-stone-700">{item.produto_nome}</span>
+                                    <span className="text-xs text-stone-500">
+                                      {carregado.toFixed(3)} t carregadas · {saldoItem.toFixed(3)} t restantes
                                     </span>
-                                  </span>
+                                  </div>
+                                  <div className="h-2 overflow-hidden rounded-full bg-stone-100">
+                                    <div
+                                      className="h-full rounded-full bg-emerald-500 transition-all"
+                                      style={{ width: `${progresso}%` }}
+                                      role="progressbar"
+                                      aria-label={`Progresso de ${item.produto_nome}`}
+                                      aria-valuenow={Math.round(progresso)}
+                                      aria-valuemin={0}
+                                      aria-valuemax={100}
+                                    />
+                                  </div>
+                                  <p className="text-right text-[10px] font-bold text-stone-400">
+                                    {progresso.toFixed(1)}% carregado
+                                  </p>
                                 </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           </div>
                         )}
@@ -780,23 +943,6 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                           </div>
                         )}
 
-                        {/* Status change */}
-                        <div className="flex flex-wrap gap-2 pt-2 border-t border-stone-100">
-                          {(Object.keys(STATUS_LABEL) as PedidoVenda['status'][]).map((s) => (
-                            <button
-                              key={s}
-                              onClick={() => handleStatusChange(p.id, s)}
-                              disabled={(p.quantidade_carregada || 0) > 0 && s !== p.status}
-                              className={`px-3 py-1 rounded-lg text-xs font-bold border transition-colors ${
-                                p.status === s
-                                  ? `${STATUS_COLOR[s]} border-current`
-                                  : 'bg-stone-50 text-stone-500 border-stone-200 hover:bg-stone-100 disabled:opacity-50 disabled:cursor-not-allowed'
-                              }`}
-                            >
-                              {STATUS_LABEL[s]}
-                            </button>
-                          ))}
-                        </div>
                       </div>
                     )}
                   </div>

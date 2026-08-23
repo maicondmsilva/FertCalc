@@ -1,6 +1,11 @@
 import { supabase } from './supabase';
 import { PedidoVenda, PedidoVendaItem, CancelamentoPedido } from '../types';
 
+export interface PedidoSaldoAlertaPreferencia {
+  dias_limite: number;
+  desativado: boolean;
+}
+
 /** Computes saldo_disponivel: prefers the DB-generated column, falls back to manual calculation. */
 function computeSaldoDisponivel(d: Record<string, unknown>): number | undefined {
   if (d.saldo_disponivel != null) return Number(d.saldo_disponivel);
@@ -62,6 +67,41 @@ function mapPedido(d: Record<string, unknown>): PedidoVenda {
     data_vencimento: d.data_vencimento as string | undefined,
     emitente: d.emitente != null ? Number(d.emitente) : 1,
   };
+}
+
+export async function getPedidoSaldoAlertaPreferencia(
+  pedidoVendaId: string,
+  userId: string
+): Promise<PedidoSaldoAlertaPreferencia> {
+  const { data, error } = await supabase
+    .from('pedido_saldo_alerta_preferencias')
+    .select('dias_limite, desativado')
+    .eq('pedido_venda_id', pedidoVendaId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data
+    ? { dias_limite: Number(data.dias_limite), desativado: Boolean(data.desativado) }
+    : { dias_limite: 30, desativado: false };
+}
+
+export async function savePedidoSaldoAlertaPreferencia(
+  pedidoVendaId: string,
+  userId: string,
+  preferencia: PedidoSaldoAlertaPreferencia
+): Promise<void> {
+  const { error } = await supabase.from('pedido_saldo_alerta_preferencias').upsert(
+    {
+      pedido_venda_id: pedidoVendaId,
+      user_id: userId,
+      dias_limite: preferencia.dias_limite,
+      desativado: preferencia.desativado,
+      atualizado_em: new Date().toISOString(),
+    },
+    { onConflict: 'pedido_venda_id,user_id' }
+  );
+  if (error) throw error;
 }
 
 export async function getPedidosVenda(filtros?: {
