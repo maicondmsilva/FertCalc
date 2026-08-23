@@ -6,40 +6,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Login from './components/Login';
 import ResetPassword from './components/ResetPassword';
-import AppContent, { type ActiveModule } from './components/AppContent';
+import AppContent from './components/AppContent';
 import AppSidebar from './components/AppSidebar';
+import { ChevronLeft, ChevronRight, Download, Menu } from 'lucide-react';
+import { PricingRecord, User, AppSettings, SavedFormula } from './types';
 import {
-  LayoutDashboard,
-  History as HistoryIcon,
-  Database,
-  Users,
-  UserCheck,
-  Building2,
-  Settings,
-  ShieldCheck,
-  Menu,
-  Target,
-  Bell,
-  Download,
-  ChevronLeft,
-  ChevronRight,
-  BarChart3,
-  FileEdit,
-  Tag,
-  Package,
-  AlertTriangle,
-  Calculator as CalcIcon,
-  Beaker,
-  CreditCard,
-  List,
-  Plus,
-  ClipboardCheck,
-  CheckCircle2,
-  Truck,
-  Calendar,
-  ClipboardList,
-} from 'lucide-react';
-import { PricingRecord, User, AppSettings, NavItem, SavedFormula } from './types';
+  getActiveModule,
+  getNavigationItems,
+  hasUserPermission,
+} from './navigation/appNavigation';
 import { getAppSettings, markNotificationsAsRead } from './services/db';
 import { signOut, restoreSession } from './services/authService';
 import { logger } from './utils/logger';
@@ -63,73 +38,7 @@ export default function App() {
   const pathParts = location.pathname.split('/').filter(Boolean);
   const activeTab = pathParts[0] || '';
 
-  let activeModule: ActiveModule = null;
-  if (
-    [
-      'dashboard',
-      'calculator',
-      'simplified_calculator',
-      'saved_formulas',
-      'produtos_formulados',
-      'history',
-      'goals',
-      'approvals',
-      'reports',
-      'pricingReport',
-      'commissionReport',
-      'pricingBySeller',
-      'pricelists',
-      'materials_macro',
-      'materials_micro',
-      'materials_brand',
-      'products',
-      'incompatibilities',
-      'clients',
-      'agents',
-      'pedidos_venda',
-    ].includes(activeTab)
-  ) {
-    activeModule = 'pricing';
-  } else if (
-    ['branches', 'settings', 'users', 'access_profiles', 'access_levels', 'alert_center'].includes(
-      activeTab
-    )
-  ) {
-    activeModule = 'config';
-  } else if (activeTab === 'prd') {
-    activeModule = 'prd';
-  } else if (
-    [
-      'managementReports_dashboard',
-      'managementReports_lancamentos',
-      'managementReports_cadastros',
-    ].includes(activeTab)
-  ) {
-    activeModule = 'managementReports';
-  } else if (
-    activeTab === 'expenses' ||
-    activeTab === 'expenses_lancamentos' ||
-    activeTab === 'expenses_novo' ||
-    activeTab === 'expenses_relatorios' ||
-    activeTab === 'expenses_conferencia' ||
-    activeTab === 'expenses_aprovacao' ||
-    activeTab === 'expenses_categorias' ||
-    activeTab === 'expenses_cartoes'
-  ) {
-    activeModule = 'expenses';
-  } else if (
-    activeTab === 'carregamento_visao_geral' ||
-    activeTab === 'carregamento_solicitacao' ||
-    activeTab === 'carregamento_liberacao' ||
-    activeTab === 'carregamento_logistica' ||
-    activeTab === 'carregamento_calendario' ||
-    activeTab === 'carregamento_relatorios' ||
-    activeTab === 'carregamento_transportadoras'
-  ) {
-    activeModule = 'carregamento';
-  } else if (activeTab === 'relatorios') {
-    activeModule = 'relatorios';
-  }
+  const activeModule = getActiveModule(activeTab);
 
   const { showInfo } = useToast();
   const [editingPricing, setEditingPricing] = useState<PricingRecord | null>(null);
@@ -248,6 +157,20 @@ export default function App() {
     setInitialFormulaContext({ formula: null, branchId: '', priceListId: '' });
   }, []);
 
+  const hasPermission = React.useCallback(
+    (permission: string) =>
+      currentUser ? hasUserPermission(currentUser, permission) : false,
+    [currentUser]
+  );
+  const navItems = useMemo(
+    () =>
+      getNavigationItems(activeModule, hasPermission, {
+        pendingExpenses: pendingExpenseCount,
+        checkedExpenses: checkedExpenseCount,
+      }),
+    [activeModule, checkedExpenseCount, hasPermission, pendingExpenseCount]
+  );
+
   // Rota de redefinição de senha (acessível sem autenticação)
   if (location.pathname === '/reset-password') {
     return <ResetPassword />;
@@ -266,288 +189,6 @@ export default function App() {
       />
     );
   }
-
-  /**
-   * Verifica se o usuário logado tem permissão para acessar um recurso.
-   * master/admin sempre têm acesso; para outros roles, consulta permissions.
-   */
-  const hasPermission = (permission: string): boolean => {
-    if (currentUser.role === 'master' || currentUser.role === 'admin') return true;
-    return !!(currentUser.permissions as any)?.[permission];
-  };
-
-  const getNavItems = () => {
-    if (!activeModule) return [];
-
-    if (activeModule === 'pricing') {
-      const allItems = [
-        { id: 'dashboard', label: 'Dashboard', icon: BarChart3, permission: 'dashboard' },
-        { id: 'calculator', label: 'Calculadora', icon: CalcIcon, permission: 'calculator' },
-        {
-          id: 'simplified_calculator',
-          label: 'Calculadora Simplificada',
-          icon: CalcIcon,
-          permission: 'calculator',
-        },
-        { id: 'saved_formulas', label: 'Batidas Salvas', icon: Beaker, permission: 'calculator' },
-        {
-          id: 'produtos_formulados',
-          label: 'Produtos Formulados',
-          icon: Package,
-          permission: 'produtosFormulados',
-        },
-        {
-          id: 'materials_group',
-          label: 'Cadastro de Matérias',
-          icon: Database,
-          permission: 'priceLists',
-          type: 'parent',
-          children: [
-            { id: 'products', label: 'Produtos', icon: Package, permission: 'priceLists' },
-            { id: 'materials_brand', label: 'Marcas', icon: Tag, permission: 'priceLists' },
-            {
-              id: 'incompatibilities',
-              label: 'Incompatibilidades',
-              icon: AlertTriangle,
-              permission: 'priceLists',
-            },
-          ],
-        },
-        { id: 'pricelists', label: 'Lista de Preço', icon: Database, permission: 'priceLists' },
-        { id: 'history', label: 'Precificações', icon: HistoryIcon, permission: 'history' },
-        {
-          id: 'pedidos_venda',
-          label: 'Pedidos de Venda',
-          icon: ClipboardList,
-          permission: 'history',
-        },
-        { id: 'approvals', label: 'Aprovações', icon: ShieldCheck, permission: 'approvals' },
-        { id: 'goals', label: 'Metas', icon: Target, permission: 'goals' },
-        {
-          id: 'reports',
-          label: 'Relatórios',
-          icon: BarChart3,
-          permission: 'reports',
-          type: 'parent',
-          children: [
-            {
-              id: 'pricingReport',
-              label: 'Relatório de Precificação',
-              icon: BarChart3,
-              permission: 'reports',
-            },
-            {
-              id: 'commissionReport',
-              label: 'Relatório de Comissão',
-              icon: BarChart3,
-              permission: 'reports',
-            },
-            {
-              id: 'pricingBySeller',
-              label: 'Precificação por Vendedor',
-              icon: BarChart3,
-              permission: 'pricingBySeller',
-            },
-          ],
-        },
-        { id: 'clients', label: 'Clientes', icon: Users, permission: 'clients' },
-        { id: 'agents', label: 'Agentes', icon: UserCheck, permission: 'agents' },
-      ];
-
-      return allItems.filter((item) => hasPermission(item.permission));
-    }
-
-    if (activeModule === 'config') {
-      const allItems = [
-        { id: 'users', label: 'Usuários', icon: Users, permission: 'users' },
-        {
-          id: 'access_profiles',
-          label: 'Perfis de Acesso',
-          icon: ShieldCheck,
-          permission: 'accessProfiles',
-        },
-        {
-          id: 'access_levels',
-          label: 'Níveis de Acesso',
-          icon: ShieldCheck,
-          permission: 'accessProfiles',
-        },
-        { id: 'branches', label: 'Filiais e Locais', icon: Building2, permission: 'branches' },
-        { id: 'settings', label: 'Personalização', icon: Settings, permission: 'settings' },
-        { id: 'alert_center', label: 'Central de Alertas', icon: Bell, permission: 'alertas' },
-      ];
-
-      return allItems.filter((item) => hasPermission(item.permission));
-    }
-
-    if (activeModule === 'prd') {
-      const allItems = [
-        { id: 'prd', label: 'Documentação PRD', icon: BarChart3, permission: 'prd' }, // Using BarChart3 as a placeholder icon
-      ];
-
-      return allItems.filter((item) => hasPermission(item.permission));
-    }
-
-    if (activeModule === 'managementReports') {
-      const allItems = [
-        {
-          id: 'managementReports_group',
-          label: 'RELATÓRIO DIÁRIO',
-          icon: BarChart3,
-          permission: 'managementReports',
-          type: 'parent',
-          children: [
-            {
-              id: 'managementReports_dashboard',
-              label: 'Capa / Relatório',
-              icon: LayoutDashboard,
-              permission: 'managementReports',
-            },
-            {
-              id: 'managementReports_lancamentos',
-              label: 'Lançamentos',
-              icon: FileEdit,
-              permission: 'managementReports',
-            },
-            {
-              id: 'managementReports_cadastros',
-              label: 'Configurações',
-              icon: Settings,
-              permission: 'managementReports',
-            },
-          ],
-        },
-      ];
-
-      return allItems.filter((item) => hasPermission(item.permission));
-    }
-
-    if (activeModule === 'expenses') {
-      const allItems = [
-        {
-          id: 'expenses_lancamentos_group',
-          label: 'Lançamentos',
-          icon: CreditCard,
-          permission: 'expenses',
-          type: 'parent',
-          children: [
-            { id: 'expenses_lancamentos', label: 'Gastos', icon: List, permission: 'expenses' },
-            { id: 'expenses_novo', label: 'Novo Gasto', icon: Plus, permission: 'expenses' },
-            {
-              id: 'expenses_relatorios',
-              label: 'Relatórios',
-              icon: BarChart3,
-              permission: 'expenses',
-            },
-          ],
-        },
-        {
-          id: 'expenses_workflow_group',
-          label: 'Workflow',
-          icon: ClipboardCheck,
-          permission: 'expenses',
-          type: 'parent',
-          children: [
-            {
-              id: 'expenses_conferencia',
-              label: 'Conferência',
-              icon: ClipboardCheck,
-              permission: 'expenses',
-              badge: pendingExpenseCount,
-            },
-            {
-              id: 'expenses_aprovacao',
-              label: 'Aprovação',
-              icon: CheckCircle2,
-              permission: 'expenses',
-              badge: checkedExpenseCount,
-            },
-          ],
-        },
-        {
-          id: 'expenses_config_group',
-          label: 'Configurações',
-          icon: Settings,
-          permission: 'expenses',
-          type: 'parent',
-          children: [
-            { id: 'expenses_categorias', label: 'Categorias', icon: Tag, permission: 'expenses' },
-            { id: 'expenses_cartoes', label: 'Cartões', icon: CreditCard, permission: 'expenses' },
-          ],
-        },
-      ];
-
-      return allItems.filter((item) => hasPermission(item.permission));
-    }
-
-    if (activeModule === 'carregamento') {
-      const allItems = [
-        {
-          id: 'carregamento_group',
-          label: 'Carregamento',
-          icon: Truck,
-          permission: 'carregamento',
-          type: 'parent',
-          children: [
-            {
-              id: 'carregamento_visao_geral',
-              label: 'Visão Geral',
-              icon: LayoutDashboard,
-              permission: 'carregamento',
-            },
-            {
-              id: 'carregamento_solicitacao',
-              label: 'Solicitação de Cotação',
-              icon: ClipboardList,
-              permission: 'carregamento',
-            },
-            {
-              id: 'carregamento_liberacao',
-              label: 'Liberação de Carregamento',
-              icon: CheckCircle2,
-              permission: 'carregamento',
-            },
-            {
-              id: 'carregamento_logistica',
-              label: 'Painel de Logística',
-              icon: Truck,
-              permission: 'carregamento',
-            },
-            {
-              id: 'carregamento_calendario',
-              label: 'Calendário',
-              icon: Calendar,
-              permission: 'carregamento',
-            },
-            {
-              id: 'carregamento_relatorios',
-              label: 'Relatórios',
-              icon: BarChart3,
-              permission: 'carregamento',
-            },
-            {
-              id: 'carregamento_transportadoras',
-              label: 'Transportadoras',
-              icon: Truck,
-              permission: 'carregamento',
-            },
-          ],
-        },
-      ];
-
-      return allItems.filter((item) => hasPermission(item.permission));
-    }
-
-    if (activeModule === 'relatorios') {
-      return [
-        { id: 'relatorios', label: '📊 Relatórios', icon: BarChart3, permission: 'relatorios' },
-      ].filter(() => true);
-    }
-
-    return [];
-  };
-
-  const navItems: NavItem[] = getNavItems();
 
   return (
     <div className="flex h-screen bg-stone-100 overflow-hidden font-sans text-stone-900">

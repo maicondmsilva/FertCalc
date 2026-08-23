@@ -2,7 +2,8 @@ import React from 'react';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { User } from '../../types';
-import AppContent, { type ActiveModule } from '../AppContent';
+import type { ActiveModule } from '../../navigation/appNavigation';
+import AppContent from '../AppContent';
 
 vi.mock('../../services/supabase', () => ({ supabase: {} }));
 vi.mock('../Home', () => ({

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ChevronDown, Home as HomeIcon, Leaf, LogOut, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { AppSettings, NavItem, User } from '../types';
-import type { ActiveModule } from './AppContent';
+import type { ActiveModule } from '../navigation/appNavigation';
 
 interface AppSidebarProps {
   activeModule: ActiveModule;
