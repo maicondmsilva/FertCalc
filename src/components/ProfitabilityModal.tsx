@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, TrendingUp, Search, Link2, Calculator } from 'lucide-react';
-import { TargetFormula, User, ProfitabilityAnalysis, PricingRecord } from '../types';
-import { calcRentability } from '../utils/rentabilityUtils';
+import { TargetFormula, User, PricingRecord } from '../types';
+import { calculateProfitability, createProfitabilityAnalysis } from '../domain/pricing-engine';
 import { saveProfitabilityToCalc, getPricingRecords } from '../services/db';
 import { useToast } from './Toast';
 
@@ -43,7 +43,7 @@ export default function ProfitabilityModal({
   const [linkedPricingRecordId, setLinkedPricingRecordId] = useState<string | undefined>(initialPricingRecordId);
   const [isSearchingPricing, setIsSearchingPricing] = useState(false);
 
-  const [result, setResult] = useState<ReturnType<typeof calcRentability> | null>(null);
+  const [result, setResult] = useState<ReturnType<typeof calculateProfitability> | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   // Reset on open
@@ -130,7 +130,7 @@ export default function ProfitabilityModal({
   const handleCalculate = () => {
     const price = typeof unitaryPrice === 'number' ? unitaryPrice : 0;
     const baseCost = calc.summary?.baseCost ?? 0;
-    const res = calcRentability({
+    const res = calculateProfitability({
       unitaryPrice: price,
       factor,
       baseCost,
@@ -155,33 +155,23 @@ export default function ProfitabilityModal({
     const price = typeof unitaryPrice === 'number' ? unitaryPrice : 0;
     const baseCost = calc.summary?.baseCost ?? 0;
 
-    const analysis: ProfitabilityAnalysis = {
+    const analysis = createProfitabilityAnalysis({
       pricingRecordId: linkedPricingRecordId,
       calculationIndex: calcIndex,
       formulaName: calc.formula,
       unitaryPrice: price,
       factor,
       baseCost,
-      baseCostAfterFactor: result.baseCostAfterFactor,
       freightDeduction: freight,
       commissionRate: commission,
-      commissionDeduction: result.commissionDeduction,
       interestRate,
-      interestDeduction: result.interestDeduction,
       taxRate,
-      taxDeduction: result.taxDeduction,
-      netRevenue: result.netRevenue,
-      profitability: result.profitability,
-      profitabilityPercent: result.profitabilityPercent,
       dueDate,
       exemptCurrentMonth,
-      daysOfInterest: result.daysOfInterest,
       packagingValue: packagingValue,
-      packagingDeduction: result.packagingDeduction,
       analyzedByUserId: currentUser.id,
       analyzedByName: currentUser.name,
-      analyzedAt: new Date().toISOString(),
-    };
+    });
 
     setIsSaving(true);
     try {
