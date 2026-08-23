@@ -8,24 +8,19 @@ import Login from './components/Login';
 import ResetPassword from './components/ResetPassword';
 import AppContent from './components/AppContent';
 import AppShell from './components/AppShell';
-import { getActiveModule, getNavigationItems, hasUserPermission } from './navigation/appNavigation';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { getNavigationItems, hasUserPermission } from './navigation/appNavigation';
+import { useNavigate } from 'react-router-dom';
 
 import { useNotifications } from './hooks/useNotifications';
 import { usePWAInstall } from './hooks/usePWAInstall';
 import { useAuthSession } from './hooks/useAuthSession';
 import { useAppData } from './hooks/useAppData';
 import { usePricingWorkspace } from './hooks/usePricingWorkspace';
+import { useAppRoute } from './hooks/useAppRoute';
 
 export default function App() {
-  const location = useLocation();
   const navigate = useNavigate();
-  const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
-  const isStandalone = useMemo(() => searchParams.get('standalone') === 'true', [searchParams]);
-  const pathParts = location.pathname.split('/').filter(Boolean);
-  const activeTab = pathParts[0] || '';
-
-  const activeModule = getActiveModule(activeTab);
+  const { activeModule, activeTab, isPasswordReset, isStandalone } = useAppRoute();
   const navigateHome = React.useCallback(() => navigate('/'), [navigate]);
   const { currentUser, login, logout, updateCurrentUser } = useAuthSession(navigateHome);
 
@@ -64,7 +59,7 @@ export default function App() {
   );
 
   // Rota de redefinição de senha (acessível sem autenticação)
-  if (location.pathname === '/reset-password') {
+  if (isPasswordReset) {
     return <ResetPassword />;
   }
 
