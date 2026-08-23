@@ -27,6 +27,7 @@ import { getPricingRecords, getGoals, getBranches } from '../services/db';
 import { getPricingTotalTons, getPricingTotalSaleValue } from '../utils/pricingMetrics';
 import {
   buildCommercialRanking,
+  buildFormulaRanking,
   calculatePricingDashboardStats,
   filterPricingsByPeriod,
   getPricingPeriodKey,
@@ -86,6 +87,21 @@ export default function Dashboard({ currentUser }: DashboardProps) {
         };
       }).slice(0, 5),
     [branchNames, filteredPricings]
+  );
+  const clientRanking = useMemo(
+    () =>
+      buildCommercialRanking(filteredPricings, (pricing) => {
+        const client = pricing.factors?.client;
+        return {
+          id: client?.id || client?.name || 'not-informed',
+          name: client?.name || 'Cliente não informado',
+        };
+      }).slice(0, 5),
+    [filteredPricings]
+  );
+  const formulaRanking = useMemo(
+    () => buildFormulaRanking(filteredPricings).slice(0, 5),
+    [filteredPricings]
   );
   const [selectedYear, selectedMonth] = selectedPeriod.split('-').map(Number);
   const monthlyGoal = goals.find(
@@ -474,7 +490,59 @@ export default function Dashboard({ currentUser }: DashboardProps) {
         )}
         <RankingCard title="Vendas por filial" items={branchRanking} />
       </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <RankingCard title="Principais clientes" items={clientRanking} />
+        <FormulaRankingCard items={formulaRanking} />
+      </div>
     </div>
+  );
+}
+
+function FormulaRankingCard({ items }: { items: ReturnType<typeof buildFormulaRanking> }) {
+  const largestVolume = items[0]?.tons || 0;
+
+  return (
+    <section className="bg-white p-6 rounded-3xl shadow-sm border border-stone-200">
+      <h3 className="text-sm font-black text-stone-800 mb-5 uppercase tracking-wider">
+        Fórmulas por volume
+      </h3>
+      <div className="space-y-5">
+        {items.map((item, index) => (
+          <div key={item.id}>
+            <div className="flex items-end justify-between gap-4 mb-2">
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-stone-700 truncate">
+                  {index + 1}. {item.name}
+                </p>
+                <p className="text-xs text-stone-400">
+                  {item.salesValue.toLocaleString('pt-BR', {
+                    style: 'currency',
+                    currency: 'BRL',
+                    maximumFractionDigits: 0,
+                  })}{' '}
+                  · {item.salesCount} {item.salesCount === 1 ? 'item' : 'itens'}
+                </p>
+              </div>
+              <p className="text-sm font-black text-stone-800 whitespace-nowrap">
+                {item.tons.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} t
+              </p>
+            </div>
+            <div className="h-2 rounded-full bg-stone-100 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-violet-500"
+                style={{ width: `${largestVolume > 0 ? (item.tons / largestVolume) * 100 : 0}%` }}
+              />
+            </div>
+          </div>
+        ))}
+        {items.length === 0 && (
+          <p className="py-8 text-center text-sm text-stone-400">
+            Nenhuma fórmula vendida neste mês.
+          </p>
+        )}
+      </div>
+    </section>
   );
 }
 

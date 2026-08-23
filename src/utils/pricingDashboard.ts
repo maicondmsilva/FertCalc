@@ -132,6 +132,49 @@ export function buildCommercialRanking(
   );
 }
 
+export function buildFormulaRanking(pricings: PricingRecord[]): CommercialRankingItem[] {
+  const groups = new Map<string, CommercialRankingItem>();
+
+  pricings
+    .filter((pricing) => pricing.status === 'Fechada' && pricing.approvalStatus === 'Aprovada')
+    .forEach((pricing) => {
+      const calculations =
+        pricing.calculations && pricing.calculations.length > 0
+          ? pricing.calculations.map((calculation) => ({
+              id: calculation.formula || 'not-informed',
+              name: calculation.formula || 'Fórmula não informada',
+              tons: Number(calculation.factors?.totalTons) || 0,
+              salesValue: Number(calculation.summary?.totalSaleValue) || 0,
+            }))
+          : [
+              {
+                id: pricing.factors?.targetFormula || 'not-informed',
+                name: pricing.factors?.targetFormula || 'Fórmula não informada',
+                tons: getPricingTotalTons(pricing),
+                salesValue: getPricingTotalSaleValue(pricing),
+              },
+            ];
+
+      calculations.forEach((calculation) => {
+        const current = groups.get(calculation.id) || {
+          id: calculation.id,
+          name: calculation.name,
+          salesValue: 0,
+          tons: 0,
+          salesCount: 0,
+        };
+        current.salesValue += calculation.salesValue;
+        current.tons += calculation.tons;
+        current.salesCount += 1;
+        groups.set(calculation.id, current);
+      });
+    });
+
+  return [...groups.values()].sort(
+    (left, right) => right.tons - left.tons || right.salesValue - left.salesValue
+  );
+}
+
 export function getSixPeriodsEndingAt(period: string) {
   const [year, month] = period.split('-').map(Number);
 
