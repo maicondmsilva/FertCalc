@@ -16,7 +16,6 @@ import {
   MapPin,
   Copy,
 } from 'lucide-react';
-import NovoPedidoVendaModal from './NovoPedidoVendaModal';
 import {
   getPricingRecords,
   deletePricingRecord,
@@ -46,6 +45,7 @@ import { getTotalPages, paginateItems } from '../utils/pagination';
 
 const HISTORY_PAGE_SIZE = 12;
 const PricingDetailModal = React.lazy(() => import('./PricingDetailModal'));
+const NovoPedidoVendaModal = React.lazy(() => import('./NovoPedidoVendaModal'));
 
 interface HistoryProps {
   onEdit?: (pricing: PricingRecord) => void;
@@ -993,17 +993,28 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
         </div>
       )}
 
-      {showNovoPedido && novoPedidoPricing && (
-        <NovoPedidoVendaModal
-          pricing={novoPedidoPricing}
-          currentUser={currentUser}
-          onClose={() => {
-            setShowNovoPedido(false);
-            setNovoPedidoPricing(null);
-          }}
-          onSuccess={() => loadData()}
-        />
-      )}
+      <React.Suspense
+        fallback={
+          <div
+            role="status"
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30 text-sm font-bold text-white"
+          >
+            Carregando pedido...
+          </div>
+        }
+      >
+        {showNovoPedido && novoPedidoPricing && (
+          <NovoPedidoVendaModal
+            pricing={novoPedidoPricing}
+            currentUser={currentUser}
+            onClose={() => {
+              setShowNovoPedido(false);
+              setNovoPedidoPricing(null);
+            }}
+            onSuccess={() => loadData()}
+          />
+        )}
+      </React.Suspense>
     </div>
   );
 }
