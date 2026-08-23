@@ -23,6 +23,7 @@ import {
   getUsers,
 } from '../services/db';
 import { logAudit } from '../services/auditService';
+import { processPricingApproval as persistPricingApproval } from '../services/approvalService';
 import { useToast } from './Toast';
 import { useConfirm } from '../hooks/useConfirm';
 import { ConfirmDialog } from './ui/ConfirmDialog';
@@ -151,40 +152,12 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
     const pricing = allPricings.find((p) => p.id === id);
     if (!pricing) return;
 
-    const historyEntry = {
-      date: new Date().toISOString(),
-      userId: currentUser.id,
-      userName: currentUser.name,
-      action: `Precificação ${newStatus}${newStatus === 'Reprovada' ? `: ${reason}` : ''}`,
-    };
-
     try {
-      await updatePricingRecord(id, {
-        approvalStatus: newStatus,
-        rejectionObservation: newStatus === 'Reprovada' ? reason : '',
-        history: [...(pricing.history || []), historyEntry],
-      } as any);
-
-      await createNotification({
-        userId: pricing.userId,
-        title: `Precificação ${newStatus === 'Aprovada' ? 'Aprovada ✅' : 'Reprovada ❌'}`,
-        message: `Sua precificação para ${pricing.factors.client.name} foi ${newStatus.toLowerCase()}.${newStatus === 'Reprovada' ? ` Motivo: ${reason}` : ''}`,
-        date: new Date().toISOString(),
-        read: false,
-        type: 'pricing_approval',
-      });
-
-      await logAudit({
-        user_id: currentUser.id,
-        user_name: currentUser.name,
-        action: newStatus === 'Aprovada' ? 'pricing.approved' : 'pricing.rejected',
-        entity_type: 'pricing_record',
-        entity_id: id,
-        metadata: {
-          client: pricing.factors?.client?.name,
-          formattedCod: pricing.formattedCod,
-          reason: newStatus === 'Reprovada' ? reason : undefined,
-        },
+      const historyEntry = await persistPricingApproval({
+        pricing,
+        status: newStatus,
+        reason,
+        approver: currentUser,
       });
 
       setAllPricings((prev) =>
