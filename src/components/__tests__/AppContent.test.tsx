@@ -83,13 +83,13 @@ describe('AppContent', () => {
     expect(screen.getByText('Página inicial')).toBeDefined();
   });
 
-  it('respeita a permissão da rota do dashboard', () => {
+  it('respeita a permissão da rota do dashboard', async () => {
     const { container } = renderContent('pricing', 'dashboard');
     expect(container.firstChild).toBeNull();
 
     cleanup();
     renderContent('pricing', 'dashboard', ['dashboard']);
-    expect(screen.getByText('Dashboard de precificação')).toBeDefined();
+    expect(await screen.findByText('Dashboard de precificação')).toBeDefined();
   });
 
   it('distingue as duas apresentações da calculadora', async () => {

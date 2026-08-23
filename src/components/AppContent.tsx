@@ -1,7 +1,6 @@
 import React, { lazy, Suspense } from 'react';
 import type { PricingRecord, SavedFormula, User } from '../types';
 import type { ActiveModule } from '../navigation/appNavigation';
-import Dashboard from './Dashboard';
 import Home from './Home';
 
 const AccessLevelManager = lazy(() => import('./AccessLevelManager'));
@@ -15,6 +14,7 @@ const Calculator = lazy(() => import('./Calculator'));
 const CarregamentoModule = lazy(() => import('./Carregamento'));
 const ClientManager = lazy(() => import('./ClientManager'));
 const CommissionReport = lazy(() => import('./CommissionReport'));
+const Dashboard = lazy(() => import('./Dashboard'));
 const ApproveExpenses = lazy(() => import('./ExpenseManagement/ApproveExpenses'));
 const CardManager = lazy(() => import('./ExpenseManagement/CardManager'));
 const CheckExpenses = lazy(() => import('./ExpenseManagement/CheckExpenses'));
