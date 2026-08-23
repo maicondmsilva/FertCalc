@@ -3,13 +3,13 @@ import { Settings, Save, Image as ImageIcon, Building, Download, Upload, Databas
 import { AppSettings, Client, Agent } from '../types';
 import { getAppSettings, saveAppSettings, createClientsBulk, createAgentsBulk } from '../services/db';
 import { useToast } from './Toast';
-import * as XLSX from 'xlsx';
 import CompatibilityCategoryManager from './CompatibilityCategoryManager';
 
 export default function SettingsManager() {
   const { showSuccess, showError } = useToast();
   const [isImportingClients, setIsImportingClients] = useState(false);
   const [isImportingAgents, setIsImportingAgents] = useState(false);
+  const [preparingTemplate, setPreparingTemplate] = useState<'clients' | 'agents' | null>(null);
 
   const clientInputRef = useRef<HTMLInputElement>(null);
   const agentInputRef = useRef<HTMLInputElement>(null);
@@ -57,8 +57,11 @@ export default function SettingsManager() {
     showSuccess('Exportação concluída. Acesse o painel Supabase para dados completos.');
   };
 
-  const handleDownloadClientTemplate = () => {
-    const ws = XLSX.utils.json_to_sheet([{
+  const handleDownloadClientTemplate = async () => {
+    setPreparingTemplate('clients');
+    try {
+      const XLSX = await import('xlsx');
+      const ws = XLSX.utils.json_to_sheet([{
       'Razão Social / Nome*': '',
       'CNPJ / CPF*': '',
       'Código': '',
@@ -75,11 +78,19 @@ export default function SettingsManager() {
     }]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Clientes');
-    XLSX.writeFile(wb, 'modelo_importacao_clientes.xlsx');
+      XLSX.writeFile(wb, 'modelo_importacao_clientes.xlsx');
+    } catch {
+      showError('Não foi possível gerar o modelo de clientes.');
+    } finally {
+      setPreparingTemplate(null);
+    }
   };
 
-  const handleDownloadAgentTemplate = () => {
-    const ws = XLSX.utils.json_to_sheet([{
+  const handleDownloadAgentTemplate = async () => {
+    setPreparingTemplate('agents');
+    try {
+      const XLSX = await import('xlsx');
+      const ws = XLSX.utils.json_to_sheet([{
       'Nome*': '',
       'Documento*': '',
       'Código': '',
@@ -95,7 +106,12 @@ export default function SettingsManager() {
     }]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Agentes');
-    XLSX.writeFile(wb, 'modelo_importacao_agentes.xlsx');
+      XLSX.writeFile(wb, 'modelo_importacao_agentes.xlsx');
+    } catch {
+      showError('Não foi possível gerar o modelo de agentes.');
+    } finally {
+      setPreparingTemplate(null);
+    }
   };
 
   const handleImportClients = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -105,6 +121,7 @@ export default function SettingsManager() {
     setIsImportingClients(true);
     try {
       const data = await file.arrayBuffer();
+      const XLSX = await import('xlsx');
       const workbook = XLSX.read(data);
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
@@ -158,6 +175,7 @@ export default function SettingsManager() {
     setIsImportingAgents(true);
     try {
       const data = await file.arrayBuffer();
+      const XLSX = await import('xlsx');
       const workbook = XLSX.read(data);
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
@@ -382,11 +400,12 @@ export default function SettingsManager() {
             </div>
             <div className="flex flex-col gap-2">
               <button
-                onClick={handleDownloadClientTemplate}
+                onClick={() => void handleDownloadClientTemplate()}
+                disabled={preparingTemplate !== null}
                 className="w-full bg-white hover:bg-emerald-100 text-emerald-700 border border-emerald-300 px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center"
               >
                 <Download className="w-4 h-4 mr-2" />
-                Baixar Modelo Excel
+                {preparingTemplate === 'clients' ? 'Preparando...' : 'Baixar Modelo Excel'}
               </button>
               <input
                 type="file"
@@ -417,11 +436,12 @@ export default function SettingsManager() {
             </div>
             <div className="flex flex-col gap-2">
               <button
-                onClick={handleDownloadAgentTemplate}
+                onClick={() => void handleDownloadAgentTemplate()}
+                disabled={preparingTemplate !== null}
                 className="w-full bg-white hover:bg-blue-100 text-blue-700 border border-blue-300 px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center"
               >
                 <Download className="w-4 h-4 mr-2" />
-                Baixar Modelo Excel
+                {preparingTemplate === 'agents' ? 'Preparando...' : 'Baixar Modelo Excel'}
               </button>
               <input
                 type="file"
