@@ -14,10 +14,6 @@ import {
   CheckCircle as CheckCircleIcon,
 } from 'lucide-react';
 import NovoPedidoVendaModal from './NovoPedidoVendaModal';
-import { generatePricingPDF } from '../utils/pdfGenerator';
-import * as XLSX from 'xlsx';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import { formatNPK } from '../utils/formatters';
 import {
   formatDatePtBr,
@@ -81,6 +77,7 @@ export default function PricingDetailModal({
     selectedPricing.factors?.commercialObservation || ''
   );
   const [showAgentInPDF, setShowAgentInPDF] = useState(false);
+  const [exporting, setExporting] = useState<'commercial' | 'complete' | 'excel' | null>(null);
   const [isTransferring, setIsTransferring] = useState(false);
   const [availableSellers, setAvailableSellers] = useState<User[]>([]);
   const [selectedSellerId, setSelectedSellerId] = useState('');
@@ -372,8 +369,26 @@ export default function PricingDetailModal({
     }
   };
 
-  const exportToPDF = (pricing: PricingRecord) => {
-    const doc = new jsPDF();
+  const exportCommercialProposal = async (pricing: PricingRecord) => {
+    setExporting('commercial');
+    try {
+      const { generatePricingPDF } = await import('../utils/pdfGenerator');
+      await generatePricingPDF(pricing, appSettings, showAgentInPDF);
+    } catch {
+      showError('Não foi possível gerar a proposta comercial.');
+    } finally {
+      setExporting(null);
+    }
+  };
+
+  const exportToPDF = async (pricing: PricingRecord) => {
+    setExporting('complete');
+    try {
+      const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+        import('jspdf'),
+        import('jspdf-autotable'),
+      ]);
+      const doc = new jsPDF();
     const cod =
       pricing.formattedCod ||
       (pricing.cod ? String(pricing.cod).padStart(4, '0') : pricing.id.slice(-8));
@@ -545,11 +560,19 @@ export default function PricingDetailModal({
       });
     }
 
-    doc.save(`proposta-completa-${cod}.pdf`);
+      doc.save(`proposta-completa-${cod}.pdf`);
+    } catch {
+      showError('Não foi possível gerar a proposta completa.');
+    } finally {
+      setExporting(null);
+    }
   };
 
-  const exportToExcel = (pricing: PricingRecord) => {
-    const calcs =
+  const exportToExcel = async (pricing: PricingRecord) => {
+    setExporting('excel');
+    try {
+      const XLSX = await import('xlsx');
+      const calcs =
       pricing.calculations && pricing.calculations.length > 0 ? pricing.calculations : [pricing];
 
     const wsData: Array<Array<string | number>> = [
@@ -596,10 +619,15 @@ export default function PricingDetailModal({
     const ws = XLSX.utils.aoa_to_sheet(wsData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Precificação');
-    XLSX.writeFile(
-      wb,
-      `Precificacao_${pricing.factors?.client?.name || 'Sem_Nome'}_${pricing.formattedCod}.xlsx`
-    );
+      XLSX.writeFile(
+        wb,
+        `Precificacao_${pricing.factors?.client?.name || 'Sem_Nome'}_${pricing.formattedCod}.xlsx`
+      );
+    } catch {
+      showError('Não foi possível gerar a planilha da precificação.');
+    } finally {
+      setExporting(null);
+    }
   };
 
   return (
@@ -1635,22 +1663,28 @@ export default function PricingDetailModal({
                 </label>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => generatePricingPDF(selectedPricing, appSettings, showAgentInPDF)}
+                    onClick={() => void exportCommercialProposal(selectedPricing)}
+                    disabled={exporting !== null}
                     className="flex items-center gap-2 px-4 py-2 bg-stone-700 text-white font-bold rounded-lg hover:bg-stone-800 transition-colors text-sm"
                   >
-                    <FileDown className="w-4 h-4" /> Proposta Comercial
+                    <FileDown className="w-4 h-4" />{' '}
+                    {exporting === 'commercial' ? 'Preparando…' : 'Proposta Comercial'}
                   </button>
                   <button
-                    onClick={() => exportToPDF(selectedPricing)}
+                    onClick={() => void exportToPDF(selectedPricing)}
+                    disabled={exporting !== null}
                     className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition-colors text-sm"
                   >
-                    <Download className="w-4 h-4" /> Proposta Completa
+                    <Download className="w-4 h-4" />{' '}
+                    {exporting === 'complete' ? 'Preparando…' : 'Proposta Completa'}
                   </button>
                   <button
-                    onClick={() => exportToExcel(selectedPricing)}
+                    onClick={() => void exportToExcel(selectedPricing)}
+                    disabled={exporting !== null}
                     className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition-colors text-sm"
                   >
-                    <FileSpreadsheet className="w-4 h-4" /> Excel
+                    <FileSpreadsheet className="w-4 h-4" />{' '}
+                    {exporting === 'excel' ? 'Preparando…' : 'Excel'}
                   </button>
                 </div>
               </div>
