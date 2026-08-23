@@ -73,6 +73,9 @@ jobs:
         uses: actions/dependency-review-action@v4
         with:
           fail-on-severity: high
+          # pdfjs-dist 6 contains breaking API changes; keep this exception
+          # narrow and remove it when the application is migrated to 6.2.108+.
+          allow-ghsas: GHSA-hq66-cqwq-w95j
 
   database:
     name: Database migration safety
