@@ -1,4 +1,5 @@
 import { logger } from './logger';
+import { persistRuntimeError } from '../services/runtimeErrorService';
 
 export interface RuntimeErrorContext {
   incidentId: string;
@@ -16,13 +17,23 @@ export function createIncidentId(): string {
 
 export function reportRuntimeError(error: unknown, context: RuntimeErrorContext): void {
   const normalizedError = error instanceof Error ? error : new Error(String(error));
-  logger.error('[runtime_error]', {
+  const runtimeEvent = {
     incidentId: context.incidentId,
     source: context.source,
     message: normalizedError.message,
     stack: normalizedError.stack,
     componentStack: context.componentStack,
     path: typeof window !== 'undefined' ? window.location.pathname : undefined,
+    userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+    release: import.meta.env.VITE_APP_VERSION || undefined,
     occurredAt: new Date().toISOString(),
+  };
+
+  logger.error('[runtime_error]', runtimeEvent);
+  void persistRuntimeError(runtimeEvent).catch((persistenceError) => {
+    logger.error('[runtime_error_persistence_failed]', {
+      incidentId: context.incidentId,
+      message: persistenceError instanceof Error ? persistenceError.message : 'unknown error',
+    });
   });
 }
