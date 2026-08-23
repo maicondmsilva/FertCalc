@@ -9,9 +9,11 @@ describe('security baseline', () => {
   });
 
   it('rejects private keys and frontend service-role variables', () => {
+    const privateKeyMarker = ['-----BEGIN', 'PRIVATE KEY-----'].join(' ');
+    const unsafeFrontendVariable = ['VITE_SUPABASE', 'SERVICE_ROLE'].join('_');
     const findings = scanFiles([
-      { path: 'unsafe.env', content: 'VITE_SUPABASE_SERVICE_ROLE=unsafe' },
-      { path: 'private.md', content: '-----BEGIN PRIVATE KEY-----' },
+      { path: 'unsafe.env', content: `${unsafeFrontendVariable}=unsafe` },
+      { path: 'private.md', content: privateKeyMarker },
     ]);
     expect(findings).toHaveLength(2);
   });
