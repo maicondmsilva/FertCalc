@@ -3,9 +3,11 @@ import { PricingRecord } from '../types';
 import {
   buildCommercialRanking,
   buildFormulaRanking,
+  calculatePercentageChange,
   calculatePricingDashboardStats,
   filterPricingsByPeriod,
   getPricingPeriodKey,
+  getPreviousPeriod,
   getSixPeriodsEndingAt,
   scopePricingsForUser,
 } from './pricingDashboard';
@@ -150,6 +152,17 @@ describe('pricing dashboard totals', () => {
     expect(stats.profitabilityCoverageRate).toBe(25);
     expect(stats.totalProfitability).toBe(2_000);
     expect(stats.profitabilityPercent).toBe(20);
+  });
+
+  it('finds the previous month across a year boundary', () => {
+    expect(getPreviousPeriod('2026-01')).toBe('2025-12');
+    expect(getPreviousPeriod('2026-08')).toBe('2026-07');
+  });
+
+  it('calculates comparable changes and rejects a zero baseline', () => {
+    expect(calculatePercentageChange(150, 100)).toBe(50);
+    expect(calculatePercentageChange(50, 100)).toBe(-50);
+    expect(calculatePercentageChange(0, 0)).toBeNull();
   });
 });
 
