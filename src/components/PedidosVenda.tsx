@@ -6,6 +6,8 @@ import {
   Search,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   GitBranch,
   Ban,
   FileText,
@@ -256,6 +258,10 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
     return matchSearch && matchStatus && matchFilial;
   });
   const selectedPedido = pedidos.find((pedido) => pedido.id === selectedPedidoId) ?? null;
+  const pedidosCronologicos = [...pedidos].reverse();
+  const selectedPedidoPosition = pedidosCronologicos.findIndex(
+    (pedido) => pedido.id === selectedPedidoId
+  );
 
   const selectPedido = async (pedido: PedidoVenda) => {
     setSelectedPedidoId(pedido.id);
@@ -273,6 +279,22 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
     } else {
       setAlertaSaldo(await getPedidoSaldoAlertaPreferencia(pedido.id, currentUser.id));
     }
+  };
+
+  const openPedidoById = async (pedidoId: string) => {
+    const pedido = pedidos.find((item) => item.id === pedidoId);
+    if (!pedido) {
+      showError('Este pedido não está disponível para o seu nível de acesso.');
+      return;
+    }
+    setActiveTab('pedidos');
+    await selectPedido(pedido);
+  };
+
+  const navigatePedido = async (direction: -1 | 1) => {
+    const nextPosition = selectedPedidoPosition + direction;
+    const pedido = pedidosCronologicos[nextPosition];
+    if (pedido) await selectPedido(pedido);
   };
 
   const saveAlertaSaldo = async (preferencia: PedidoSaldoAlertaPreferencia) => {
@@ -353,7 +375,7 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
 
       {activeTab === 'relatorio' ? (
         <React.Suspense fallback={<LoadingFeature label="Carregando relatório..." />}>
-          <RelatorioCancSubstitui currentUser={currentUser} />
+          <RelatorioCancSubstitui currentUser={currentUser} onOpenPedido={openPedidoById} />
         </React.Suspense>
       ) : activeTab === 'saldos_cancelados' ? (
         <div className="space-y-4">
@@ -453,11 +475,21 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
 
                         return (
                           <tr key={c.id} className="hover:bg-stone-50 transition-colors">
-                            <td className="px-5 py-4 font-mono font-bold text-stone-700">
-                              {pOrigem?.barra_pedido ||
-                                (pOrigem?.numero_pedido
-                                  ? `${pOrigem.numero_pedido}/${pOrigem.emitente ?? 1}`
-                                  : '—')}
+                            <td className="px-5 py-4 font-mono font-bold">
+                              {pOrigem ? (
+                                <button
+                                  type="button"
+                                  onClick={() => void openPedidoById(pOrigem.id)}
+                                  className="text-emerald-700 underline decoration-emerald-300 underline-offset-2 hover:text-emerald-900"
+                                >
+                                  {pOrigem.barra_pedido ||
+                                    (pOrigem.numero_pedido
+                                      ? `${pOrigem.numero_pedido}/${pOrigem.emitente ?? 1}`
+                                      : '—')}
+                                </button>
+                              ) : (
+                                <span className="text-stone-400">—</span>
+                              )}
                             </td>
                             <td className="px-5 py-4">
                               <span className="text-stone-800 font-medium block">{clientName}</span>
@@ -573,6 +605,33 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
               )}
             </div>
           </div>}
+
+          {selectedPedido && (
+            <nav
+              className="flex items-center justify-between rounded-xl border border-stone-200 bg-white px-4 py-3"
+              aria-label="Navegação entre pedidos"
+            >
+              <button
+                type="button"
+                onClick={() => void navigatePedido(-1)}
+                disabled={selectedPedidoPosition <= 0}
+                className="inline-flex items-center gap-1 rounded-lg border border-stone-200 px-3 py-2 text-sm font-bold text-stone-600 hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <ChevronLeft className="h-4 w-4" /> Anterior
+              </button>
+              <span className="text-xs text-stone-500">
+                Pedido {selectedPedidoPosition + 1} de {pedidosCronologicos.length}
+              </span>
+              <button
+                type="button"
+                onClick={() => void navigatePedido(1)}
+                disabled={selectedPedidoPosition < 0 || selectedPedidoPosition >= pedidosCronologicos.length - 1}
+                className="inline-flex items-center gap-1 rounded-lg border border-stone-200 px-3 py-2 text-sm font-bold text-stone-600 hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Próximo <ChevronRight className="h-4 w-4" />
+              </button>
+            </nav>
+          )}
 
           {/* Cards */}
           {loading ? (
@@ -692,6 +751,14 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                             >
                               {STATUS_LABEL[p.status]}
                             </span>
+                            {p.status === 'concluido' && (
+                              <span className="text-xs font-semibold text-stone-600">
+                                Produto:{' '}
+                                {p.produto_nome ||
+                                  itensPedido.map((item) => item.produto_nome).join(', ') ||
+                                  'não informado'}
+                              </span>
+                            )}
                             {(p.quantidade_cancelada_definitiva ?? 0) > 0 &&
                               p.status !== 'cancelado' && (
                                 <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
