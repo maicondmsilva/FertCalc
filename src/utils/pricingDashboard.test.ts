@@ -73,6 +73,42 @@ describe('pricing dashboard totals', () => {
       inProgressCount: 1,
       lostCount: 1,
       closedTons: 10,
+      averageTicketValue: 20_000,
+      conversionRate: 50,
+      approvalRate: 100,
+      averageMarginPerTon: 0,
     });
+  });
+
+  it('calculates commercial rates only from decided records and weights margin by tons', () => {
+    const stats = calculatePricingDashboardStats([
+      pricing({
+        factors: { totalTons: 10, margin: 100 } as PricingRecord['factors'],
+        summary: { totalSaleValue: 20_000 } as PricingRecord['summary'],
+      }),
+      pricing({
+        factors: { totalTons: 30, margin: 300 } as PricingRecord['factors'],
+        summary: { totalSaleValue: 60_000 } as PricingRecord['summary'],
+      }),
+      pricing({ status: 'Perdida', approvalStatus: 'Reprovada' }),
+      pricing({ status: 'Em Andamento', approvalStatus: 'Pendente' }),
+      pricing({ status: 'Excluída', approvalStatus: 'Reprovada' }),
+    ]);
+
+    expect(stats.averageTicketValue).toBe(40_000);
+    expect(stats.conversionRate).toBeCloseTo(66.6667, 3);
+    expect(stats.approvalRate).toBeCloseTo(66.6667, 3);
+    expect(stats.averageMarginPerTon).toBe(250);
+  });
+
+  it('returns zero rates when there are no decided records', () => {
+    const stats = calculatePricingDashboardStats([
+      pricing({ status: 'Em Andamento', approvalStatus: 'Pendente' }),
+    ]);
+
+    expect(stats.averageTicketValue).toBe(0);
+    expect(stats.conversionRate).toBe(0);
+    expect(stats.approvalRate).toBe(0);
+    expect(stats.averageMarginPerTon).toBe(0);
   });
 });
