@@ -9,6 +9,7 @@ vi.mock('./supabase', () => ({
 
 import {
   createPricingRecord,
+  getGoals,
   getPricingRecords,
   normalizeCalculationsForDb,
   updatePricingRecord,
@@ -140,6 +141,26 @@ describe('pricing record persistence', () => {
       formattedCod: '42',
       approvalStatus: 'Aprovada',
     });
+  });
+
+  it('filtra precificações e metas pelo usuário antes de ordenar os resultados', async () => {
+    const pricingOrder = vi.fn().mockResolvedValue({ data: [], error: null });
+    const pricingEq = vi.fn().mockReturnValue({ order: pricingOrder });
+    const goalOrder = vi.fn().mockResolvedValue({ data: [], error: null });
+    const goalEq = vi.fn().mockReturnValue({ order: goalOrder });
+    fromMock.mockImplementation((table: string) => ({
+      select: vi.fn().mockReturnValue({
+        eq: table === 'pricing_records' ? pricingEq : goalEq,
+      }),
+    }));
+
+    await getPricingRecords('user-1');
+    await getGoals('user-1');
+
+    expect(pricingEq).toHaveBeenCalledWith('user_id', 'user-1');
+    expect(goalEq).toHaveBeenCalledWith('user_id', 'user-1');
+    expect(pricingOrder).toHaveBeenCalledWith('created_at', { ascending: false });
+    expect(goalOrder).toHaveBeenCalledWith('created_at', { ascending: false });
   });
 
   it('atualiza campos permitidos sem aceitar troca de organização pelo cliente', async () => {
