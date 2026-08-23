@@ -6,10 +6,7 @@ export interface PricingEngineOptions {
   today?: Date;
 }
 
-export function calculateMaterialComposition(
-  macros: RawMaterial[],
-  micros: RawMaterial[]
-) {
+export function calculateMaterialComposition(macros: RawMaterial[], micros: RawMaterial[]) {
   const selected = [...macros.filter((m) => m.selected), ...micros.filter((m) => m.selected)];
   let totalWeight = 0;
   let baseCost = 0;
@@ -31,8 +28,7 @@ export function calculateMaterialComposition(
     totalCa += quantity * (numberOrZero(material.ca) / 100);
     material.microGuarantees?.forEach((guarantee) => {
       micronutrients[guarantee.name] =
-        (micronutrients[guarantee.name] || 0) +
-        quantity * (numberOrZero(guarantee.value) / 100);
+        (micronutrients[guarantee.name] || 0) + quantity * (numberOrZero(guarantee.value) / 100);
     });
   });
 
@@ -58,9 +54,8 @@ export function calculateInterestDays(
 ): number {
   if (!dueDate) return 0;
   const due = new Date(dueDate);
-  const start = exemptCurrentMonth
-    ? new Date(today.getFullYear(), today.getMonth() + 1, 0)
-    : today;
+  if (Number.isNaN(due.getTime())) return 0;
+  const start = exemptCurrentMonth ? new Date(today.getFullYear(), today.getMonth() + 1, 0) : today;
   return Math.max(0, Math.ceil((due.getTime() - start.getTime()) / 86_400_000));
 }
 
@@ -71,13 +66,14 @@ export function calculatePricingSummary(
   options: PricingEngineOptions = {}
 ): PricingSummary {
   const composition = calculateMaterialComposition(macros, micros);
-  const basePrice = composition.baseCost * (numberOrZero(factors.factor) || 1) - numberOrZero(factors.discount);
+  const basePrice =
+    composition.baseCost * (numberOrZero(factors.factor) || 1) - numberOrZero(factors.discount);
   const days = calculateInterestDays(
     factors.dueDate,
     Boolean(factors.exemptCurrentMonth),
     options.today ?? new Date()
   );
-  const interestValue = basePrice * ((numberOrZero(factors.monthlyInterestRate) / 30) / 100) * days;
+  const interestValue = basePrice * (numberOrZero(factors.monthlyInterestRate) / 30 / 100) * days;
   const taxValue = basePrice * (numberOrZero(factors.taxRate) / 100);
   const commissionValue = basePrice * (numberOrZero(factors.commission) / 100);
   const freightType = factors.tipoFrete ?? (numberOrZero(factors.freight) > 0 ? 'CIF' : 'FOB');
