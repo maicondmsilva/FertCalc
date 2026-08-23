@@ -27,15 +27,34 @@ import {
 } from '../services/carregamentoService';
 import { getBranches, getClients, getPricingRecords } from '../services/db';
 import { useToast } from './Toast';
-import NovoPedidoVendaModal from './NovoPedidoVendaModal';
-import CancSubstituiModal from './CancSubstituiModal';
-import CancelamentoDefinitivoModal from './CancelamentoDefinitivoModal';
-import RelatorioCancSubstitui from './RelatorioCancSubstitui';
-import { ModalNovoCarregamento, CarregamentoFormData } from './Carregamento';
+import type { CarregamentoFormData } from './Carregamento';
 import { Filial } from '../types/carregamento';
 import { getStatusInicial } from '../utils/getStatusInicial';
 import HistoricoCarregamentosPedido from './HistoricoCarregamentosPedido';
 import { canReceiveSaldoPedidoAlert } from '../services/alertConfigService';
+
+const NovoPedidoVendaModal = React.lazy(() => import('./NovoPedidoVendaModal'));
+const CancSubstituiModal = React.lazy(() => import('./CancSubstituiModal'));
+const CancelamentoDefinitivoModal = React.lazy(() => import('./CancelamentoDefinitivoModal'));
+const RelatorioCancSubstitui = React.lazy(() => import('./RelatorioCancSubstitui'));
+const ModalNovoCarregamento = React.lazy(() =>
+  import('./Carregamento').then((module) => ({ default: module.ModalNovoCarregamento }))
+);
+
+function LoadingFeature({ label, overlay = false }: { label: string; overlay?: boolean }) {
+  return (
+    <div
+      role="status"
+      className={
+        overlay
+          ? 'fixed inset-0 z-[100] flex items-center justify-center bg-black/30 text-sm font-bold text-white'
+          : 'flex min-h-48 items-center justify-center rounded-xl border border-stone-200 bg-white text-sm font-bold text-stone-500'
+      }
+    >
+      {label}
+    </div>
+  );
+}
 
 const STATUS_LABEL: Record<PedidoVenda['status'], string> = {
   pendente: 'Ativo',
@@ -333,7 +352,9 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
       </div>
 
       {activeTab === 'relatorio' ? (
-        <RelatorioCancSubstitui currentUser={currentUser} />
+        <React.Suspense fallback={<LoadingFeature label="Carregando relatório..." />}>
+          <RelatorioCancSubstitui currentUser={currentUser} />
+        </React.Suspense>
       ) : activeTab === 'saldos_cancelados' ? (
         <div className="space-y-4">
           {/* Filters */}
@@ -962,44 +983,46 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
         </>
       )}
 
-      {showNovoPedido && (
-        <NovoPedidoVendaModal
-          pricing={null}
-          currentUser={currentUser}
-          onClose={() => setShowNovoPedido(false)}
-          onSuccess={load}
-        />
-      )}
+      <React.Suspense fallback={<LoadingFeature label="Carregando formulário..." overlay />}>
+        {showNovoPedido && (
+          <NovoPedidoVendaModal
+            pricing={null}
+            currentUser={currentUser}
+            onClose={() => setShowNovoPedido(false)}
+            onSuccess={load}
+          />
+        )}
 
-      {pedidoCancSubstitui && (
-        <CancSubstituiModal
-          pedido={pedidoCancSubstitui}
-          currentUser={currentUser}
-          onClose={() => setPedidoCancSubstitui(null)}
-          onSuccess={load}
-        />
-      )}
+        {pedidoCancSubstitui && (
+          <CancSubstituiModal
+            pedido={pedidoCancSubstitui}
+            currentUser={currentUser}
+            onClose={() => setPedidoCancSubstitui(null)}
+            onSuccess={load}
+          />
+        )}
 
-      {pedidoCancelamentoDefinitivo && (
-        <CancelamentoDefinitivoModal
-          pedido={pedidoCancelamentoDefinitivo}
-          currentUser={currentUser}
-          onClose={() => setPedidoCancelamentoDefinitivo(null)}
-          onSuccess={load}
-        />
-      )}
+        {pedidoCancelamentoDefinitivo && (
+          <CancelamentoDefinitivoModal
+            pedido={pedidoCancelamentoDefinitivo}
+            currentUser={currentUser}
+            onClose={() => setPedidoCancelamentoDefinitivo(null)}
+            onSuccess={load}
+          />
+        )}
 
-      {modalCarregamentoAberto && (
-        <ModalNovoCarregamento
-          filiais={filiais}
-          pedidoVinculado={pedidoParaCarregamento ?? undefined}
-          onSave={handleSolicitarCarregamento}
-          onClose={() => {
-            setModalCarregamentoAberto(false);
-            setPedidoParaCarregamento(null);
-          }}
-        />
-      )}
+        {modalCarregamentoAberto && (
+          <ModalNovoCarregamento
+            filiais={filiais}
+            pedidoVinculado={pedidoParaCarregamento ?? undefined}
+            onSave={handleSolicitarCarregamento}
+            onClose={() => {
+              setModalCarregamentoAberto(false);
+              setPedidoParaCarregamento(null);
+            }}
+          />
+        )}
+      </React.Suspense>
     </div>
   );
 }
