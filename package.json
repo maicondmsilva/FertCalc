@@ -12,6 +12,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "dr:check": "node scripts/check-disaster-recovery-readiness.mjs",
     "lint:ts": "tsc --noEmit",
     "lint:eslint": "eslint src --ext .ts,.tsx",
     "lint:format": "prettier --check \"src/**/*.{ts,tsx}\"",

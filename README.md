@@ -172,6 +172,10 @@ O workflow `monitor-production.yml` verifica a aplicação publicada a cada 15 m
 
 Após cada deploy, a mesma verificação confirma o código HTTP e a identificação da página do FertCalc. Se a proteção SSO estiver ativa sem o segredo de bypass, o workflow emite um aviso sem expor dados sensíveis.
 
+### Recuperação de desastre
+
+O workflow `disaster-recovery-readiness.yml` verifica semanalmente se os ativos necessários para recuperação continuam versionados e protegidos. O procedimento operacional, incluindo backup do banco, Storage, validação e liberação, está em [`docs/DISASTER_RECOVERY_RUNBOOK.md`](docs/DISASTER_RECOVERY_RUNBOOK.md).
+
 ### Deploy automático de Edge Functions (Supabase)
 
 O repositório também possui o workflow **`.github/workflows/deploy-supabase-functions.yml`**.

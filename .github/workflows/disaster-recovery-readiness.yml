@@ -1,0 +1,30 @@
+name: Disaster Recovery Readiness
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: disaster-recovery-readiness
+  cancel-in-progress: true
+
+jobs:
+  readiness:
+    name: Validate recovery assets
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validate recovery assets
+        run: node scripts/check-disaster-recovery-readiness.mjs
