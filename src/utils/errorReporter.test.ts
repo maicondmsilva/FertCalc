@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { logger } from './logger';
 import { createIncidentId, reportRuntimeError } from './errorReporter';
+import { persistRuntimeError } from '../services/runtimeErrorService';
+
+vi.mock('../services/runtimeErrorService', () => ({
+  persistRuntimeError: vi.fn().mockResolvedValue(undefined),
+}));
 
 describe('runtime error reporter', () => {
   it('creates a support-friendly incident identifier', () => {
@@ -22,6 +27,9 @@ describe('runtime error reporter', () => {
         message: 'falha',
         source: 'react-error-boundary',
       })
+    );
+    expect(persistRuntimeError).toHaveBeenCalledWith(
+      expect.objectContaining({ incidentId: 'FERT-TEST-1234', message: 'falha' })
     );
   });
 });
