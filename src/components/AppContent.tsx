@@ -1,5 +1,6 @@
 import React from 'react';
 import type { PricingRecord, SavedFormula, User } from '../types';
+import type { ActiveModule } from '../navigation/appNavigation';
 import AccessLevelManager from './AccessLevelManager';
 import AccessProfileManager from './AccessProfileManager';
 import AgentManager from './AgentManager';
@@ -34,16 +35,6 @@ import Reports from './Reports';
 import SavedFormulas from './SavedFormulas';
 import SettingsManager from './SettingsManager';
 import UserManager from './UserManager';
-
-export type ActiveModule =
-  | 'pricing'
-  | 'config'
-  | 'prd'
-  | 'managementReports'
-  | 'expenses'
-  | 'carregamento'
-  | 'relatorios'
-  | null;
 
 interface FormulaContext {
   formula: SavedFormula | null;
