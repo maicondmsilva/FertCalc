@@ -29,9 +29,11 @@ import { getPricingTotalTons, getPricingTotalSaleValue } from '../utils/pricingM
 import {
   buildCommercialRanking,
   buildFormulaRanking,
+  calculatePercentageChange,
   calculatePricingDashboardStats,
   filterPricingsByPeriod,
   getPricingPeriodKey,
+  getPreviousPeriod,
   getSixPeriodsEndingAt,
   scopePricingsForUser,
   toPeriodKey,
@@ -66,6 +68,13 @@ export default function Dashboard({ currentUser }: DashboardProps) {
     [pricings, selectedPeriod]
   );
   const stats = useMemo(() => calculatePricingDashboardStats(filteredPricings), [filteredPricings]);
+  const previousStats = useMemo(
+    () =>
+      calculatePricingDashboardStats(
+        filterPricingsByPeriod(pricings, getPreviousPeriod(selectedPeriod))
+      ),
+    [pricings, selectedPeriod]
+  );
   const sellerRanking = useMemo(
     () =>
       buildCommercialRanking(filteredPricings, (pricing) => ({
@@ -197,6 +206,9 @@ export default function Dashboard({ currentUser }: DashboardProps) {
           <p className="text-2xl font-black text-stone-800">
             R$ {stats.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </p>
+          <TrendBadge
+            value={calculatePercentageChange(stats.totalValue, previousStats.totalValue)}
+          />
         </div>
 
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
@@ -245,6 +257,9 @@ export default function Dashboard({ currentUser }: DashboardProps) {
             })}{' '}
             <span className="text-sm font-medium text-stone-400">t</span>
           </p>
+          <TrendBadge
+            value={calculatePercentageChange(stats.closedTons, previousStats.closedTons)}
+          />
         </div>
       </div>
 
@@ -259,7 +274,13 @@ export default function Dashboard({ currentUser }: DashboardProps) {
           <p className="text-2xl font-black text-stone-800">
             R$ {stats.averageTicketValue.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}
           </p>
-          <p className="text-xs text-stone-400 mt-2">Por venda fechada e aprovada</p>
+          <TrendBadge
+            value={calculatePercentageChange(
+              stats.averageTicketValue,
+              previousStats.averageTicketValue
+            )}
+          />
+          <p className="text-xs text-stone-400 mt-1">Por venda fechada e aprovada</p>
         </div>
 
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
@@ -272,7 +293,12 @@ export default function Dashboard({ currentUser }: DashboardProps) {
           <p className="text-2xl font-black text-stone-800">
             {stats.conversionRate.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%
           </p>
-          <p className="text-xs text-stone-400 mt-2">Fechadas entre negociações decididas</p>
+          <TrendBadge
+            value={stats.conversionRate - previousStats.conversionRate}
+            suffix="p.p."
+            hasComparison={previousStats.closedCount + previousStats.lostCount > 0}
+          />
+          <p className="text-xs text-stone-400 mt-1">Fechadas entre negociações decididas</p>
         </div>
 
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
@@ -557,6 +583,35 @@ export default function Dashboard({ currentUser }: DashboardProps) {
         <FormulaRankingCard items={formulaRanking} />
       </div>
     </div>
+  );
+}
+
+function TrendBadge({
+  value,
+  suffix = '%',
+  hasComparison = true,
+}: {
+  value: number | null;
+  suffix?: string;
+  hasComparison?: boolean;
+}) {
+  if (value === null || !hasComparison) {
+    return <p className="text-xs text-stone-400 mt-2">Sem base no mês anterior</p>;
+  }
+
+  const isPositive = value > 0;
+  const isNegative = value < 0;
+  return (
+    <p
+      className={`text-xs font-bold mt-2 ${
+        isPositive ? 'text-emerald-600' : isNegative ? 'text-red-600' : 'text-stone-400'
+      }`}
+    >
+      {isPositive ? '▲' : isNegative ? '▼' : '•'} {Math.abs(value).toLocaleString('pt-BR', {
+        maximumFractionDigits: 1,
+      })}{' '}
+      {suffix} vs. mês anterior
+    </p>
   );
 }
 

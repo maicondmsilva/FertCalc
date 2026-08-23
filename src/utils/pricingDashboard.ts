@@ -38,6 +38,16 @@ export function filterPricingsByPeriod(pricings: PricingRecord[], period: string
   return pricings.filter((pricing) => getPricingPeriodKey(pricing.date) === period);
 }
 
+export function getPreviousPeriod(period: string): string {
+  const [year, month] = period.split('-').map(Number);
+  return toPeriodKey(new Date(year, month - 2, 1));
+}
+
+export function calculatePercentageChange(current: number, previous: number): number | null {
+  if (previous === 0) return null;
+  return ((current - previous) / Math.abs(previous)) * 100;
+}
+
 export function calculatePricingDashboardStats(pricings: PricingRecord[]): PricingDashboardStats {
   const approvedClosed = pricings.filter(
     (pricing) => pricing.status === 'Fechada' && pricing.approvalStatus === 'Aprovada'
