@@ -9,4 +9,8 @@ coverage/
 .env
 data/
 core
+backups/
+*.backup
+*.dump
+*.sql.gz
 core
