@@ -1,0 +1,33 @@
+name: Production Monitor
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: URL opcional para uma verificação manual
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-monitor
+  cancel-in-progress: true
+
+jobs:
+  health:
+    name: Check production health
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check FertCalc response
+        env:
+          TARGET_URL: ${{ inputs.target_url || vars.PRODUCTION_HEALTH_URL }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: node scripts/check-production-health.mjs

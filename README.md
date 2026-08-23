@@ -161,6 +161,17 @@ Para configurar, adicione os seguintes **secrets** no repositório GitHub (`Sett
 | `VITE_SUPABASE_URL` | URL do projeto Supabase |
 | `VITE_SUPABASE_ANON_KEY` | Chave anônima do Supabase |
 
+### Monitoramento de produção
+
+O workflow `monitor-production.yml` verifica a aplicação publicada a cada 15 minutos e também pode ser executado manualmente. Configure:
+
+| Configuração | Tipo | Descrição |
+|-------------|------|-----------|
+| `PRODUCTION_HEALTH_URL` | Variable | URL pública ou protegida da aplicação em produção |
+| `VERCEL_AUTOMATION_BYPASS_SECRET` | Secret opcional | Segredo de bypass quando o Deployment Protection da Vercel estiver ativo |
+
+Após cada deploy, a mesma verificação confirma o código HTTP e a identificação da página do FertCalc. Se a proteção SSO estiver ativa sem o segredo de bypass, o workflow emite um aviso sem expor dados sensíveis.
+
 ### Deploy automático de Edge Functions (Supabase)
 
 O repositório também possui o workflow **`.github/workflows/deploy-supabase-functions.yml`**.
