@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Bell, Save } from 'lucide-react';
 import { AlertConfig, getAlertConfigs, updateAlertConfig } from '../services/alertConfigService';
 import { useToast } from './Toast';
+import { getUsers } from '../services/db';
+import { User } from '../types';
 
 const ALL_ROLES = ['master', 'admin', 'manager', 'user'] as const;
 type Role = (typeof ALL_ROLES)[number];
@@ -69,17 +71,28 @@ export default function AlertCenter() {
   const [configs, setConfigs] = useState<AlertConfig[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
   // Local edits: keyed by config id
-  const [edits, setEdits] = useState<Record<string, { ativo: boolean; roles: string[] }>>({});
+  const [edits, setEdits] = useState<
+    Record<string, { ativo: boolean; roles: string[]; recipientUserIds: string[] }>
+  >({});
 
   const loadConfigs = async () => {
     setLoading(true);
-    const data = await getAlertConfigs();
+    const [data, availableUsers] = await Promise.all([getAlertConfigs(), getUsers()]);
     setConfigs(data);
+    setUsers(availableUsers.filter((user) => user.ativo));
     // Initialize local edits from loaded data
-    const initial: Record<string, { ativo: boolean; roles: string[] }> = {};
+    const initial: Record<
+      string,
+      { ativo: boolean; roles: string[]; recipientUserIds: string[] }
+    > = {};
     data.forEach((c) => {
-      initial[c.id] = { ativo: c.ativo, roles: [...c.roles] };
+      initial[c.id] = {
+        ativo: c.ativo,
+        roles: [...c.roles],
+        recipientUserIds: [...c.recipientUserIds],
+      };
     });
     setEdits(initial);
     setLoading(false);
@@ -90,7 +103,11 @@ export default function AlertCenter() {
   }, []);
 
   const getEdit = (id: string, config: AlertConfig) =>
-    edits[id] ?? { ativo: config.ativo, roles: [...config.roles] };
+    edits[id] ?? {
+      ativo: config.ativo,
+      roles: [...config.roles],
+      recipientUserIds: [...config.recipientUserIds],
+    };
 
   const handleToggleAtivo = (config: AlertConfig) => {
     const current = getEdit(config.id, config);
@@ -102,11 +119,20 @@ export default function AlertCenter() {
     setEdits((prev) => ({ ...prev, [config.id]: { ...current, roles } }));
   };
 
+  const handleUsersChange = (config: AlertConfig, recipientUserIds: string[]) => {
+    const current = getEdit(config.id, config);
+    setEdits((prev) => ({ ...prev, [config.id]: { ...current, recipientUserIds } }));
+  };
+
   const handleSave = async (config: AlertConfig) => {
     const edit = getEdit(config.id, config);
     setSaving(config.id);
     try {
-      await updateAlertConfig(config.id, { ativo: edit.ativo, roles: edit.roles });
+      await updateAlertConfig(config.id, {
+        ativo: edit.ativo,
+        roles: edit.roles,
+        recipientUserIds: edit.recipientUserIds,
+      });
       showSuccess('Configuração salva com sucesso!');
       await loadConfigs();
     } catch (err: unknown) {
@@ -121,7 +147,9 @@ export default function AlertCenter() {
     const edit = getEdit(config.id, config);
     return (
       edit.ativo !== config.ativo ||
-      JSON.stringify([...edit.roles].sort()) !== JSON.stringify([...config.roles].sort())
+      JSON.stringify([...edit.roles].sort()) !== JSON.stringify([...config.roles].sort()) ||
+      JSON.stringify([...edit.recipientUserIds].sort()) !==
+        JSON.stringify([...config.recipientUserIds].sort())
     );
   };
 
@@ -161,6 +189,7 @@ export default function AlertCenter() {
                 <th className="px-5 py-3">Tipo</th>
                 <th className="px-5 py-3">Descrição</th>
                 <th className="px-5 py-3">Notificar Para</th>
+                <th className="px-5 py-3">Usuários específicos</th>
                 <th className="px-5 py-3 text-center">Status</th>
                 <th className="px-5 py-3 text-right">Ações</th>
               </tr>
@@ -191,6 +220,35 @@ export default function AlertCenter() {
                         roles={edit.roles}
                         onChange={(roles) => handleRolesChange(config, roles)}
                       />
+                    </td>
+
+                    {/* Usuários específicos */}
+                    <td className="px-5 py-3">
+                      <div className="max-h-28 w-52 space-y-1 overflow-y-auto rounded-lg border border-stone-200 bg-white p-2">
+                        {users.map((user) => (
+                          <label key={user.id} className="flex items-center gap-2 text-xs text-stone-600">
+                            <input
+                              type="checkbox"
+                              checked={edit.recipientUserIds.includes(user.id)}
+                              onChange={() =>
+                                handleUsersChange(
+                                  config,
+                                  edit.recipientUserIds.includes(user.id)
+                                    ? edit.recipientUserIds.filter((id) => id !== user.id)
+                                    : [...edit.recipientUserIds, user.id]
+                                )
+                              }
+                              className="accent-emerald-600"
+                            />
+                            <span className="truncate">
+                              {user.name} ({ROLE_LABELS[user.role as Role] ?? user.role})
+                            </span>
+                          </label>
+                        ))}
+                        {users.length === 0 && (
+                          <span className="text-xs text-stone-400">Nenhum usuário disponível</span>
+                        )}
+                      </div>
                     </td>
 
                     {/* Status toggle */}

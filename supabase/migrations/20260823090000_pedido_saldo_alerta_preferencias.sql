@@ -8,6 +8,20 @@ create table if not exists public.pedido_saldo_alerta_preferencias (
   primary key (pedido_venda_id, user_id)
 );
 
+alter table public.alert_configs
+  add column if not exists recipient_user_ids uuid[] not null default '{}';
+
+insert into public.alert_configs (tipo, descricao, roles, recipient_user_ids, ativo)
+values (
+  'saldo_pedido_antigo',
+  'Pedido com saldo pendente para carregamento além do prazo configurado',
+  array['master', 'admin']::text[],
+  '{}'::uuid[],
+  true
+)
+on conflict (tipo) do update
+set descricao = excluded.descricao;
+
 alter table public.pedido_saldo_alerta_preferencias enable row level security;
 
 create policy "pedido_saldo_alerta_select_own_visible"

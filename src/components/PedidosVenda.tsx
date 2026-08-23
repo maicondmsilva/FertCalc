@@ -35,6 +35,7 @@ import { ModalNovoCarregamento, CarregamentoFormData } from './Carregamento';
 import { Filial } from '../types/carregamento';
 import { getStatusInicial } from '../utils/getStatusInicial';
 import HistoricoCarregamentosPedido from './HistoricoCarregamentosPedido';
+import { canReceiveSaldoPedidoAlert } from '../services/alertConfigService';
 
 const STATUS_LABEL: Record<PedidoVenda['status'], string> = {
   pendente: 'Ativo',
@@ -82,6 +83,7 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
     dias_limite: 30,
     desativado: false,
   });
+  const [podeReceberAlertaSaldo, setPodeReceberAlertaSaldo] = useState(false);
   const [pedidoCancSubstitui, setPedidoCancSubstitui] = useState<PedidoVenda | null>(null);
   const [pedidoCancelamentoDefinitivo, setPedidoCancelamentoDefinitivo] =
     useState<PedidoVenda | null>(null);
@@ -113,14 +115,16 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
       if (firstPedido) {
         setSelectedPedidoId(firstPedido.id);
         setExpandedIds(new Set([firstPedido.id]));
-        const [itens, progresso, preferencia] = await Promise.all([
+        const [itens, progresso, preferencia, podeReceber] = await Promise.all([
           getPedidoVendaItens(firstPedido.id),
           getQuantidadeCarregadaPorItem(firstPedido.id),
           getPedidoSaldoAlertaPreferencia(firstPedido.id, currentUser.id),
+          canReceiveSaldoPedidoAlert(currentUser.id, currentUser.role),
         ]);
         setItensPorPedido({ [firstPedido.id]: itens });
         setCarregadoPorItem(progresso);
         setAlertaSaldo(preferencia);
+        setPodeReceberAlertaSaldo(podeReceber);
       } else {
         setSelectedPedidoId(null);
         setExpandedIds(new Set());
@@ -579,7 +583,12 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                     ),
                   0
                 );
-                if (alertaSaldo.desativado || saldoReal <= 0 || idadeDias < alertaSaldo.dias_limite)
+                if (
+                  !podeReceberAlertaSaldo ||
+                  alertaSaldo.desativado ||
+                  saldoReal <= 0 ||
+                  idadeDias < alertaSaldo.dias_limite
+                )
                   return null;
                 return (
                   <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
