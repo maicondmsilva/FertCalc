@@ -16,11 +16,7 @@ import {
   MapPin,
   Copy,
 } from 'lucide-react';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import PricingDetailModal from './PricingDetailModal';
 import NovoPedidoVendaModal from './NovoPedidoVendaModal';
-import { generatePricingPDF } from '../utils/pdfGenerator';
 import {
   getPricingRecords,
   deletePricingRecord,
@@ -49,6 +45,7 @@ import { addPricingHistory } from '../services/pricingHistoryService';
 import { getTotalPages, paginateItems } from '../utils/pagination';
 
 const HISTORY_PAGE_SIZE = 12;
+const PricingDetailModal = React.lazy(() => import('./PricingDetailModal'));
 
 interface HistoryProps {
   onEdit?: (pricing: PricingRecord) => void;
@@ -168,7 +165,11 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
       .reduce((sum, p) => sum + getPricingTotalTons(p), 0),
   };
 
-  const exportConsolidatedReport = () => {
+  const exportConsolidatedReport = async () => {
+    const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+      import('jspdf'),
+      import('jspdf-autotable'),
+    ]);
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
 
@@ -903,23 +904,36 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
       )}
 
       {/* Detail Modal */}
-      {selectedPricing && (
-        <PricingDetailModal
-          selectedPricing={selectedPricing}
-          currentUser={currentUser}
-          onClose={() => setSelectedPricing(null)}
-          onEdit={onEdit}
-          onDelete={handleDelete}
-          onUpdateStatus={updateStatus}
-          onUpdateApproval={async (id, status) => {
-            await updateApprovalStatus(id, status);
-            setPricings(pricings.map((p) => (p.id === id ? { ...p, approvalStatus: status } : p)));
-          }}
-          onSaveObservation={loadData}
-          onTransferSuccess={loadData}
-          appSettings={appSettings}
-        />
-      )}
+      <React.Suspense
+        fallback={
+          <div
+            role="status"
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30 text-sm font-bold text-white"
+          >
+            Carregando detalhes...
+          </div>
+        }
+      >
+        {selectedPricing && (
+          <PricingDetailModal
+            selectedPricing={selectedPricing}
+            currentUser={currentUser}
+            onClose={() => setSelectedPricing(null)}
+            onEdit={onEdit}
+            onDelete={handleDelete}
+            onUpdateStatus={updateStatus}
+            onUpdateApproval={async (id, status) => {
+              await updateApprovalStatus(id, status);
+              setPricings(
+                pricings.map((p) => (p.id === id ? { ...p, approvalStatus: status } : p))
+              );
+            }}
+            onSaveObservation={loadData}
+            onTransferSuccess={loadData}
+            appSettings={appSettings}
+          />
+        )}
+      </React.Suspense>
 
       {/* Modal de confirmação de exclusão */}
       {isDeleting && (
