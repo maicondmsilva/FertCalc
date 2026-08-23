@@ -9,6 +9,7 @@ import * as XLSX from 'xlsx';
 
 interface RelatorioCancSubstituiProps {
   currentUser: { id: string; name: string };
+  onOpenPedido?: (pedidoId: string) => void;
 }
 
 type TipoFiltro = '' | 'canc_substitui' | 'definitivo';
@@ -35,11 +36,17 @@ interface EnrichedCancelamento extends CancelamentoPedido {
   pedidoOrigemCliente?: string;
   pedidoOrigemProduto?: string;
   pedidoOrigemQtd?: number;
-  pedidoDestinoEmitente?: string;
+  pedidoOrigemDisponivel?: boolean;
+  pedidoDestinoNome?: string;
+  pedidoDestinoCliente?: string;
+  pedidoDestinoDisponivel?: boolean;
   pedidoSaldoRestante?: number;
 }
 
-export default function RelatorioCancSubstitui({ currentUser }: RelatorioCancSubstituiProps) {
+export default function RelatorioCancSubstitui({
+  currentUser,
+  onOpenPedido,
+}: RelatorioCancSubstituiProps) {
   const { showError } = useToast();
   const [cancelamentos, setCancelamentos] = useState<EnrichedCancelamento[]>([]);
   const [loading, setLoading] = useState(false);
@@ -93,8 +100,11 @@ export default function RelatorioCancSubstitui({ currentUser }: RelatorioCancSub
               ? `${origem.numero_pedido}/${origem.emitente ?? 1}`
               : log.pedido_origem_id.slice(0, 8));
 
-          const destinoEmitente = destino
-            ? `/${destino.emitente ?? 1}`
+          const destinoNome = destino
+            ? destino.barra_pedido ||
+              (destino.numero_pedido
+                ? `${destino.numero_pedido}/${destino.emitente ?? 1}`
+                : destino.id.slice(0, 8))
             : '—';
 
           return {
@@ -103,7 +113,10 @@ export default function RelatorioCancSubstitui({ currentUser }: RelatorioCancSub
             pedidoOrigemCliente: origem?.cliente_nome,
             pedidoOrigemProduto: origem?.produto_nome,
             pedidoOrigemQtd: origem?.quantidade_original ?? origem?.quantidade_real,
-            pedidoDestinoEmitente: destinoEmitente,
+            pedidoOrigemDisponivel: Boolean(origem),
+            pedidoDestinoNome: destinoNome,
+            pedidoDestinoCliente: destino?.cliente_nome,
+            pedidoDestinoDisponivel: Boolean(destino),
             pedidoSaldoRestante: origem?.saldo_disponivel,
           };
         });
@@ -167,16 +180,18 @@ export default function RelatorioCancSubstitui({ currentUser }: RelatorioCancSub
     const f = appliedFilters;
     const matchNumero =
       !f.numeroPedido ||
-      (c.pedidoOrigemNome ?? '').toLowerCase().includes(f.numeroPedido.toLowerCase());
+      (c.pedidoOrigemNome ?? '').toLowerCase().includes(f.numeroPedido.toLowerCase()) ||
+      (c.pedidoDestinoNome ?? '').toLowerCase().includes(f.numeroPedido.toLowerCase());
     const matchCliente =
       !f.clienteNome ||
-      (c.pedidoOrigemCliente ?? '').toLowerCase().includes(f.clienteNome.toLowerCase());
+      (c.pedidoOrigemCliente ?? '').toLowerCase().includes(f.clienteNome.toLowerCase()) ||
+      (c.pedidoDestinoCliente ?? '').toLowerCase().includes(f.clienteNome.toLowerCase());
     const matchEmitenteOrigem =
       !f.emitenteOrigem ||
       (c.pedidoOrigemNome ?? '').includes(`/${f.emitenteOrigem}`);
     const matchEmitenteDestino =
       !f.emitenteDestino ||
-      (c.pedidoDestinoEmitente ?? '').includes(`/${f.emitenteDestino}`);
+      (c.pedidoDestinoNome ?? '').includes(`/${f.emitenteDestino}`);
     return matchNumero && matchCliente && matchEmitenteOrigem && matchEmitenteDestino;
   });
 
@@ -220,8 +235,9 @@ export default function RelatorioCancSubstitui({ currentUser }: RelatorioCancSub
       head: [
         [
           'Nº Pedido / Emit. Orig.',
-          'Emit. Destino',
-          'Cliente',
+          'Pedido Destino / Emit.',
+          'Cliente Origem',
+          'Cliente Destino',
           'Produto',
           'Qtd Original',
           'Qtd Desm.',
@@ -234,8 +250,9 @@ export default function RelatorioCancSubstitui({ currentUser }: RelatorioCancSub
       ],
       body: filtered.map((c) => [
         c.pedidoOrigemNome ?? '—',
-        c.pedidoDestinoEmitente ?? '—',
+        c.pedidoDestinoNome ?? '—',
         c.pedidoOrigemCliente ?? '—',
+        c.pedidoDestinoCliente ?? '—',
         c.pedidoOrigemProduto ?? '—',
         c.pedidoOrigemQtd != null ? fmtQtd(c.pedidoOrigemQtd) : '—',
         fmtQtd(c.quantidade),
@@ -250,6 +267,7 @@ export default function RelatorioCancSubstitui({ currentUser }: RelatorioCancSub
       foot: [
         [
           `Total: ${totalOperacoes} operações`,
+          '',
           '',
           '',
           '',
@@ -271,8 +289,9 @@ export default function RelatorioCancSubstitui({ currentUser }: RelatorioCancSub
   const handleExportXLSX = () => {
     const rows = filtered.map((c) => ({
       'Nº Pedido / Emit. Orig.': c.pedidoOrigemNome ?? '—',
-      'Emit. Destino': c.pedidoDestinoEmitente ?? '—',
-      Cliente: c.pedidoOrigemCliente ?? '—',
+      'Pedido Destino / Emit.': c.pedidoDestinoNome ?? '—',
+      'Cliente Origem': c.pedidoOrigemCliente ?? '—',
+      'Cliente Destino': c.pedidoDestinoCliente ?? '—',
       Produto: c.pedidoOrigemProduto ?? '—',
       'Qtd Original (ton)': c.pedidoOrigemQtd != null ? c.pedidoOrigemQtd : '',
       'Qtd Desmembrada (ton)': c.quantidade,
@@ -289,6 +308,7 @@ export default function RelatorioCancSubstitui({ currentUser }: RelatorioCancSub
     ws['!cols'] = [
       { wch: 22 },
       { wch: 14 },
+      { wch: 24 },
       { wch: 24 },
       { wch: 28 },
       { wch: 18 },
@@ -493,8 +513,9 @@ export default function RelatorioCancSubstitui({ currentUser }: RelatorioCancSub
             <thead className="bg-stone-50 text-stone-500 uppercase text-[10px] font-bold border-b border-stone-200">
               <tr>
                 <th className="px-4 py-3 whitespace-nowrap">Nº Pedido / Emit. Orig.</th>
-                <th className="px-4 py-3 whitespace-nowrap">Emit. Destino</th>
-                <th className="px-4 py-3">Cliente</th>
+                <th className="px-4 py-3 whitespace-nowrap">Pedido Destino / Emit.</th>
+                <th className="px-4 py-3">Cliente Origem</th>
+                <th className="px-4 py-3">Cliente Destino</th>
                 <th className="px-4 py-3">Produto</th>
                 <th className="px-4 py-3 whitespace-nowrap">Qtd Original</th>
                 <th className="px-4 py-3 whitespace-nowrap">Qtd Desmembrada</th>
@@ -508,14 +529,37 @@ export default function RelatorioCancSubstitui({ currentUser }: RelatorioCancSub
             <tbody className="divide-y divide-stone-100">
               {paginated.map((c) => (
                 <tr key={c.id} className="hover:bg-stone-50 transition-colors">
-                  <td className="px-4 py-3 font-mono font-bold text-stone-800 whitespace-nowrap">
-                    {c.pedidoOrigemNome ?? '—'}
+                  <td className="px-4 py-3 font-mono font-bold whitespace-nowrap">
+                    {onOpenPedido && c.pedidoOrigemDisponivel ? (
+                      <button
+                        type="button"
+                        onClick={() => onOpenPedido(c.pedido_origem_id)}
+                        className="text-emerald-700 underline decoration-emerald-300 underline-offset-2 hover:text-emerald-900"
+                      >
+                        {c.pedidoOrigemNome ?? '—'}
+                      </button>
+                    ) : (
+                      c.pedidoOrigemNome ?? '—'
+                    )}
                   </td>
-                  <td className="px-4 py-3 font-mono text-stone-600 text-xs whitespace-nowrap">
-                    {c.pedidoDestinoEmitente ?? '—'}
+                  <td className="px-4 py-3 font-mono text-xs whitespace-nowrap">
+                    {c.pedido_destino_id && onOpenPedido && c.pedidoDestinoDisponivel ? (
+                      <button
+                        type="button"
+                        onClick={() => onOpenPedido(c.pedido_destino_id!)}
+                        className="text-emerald-700 underline decoration-emerald-300 underline-offset-2 hover:text-emerald-900"
+                      >
+                        {c.pedidoDestinoNome ?? '—'}
+                      </button>
+                    ) : (
+                      <span className="text-stone-500">{c.pedidoDestinoNome ?? '—'}</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-stone-700 max-w-[150px] truncate">
                     {c.pedidoOrigemCliente ?? '—'}
+                  </td>
+                  <td className="px-4 py-3 text-stone-700 max-w-[150px] truncate">
+                    {c.pedidoDestinoCliente ?? '—'}
                   </td>
                   <td className="px-4 py-3 text-stone-700 max-w-[150px] truncate">
                     {c.pedidoOrigemProduto ?? '—'}
