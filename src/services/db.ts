@@ -882,11 +882,10 @@ export async function deletePriceList(id: string): Promise<void> {
 // ============================================================
 // PRICING RECORDS
 // ============================================================
-export async function getPricingRecords(): Promise<PricingRecord[]> {
-  const { data, error } = await supabase
-    .from('pricing_records')
-    .select('*')
-    .order('created_at', { ascending: false });
+export async function getPricingRecords(userId?: string): Promise<PricingRecord[]> {
+  let query = supabase.from('pricing_records').select('*');
+  if (userId) query = query.eq('user_id', userId);
+  const { data, error } = await query.order('created_at', { ascending: false });
   if (error || !data) return [];
   return data.map(mapPricingRecord);
 }
@@ -1238,11 +1237,10 @@ export async function deleteSavedFormula(id: string): Promise<void> {
 // ============================================================
 // GOALS
 // ============================================================
-export async function getGoals(): Promise<Goal[]> {
-  const { data, error } = await supabase
-    .from('goals')
-    .select('*')
-    .order('created_at', { ascending: false });
+export async function getGoals(userId?: string): Promise<Goal[]> {
+  let query = supabase.from('goals').select('*');
+  if (userId) query = query.eq('user_id', userId);
+  const { data, error } = await query.order('created_at', { ascending: false });
   if (error || !data) return [];
   return data.map((d) => ({
     id: d.id,

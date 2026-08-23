@@ -34,9 +34,12 @@ export default function Dashboard({ currentUser }: DashboardProps) {
 
   useEffect(() => {
     const loadData = async () => {
-      const [allPricings, allGoals] = await Promise.all([getPricingRecords(), getGoals()]);
-      setPricings(allPricings.filter((p) => p.userId === currentUser.id));
-      setGoals(allGoals.filter((g) => g.userId === currentUser.id));
+      const [userPricings, userGoals] = await Promise.all([
+        getPricingRecords(currentUser.id),
+        getGoals(currentUser.id),
+      ]);
+      setPricings(userPricings);
+      setGoals(userGoals);
     };
     loadData();
   }, [currentUser]);
