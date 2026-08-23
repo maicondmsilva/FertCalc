@@ -2,12 +2,13 @@ import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
 import { useManagementData } from '../hooks/useManagementData';
-import ManagementDashboard from './management/ManagementDashboard';
-import ManagementLancamentos from './management/ManagementLancamentos';
-import ManagementCadastros from './management/ManagementCadastros';
 import { Toast } from './management/ManagementUI';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import type { User } from '../types';
+
+const ManagementDashboard = React.lazy(() => import('./management/ManagementDashboard'));
+const ManagementLancamentos = React.lazy(() => import('./management/ManagementLancamentos'));
+const ManagementCadastros = React.lazy(() => import('./management/ManagementCadastros'));
 
 interface ManagementReportsModuleProps {
   currentUser: User;
@@ -69,49 +70,61 @@ export default function ManagementReportsModule({
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.2 }}
       >
-        {activeTab === 'dashboard' && (
-          <ManagementDashboard
-            unidades={unidades}
-            indicadores={indicadores}
-            categorias={categorias}
-            lancamentos={lancamentos}
-            metas={metas}
-            configs={configs}
-            diasUteis={diasUteis}
-          />
-        )}
-        {activeTab === 'lancamentos' && (
-          <ManagementLancamentos
-            unidades={unidades}
-            indicadores={indicadores}
-            categorias={categorias}
-            configs={configs}
-            currentUser={currentUser}
-            onSave={handleSaveLancamentos}
-          />
-        )}
-        {activeTab === 'cadastros' && (
-          <ManagementCadastros
-            unidades={unidades}
-            indicadores={indicadores}
-            categorias={categorias}
-            metas={metas}
-            configs={configs}
-            diasUteis={diasUteis}
-            onSaveUnidade={handleSaveUnidade}
-            onSaveIndicador={handleSaveIndicador}
-            onSaveCategoria={handleSaveCategoria}
-            onSaveMeta={handleSaveMeta}
-            onSaveConfig={handleSaveConfig}
-            onSaveDiasUteis={handleSaveDiasUteis}
-            onDeleteUnidade={handleDeleteUnidade}
-            onDeleteIndicador={handleDeleteIndicador}
-            onDeleteCategoria={handleDeleteCategoria}
-            onDeleteMeta={handleDeleteMeta}
-            onDeleteConfig={handleDeleteConfig}
-            onDeleteDiasUteis={handleDeleteDiasUteis}
-          />
-        )}
+        <React.Suspense
+          fallback={
+            <div
+              role="status"
+              className="flex min-h-64 items-center justify-center gap-2 text-sm font-medium text-slate-500"
+            >
+              <Loader2 className="h-5 w-5 animate-spin text-indigo-600" />
+              Carregando página...
+            </div>
+          }
+        >
+          {activeTab === 'dashboard' && (
+            <ManagementDashboard
+              unidades={unidades}
+              indicadores={indicadores}
+              categorias={categorias}
+              lancamentos={lancamentos}
+              metas={metas}
+              configs={configs}
+              diasUteis={diasUteis}
+            />
+          )}
+          {activeTab === 'lancamentos' && (
+            <ManagementLancamentos
+              unidades={unidades}
+              indicadores={indicadores}
+              categorias={categorias}
+              configs={configs}
+              currentUser={currentUser}
+              onSave={handleSaveLancamentos}
+            />
+          )}
+          {activeTab === 'cadastros' && (
+            <ManagementCadastros
+              unidades={unidades}
+              indicadores={indicadores}
+              categorias={categorias}
+              metas={metas}
+              configs={configs}
+              diasUteis={diasUteis}
+              onSaveUnidade={handleSaveUnidade}
+              onSaveIndicador={handleSaveIndicador}
+              onSaveCategoria={handleSaveCategoria}
+              onSaveMeta={handleSaveMeta}
+              onSaveConfig={handleSaveConfig}
+              onSaveDiasUteis={handleSaveDiasUteis}
+              onDeleteUnidade={handleDeleteUnidade}
+              onDeleteIndicador={handleDeleteIndicador}
+              onDeleteCategoria={handleDeleteCategoria}
+              onDeleteMeta={handleDeleteMeta}
+              onDeleteConfig={handleDeleteConfig}
+              onDeleteDiasUteis={handleDeleteDiasUteis}
+            />
+          )}
+        </React.Suspense>
       </MotionDiv>
 
       <AnimatePresenceComponent>
