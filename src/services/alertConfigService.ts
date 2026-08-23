@@ -11,6 +11,7 @@ export interface AlertConfig {
   descricao: string;
   roles: string[];
   permissions: string[];
+  recipientUserIds: string[];
   ativo: boolean;
   criado_em: string;
   atualizado_em: string;
@@ -20,6 +21,7 @@ type AlertConfigUpdate = {
   ativo?: boolean;
   roles?: string[];
   permissions?: string[];
+  recipientUserIds?: string[];
 };
 
 function mapAlertConfig(row: Record<string, unknown>): AlertConfig {
@@ -29,6 +31,7 @@ function mapAlertConfig(row: Record<string, unknown>): AlertConfig {
     descricao: row.descricao as string,
     roles: (row.roles as string[]) ?? [],
     permissions: (row.permissions as string[]) ?? [],
+    recipientUserIds: (row.recipient_user_ids as string[]) ?? [],
     ativo: row.ativo as boolean,
     criado_em: row.criado_em as string,
     atualizado_em: row.atualizado_em as string,
@@ -51,6 +54,8 @@ export async function updateAlertConfig(id: string, payload: AlertConfigUpdate):
   if (payload.ativo !== undefined) updatePayload.ativo = payload.ativo;
   if (payload.roles !== undefined) updatePayload.roles = payload.roles;
   if (payload.permissions !== undefined) updatePayload.permissions = payload.permissions;
+  if (payload.recipientUserIds !== undefined)
+    updatePayload.recipient_user_ids = payload.recipientUserIds;
 
   const { error } = await supabase.from('alert_configs').update(updatePayload).eq('id', id);
 
@@ -60,4 +65,16 @@ export async function updateAlertConfig(id: string, payload: AlertConfigUpdate):
     const detail = error.code ? ` (código: ${error.code})` : '';
     throw new Error(msg + detail);
   }
+}
+
+export async function canReceiveSaldoPedidoAlert(userId: string, role: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('alert_configs')
+    .select('ativo, roles, recipient_user_ids')
+    .eq('tipo', 'saldo_pedido_antigo')
+    .maybeSingle();
+  if (error || !data || !data.ativo) return false;
+  const roles = (data.roles as string[]) ?? [];
+  const users = (data.recipient_user_ids as string[]) ?? [];
+  return roles.includes(role) || users.includes(userId);
 }

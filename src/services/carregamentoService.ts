@@ -830,3 +830,36 @@ export async function getCarregamentosByPedidoVenda(pedidoVendaId: string): Prom
     },
   };
 }
+
+/** Quantidade efetivamente carregada por item do pedido, respeitando o RLS do usuário. */
+export async function getQuantidadeCarregadaPorItem(
+  pedidoVendaId: string
+): Promise<Record<string, number>> {
+  const { data, error } = await supabase
+    .from('carregamentos')
+    .select('quantidade_carregada, carregamento_itens(pedido_venda_item_id, quantidade_ton)')
+    .eq('pedido_venda_id', pedidoVendaId)
+    .gt('quantidade_carregada', 0);
+
+  if (error) throw error;
+
+  const carregadoPorItem: Record<string, number> = {};
+  for (const row of data ?? []) {
+    const itens = (row.carregamento_itens ?? []) as Array<{
+      pedido_venda_item_id: string | null;
+      quantidade_ton: number | string | null;
+    }>;
+    const totalSolicitado = itens.reduce((total, item) => total + Number(item.quantidade_ton ?? 0), 0);
+    const totalCarregado = Number(row.quantidade_carregada ?? 0);
+    if (totalSolicitado <= 0 || totalCarregado <= 0) continue;
+
+    for (const item of itens) {
+      if (!item.pedido_venda_item_id) continue;
+      const proporcao = Number(item.quantidade_ton ?? 0) / totalSolicitado;
+      carregadoPorItem[item.pedido_venda_item_id] =
+        (carregadoPorItem[item.pedido_venda_item_id] ?? 0) + totalCarregado * proporcao;
+    }
+  }
+
+  return carregadoPorItem;
+}
