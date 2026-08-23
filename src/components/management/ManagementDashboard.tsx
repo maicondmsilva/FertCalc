@@ -2,8 +2,6 @@ import React, { useState, useMemo } from 'react';
 import { Download } from 'lucide-react';
 import { format, startOfMonth, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
 
 import type {
   Unidade,
@@ -37,6 +35,8 @@ export default function ManagementDashboard({
   diasUteis,
 }: ManagementDashboardProps) {
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [pdfError, setPdfError] = useState('');
 
   const { reverseVisualIdMap } = useMemo(
     () => gerarIdsVisuais(indicadores, categorias),
@@ -754,8 +754,15 @@ export default function ManagementDashboard({
     </tr>
   );
 
-  const generatePDF = () => {
-    const doc = new jsPDF('l', 'mm', 'a4');
+  const generatePDF = async () => {
+    setGeneratingPdf(true);
+    setPdfError('');
+    try {
+      const [{ jsPDF }, { default: autoTable }] = await Promise.all([
+        import('jspdf'),
+        import('jspdf-autotable'),
+      ]);
+      const doc = new jsPDF('l', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
 
     // Header
@@ -864,7 +871,12 @@ export default function ManagementDashboard({
       },
     });
 
-    doc.save(`relatorio-diario-${format(parseISO(selectedDate), 'yyyy-MM-dd')}.pdf`);
+      doc.save(`relatorio-diario-${format(parseISO(selectedDate), 'yyyy-MM-dd')}.pdf`);
+    } catch {
+      setPdfError('Não foi possível gerar o PDF. Tente novamente.');
+    } finally {
+      setGeneratingPdf(false);
+    }
   };
 
   return (
@@ -881,11 +893,18 @@ export default function ManagementDashboard({
             onChange={(e) => setSelectedDate(e.target.value)}
             className="w-auto"
           />
-          <Button variant="outline" size="icon" onClick={generatePDF} title="Gerar PDF">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => void generatePDF()}
+            disabled={generatingPdf}
+            title={generatingPdf ? 'Preparando PDF...' : 'Gerar PDF'}
+          >
             <Download className="w-4 h-4" />
           </Button>
         </div>
       </div>
+      {pdfError && <p className="text-sm font-medium text-red-600">{pdfError}</p>}
 
       <Card className="overflow-x-auto">
         <table className="w-full text-[11px] text-left border-collapse">
