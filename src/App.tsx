@@ -7,6 +7,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Login from './components/Login';
 import ResetPassword from './components/ResetPassword';
 import AppContent, { type ActiveModule } from './components/AppContent';
+import AppSidebar from './components/AppSidebar';
 import {
   LayoutDashboard,
   History as HistoryIcon,
@@ -15,19 +16,14 @@ import {
   UserCheck,
   Building2,
   Settings,
-  LogOut,
-  Leaf,
   ShieldCheck,
   Menu,
-  X,
   Target,
   Bell,
   Download,
   ChevronLeft,
   ChevronRight,
-  Home as HomeIcon,
   BarChart3,
-  ChevronDown,
   FileEdit,
   Tag,
   Package,
@@ -47,7 +43,7 @@ import { PricingRecord, User, AppSettings, NavItem, SavedFormula } from './types
 import { getAppSettings, markNotificationsAsRead } from './services/db';
 import { signOut, restoreSession } from './services/authService';
 import { logger } from './utils/logger';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useToast } from './components/Toast';
 
 import { getPendingCount, getCheckedCount } from './services/expenseService';
@@ -161,12 +157,6 @@ export default function App() {
   });
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
-  const [isReportsExpanded, setIsReportsExpanded] = useState(false);
-  const [isMaterialsExpanded, setIsMaterialsExpanded] = useState(false);
-  const [isExpenseLancamentosExpanded, setIsExpenseLancamentosExpanded] = useState(true);
-  const [isExpenseWorkflowExpanded, setIsExpenseWorkflowExpanded] = useState(false);
-  const [isExpenseConfigExpanded, setIsExpenseConfigExpanded] = useState(false);
-  const [isCarregamentoExpanded, setIsCarregamentoExpanded] = useState(true);
   const [pendingExpenseCount, setPendingExpenseCount] = useState(0);
   const [checkedExpenseCount, setCheckedExpenseCount] = useState(0);
 
@@ -207,11 +197,7 @@ export default function App() {
 
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      if (!target.closest('aside') && !target.closest('.notification-trigger')) {
-        setIsMaterialsExpanded(false);
-        setIsReportsExpanded(false);
-        setIsNotificationsOpen(false);
-      }
+      if (!target.closest('.notification-trigger')) setIsNotificationsOpen(false);
     };
     window.document.addEventListener('mousedown', handleClickOutside);
 
@@ -565,224 +551,25 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-stone-100 overflow-hidden font-sans text-stone-900">
-      {/* Mobile Sidebar Overlay */}
-      {isMobileMenuOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
-          onClick={() => setIsMobileMenuOpen(false)}
-        />
-      )}
-
-      {/* Sidebar */}
-      <aside
-        className={`bg-white border-r border-stone-200 flex flex-col transition-all duration-300 z-50
-          ${isSidebarExpanded ? 'w-64' : 'w-20'} 
-          ${isMobileMenuOpen ? 'fixed inset-y-0 left-0' : 'hidden md:flex relative'}
-          ${!activeModule || isStandalone ? 'hidden' : ''}
-        `}
-      >
-        {/* Logo Area */}
-        <div className="h-16 flex items-center justify-between border-b border-stone-200 px-4">
-          <div className="flex items-center overflow-hidden">
-            {appSettings.companyLogo ? (
-              <img src={appSettings.companyLogo} alt="Logo" className="h-8 w-auto flex-shrink-0" />
-            ) : (
-              <Leaf className="w-8 h-8 text-emerald-600 flex-shrink-0" />
-            )}
-            {isSidebarExpanded && (
-              <span className="ml-2 text-lg font-bold text-emerald-700 truncate whitespace-nowrap">
-                {appSettings.companyName}
-              </span>
-            )}
-          </div>
-          {/* Mobile Close Button */}
-          <button
-            className="md:hidden text-stone-400 hover:text-stone-600"
-            onClick={() => setIsMobileMenuOpen(false)}
-            aria-label="Fechar menu"
-          >
-            <X className="w-5 h-5" aria-hidden="true" />
-          </button>
-        </div>
-
-        {/* Back to Home Button */}
-        <div className="p-2 border-b border-stone-100">
-          <Link
-            to="/"
-            className={`w-full flex items-center px-3 py-2 rounded-lg text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition-colors`}
-            title={!isSidebarExpanded ? 'Voltar ao Início' : undefined}
-          >
-            <HomeIcon className="w-5 h-5 flex-shrink-0 text-stone-400" />
-            {isSidebarExpanded && (
-              <span className="ml-3 font-bold text-xs uppercase tracking-widest">Início</span>
-            )}
-          </Link>
-        </div>
-
-        {/* Navigation Links */}
-        <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-1">
-          <div className="px-3 mb-2">
-            {isSidebarExpanded && (
-              <p className="text-[10px] font-black text-stone-400 uppercase tracking-[0.2em]">
-                {activeModule === 'pricing'
-                  ? 'Precificação'
-                  : activeModule === 'expenses'
-                    ? 'Cartão Corporativo'
-                    : activeModule === 'carregamento'
-                      ? 'Carregamento'
-                      : activeModule === 'relatorios'
-                        ? 'Relatórios'
-                        : 'Configuração'}
-              </p>
-            )}
-          </div>
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.id;
-
-            const getGroupExpanded = (id: string) => {
-              if (id === 'materials_group') return isMaterialsExpanded;
-              if (id === 'reports') return isReportsExpanded;
-              if (id === 'managementReports_group') return isReportsExpanded;
-              if (id === 'expenses_lancamentos_group') return isExpenseLancamentosExpanded;
-              if (id === 'expenses_workflow_group') return isExpenseWorkflowExpanded;
-              if (id === 'expenses_config_group') return isExpenseConfigExpanded;
-              if (id === 'carregamento_group') return isCarregamentoExpanded;
-              return false;
-            };
-
-            const toggleGroup = (id: string) => {
-              if (id === 'materials_group') setIsMaterialsExpanded((p) => !p);
-              else if (id === 'reports' || id === 'managementReports_group')
-                setIsReportsExpanded((p) => !p);
-              else if (id === 'expenses_lancamentos_group')
-                setIsExpenseLancamentosExpanded((p) => !p);
-              else if (id === 'expenses_workflow_group') setIsExpenseWorkflowExpanded((p) => !p);
-              else if (id === 'expenses_config_group') setIsExpenseConfigExpanded((p) => !p);
-              else if (id === 'carregamento_group') setIsCarregamentoExpanded((p) => !p);
-            };
-
-            const isExpanded = getGroupExpanded(item.id);
-            const isExpenseGroup = item.id.startsWith('expenses_');
-            const isCarregamentoGroup = item.id.startsWith('carregamento_');
-
-            if (item.type === 'parent') {
-              return (
-                <div key={item.id}>
-                  <button
-                    onClick={() => toggleGroup(item.id)}
-                    className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-colors ${isExpanded ? (isExpenseGroup ? 'bg-purple-50 text-purple-700 font-medium' : isCarregamentoGroup ? 'bg-amber-50 text-amber-700 font-medium' : 'bg-emerald-50 text-emerald-700 font-medium') : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900'}`}
-                    title={!isSidebarExpanded ? item.label : undefined}
-                  >
-                    <Icon
-                      className={`w-5 h-5 flex-shrink-0 ${isExpanded || isActive ? (isExpenseGroup ? 'text-purple-600' : isCarregamentoGroup ? 'text-amber-600' : 'text-emerald-600') : 'text-stone-400'}`}
-                    />
-                    {isSidebarExpanded && <span className="ml-3 truncate">{item.label}</span>}
-                    {isSidebarExpanded && (
-                      <ChevronDown
-                        className={`w-4 h-4 ml-auto transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                      />
-                    )}
-                  </button>
-                  {isExpanded && isSidebarExpanded && (
-                    <div className="ml-6 mt-1 space-y-1">
-                      {item.children
-                        ?.filter((child) => hasPermission(child.permission))
-                        .map((child) => {
-                          const ChildIcon = child.icon;
-                          const isChildActive = activeTab === child.id;
-                          return (
-                            <Link
-                              key={child.id}
-                              to={`/${child.id}?standalone=true`}
-                              onClick={(e) => {
-                                if (!e.ctrlKey && !e.metaKey) {
-                                  e.preventDefault();
-                                  setInitialFormulaContext({
-                                    formula: null,
-                                    branchId: '',
-                                    priceListId: '',
-                                  });
-                                  setIsMobileMenuOpen(false);
-                                  navigate(`/${child.id}`);
-                                }
-                              }}
-                              className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-colors ${isChildActive ? (isExpenseGroup ? 'bg-purple-50 text-purple-700 font-medium' : isCarregamentoGroup ? 'bg-amber-50 text-amber-700 font-medium' : 'bg-emerald-50 text-emerald-700 font-medium') : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900'}`}
-                              title={!isSidebarExpanded ? child.label : undefined}
-                            >
-                              <ChildIcon
-                                className={`w-5 h-5 flex-shrink-0 ${isChildActive ? (isExpenseGroup ? 'text-purple-600' : isCarregamentoGroup ? 'text-amber-600' : 'text-emerald-600') : 'text-stone-400'}`}
-                              />
-                              {isSidebarExpanded && (
-                                <span className="ml-3 truncate flex-1">{child.label}</span>
-                              )}
-                              {isSidebarExpanded && (child as any).badge > 0 && (
-                                <span className="ml-auto bg-amber-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
-                                  {(child as any).badge}
-                                </span>
-                              )}
-                            </Link>
-                          );
-                        })}
-                    </div>
-                  )}
-                </div>
-              );
-            } else {
-              return (
-                <Link
-                  key={item.id}
-                  to={`/${item.id}?standalone=true`}
-                  onClick={(e) => {
-                    if (!e.ctrlKey && !e.metaKey) {
-                      e.preventDefault();
-                      if (item.id !== 'calculator' && item.id !== 'simplified_calculator') {
-                        setInitialFormulaContext({ formula: null, branchId: '', priceListId: '' });
-                      }
-                      setIsMobileMenuOpen(false);
-                      navigate(`/${item.id}`);
-                    }
-                  }}
-                  className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-colors ${
-                    isActive
-                      ? 'bg-emerald-50 text-emerald-700 font-medium'
-                      : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900'
-                  }`}
-                  title={!isSidebarExpanded ? item.label : undefined}
-                >
-                  <Icon
-                    className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-emerald-600' : 'text-stone-400'}`}
-                  />
-                  {isSidebarExpanded && <span className="ml-3 truncate">{item.label}</span>}
-                </Link>
-              );
-            }
-          })}
-        </nav>
-
-        {/* User Area */}
-        <div className="p-4 border-t border-stone-200">
-          <div
-            className={`flex items-center ${isSidebarExpanded ? 'justify-between' : 'justify-center flex-col gap-4'}`}
-          >
-            {isSidebarExpanded && (
-              <div className="overflow-hidden">
-                <p className="text-sm font-bold text-stone-800 truncate">{currentUser.name}</p>
-                <p className="text-xs text-stone-500 truncate">@{currentUser.nickname}</p>
-              </div>
-            )}
-            <button
-              onClick={handleLogout}
-              className="p-2 text-stone-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-              title="Sair"
-              aria-label="Sair da conta"
-            >
-              <LogOut className="w-5 h-5" aria-hidden="true" />
-            </button>
-          </div>
-        </div>
-      </aside>
-
+      <AppSidebar
+        activeModule={activeModule}
+        activeTab={activeTab}
+        appSettings={appSettings}
+        currentUser={currentUser}
+        isExpanded={isSidebarExpanded}
+        isMobileOpen={isMobileMenuOpen}
+        isStandalone={isStandalone}
+        navItems={navItems}
+        hasPermission={hasPermission}
+        onCloseMobile={() => setIsMobileMenuOpen(false)}
+        onLogout={handleLogout}
+        onNavigate={(routeId, clearFormulaContext) => {
+          if (clearFormulaContext) {
+            setInitialFormulaContext({ formula: null, branchId: '', priceListId: '' });
+          }
+          navigate(routeId ? `/${routeId}` : '/');
+        }}
+      />
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
@@ -865,10 +652,7 @@ export default function App() {
               onSelectModule={(moduleId) => {
                 if (moduleId === 'pricing') navigate('/dashboard');
                 if (moduleId === 'config') navigate('/users');
-                if (moduleId === 'managementReports') {
-                  setIsReportsExpanded(true);
-                  navigate('/managementReports_dashboard');
-                }
+                if (moduleId === 'managementReports') navigate('/managementReports_dashboard');
                 if (moduleId === 'prd') navigate('/prd');
                 if (moduleId === 'expenses') navigate('/expenses_lancamentos');
                 if (moduleId === 'carregamento') navigate('/carregamento_visao_geral');
