@@ -1,6 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import {
   getSavedFormulas,
   deleteSavedFormula,
@@ -71,7 +69,9 @@ function ModalGerarRelatorio({
   companyName,
   onClose,
 }: ModalGerarRelatorioProps) {
+  const { showError } = useToast();
   const selectedFormulas = formulas.filter((f) => selectedIds.includes(f.id));
+  const [generatingPdf, setGeneratingPdf] = useState(false);
   const [applyToAll, setApplyToAll] = useState(true);
   const [includeComposicao, setIncludeComposicao] = useState(false);
   const [globalFactors, setGlobalFactors] = useState<ReportFactors>({
@@ -119,8 +119,14 @@ function ModalGerarRelatorio({
     return preco;
   };
 
-  const handleGeneratePDF = () => {
-    const doc = new jsPDF();
+  const handleGeneratePDF = async () => {
+    setGeneratingPdf(true);
+    try {
+      const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+        import('jspdf'),
+        import('jspdf-autotable'),
+      ]);
+      const doc = new jsPDF();
     const now = new Date();
     const dateStr = now.toLocaleDateString('pt-BR');
 
@@ -263,8 +269,13 @@ function ModalGerarRelatorio({
       });
     }
 
-    doc.save(`relatorio-precos-${dateStr.replace(/\//g, '-')}.pdf`);
-    onClose();
+      doc.save(`relatorio-precos-${dateStr.replace(/\//g, '-')}.pdf`);
+      onClose();
+    } catch {
+      showError('Não foi possível gerar o relatório em PDF.');
+    } finally {
+      setGeneratingPdf(false);
+    }
   };
 
   const updateGlobal = (field: keyof ReportFactors, value: string | number) => {
@@ -464,11 +475,12 @@ function ModalGerarRelatorio({
             Cancelar
           </button>
           <button
-            onClick={handleGeneratePDF}
+            onClick={() => void handleGeneratePDF()}
+            disabled={generatingPdf}
             className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg flex items-center gap-2 transition-colors"
           >
             <FileText className="w-4 h-4" />
-            Gerar PDF
+            {generatingPdf ? 'Preparando…' : 'Gerar PDF'}
           </button>
         </div>
       </div>
