@@ -1,7 +1,7 @@
 import React from 'react';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { User } from '../../types';
+import type { PricingRecord, User } from '../../types';
 import type { ActiveModule } from '../../navigation/appNavigation';
 import AppContent from '../AppContent';
 
@@ -13,9 +13,36 @@ vi.mock('../Dashboard', () => ({
   default: () => <div>Dashboard de precificação</div>,
 }));
 vi.mock('../Calculator', () => ({
-  default: ({ isSimplified }: { isSimplified: boolean }) => (
-    <div>{isSimplified ? 'Calculadora simplificada' : 'Calculadora completa'}</div>
+  default: ({
+    isSimplified,
+    initialData,
+    onSaveSuccess,
+  }: {
+    isSimplified: boolean;
+    initialData?: PricingRecord | null;
+    onSaveSuccess?: (record: PricingRecord) => void;
+  }) => (
+    <div>
+      {isSimplified ? 'Calculadora simplificada' : 'Calculadora completa'}
+      {initialData && <span>Precificação em edição: {initialData.id}</span>}
+      <button onClick={() => onSaveSuccess?.({ id: 'pricing-1' } as PricingRecord)}>
+        Salvar precificação
+      </button>
+    </div>
   ),
+}));
+vi.mock('../History', () => ({
+  default: ({ onEdit }: { onEdit: (record: PricingRecord) => void }) => (
+    <button onClick={() => onEdit({ id: 'pricing-1' } as PricingRecord)}>
+      Editar precificação pricing-1
+    </button>
+  ),
+}));
+vi.mock('../Approvals', () => ({
+  default: () => <div>Aprovações de precificação</div>,
+}));
+vi.mock('../PricingReport', () => ({
+  default: () => <div>Relatório de precificação</div>,
 }));
 vi.mock('../Carregamento', () => ({
   default: ({ view }: { view: string }) => <div>Carregamento: {view}</div>,
@@ -31,11 +58,7 @@ const currentUser = {
   role: 'user',
 } as User;
 
-const renderContent = (
-  activeModule: ActiveModule,
-  activeTab: string,
-  permissions: string[] = []
-) =>
+const renderContent = (activeModule: ActiveModule, activeTab: string, permissions: string[] = []) =>
   render(
     <AppContent
       activeModule={activeModule}
@@ -77,5 +100,45 @@ describe('AppContent', () => {
   it('mapeia a rota logística para a visualização correta', () => {
     renderContent('carregamento', 'carregamento_logistica', ['carregamento']);
     expect(screen.getByText('Carregamento: logistica')).toBeDefined();
+  });
+
+  it('preserva o contrato da jornada entre cálculo, histórico, aprovação e relatório', () => {
+    const onCalculatorSaved = vi.fn();
+    const onEditPricing = vi.fn();
+    const commonProps = {
+      activeModule: 'pricing' as const,
+      currentUser,
+      editingPricing: null,
+      initialFormulaContext: { formula: null, branchId: '', priceListId: '' },
+      hasPermission: () => true,
+      onSelectModule: vi.fn(),
+      onEditPricing,
+      onCalculatorSaved,
+      onClearCalculator: vi.fn(),
+      onSendFormulaToCalculator: vi.fn(),
+    };
+
+    const view = render(<AppContent {...commonProps} activeTab="calculator" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar precificação' }));
+    expect(onCalculatorSaved).toHaveBeenCalledWith(expect.objectContaining({ id: 'pricing-1' }));
+
+    view.rerender(<AppContent {...commonProps} activeTab="history" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Editar precificação pricing-1' }));
+    expect(onEditPricing).toHaveBeenCalledWith(expect.objectContaining({ id: 'pricing-1' }));
+
+    view.rerender(
+      <AppContent
+        {...commonProps}
+        activeTab="calculator"
+        editingPricing={{ id: 'pricing-1' } as PricingRecord}
+      />
+    );
+    expect(screen.getByText('Precificação em edição: pricing-1')).toBeInTheDocument();
+
+    view.rerender(<AppContent {...commonProps} activeTab="approvals" />);
+    expect(screen.getByText('Aprovações de precificação')).toBeInTheDocument();
+
+    view.rerender(<AppContent {...commonProps} activeTab="pricingReport" />);
+    expect(screen.getByText('Relatório de precificação')).toBeInTheDocument();
   });
 });
