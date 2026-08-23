@@ -176,6 +176,10 @@ Após cada deploy, a mesma verificação confirma o código HTTP e a identifica�
 
 O workflow `disaster-recovery-readiness.yml` verifica semanalmente se os ativos necessários para recuperação continuam versionados e protegidos. O procedimento operacional, incluindo backup do banco, Storage, validação e liberação, está em [`docs/DISASTER_RECOVERY_RUNBOOK.md`](docs/DISASTER_RECOVERY_RUNBOOK.md).
 
+### Retenção de dados
+
+A política de retenção mantém notificações não lidas e auditorias protegidas, oferece prévia antes de qualquer exclusão e limita a limpeza a lotes administrativos. Consulte [`docs/DATA_RETENTION.md`](docs/DATA_RETENTION.md).
+
 ### Deploy automático de Edge Functions (Supabase)
 
 O repositório também possui o workflow **`.github/workflows/deploy-supabase-functions.yml`**.
