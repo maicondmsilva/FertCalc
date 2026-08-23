@@ -3,9 +3,6 @@ import { CancelamentoPedido, PedidoVenda } from '../types';
 import { getCancelamentos, getPedidosVenda } from '../services/pedidosVendaService';
 import { FileText, Search, RefreshCw, FileSpreadsheet, ChevronLeft, ChevronRight, X, Filter } from 'lucide-react';
 import { useToast } from './Toast';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import * as XLSX from 'xlsx';
 
 interface RelatorioCancSubstituiProps {
   currentUser: { id: string; name: string };
@@ -50,6 +47,7 @@ export default function RelatorioCancSubstitui({
   const { showError } = useToast();
   const [cancelamentos, setCancelamentos] = useState<EnrichedCancelamento[]>([]);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState<'pdf' | 'excel' | null>(null);
   const [page, setPage] = useState(1);
 
   // Pending filter state (not yet applied)
@@ -218,8 +216,14 @@ export default function RelatorioCancSubstitui({
     return parts.length > 0 ? parts.join(' | ') : 'Nenhum filtro aplicado';
   };
 
-  const handleExportPDF = () => {
-    const doc = new jsPDF({ orientation: 'landscape' });
+  const handleExportPDF = async () => {
+    setExporting('pdf');
+    try {
+      const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+        import('jspdf'),
+        import('jspdf-autotable'),
+      ]);
+      const doc = new jsPDF({ orientation: 'landscape' });
 
     // Header
     doc.setFontSize(16);
@@ -283,11 +287,19 @@ export default function RelatorioCancSubstitui({
       footStyles: { fillColor: [245, 245, 244], textColor: [68, 64, 60], fontStyle: 'bold', fontSize: 7 },
     });
 
-    doc.save('relatorio-canc-substitui.pdf');
+      doc.save('relatorio-canc-substitui.pdf');
+    } catch {
+      showError('Não foi possível gerar o relatório em PDF.');
+    } finally {
+      setExporting(null);
+    }
   };
 
-  const handleExportXLSX = () => {
-    const rows = filtered.map((c) => ({
+  const handleExportXLSX = async () => {
+    setExporting('excel');
+    try {
+      const XLSX = await import('xlsx');
+      const rows = filtered.map((c) => ({
       'Nº Pedido / Emit. Orig.': c.pedidoOrigemNome ?? '—',
       'Pedido Destino / Emit.': c.pedidoDestinoNome ?? '—',
       'Cliente Origem': c.pedidoOrigemCliente ?? '—',
@@ -330,7 +342,12 @@ export default function RelatorioCancSubstitui({
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Canc-Substitui');
-    XLSX.writeFile(wb, 'relatorio-canc-substitui.xlsx');
+      XLSX.writeFile(wb, 'relatorio-canc-substitui.xlsx');
+    } catch {
+      showError('Não foi possível gerar o relatório em Excel.');
+    } finally {
+      setExporting(null);
+    }
   };
 
   return (
@@ -343,20 +360,20 @@ export default function RelatorioCancSubstitui({
         </h2>
         <div className="flex items-center gap-2">
           <button
-            onClick={handleExportPDF}
-            disabled={loading || filtered.length === 0}
+            onClick={() => void handleExportPDF()}
+            disabled={loading || exporting !== null || filtered.length === 0}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <FileText className="w-3.5 h-3.5" />
-            PDF
+            {exporting === 'pdf' ? 'Preparando…' : 'PDF'}
           </button>
           <button
-            onClick={handleExportXLSX}
-            disabled={loading || filtered.length === 0}
+            onClick={() => void handleExportXLSX()}
+            disabled={loading || exporting !== null || filtered.length === 0}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <FileSpreadsheet className="w-3.5 h-3.5" />
-            Excel
+            {exporting === 'excel' ? 'Preparando…' : 'Excel'}
           </button>
           <button
             onClick={() => load(appliedFilters)}
