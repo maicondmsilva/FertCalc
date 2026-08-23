@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { PricingRecord } from '../types';
 import {
   buildCommercialRanking,
+  buildFormulaRanking,
   calculatePricingDashboardStats,
   filterPricingsByPeriod,
   getPricingPeriodKey,
@@ -156,5 +157,44 @@ describe('commercial dashboard hierarchy and rankings', () => {
       { id: 'seller-2', name: 'Vendedor B', salesValue: 50_000, tons: 20, salesCount: 1 },
       { id: 'seller-1', name: 'Vendedor A', salesValue: 20_000, tons: 10, salesCount: 1 },
     ]);
+  });
+
+  it('distributes multi-formula sales using each formula own value and volume', () => {
+    const ranking = buildFormulaRanking([
+      pricing({
+        calculations: [
+          {
+            id: 'calc-1',
+            formula: '20-05-20',
+            factors: { totalTons: 10 } as PricingRecord['factors'],
+            summary: { totalSaleValue: 20_000 } as PricingRecord['summary'],
+          },
+          {
+            id: 'calc-2',
+            formula: '10-10-10',
+            factors: { totalTons: 30 } as PricingRecord['factors'],
+            summary: { totalSaleValue: 45_000 } as PricingRecord['summary'],
+          },
+        ] as PricingRecord['calculations'],
+      }),
+    ]);
+
+    expect(ranking).toEqual([
+      { id: '10-10-10', name: '10-10-10', salesValue: 45_000, tons: 30, salesCount: 1 },
+      { id: '20-05-20', name: '20-05-20', salesValue: 20_000, tons: 10, salesCount: 1 },
+    ]);
+  });
+
+  it('supports legacy pricing records without calculations', () => {
+    const ranking = buildFormulaRanking([
+      pricing({ factors: { targetFormula: '04-14-08', totalTons: 12 } as PricingRecord['factors'] }),
+    ]);
+
+    expect(ranking[0]).toMatchObject({
+      id: '04-14-08',
+      name: '04-14-08',
+      salesValue: 20_000,
+      tons: 12,
+    });
   });
 });
