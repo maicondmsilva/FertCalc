@@ -4,6 +4,7 @@ import { AppSettings, Client, Agent } from '../types';
 import { getAppSettings, saveAppSettings, createClientsBulk, createAgentsBulk } from '../services/db';
 import { useToast } from './Toast';
 import CompatibilityCategoryManager from './CompatibilityCategoryManager';
+import SystemHealthPanel from './SystemHealthPanel';
 
 export default function SettingsManager() {
   const { showSuccess, showError } = useToast();
@@ -223,6 +224,7 @@ export default function SettingsManager() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
+      <SystemHealthPanel />
       <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
         <h2 className="text-xl font-bold text-stone-800 mb-6 flex items-center">
           <Settings className="w-5 h-5 mr-2 text-stone-600" />
