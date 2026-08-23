@@ -92,6 +92,7 @@ export async function signIn(email: string, password: string): Promise<AuthResul
     }
     const profile = await getUserByEmail(profileEmail);
     if (!profile) {
+      await supabase.auth.signOut();
       return { user: null, error: 'Perfil de usuário não encontrado. Contate o administrador.' };
     }
 
@@ -158,7 +159,10 @@ export async function restoreSession(): Promise<User | null> {
     if (!session?.user?.email) return null;
 
     const profile = await getUserByEmail(session.user.email);
-    if (!profile || (!profile.ativo && profile.role !== 'master')) return null;
+    if (!profile || (!profile.ativo && profile.role !== 'master')) {
+      await supabase.auth.signOut();
+      return null;
+    }
 
     return profile;
   } catch (err) {
