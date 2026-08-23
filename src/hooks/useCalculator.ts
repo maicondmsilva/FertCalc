@@ -53,10 +53,10 @@ import {
 } from '../services/produtosFormuladosService';
 import { addHistoricoPreco } from '../services/historicoPrecoService';
 import {
+  applyFreeCompositionSummary,
+  calculateTargetFormula,
   calculatePricingSummary,
   hasFormulaTarget,
-  optimizeFormula,
-  parseFormulaTarget,
 } from '../domain/pricing-engine';
 
 interface UseCalculatorProps {
@@ -497,28 +497,6 @@ export function useCalculator({
 
   const calculateSummary = calculatePricingSummary;
 
-  const applyFreeCompositionSummary = (
-    calc: TargetFormula,
-    currentMacros: RawMaterial[],
-    currentMicros: RawMaterial[]
-  ): TargetFormula => {
-    const nextMacros = currentMacros.map((material) => ({
-      ...material,
-      quantity: material.selected ? Number(material.minQty || material.quantity || 0) : 0,
-    }));
-    const nextMicros = currentMicros.map((material) => ({
-      ...material,
-      quantity: material.selected ? Number(material.minQty || material.quantity || 0) : 0,
-    }));
-
-    return {
-      ...calc,
-      macros: nextMacros,
-      micros: nextMicros,
-      summary: calculateSummary(nextMacros, nextMicros, calc.factors),
-    };
-  };
-
   const calculateFormula = (targetFormulaId?: string) => {
     const formulasToCalculate = targetFormulaId
       ? calculations.filter((c) => c.id === targetFormulaId)
@@ -532,113 +510,26 @@ export function useCalculator({
     const updatedCalculations = [...calculations];
 
     formulasToCalculate.forEach((calc) => {
-      const currentMacros = calc.macros && calc.macros.length > 0 ? calc.macros : macros;
-      const currentMicros = microsInGear ? (calc.micros.length > 0 ? calc.micros : micros) : micros;
-      const calculationMode = getCalculationMode(calc);
-
-      if (calculationMode === 'produtos_livres') {
-        const produtosLivres = (calc.produtos_livres || []).filter(
-          (item) => Number(item.quantity) > 0
-        );
-
-        if (produtosLivres.length === 0) {
-          showError('Adicione ao menos um produto livre com quantidade em kg para calcular.');
-          return;
-        }
-
-        const unknownProduct = produtosLivres.find(
-          (item) =>
-            ![...currentMacros, ...currentMicros].some((material) => material.id === item.productId)
-        );
-
-        if (unknownProduct) {
-          showError(
-            `Produto livre (${unknownProduct.productId}) não foi encontrado na lista de preço atual.`
-          );
-          return;
-        }
-
-        const { nextMacros, nextMicros } = applyProdutosLivresToMaterials(
-          produtosLivres,
-          currentMacros,
-          currentMicros
-        );
-        const calcIndex = updatedCalculations.findIndex((item) => item.id === calc.id);
-
-        if (calcIndex !== -1) {
-          const summary = calculateSummary(
-            nextMacros,
-            nextMicros,
-            updatedCalculations[calcIndex].factors
-          );
-          updatedCalculations[calcIndex] = {
-            ...updatedCalculations[calcIndex],
-            formula: formatNPK(
-              calc.formula || '0-0-0',
-              summary.resultingN,
-              summary.resultingP,
-              summary.resultingK
-            ),
-            macros: nextMacros,
-            micros: nextMicros,
-            summary,
-          };
-        }
-        return;
-      }
-
-      if (!hasFormulaTarget(calc.formula)) {
-        const calcIndex = updatedCalculations.findIndex((item) => item.id === calc.id);
-        if (calcIndex !== -1) {
-          updatedCalculations[calcIndex] = applyFreeCompositionSummary(
-            updatedCalculations[calcIndex],
-            currentMacros,
-            currentMicros
-          );
-        }
-        return;
-      }
-
-      const target = parseFormulaTarget(calc.formula);
-      if (!target) return;
-
-      const optimization = optimizeFormula({
-        target,
-        targetS: calc.targetS,
-        targetCa: calc.targetCa,
-        macros: currentMacros,
-        micros: currentMicros,
+      const result = calculateTargetFormula({
+        calculation: calc,
+        defaultMacros: macros,
+        defaultMicros: micros,
+        microsInGear,
         incompatibilityRules,
       });
+      const calcIndex = updatedCalculations.findIndex((item) => item.id === calc.id);
+      if (calcIndex !== -1) updatedCalculations[calcIndex] = result.calculation;
 
-      if (optimization.feasible) {
-        const calcIndex = updatedCalculations.findIndex((c) => c.id === calc.id);
-        if (calcIndex !== -1) {
-          const newMacros = optimization.macros;
-          const newMicros = optimization.micros;
-
-          updatedCalculations[calcIndex] = {
-            ...updatedCalculations[calcIndex],
-            macros: newMacros,
-            micros: newMicros,
-            summary: calculateSummary(newMacros, newMicros, updatedCalculations[calcIndex].factors),
-          };
-        }
-      } else {
+      if (result.issue?.code === 'EMPTY_FREE_PRODUCTS') {
+        showError('Adicione ao menos um produto livre com quantidade em kg para calcular.');
+      } else if (result.issue?.code === 'UNKNOWN_FREE_PRODUCT') {
         showError(
-          `A formulação ${calc.formula} não fecha com os produtos selecionados. Verifique as restrições ou adicione enchimento.`
+          `Produto livre (${result.issue.productId}) não foi encontrado na lista de preço atual.`
         );
-        const calcIndex = updatedCalculations.findIndex((c) => c.id === calc.id);
-        if (calcIndex !== -1) {
-          updatedCalculations[calcIndex] = {
-            ...updatedCalculations[calcIndex],
-            summary: calculateSummary(
-              updatedCalculations[calcIndex].macros,
-              updatedCalculations[calcIndex].micros,
-              updatedCalculations[calcIndex].factors
-            ),
-          };
-        }
+      } else if (result.issue?.code === 'INFEASIBLE_FORMULA') {
+        showError(
+          `A formulação ${result.issue.formula} não fecha com os produtos selecionados. Verifique as restrições ou adicione enchimento.`
+        );
       }
     });
 
