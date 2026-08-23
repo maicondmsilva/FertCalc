@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { PricingRecord } from '../types';
 import {
+  buildCommercialRanking,
   calculatePricingDashboardStats,
   filterPricingsByPeriod,
   getPricingPeriodKey,
   getSixPeriodsEndingAt,
+  scopePricingsForUser,
 } from './pricingDashboard';
+import type { User } from '../types';
 
 function pricing(overrides: Partial<PricingRecord> = {}): PricingRecord {
   return {
@@ -110,5 +113,48 @@ describe('pricing dashboard totals', () => {
     expect(stats.conversionRate).toBe(0);
     expect(stats.approvalRate).toBe(0);
     expect(stats.averageMarginPerTon).toBe(0);
+  });
+});
+
+describe('commercial dashboard hierarchy and rankings', () => {
+  const user = (overrides: Partial<User>): User =>
+    ({ id: 'user-1', role: 'user', managedUserIds: [], ...overrides }) as User;
+
+  it('scopes sellers according to the current hierarchy', () => {
+    const records = [
+      pricing({ id: 'own', userId: 'user-1' }),
+      pricing({ id: 'managed', userId: 'user-2' }),
+      pricing({ id: 'outside', userId: 'user-3' }),
+    ];
+
+    expect(scopePricingsForUser(records, user({})).map(({ id }) => id)).toEqual(['own']);
+    expect(
+      scopePricingsForUser(
+        records,
+        user({ role: 'manager', managedUserIds: ['user-2'] })
+      ).map(({ id }) => id)
+    ).toEqual(['own', 'managed']);
+    expect(scopePricingsForUser(records, user({ role: 'admin' }))).toHaveLength(3);
+  });
+
+  it('ranks only approved closed sales by realized value', () => {
+    const ranking = buildCommercialRanking(
+      [
+        pricing({ userId: 'seller-1', userName: 'Vendedor A' }),
+        pricing({
+          userId: 'seller-2',
+          userName: 'Vendedor B',
+          factors: { totalTons: 20 } as PricingRecord['factors'],
+          summary: { totalSaleValue: 50_000 } as PricingRecord['summary'],
+        }),
+        pricing({ userId: 'seller-1', userName: 'Vendedor A', status: 'Em Andamento' }),
+      ],
+      (record) => ({ id: record.userId, name: record.userName || 'Não informado' })
+    );
+
+    expect(ranking).toEqual([
+      { id: 'seller-2', name: 'Vendedor B', salesValue: 50_000, tons: 20, salesCount: 1 },
+      { id: 'seller-1', name: 'Vendedor A', salesValue: 20_000, tons: 10, salesCount: 1 },
+    ]);
   });
 });

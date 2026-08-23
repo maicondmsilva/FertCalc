@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { PricingRecord, Goal, User } from '../types';
+import { PricingRecord, Goal, User, Branch } from '../types';
 import {
   TrendingUp,
   DollarSign,
@@ -23,13 +23,15 @@ import {
   PieChart,
   Pie,
 } from 'recharts';
-import { getPricingRecords, getGoals } from '../services/db';
+import { getPricingRecords, getGoals, getBranches } from '../services/db';
 import { getPricingTotalTons, getPricingTotalSaleValue } from '../utils/pricingMetrics';
 import {
+  buildCommercialRanking,
   calculatePricingDashboardStats,
   filterPricingsByPeriod,
   getPricingPeriodKey,
   getSixPeriodsEndingAt,
+  scopePricingsForUser,
   toPeriodKey,
 } from '../utils/pricingDashboard';
 
@@ -40,16 +42,19 @@ interface DashboardProps {
 export default function Dashboard({ currentUser }: DashboardProps) {
   const [pricings, setPricings] = useState<PricingRecord[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedPeriod, setSelectedPeriod] = useState(() => toPeriodKey(new Date()));
 
   useEffect(() => {
     const loadData = async () => {
-      const [userPricings, userGoals] = await Promise.all([
-        getPricingRecords(currentUser.id),
+      const [accessiblePricings, userGoals, availableBranches] = await Promise.all([
+        getPricingRecords(),
         getGoals(currentUser.id),
+        getBranches(),
       ]);
-      setPricings(userPricings);
+      setPricings(scopePricingsForUser(accessiblePricings, currentUser));
       setGoals(userGoals);
+      setBranches(availableBranches);
     };
     loadData();
   }, [currentUser]);
@@ -59,6 +64,29 @@ export default function Dashboard({ currentUser }: DashboardProps) {
     [pricings, selectedPeriod]
   );
   const stats = useMemo(() => calculatePricingDashboardStats(filteredPricings), [filteredPricings]);
+  const sellerRanking = useMemo(
+    () =>
+      buildCommercialRanking(filteredPricings, (pricing) => ({
+        id: pricing.userId,
+        name: pricing.userName || 'Vendedor não informado',
+      })).slice(0, 5),
+    [filteredPricings]
+  );
+  const branchNames = useMemo(
+    () => new Map(branches.map((branch) => [branch.id, branch.name])),
+    [branches]
+  );
+  const branchRanking = useMemo(
+    () =>
+      buildCommercialRanking(filteredPricings, (pricing) => {
+        const branchId = pricing.factors?.branchId || 'not-informed';
+        return {
+          id: branchId,
+          name: branchNames.get(branchId) || 'Filial não informada',
+        };
+      }).slice(0, 5),
+    [branchNames, filteredPricings]
+  );
   const [selectedYear, selectedMonth] = selectedPeriod.split('-').map(Number);
   const monthlyGoal = goals.find(
     (g) =>
@@ -439,6 +467,64 @@ export default function Dashboard({ currentUser }: DashboardProps) {
           </div>
         </div>
       </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {currentUser.role !== 'user' && (
+          <RankingCard title="Vendas por vendedor" items={sellerRanking} />
+        )}
+        <RankingCard title="Vendas por filial" items={branchRanking} />
+      </div>
     </div>
+  );
+}
+
+function RankingCard({
+  title,
+  items,
+}: {
+  title: string;
+  items: ReturnType<typeof buildCommercialRanking>;
+}) {
+  const largestValue = items[0]?.salesValue || 0;
+
+  return (
+    <section className="bg-white p-6 rounded-3xl shadow-sm border border-stone-200">
+      <h3 className="text-sm font-black text-stone-800 mb-5 uppercase tracking-wider">{title}</h3>
+      <div className="space-y-5">
+        {items.map((item, index) => (
+          <div key={item.id}>
+            <div className="flex items-end justify-between gap-4 mb-2">
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-stone-700 truncate">
+                  {index + 1}. {item.name}
+                </p>
+                <p className="text-xs text-stone-400">
+                  {item.tons.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} t ·{' '}
+                  {item.salesCount} {item.salesCount === 1 ? 'venda' : 'vendas'}
+                </p>
+              </div>
+              <p className="text-sm font-black text-stone-800 whitespace-nowrap">
+                {item.salesValue.toLocaleString('pt-BR', {
+                  style: 'currency',
+                  currency: 'BRL',
+                  maximumFractionDigits: 0,
+                })}
+              </p>
+            </div>
+            <div className="h-2 rounded-full bg-stone-100 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-emerald-500"
+                style={{ width: `${largestValue > 0 ? (item.salesValue / largestValue) * 100 : 0}%` }}
+              />
+            </div>
+          </div>
+        ))}
+        {items.length === 0 && (
+          <p className="py-8 text-center text-sm text-stone-400">
+            Nenhuma venda fechada e aprovada neste mês.
+          </p>
+        )}
+      </div>
+    </section>
   );
 }
