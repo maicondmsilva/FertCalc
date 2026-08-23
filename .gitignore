@@ -13,4 +13,6 @@ backups/
 *.backup
 *.dump
 *.sql.gz
+supabase/.temp/
+supabase/.branches/
 core

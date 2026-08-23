@@ -172,6 +172,8 @@ O workflow `monitor-production.yml` verifica a aplicação publicada a cada 15 m
 
 Após cada deploy, a mesma verificação confirma o código HTTP e a identificação da página do FertCalc. Se a proteção SSO estiver ativa sem o segredo de bypass, o workflow emite um aviso sem expor dados sensíveis.
 
+O CI também bloqueia segredos versionados, vulnerabilidades críticas de produção, dependências novas de alto risco e migrations inseguras. O CodeQL analisa JavaScript e TypeScript em cada PR e semanalmente. O build aprovado fica preservado por sete dias como artefato do workflow.
+
 ### Recuperação de desastre
 
 O workflow `disaster-recovery-readiness.yml` verifica semanalmente se os ativos necessários para recuperação continuam versionados e protegidos. O procedimento operacional, incluindo backup do banco, Storage, validação e liberação, está em [`docs/DISASTER_RECOVERY_RUNBOOK.md`](docs/DISASTER_RECOVERY_RUNBOOK.md).

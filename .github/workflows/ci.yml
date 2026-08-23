@@ -44,9 +44,56 @@ jobs:
       - name: Disaster recovery readiness
         run: npm run dr:check
 
+  security:
+    name: Security and dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Scan tracked files for secrets
+        run: npm run security:check
+
+      - name: Block critical production vulnerabilities
+        run: npm audit --omit=dev --audit-level=critical
+
+      - name: Review newly introduced dependencies
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+
+  database:
+    name: Database migration safety
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validate migrations
+        run: npm run db:check
+
   build:
     name: Build
-    needs: [quality]
+    needs: [quality, security, database]
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -73,3 +120,11 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Preserve verified build
+        uses: actions/upload-artifact@v4
+        with:
+          name: fertcalc-production-build
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
