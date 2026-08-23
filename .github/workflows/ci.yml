@@ -72,9 +72,7 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
         uses: actions/dependency-review-action@v4
         with:
-          # Keep the PR gate aligned with npm audit above. High findings remain
-          # visible while the breaking pdfjs migration and xlsx replacement are planned.
-          fail-on-severity: critical
+          fail-on-severity: high
 
   database:
     name: Database migration safety
