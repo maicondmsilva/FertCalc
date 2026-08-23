@@ -17,6 +17,10 @@ export interface PricingDashboardStats {
   conversionRate: number;
   approvalRate: number;
   averageMarginPerTon: number;
+  analyzedTons: number;
+  profitabilityCoverageRate: number;
+  totalProfitability: number;
+  profitabilityPercent: number;
 }
 
 export function toPeriodKey(date: Date): string {
@@ -63,6 +67,24 @@ export function calculatePricingDashboardStats(pricings: PricingRecord[]): Prici
     },
     { value: 0, tons: 0 }
   );
+  const profitabilityTotals = approvedClosed.reduce(
+    (acc, pricing) => {
+      (pricing.calculations || []).forEach((calculation) => {
+        const analysis = calculation.profitabilityAnalysis;
+        if (!analysis) return;
+        const tons = Number(calculation.factors?.totalTons) || 0;
+        acc.tons += tons;
+        acc.profitability += (Number(analysis.profitability) || 0) * tons;
+        acc.baseCost += (Number(analysis.baseCostAfterFactor) || 0) * tons;
+      });
+      return acc;
+    },
+    { tons: 0, profitability: 0, baseCost: 0 }
+  );
+  const closedTons = approvedClosed.reduce(
+    (sum, pricing) => sum + getPricingTotalTons(pricing),
+    0
+  );
 
   return {
     totalValue,
@@ -74,13 +96,21 @@ export function calculatePricingDashboardStats(pricings: PricingRecord[]): Prici
     closedCount: approvedClosed.length,
     inProgressCount: inProgress.length,
     lostCount,
-    closedTons: approvedClosed.reduce((sum, pricing) => sum + getPricingTotalTons(pricing), 0),
+    closedTons,
     averageTicketValue: approvedClosed.length > 0 ? totalValue / approvedClosed.length : 0,
     conversionRate:
       decidedNegotiations > 0 ? (approvedClosed.length / decidedNegotiations) * 100 : 0,
     approvalRate:
       approvalDecisions.length > 0 ? (approvedDecisions / approvalDecisions.length) * 100 : 0,
     averageMarginPerTon: marginTotals.tons > 0 ? marginTotals.value / marginTotals.tons : 0,
+    analyzedTons: profitabilityTotals.tons,
+    profitabilityCoverageRate:
+      closedTons > 0 ? (profitabilityTotals.tons / closedTons) * 100 : 0,
+    totalProfitability: profitabilityTotals.profitability,
+    profitabilityPercent:
+      profitabilityTotals.baseCost > 0
+        ? (profitabilityTotals.profitability / profitabilityTotals.baseCost) * 100
+        : 0,
   };
 }
 

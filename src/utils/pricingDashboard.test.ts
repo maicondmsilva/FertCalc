@@ -81,6 +81,10 @@ describe('pricing dashboard totals', () => {
       conversionRate: 50,
       approvalRate: 100,
       averageMarginPerTon: 0,
+      analyzedTons: 0,
+      profitabilityCoverageRate: 0,
+      totalProfitability: 0,
+      profitabilityPercent: 0,
     });
   });
 
@@ -114,6 +118,38 @@ describe('pricing dashboard totals', () => {
     expect(stats.conversionRate).toBe(0);
     expect(stats.approvalRate).toBe(0);
     expect(stats.averageMarginPerTon).toBe(0);
+  });
+
+  it('calculates profitability only for analyzed formulas and reports its coverage', () => {
+    const stats = calculatePricingDashboardStats([
+      pricing({
+        calculations: [
+          {
+            id: 'analyzed',
+            formula: '20-05-20',
+            factors: { totalTons: 10 } as PricingRecord['factors'],
+            summary: { totalSaleValue: 20_000 } as PricingRecord['summary'],
+            profitabilityAnalysis: {
+              profitability: 200,
+              profitabilityPercent: 20,
+              baseCostAfterFactor: 1_000,
+            },
+          },
+          {
+            id: 'not-analyzed',
+            formula: '10-10-10',
+            factors: { totalTons: 30 } as PricingRecord['factors'],
+            summary: { totalSaleValue: 45_000 } as PricingRecord['summary'],
+          },
+        ] as PricingRecord['calculations'],
+      }),
+    ]);
+
+    expect(stats.closedTons).toBe(40);
+    expect(stats.analyzedTons).toBe(10);
+    expect(stats.profitabilityCoverageRate).toBe(25);
+    expect(stats.totalProfitability).toBe(2_000);
+    expect(stats.profitabilityPercent).toBe(20);
   });
 });
 
