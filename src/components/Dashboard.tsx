@@ -1,6 +1,16 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { PricingRecord, Goal, User } from '../types';
-import { TrendingUp, DollarSign, FileText, Target, Clock, BarChart3 } from 'lucide-react';
+import {
+  TrendingUp,
+  DollarSign,
+  FileText,
+  Target,
+  Clock,
+  BarChart3,
+  BadgePercent,
+  CircleDollarSign,
+  CheckCircle2,
+} from 'lucide-react';
 import {
   BarChart,
   Bar,
@@ -190,6 +200,61 @@ export default function Dashboard({ currentUser }: DashboardProps) {
             })}{' '}
             <span className="text-sm font-medium text-stone-400">t</span>
           </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
+          <div className="bg-amber-100 p-2 rounded-lg w-fit mb-4">
+            <CircleDollarSign className="w-5 h-5 text-amber-700" />
+          </div>
+          <p className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-1">
+            Ticket Médio
+          </p>
+          <p className="text-2xl font-black text-stone-800">
+            R$ {stats.averageTicketValue.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}
+          </p>
+          <p className="text-xs text-stone-400 mt-2">Por venda fechada e aprovada</p>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
+          <div className="bg-cyan-100 p-2 rounded-lg w-fit mb-4">
+            <TrendingUp className="w-5 h-5 text-cyan-700" />
+          </div>
+          <p className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-1">
+            Conversão
+          </p>
+          <p className="text-2xl font-black text-stone-800">
+            {stats.conversionRate.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%
+          </p>
+          <p className="text-xs text-stone-400 mt-2">Fechadas entre negociações decididas</p>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
+          <div className="bg-emerald-100 p-2 rounded-lg w-fit mb-4">
+            <CheckCircle2 className="w-5 h-5 text-emerald-700" />
+          </div>
+          <p className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-1">
+            Aprovação
+          </p>
+          <p className="text-2xl font-black text-stone-800">
+            {stats.approvalRate.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%
+          </p>
+          <p className="text-xs text-stone-400 mt-2">Aprovadas entre análises decididas</p>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
+          <div className="bg-violet-100 p-2 rounded-lg w-fit mb-4">
+            <BadgePercent className="w-5 h-5 text-violet-700" />
+          </div>
+          <p className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-1">
+            Margem Aplicada
+          </p>
+          <p className="text-2xl font-black text-stone-800">
+            R$ {stats.averageMarginPerTon.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}
+            <span className="text-sm font-medium text-stone-400"> / t</span>
+          </p>
+          <p className="text-xs text-stone-400 mt-2">Média ponderada pelo volume fechado</p>
         </div>
       </div>
 

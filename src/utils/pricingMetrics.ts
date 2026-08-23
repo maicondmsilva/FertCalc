@@ -37,3 +37,32 @@ export function getPricingAverageCommissionRate(pricing: PricingRecord): number 
   }
   return Number(pricing.factors?.commission) || 0;
 }
+
+export function getPricingWeightedMargin(pricing: PricingRecord): {
+  marginPerTon: number;
+  tons: number;
+} {
+  if (pricing.calculations && pricing.calculations.length > 0) {
+    const totals = pricing.calculations.reduce(
+      (acc, calc) => {
+        const tons = Number(calc.factors?.totalTons) || 0;
+        const marginPerTon = Number(calc.factors?.margin) || 0;
+        return {
+          marginValue: acc.marginValue + marginPerTon * tons,
+          tons: acc.tons + tons,
+        };
+      },
+      { marginValue: 0, tons: 0 }
+    );
+
+    return {
+      marginPerTon: totals.tons > 0 ? totals.marginValue / totals.tons : 0,
+      tons: totals.tons,
+    };
+  }
+
+  return {
+    marginPerTon: Number(pricing.factors?.margin) || 0,
+    tons: Number(pricing.factors?.totalTons) || 0,
+  };
+}
