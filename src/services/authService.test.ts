@@ -35,7 +35,7 @@ vi.mock('../utils/logger', () => ({
   },
 }));
 
-import { createAuthUser, restoreSession, signIn } from './authService';
+import { adminDeleteAuthUser, createAuthUser, restoreSession, signIn } from './authService';
 
 describe('signIn', () => {
   beforeEach(() => {
@@ -218,5 +218,68 @@ describe('createAuthUser', () => {
     expect(result.success).toBe(false);
     expect(result.error).toContain('admin-create-user');
     expect(result.error).toContain('deploy');
+  });
+});
+
+describe('adminDeleteAuthUser', () => {
+  beforeEach(() => {
+    getSessionMock.mockReset();
+    vi.unstubAllGlobals();
+    getSessionMock.mockResolvedValue({
+      data: { session: { access_token: 'token-valido' } },
+    });
+  });
+
+  it('não chama a Edge Function sem uma sessão administrativa', async () => {
+    getSessionMock.mockResolvedValue({ data: { session: null } });
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(adminDeleteAuthUser('user-1')).resolves.toEqual({
+      success: false,
+      error: 'Usuário não autenticado',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('confirma a exclusão concluída pela Edge Function', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ success: true }) })
+    );
+
+    await expect(adminDeleteAuthUser('user-1')).resolves.toEqual({ success: true });
+  });
+
+  it('aciona o fallback do perfil quando a Edge Function não está disponível', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+        json: async () => ({ error: 'Not Found' }),
+      })
+    );
+
+    const result = await adminDeleteAuthUser('user-1');
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('perfil local');
+  });
+
+  it('propaga a falha de limpeza do perfil para o chamador tentar o fallback', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: async () => ({ error: 'Authentication removed, but profile cleanup failed' }),
+      })
+    );
+
+    await expect(adminDeleteAuthUser('user-1')).resolves.toEqual({
+      success: false,
+      error: 'Authentication removed, but profile cleanup failed',
+    });
   });
 });

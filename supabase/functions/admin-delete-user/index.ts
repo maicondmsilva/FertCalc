@@ -68,7 +68,13 @@ Deno.serve(async (req: Request) => {
     }
 
     // Also ensure app_users row is removed (in case there's no cascade)
-    await supabaseAdmin.from('app_users').delete().eq('id', user_id);
+    const { error: deleteProfileError } = await supabaseAdmin
+      .from('app_users')
+      .delete()
+      .eq('id', user_id);
+    if (deleteProfileError) {
+      return jsonResponse({ error: 'Authentication removed, but profile cleanup failed' }, 500);
+    }
 
     return jsonResponse({ success: true }, 200);
   } catch (err) {

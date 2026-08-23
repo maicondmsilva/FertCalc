@@ -350,9 +350,10 @@ export async function adminDeleteAuthUser(
       const err = (await res.json()) as { error?: string };
       const message = err.error ?? 'Erro ao excluir usuário no Auth';
       if (res.status === 404) {
-        // Edge function not deployed yet — fall through gracefully
-        logger.warn('[authService] admin-delete-user not deployed, skipping auth deletion');
-        return { success: true }; // app_users will still be deleted by caller
+        const notFoundMessage =
+          'Função admin-delete-user não encontrada; o perfil local será removido pelo sistema.';
+        logger.warn('[authService] admin-delete-user not deployed, using profile fallback');
+        return { success: false, error: notFoundMessage };
       }
       logger.warn('[authService] adminDeleteAuthUser error:', message);
       return { success: false, error: message };
