@@ -3,25 +3,23 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import Login from './components/Login';
 import ResetPassword from './components/ResetPassword';
 import AppContent from './components/AppContent';
 import AppShell from './components/AppShell';
-import { PricingRecord, AppSettings, SavedFormula } from './types';
+import { PricingRecord, SavedFormula } from './types';
 import {
   getActiveModule,
   getNavigationItems,
   hasUserPermission,
 } from './navigation/appNavigation';
-import { getAppSettings } from './services/db';
 import { useNavigate, useLocation } from 'react-router-dom';
-
-import { getPendingCount, getCheckedCount } from './services/expenseService';
 
 import { useNotifications } from './hooks/useNotifications';
 import { usePWAInstall } from './hooks/usePWAInstall';
 import { useAuthSession } from './hooks/useAuthSession';
+import { useAppData } from './hooks/useAppData';
 
 export default function App() {
   const location = useLocation();
@@ -52,33 +50,12 @@ export default function App() {
     markAllRead,
     clearAll,
   } = useNotifications(currentUser?.id || '');
-  const [appSettings, setAppSettings] = useState<AppSettings>({
-    companyName: 'FertCalc Pro',
-    companyLogo: '',
-  });
-  const [pendingExpenseCount, setPendingExpenseCount] = useState(0);
-  const [checkedExpenseCount, setCheckedExpenseCount] = useState(0);
-
-  useEffect(() => {
-    getAppSettings().then((savedSettings) => {
-      if (savedSettings?.companyName) {
-        setAppSettings(savedSettings);
-      }
-    });
-  }, []);
+  const { appSettings, pendingExpenseCount, checkedExpenseCount } = useAppData(
+    activeModule,
+    currentUser?.id
+  );
 
   const { canInstall, handleInstall } = usePWAInstall();
-
-  // Load expense badge counts when entering the expenses module
-  useEffect(() => {
-    if (activeModule !== 'expenses' || !currentUser) return;
-    const load = async () => {
-      const [p, c] = await Promise.all([getPendingCount(), getCheckedCount()]);
-      setPendingExpenseCount(p);
-      setCheckedExpenseCount(c);
-    };
-    load();
-  }, [activeModule, currentUser]);
 
   // handleInstall e canInstall agora vêm do hook usePWAInstall (acima)
 
