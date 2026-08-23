@@ -45,6 +45,18 @@ describe('LP optimization engine', () => {
     expect(ureia.quantity).toBe(0);
   });
 
+  it('calcula S e Ca resultantes mesmo quando não há metas para esses nutrientes', () => {
+    const result = optimizeFormula({
+      target: { n: 45, p: 0, k: 0 },
+      macros: [material({ s: 12, ca: 4 })],
+      micros: [],
+      incompatibilityRules: [],
+    });
+    expect(result.feasible).toBe(true);
+    expect(result.composition.resultingS).toBeCloseTo(12);
+    expect(result.composition.resultingCa).toBeCloseTo(4);
+  });
+
   it('informa quando os materiais não conseguem fechar a fórmula', () => {
     const result = optimizeFormula({
       target: { n: 0, p: 0, k: 60 }, macros: [material()], micros: [], incompatibilityRules: [],

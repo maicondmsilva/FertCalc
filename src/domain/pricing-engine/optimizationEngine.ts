@@ -1,6 +1,7 @@
 import solver from 'javascript-lp-solver';
 import type { IncompatibilityRule, RawMaterial } from '../../types';
 import type { FormulaTarget } from './formulaEngine';
+import { calculateMaterialComposition } from './pricingEngine';
 
 type Constraint = Record<string, number>;
 type Variable = Record<string, number>;
@@ -27,6 +28,7 @@ export interface FormulaOptimizationResult {
   macros: RawMaterial[];
   micros: RawMaterial[];
   values: Record<string, number>;
+  composition: ReturnType<typeof calculateMaterialComposition>;
 }
 
 const numeric = (value: unknown): number => Number(value) || 0;
@@ -116,5 +118,13 @@ export function optimizeFormula(input: FormulaOptimizationInput): FormulaOptimiz
       quantity: material.selected && feasible ? values[material.id] || 0 : 0,
     }));
 
-  return { feasible, values, macros: apply(input.macros), micros: apply(input.micros) };
+  const macros = apply(input.macros);
+  const micros = apply(input.micros);
+  return {
+    feasible,
+    values,
+    macros,
+    micros,
+    composition: calculateMaterialComposition(macros, micros),
+  };
 }
