@@ -1,4 +1,4 @@
-import { PricingRecord } from '../types';
+import { PricingRecord, User } from '../types';
 import {
   getPricingTotalSaleValue,
   getPricingTotalTons,
@@ -82,6 +82,54 @@ export function calculatePricingDashboardStats(pricings: PricingRecord[]): Prici
       approvalDecisions.length > 0 ? (approvedDecisions / approvalDecisions.length) * 100 : 0,
     averageMarginPerTon: marginTotals.tons > 0 ? marginTotals.value / marginTotals.tons : 0,
   };
+}
+
+export interface CommercialRankingItem {
+  id: string;
+  name: string;
+  salesValue: number;
+  tons: number;
+  salesCount: number;
+}
+
+export function scopePricingsForUser(
+  pricings: PricingRecord[],
+  currentUser: User
+): PricingRecord[] {
+  if (currentUser.role === 'master' || currentUser.role === 'admin') return pricings;
+
+  const visibleUserIds = new Set([
+    currentUser.id,
+    ...(currentUser.role === 'manager' ? currentUser.managedUserIds || [] : []),
+  ]);
+  return pricings.filter((pricing) => visibleUserIds.has(pricing.userId));
+}
+
+export function buildCommercialRanking(
+  pricings: PricingRecord[],
+  getGroup: (pricing: PricingRecord) => { id: string; name: string }
+): CommercialRankingItem[] {
+  const groups = new Map<string, CommercialRankingItem>();
+
+  pricings
+    .filter((pricing) => pricing.status === 'Fechada' && pricing.approvalStatus === 'Aprovada')
+    .forEach((pricing) => {
+      const group = getGroup(pricing);
+      const current = groups.get(group.id) || {
+        ...group,
+        salesValue: 0,
+        tons: 0,
+        salesCount: 0,
+      };
+      current.salesValue += getPricingTotalSaleValue(pricing);
+      current.tons += getPricingTotalTons(pricing);
+      current.salesCount += 1;
+      groups.set(group.id, current);
+    });
+
+  return [...groups.values()].sort(
+    (left, right) => right.salesValue - left.salesValue || left.name.localeCompare(right.name)
+  );
 }
 
 export function getSixPeriodsEndingAt(period: string) {
