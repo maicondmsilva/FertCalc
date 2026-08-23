@@ -61,7 +61,7 @@ describe('jornada de autenticação da aplicação', () => {
     expect(screen.queryByText(/Área autenticada/)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Entrar no FertCalc' }));
-    expect(screen.getByText('Área autenticada: Usuário')).toBeInTheDocument();
+    expect(await screen.findByText('Área autenticada: Usuário')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Sair do FertCalc' }));
     expect(screen.getByText('Tela de login')).toBeInTheDocument();
