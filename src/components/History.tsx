@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PricingRecord, User as AppUser, AppSettings } from '../types';
+import { PricingRecord, User as AppUser, AppSettings, Branch, PriceList } from '../types';
 import {
   Search,
   FileText,
@@ -26,6 +26,8 @@ import {
   createNotification,
   getUsers,
   getManagersOfUser,
+  getBranches,
+  getPriceLists,
 } from '../services/db';
 import { useToast } from './Toast';
 import { ConfirmDialog } from './ui/ConfirmDialog';
@@ -64,15 +66,25 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
   const [showNovoPedido, setShowNovoPedido] = useState(false);
   const [novoPedidoPricing, setNovoPedidoPricing] = useState<PricingRecord | null>(null);
   const [locaisCarregamento, setLocaisCarregamento] = useState<LocalCarregamento[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [priceLists, setPriceLists] = useState<PriceList[]>([]);
 
   useEffect(() => {
     loadData();
   }, [currentUser]);
 
   useEffect(() => {
-    getLocaisAtivos()
-      .then(setLocaisCarregamento)
-      .catch(() => setLocaisCarregamento([]));
+    Promise.all([getLocaisAtivos(), getBranches(), getPriceLists()])
+      .then(([locations, availableBranches, availablePriceLists]) => {
+        setLocaisCarregamento(locations);
+        setBranches(availableBranches);
+        setPriceLists(availablePriceLists);
+      })
+      .catch(() => {
+        setLocaisCarregamento([]);
+        setBranches([]);
+        setPriceLists([]);
+      });
   }, []);
 
   const loadData = async () => {
@@ -751,17 +763,45 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                     </span>
                   </div>
                   <div className="mt-2 space-y-1">
-                    {p.calculations?.map((calc, idx) => (
-                      <div
-                        key={idx}
-                        className="flex justify-between items-center bg-stone-50 px-2 py-1 rounded text-[10px] border border-stone-100"
-                      >
-                        <span className="font-bold text-stone-600">{calc.formula}</span>
-                        <span className="text-emerald-600 font-mono">
-                          R$ {calc.summary?.finalPrice.toFixed(2)}
-                        </span>
-                      </div>
-                    ))}
+                    {p.calculations?.map((calc, idx) => {
+                      const calcFactors = calc.factors || p.factors;
+                      const tons = Number(calcFactors?.totalTons) || 0;
+                      const packagingValue = Number(calcFactors?.embalagem_valor) || 0;
+                      const packagingAdjustment = calcFactors?.embalagem_ajuste ||
+                        (packagingValue > 0 ? 'cobrar' : packagingValue < 0 ? 'descontar' : 'nenhum');
+                      const branchName = branches.find((branch) => branch.id === calcFactors?.branchId)?.name;
+                      const locationName = locaisCarregamento.find((location) => location.id === calcFactors?.local_carregamento_id)?.nome;
+                      const priceListName = priceLists.find((list) => list.id === calcFactors?.priceListId)?.name;
+
+                      return (
+                        <div key={idx} className="bg-stone-50 px-3 py-2 rounded-lg text-[10px] border border-stone-200 space-y-2">
+                          <div className="flex justify-between items-center gap-2">
+                            <span className="font-black text-stone-700 truncate">{calc.formula}</span>
+                            <span className="text-emerald-600 font-mono font-bold whitespace-nowrap">
+                              R$ {Number(calc.summary?.finalPrice || 0).toFixed(2)}/t
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-stone-500">
+                            <span><strong className="text-stone-600">Quantidade:</strong> {tons.toFixed(2)} t</span>
+                            <span><strong className="text-stone-600">Filial:</strong> {branchName || calcFactors?.branchId || '—'}</span>
+                            <span><strong className="text-stone-600">Local:</strong> {locationName || calcFactors?.local_carregamento_id || '—'}</span>
+                            <span><strong className="text-stone-600">Lista:</strong> {priceListName || calcFactors?.priceListId || '—'}</span>
+                            <span><strong className="text-stone-600">Agente:</strong> {p.factors?.agent?.name || 'Sem agente'}</span>
+                            <span><strong className="text-stone-600">Comissão:</strong> {Number(calcFactors?.commission || 0).toFixed(2)}%</span>
+                            <span><strong className="text-stone-600">Embalagem:</strong> {calcFactors?.embalagem_nome || 'Sem embalagem'}</span>
+                            <span><strong className="text-stone-600">Ajuste embalagem:</strong> {packagingAdjustment === 'nenhum' ? 'Nenhum' : `${packagingAdjustment === 'cobrar' ? 'Cobrar' : 'Descontar'} R$ ${Math.abs(packagingValue).toFixed(2)}/t`}</span>
+                            <span><strong className="text-stone-600">Fator:</strong> {Number(calcFactors?.factor || 0).toFixed(4)}</span>
+                            <span><strong className="text-stone-600">Margem:</strong> R$ {Number(calcFactors?.margin || 0).toFixed(2)}/t</span>
+                            <span><strong className="text-stone-600">Desconto:</strong> R$ {Number(calcFactors?.discount || 0).toFixed(2)}/t</span>
+                            <span><strong className="text-stone-600">Alíquota:</strong> {Number(calcFactors?.taxRate || 0).toFixed(2)}%</span>
+                            <span><strong className="text-stone-600">Juros:</strong> {Number(calcFactors?.monthlyInterestRate || 0).toFixed(3)}% a.m.</span>
+                            <span><strong className="text-stone-600">Pagamento:</strong> {calcFactors?.paymentCondition === 'ddf' ? `${calcFactors.ddfDias || 0} DDF` : 'Vencimento'}</span>
+                            <span><strong className="text-stone-600">Frete:</strong> {calcFactors?.tipoFrete || 'CIF'} · R$ {Number(calcFactors?.freight || 0).toFixed(2)}/t</span>
+                            <span><strong className="text-stone-600">Vencimento:</strong> {formatDatePtBr(calcFactors?.dueDate)}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                   {p.factors?.commercialObservation && (
                     <div className="flex items-start mt-2 p-2 bg-stone-50 rounded border border-stone-100 italic text-stone-500 text-[10px] line-clamp-2">

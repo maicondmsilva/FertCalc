@@ -58,6 +58,7 @@ import {
   calculatePricingSummary,
   hasFormulaTarget,
 } from '../domain/pricing-engine';
+import { validatePricingForSave } from '../utils/pricingValidation';
 
 interface UseCalculatorProps {
   initialData?: PricingRecord | null;
@@ -964,8 +965,14 @@ export function useCalculator({
         ),
       };
     });
-    const selectedCalculation =
-      updatedCalculations.find((c) => c.selected) || updatedCalculations[0];
+    const validation = validatePricingForSave(updatedCalculations, factors.agent);
+    if (!validation.valid) {
+      showError(validation.message || 'Revise os dados da precificação antes de salvar.');
+      return;
+    }
+
+    const selectedCalculations = updatedCalculations.filter((calculation) => calculation.selected);
+    const selectedCalculation = selectedCalculations[0];
 
     // Merge global factors with selected calculation's factors (CIF/FOB, freight)
     const mergedFactors = {
@@ -998,7 +1005,7 @@ export function useCalculator({
       factors: mergedFactors,
       rejectionObservation:
         initialData?.approvalStatus === 'Reprovada' ? '' : initialData?.rejectionObservation,
-      summary: updatedCalculations.find((c) => c.selected)?.summary || {
+      summary: selectedCalculation?.summary || {
         totalWeight: 0,
         baseCost: 0,
         basePrice: 0,
@@ -1015,7 +1022,7 @@ export function useCalculator({
         resultingCa: 0,
         resultingMicros: {},
       },
-      calculations: updatedCalculations,
+      calculations: selectedCalculations,
       history: [...(initialData?.history || []), historyEntry],
     };
 
