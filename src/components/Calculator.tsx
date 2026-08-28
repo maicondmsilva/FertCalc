@@ -410,6 +410,11 @@ export default function Calculator({
                         <button
                           disabled={isLocked}
                           onClick={() => {
+                            calculations.forEach((calculation) => {
+                              if (Number(calculation.factors?.commission) !== 0) {
+                                updateCalculationFactors(calculation.id, 'commission', 0);
+                              }
+                            });
                             setFactors({
                               ...factors,
                               agent: { id: '', code: '', name: '', document: '' },
@@ -1121,6 +1126,8 @@ export default function Calculator({
                               <input
                                 type="number"
                                 step="0.1"
+                                min="0"
+                                disabled={!factors.agent?.id}
                                 value={calc.factors.commission === 0 ? '' : calc.factors.commission}
                                 onChange={(e) =>
                                   updateCalculationFactors(
@@ -1129,8 +1136,13 @@ export default function Calculator({
                                     e.target.value === '' ? 0 : Number(e.target.value)
                                   )
                                 }
-                                className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500"
+                                className={`w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500 ${!factors.agent?.id ? 'bg-stone-100 text-stone-400 cursor-not-allowed' : ''}`}
                               />
+                              {!factors.agent?.id && (
+                                <p className="mt-1 text-[10px] font-medium text-amber-600">
+                                  Selecione um agente para liberar a comissão.
+                                </p>
+                              )}
                             </div>
                             {/* CIF / FOB toggle */}
                             <div className="col-span-2 lg:col-span-3">

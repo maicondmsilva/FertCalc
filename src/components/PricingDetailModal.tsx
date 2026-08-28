@@ -1,5 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { PricingRecord, User, AppSettings, PedidoVenda, Embalagem } from '../types';
+import {
+  PricingRecord,
+  User,
+  AppSettings,
+  PedidoVenda,
+  Embalagem,
+  Branch,
+  PriceList,
+} from '../types';
+import type { LocalCarregamento } from '../types/carregamento';
 import {
   X,
   Edit3,
@@ -28,6 +37,8 @@ import {
   transferPricingRecord,
   acceptPricingTransfer,
   createNotification,
+  getBranches,
+  getPriceLists,
 } from '../services/db';
 import {
   getPedidoVendaByPrecificacao,
@@ -35,6 +46,7 @@ import {
   updatePedidoVenda,
 } from '../services/pedidosVendaService';
 import { getEmbalagens } from '../services/embalagensService';
+import { getLocaisCarregamento } from '../services/locaisCarregamentoService';
 import { useToast } from './Toast';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { useConfirm } from '../hooks/useConfirm';
@@ -58,6 +70,29 @@ interface PricingDetailModalProps {
   appSettings?: AppSettings;
 }
 type PricingCalculation = PricingRecord | NonNullable<PricingRecord['calculations']>[number];
+
+function DetailItem({
+  label,
+  value,
+  tone = 'default',
+}: {
+  label: string;
+  value: React.ReactNode;
+  tone?: 'default' | 'positive' | 'negative';
+}) {
+  const valueColor =
+    tone === 'positive'
+      ? 'text-emerald-700'
+      : tone === 'negative'
+        ? 'text-red-700'
+        : 'text-stone-800';
+  return (
+    <div className="rounded-lg border border-stone-200 bg-white px-3 py-2 min-w-0">
+      <p className="text-[9px] font-bold uppercase tracking-wider text-stone-400">{label}</p>
+      <div className={`mt-1 text-sm font-semibold break-words ${valueColor}`}>{value}</div>
+    </div>
+  );
+}
 
 export default function PricingDetailModal({
   selectedPricing,
@@ -105,6 +140,9 @@ export default function PricingDetailModal({
   const [embalagens, setEmbalagens] = useState<Embalagem[]>([]);
   const [loadingEmbalagens, setLoadingEmbalagens] = useState(false);
   const [dbHistory, setDbHistory] = useState<DBPricingHistoryEntry[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [priceLists, setPriceLists] = useState<PriceList[]>([]);
+  const [loadingLocations, setLoadingLocations] = useState<LocalCarregamento[]>([]);
   const embalagemOptions = useMemo(
     () => embalagens.map((e) => e.nome).filter(Boolean),
     [embalagens]
@@ -117,6 +155,20 @@ export default function PricingDetailModal({
       .then(setDbHistory)
       .catch(() => setDbHistory([]));
   }, [selectedPricing.id]);
+
+  React.useEffect(() => {
+    Promise.all([getBranches(), getPriceLists(), getLocaisCarregamento()])
+      .then(([availableBranches, availablePriceLists, availableLocations]) => {
+        setBranches(availableBranches);
+        setPriceLists(availablePriceLists);
+        setLoadingLocations(availableLocations);
+      })
+      .catch(() => {
+        setBranches([]);
+        setPriceLists([]);
+        setLoadingLocations([]);
+      });
+  }, []);
 
   React.useEffect(() => {
     if (isTransferring) {
@@ -389,176 +441,179 @@ export default function PricingDetailModal({
         import('jspdf-autotable'),
       ]);
       const doc = new jsPDF();
-    const cod =
-      pricing.formattedCod ||
-      (pricing.cod ? String(pricing.cod).padStart(4, '0') : pricing.id.slice(-8));
-    const freightType = getPricingFreightType(pricing);
-    const freightValue = getPricingFreightValue(pricing);
-    const dueDate = formatDatePtBr(getPricingDueDate(pricing));
+      const cod =
+        pricing.formattedCod ||
+        (pricing.cod ? String(pricing.cod).padStart(4, '0') : pricing.id.slice(-8));
+      const freightType = getPricingFreightType(pricing);
+      const freightValue = getPricingFreightValue(pricing);
+      const dueDate = formatDatePtBr(getPricingDueDate(pricing));
 
-    // Título compacto
-    doc.setFontSize(16);
-    doc.setFont(undefined as any, 'bold');
-    doc.text(appSettings.companyName, 14, 15);
-    doc.setFontSize(9);
-    doc.setFont(undefined as any, 'normal');
-    doc.text('PROPOSTA COMPLETA', 14, 20);
-
-    // Dados gerais compactos (3 linhas com frete e vencimento)
-    autoTable(doc, {
-      startY: 25,
-      head: [['DADOS GERAIS']],
-      body: [
-        [
-          `COD: ${cod}  |  Data: ${new Date(pricing.date).toLocaleString('pt-BR')}  |  Cliente: ${pricing.factors?.client?.name || 'N/A'}  |  Agente: ${pricing.factors?.agent?.name || 'N/A'}`,
-        ],
-        [
-          `Status: ${pricing.status}  |  Aprovação: ${pricing.approvalStatus || 'Pendente'}  |  Transporte: ${freightType === 'CIF' ? `CIF — R$ ${freightValue.toFixed(2)}/ton` : 'FOB'}  |  Vencimento: ${dueDate}`,
-        ],
-      ],
-      styles: { fontSize: 8, cellPadding: 2 },
-      headStyles: { fillColor: [26, 26, 46], fontSize: 8, fontStyle: 'bold' },
-    });
-
-    let currentY = (doc as any).lastAutoTable.finalY + 6;
-
-    // Iterate over calculations
-    const calcs =
-      pricing.calculations && pricing.calculations.length > 0 ? pricing.calculations : [pricing];
-
-    calcs.forEach((calc, idx) => {
-      const calcSummary = getCalculationSummary(calc);
-      const calcMaterials = getCalculationMaterials(calc);
-      if (idx > 0 && currentY > 230) {
-        doc.addPage();
-        currentY = 15;
-      }
-
-      doc.setFontSize(11);
+      // Título compacto
+      doc.setFontSize(16);
       doc.setFont(undefined as any, 'bold');
-      doc.text(`Fórmula: ${getCalculationFormulaLabel(calc)}`, 14, currentY);
-      currentY += 5;
+      doc.text(appSettings.companyName, 14, 15);
+      doc.setFontSize(9);
+      doc.setFont(undefined as any, 'normal');
+      doc.text('PROPOSTA COMPLETA', 14, 20);
 
-      // Products - novo layout com Frete
-      const productsData = calcMaterials
-        .filter((p) => p.quantity > 0)
-        .map((p) => [
-          p.name,
-          freightType,
-          (p.quantity / 1000).toFixed(2),
-          `R$ ${Number(p.price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-          freightType === 'CIF' ? `R$ ${freightValue.toFixed(0)}` : 'R$ 0',
-          `R$ ${((p.quantity / 1000) * Number(p.price) + (p.quantity / 1000) * freightValue).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-        ]);
-
+      // Dados gerais compactos (3 linhas com frete e vencimento)
       autoTable(doc, {
-        startY: currentY,
-        head: [['Produto', 'Frete', 'Qtd(ton)', 'Preço/Ton', 'Frete/Ton', 'Total']],
-        body: productsData,
-        styles: { fontSize: 8, cellPadding: 2 },
-        headStyles: { fillColor: [26, 26, 46], fontSize: 8, fontStyle: 'bold' },
-        columnStyles: {
-          0: { cellWidth: 50 },
-          1: { cellWidth: 18, halign: 'center' as const },
-          2: { cellWidth: 22, halign: 'right' as const },
-          3: { cellWidth: 30, halign: 'right' as const },
-          4: { cellWidth: 28, halign: 'right' as const },
-          5: { cellWidth: 32, halign: 'right' as const },
-        },
-      });
-
-      currentY = (doc as any).lastAutoTable.finalY + 4;
-
-      // Resumo compacto
-      autoTable(doc, {
-        startY: currentY,
-        head: [['Resumo', 'Valor']],
+        startY: 25,
+        head: [['DADOS GERAIS']],
         body: [
-          ['Custo Base', `R$ ${Number(calcSummary.baseCost).toFixed(2)}`],
-          ['Preço Final/ton', `R$ ${Number(calcSummary.finalPrice).toFixed(2)}`],
           [
-            'N-P-K Real',
-            formatNPK(
-              calc.formula,
-              calcSummary.resultingN || 0,
-              calcSummary.resultingP || 0,
-              calcSummary.resultingK || 0
-            ),
+            `COD: ${cod}  |  Data: ${new Date(pricing.date).toLocaleString('pt-BR')}  |  Cliente: ${pricing.factors?.client?.name || 'N/A'}  |  Agente: ${pricing.factors?.agent?.name || 'N/A'}`,
+          ],
+          [
+            `Status: ${pricing.status}  |  Aprovação: ${pricing.approvalStatus || 'Pendente'}  |  Transporte: ${freightType === 'CIF' ? `CIF — R$ ${freightValue.toFixed(2)}/ton` : 'FOB'}  |  Vencimento: ${dueDate}`,
           ],
         ],
         styles: { fontSize: 8, cellPadding: 2 },
         headStyles: { fillColor: [26, 26, 46], fontSize: 8, fontStyle: 'bold' },
       });
 
-      currentY = (doc as any).lastAutoTable.finalY + 8;
+      let currentY = (doc as any).lastAutoTable.finalY + 6;
 
-      // Rentabilidade (se existir)
-      const pa = (calc as any).profitabilityAnalysis;
-      if (pa) {
-        const isPosRent = pa.profitability >= 0;
-        if (currentY > 220) {
+      // Iterate over calculations
+      const calcs =
+        pricing.calculations && pricing.calculations.length > 0 ? pricing.calculations : [pricing];
+
+      calcs.forEach((calc, idx) => {
+        const calcSummary = getCalculationSummary(calc);
+        const calcMaterials = getCalculationMaterials(calc);
+        if (idx > 0 && currentY > 230) {
           doc.addPage();
           currentY = 15;
         }
 
+        doc.setFontSize(11);
+        doc.setFont(undefined as any, 'bold');
+        doc.text(`Fórmula: ${getCalculationFormulaLabel(calc)}`, 14, currentY);
+        currentY += 5;
+
+        // Products - novo layout com Frete
+        const productsData = calcMaterials
+          .filter((p) => p.quantity > 0)
+          .map((p) => [
+            p.name,
+            freightType,
+            (p.quantity / 1000).toFixed(2),
+            `R$ ${Number(p.price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+            freightType === 'CIF' ? `R$ ${freightValue.toFixed(0)}` : 'R$ 0',
+            `R$ ${((p.quantity / 1000) * Number(p.price) + (p.quantity / 1000) * freightValue).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+          ]);
+
         autoTable(doc, {
           startY: currentY,
-          head: [['ANÁLISE DE RENTABILIDADE']],
+          head: [['Produto', 'Frete', 'Qtd(ton)', 'Preço/Ton', 'Frete/Ton', 'Total']],
+          body: productsData,
+          styles: { fontSize: 8, cellPadding: 2 },
+          headStyles: { fillColor: [26, 26, 46], fontSize: 8, fontStyle: 'bold' },
+          columnStyles: {
+            0: { cellWidth: 50 },
+            1: { cellWidth: 18, halign: 'center' as const },
+            2: { cellWidth: 22, halign: 'right' as const },
+            3: { cellWidth: 30, halign: 'right' as const },
+            4: { cellWidth: 28, halign: 'right' as const },
+            5: { cellWidth: 32, halign: 'right' as const },
+          },
+        });
+
+        currentY = (doc as any).lastAutoTable.finalY + 4;
+
+        // Resumo compacto
+        autoTable(doc, {
+          startY: currentY,
+          head: [['Resumo', 'Valor']],
           body: [
-            ['Valor Unitário (Venda)', `R$ ${Number(pa.unitaryPrice).toFixed(2)}`],
-            [`(-) Alíquota (${pa.taxRate}%)`, `R$ ${Number(pa.taxDeduction).toFixed(2)}`],
-            ['(-) Frete', `R$ ${Number(pa.freightDeduction).toFixed(2)}`],
+            ['Custo Base', `R$ ${Number(calcSummary.baseCost).toFixed(2)}`],
+            ['Preço Final/ton', `R$ ${Number(calcSummary.finalPrice).toFixed(2)}`],
             [
-              `(-) Comissão (${pa.commissionRate}%)`,
-              `R$ ${Number(pa.commissionDeduction).toFixed(2)}`,
-            ],
-            [`(-) Juros (${pa.interestRate}%)`, `R$ ${Number(pa.interestDeduction).toFixed(2)}`],
-            ['= Receita Líquida', `R$ ${Number(pa.netRevenue).toFixed(2)}`],
-            [`(-) Custo × Fator (${pa.factor})`, `R$ ${Number(pa.baseCostAfterFactor).toFixed(2)}`],
-            [
-              `RENTABILIDADE (${Number(pa.profitabilityPercent).toFixed(2)}%)`,
-              `${isPosRent ? '+' : ''}R$ ${Number(pa.profitability).toFixed(2)}`,
-            ],
-            [
-              'Analisado por',
-              `${pa.analyzedByName} em ${new Date(pa.analyzedAt).toLocaleString('pt-BR')}`,
+              'N-P-K Real',
+              formatNPK(
+                calc.formula,
+                calcSummary.resultingN || 0,
+                calcSummary.resultingP || 0,
+                calcSummary.resultingK || 0
+              ),
             ],
           ],
           styles: { fontSize: 8, cellPadding: 2 },
+          headStyles: { fillColor: [26, 26, 46], fontSize: 8, fontStyle: 'bold' },
+        });
+
+        currentY = (doc as any).lastAutoTable.finalY + 8;
+
+        // Rentabilidade (se existir)
+        const pa = (calc as any).profitabilityAnalysis;
+        if (pa) {
+          const isPosRent = pa.profitability >= 0;
+          if (currentY > 220) {
+            doc.addPage();
+            currentY = 15;
+          }
+
+          autoTable(doc, {
+            startY: currentY,
+            head: [['ANÁLISE DE RENTABILIDADE']],
+            body: [
+              ['Valor Unitário (Venda)', `R$ ${Number(pa.unitaryPrice).toFixed(2)}`],
+              [`(-) Alíquota (${pa.taxRate}%)`, `R$ ${Number(pa.taxDeduction).toFixed(2)}`],
+              ['(-) Frete', `R$ ${Number(pa.freightDeduction).toFixed(2)}`],
+              [
+                `(-) Comissão (${pa.commissionRate}%)`,
+                `R$ ${Number(pa.commissionDeduction).toFixed(2)}`,
+              ],
+              [`(-) Juros (${pa.interestRate}%)`, `R$ ${Number(pa.interestDeduction).toFixed(2)}`],
+              ['= Receita Líquida', `R$ ${Number(pa.netRevenue).toFixed(2)}`],
+              [
+                `(-) Custo × Fator (${pa.factor})`,
+                `R$ ${Number(pa.baseCostAfterFactor).toFixed(2)}`,
+              ],
+              [
+                `RENTABILIDADE (${Number(pa.profitabilityPercent).toFixed(2)}%)`,
+                `${isPosRent ? '+' : ''}R$ ${Number(pa.profitability).toFixed(2)}`,
+              ],
+              [
+                'Analisado por',
+                `${pa.analyzedByName} em ${new Date(pa.analyzedAt).toLocaleString('pt-BR')}`,
+              ],
+            ],
+            styles: { fontSize: 8, cellPadding: 2 },
+            headStyles: {
+              fillColor: isPosRent ? [5, 150, 105] : [220, 38, 38],
+              fontSize: 8,
+              fontStyle: 'bold',
+            },
+            didParseCell: (data) => {
+              if (data.row.index === 7) {
+                data.cell.styles.fontStyle = 'bold';
+                data.cell.styles.fillColor = isPosRent ? [209, 250, 229] : [254, 226, 226];
+                data.cell.styles.textColor = isPosRent ? [5, 150, 105] : [220, 38, 38];
+              }
+            },
+          });
+          currentY = (doc as any).lastAutoTable.finalY + 8;
+        }
+      });
+
+      // Observação Comercial (grande, destaque)
+      const obs = pricing.factors?.commercialObservation || '';
+      if (obs) {
+        autoTable(doc, {
+          startY: currentY,
+          head: [['OBSERVAÇÃO COMERCIAL']],
+          body: [[obs]],
+          styles: { fontSize: 9, cellPadding: 4, halign: 'left' as const },
           headStyles: {
-            fillColor: isPosRent ? [5, 150, 105] : [220, 38, 38],
-            fontSize: 8,
+            fillColor: [245, 158, 11],
+            textColor: [0, 0, 0],
+            fontSize: 9,
             fontStyle: 'bold',
           },
-          didParseCell: (data) => {
-            if (data.row.index === 7) {
-              data.cell.styles.fontStyle = 'bold';
-              data.cell.styles.fillColor = isPosRent ? [209, 250, 229] : [254, 226, 226];
-              data.cell.styles.textColor = isPosRent ? [5, 150, 105] : [220, 38, 38];
-            }
-          },
+          bodyStyles: { minCellHeight: 20 },
         });
-        currentY = (doc as any).lastAutoTable.finalY + 8;
       }
-    });
-
-    // Observação Comercial (grande, destaque)
-    const obs = pricing.factors?.commercialObservation || '';
-    if (obs) {
-      autoTable(doc, {
-        startY: currentY,
-        head: [['OBSERVAÇÃO COMERCIAL']],
-        body: [[obs]],
-        styles: { fontSize: 9, cellPadding: 4, halign: 'left' as const },
-        headStyles: {
-          fillColor: [245, 158, 11],
-          textColor: [0, 0, 0],
-          fontSize: 9,
-          fontStyle: 'bold',
-        },
-        bodyStyles: { minCellHeight: 20 },
-      });
-    }
 
       doc.save(`proposta-completa-${cod}.pdf`);
     } catch {
@@ -573,52 +628,52 @@ export default function PricingDetailModal({
     try {
       const XLSX = await import('xlsx');
       const calcs =
-      pricing.calculations && pricing.calculations.length > 0 ? pricing.calculations : [pricing];
+        pricing.calculations && pricing.calculations.length > 0 ? pricing.calculations : [pricing];
 
-    const wsData: Array<Array<string | number>> = [
-      ['RELATÓRIO DE PRECIFICAÇÃO'],
-      ['Empresa', appSettings.companyName],
-      ['ID', pricing.id],
-      ['Data', new Date(pricing.date).toLocaleString('pt-BR')],
-      ['Status', pricing.status],
-      [''],
-      ['CLIENTE'],
-      ['Nome', pricing.factors?.client?.name || 'N/A'],
-      ['Documento', pricing.factors?.client?.document || 'N/A'],
-      [''],
-      ['AGENTE'],
-      ['Nome', pricing.factors?.agent?.name || 'N/A'],
-      [''],
-    ];
+      const wsData: Array<Array<string | number>> = [
+        ['RELATÓRIO DE PRECIFICAÇÃO'],
+        ['Empresa', appSettings.companyName],
+        ['ID', pricing.id],
+        ['Data', new Date(pricing.date).toLocaleString('pt-BR')],
+        ['Status', pricing.status],
+        [''],
+        ['CLIENTE'],
+        ['Nome', pricing.factors?.client?.name || 'N/A'],
+        ['Documento', pricing.factors?.client?.document || 'N/A'],
+        [''],
+        ['AGENTE'],
+        ['Nome', pricing.factors?.agent?.name || 'N/A'],
+        [''],
+      ];
 
-    calcs.forEach((calc, idx) => {
-      const calcSummary = getCalculationSummary(calc);
-      const calcMaterials = getCalculationMaterials(calc);
-      wsData.push(
-        [`FÓRMULA ${idx + 1}: ${getCalculationFormulaLabel(calc)}`],
-        ['COMPOSIÇÃO'],
-        ['Produto', 'Qtd (kg)', 'Preço (R$/ton)', 'Subtotal (R$)']
-      );
+      calcs.forEach((calc, idx) => {
+        const calcSummary = getCalculationSummary(calc);
+        const calcMaterials = getCalculationMaterials(calc);
+        wsData.push(
+          [`FÓRMULA ${idx + 1}: ${getCalculationFormulaLabel(calc)}`],
+          ['COMPOSIÇÃO'],
+          ['Produto', 'Qtd (kg)', 'Preço (R$/ton)', 'Subtotal (R$)']
+        );
 
-      const materials = calcMaterials.filter((p) => p.quantity > 0);
-      materials.forEach((p) => {
-        wsData.push([p.name, p.quantity, p.price, (p.quantity / 1000) * p.price]);
+        const materials = calcMaterials.filter((p) => p.quantity > 0);
+        materials.forEach((p) => {
+          wsData.push([p.name, p.quantity, p.price, (p.quantity / 1000) * p.price]);
+        });
+
+        wsData.push(
+          ['RESUMO FINANCEIRO'],
+          ['Custo Base', calcSummary.baseCost],
+          ['PREÇO FINAL', calcSummary.finalPrice],
+          ['Garantia N', calcSummary.resultingN],
+          ['Garantia P', calcSummary.resultingP],
+          ['Garantia K', calcSummary.resultingK],
+          ['']
+        );
       });
 
-      wsData.push(
-        ['RESUMO FINANCEIRO'],
-        ['Custo Base', calcSummary.baseCost],
-        ['PREÇO FINAL', calcSummary.finalPrice],
-        ['Garantia N', calcSummary.resultingN],
-        ['Garantia P', calcSummary.resultingP],
-        ['Garantia K', calcSummary.resultingK],
-        ['']
-      );
-    });
-
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Precificação');
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Precificação');
       XLSX.writeFile(
         wb,
         `Precificacao_${pricing.factors?.client?.name || 'Sem_Nome'}_${pricing.formattedCod}.xlsx`
@@ -1162,6 +1217,26 @@ export default function PricingDetailModal({
               const calcSummary = getCalculationSummary(calc);
               const calcMaterials = getCalculationMaterials(calc);
               const calcFormula = getCalculationFormulaLabel(calc);
+              const calcFactors = calc.factors || selectedPricing.factors;
+              const tons = Number(calcFactors?.totalTons) || 0;
+              const branch = branches.find((item) => item.id === calcFactors?.branchId);
+              const priceList = priceLists.find((item) => item.id === calcFactors?.priceListId);
+              const loadingLocation = loadingLocations.find(
+                (item) => item.id === calcFactors?.local_carregamento_id
+              );
+              const packagingAdjustment =
+                calcFactors?.embalagem_ajuste ||
+                ((calcFactors?.embalagem_valor || 0) > 0
+                  ? 'cobrar'
+                  : (calcFactors?.embalagem_valor || 0) < 0
+                    ? 'descontar'
+                    : 'nenhum');
+              const packagingPerTon = Number(calcFactors?.embalagem_valor) || 0;
+              const packagingTotal = packagingPerTon * tons;
+              const paymentLabel =
+                calcFactors?.paymentCondition === 'ddf'
+                  ? `${calcFactors.ddfDias || 0} DDF`
+                  : 'Data de vencimento';
 
               return (
                 <div
@@ -1177,6 +1252,121 @@ export default function PricingDetailModal({
                       <p className="text-lg font-bold text-emerald-600 font-mono">
                         R$ {Number(calcSummary.finalPrice).toFixed(2)} / ton
                       </p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="text-xs font-bold text-stone-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                      <ClipboardList className="w-3.5 h-3.5" /> Configuração comercial e logística
+                    </h4>
+                    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+                      <DetailItem
+                        label="Filial"
+                        value={branch?.name || calcFactors?.branchId || 'Não informada'}
+                      />
+                      <DetailItem
+                        label="Local de carregamento"
+                        value={
+                          loadingLocation?.nome ||
+                          calcFactors?.local_carregamento_id ||
+                          'Não informado'
+                        }
+                      />
+                      <DetailItem
+                        label="Lista de preço"
+                        value={priceList?.name || calcFactors?.priceListId || 'Não informada'}
+                      />
+                      <DetailItem
+                        label="Quantidade"
+                        value={`${tons.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} t`}
+                      />
+                      <DetailItem
+                        label="Agente"
+                        value={selectedPricing.factors?.agent?.name || 'Sem agente'}
+                      />
+                      <DetailItem
+                        label="Comissão"
+                        value={`${Number(calcFactors?.commission || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}% · R$ ${Number(calcSummary.commissionValue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/t`}
+                      />
+                      <DetailItem
+                        label="Embalagem"
+                        value={calcFactors?.embalagem_nome || 'Sem embalagem'}
+                      />
+                      <DetailItem
+                        label="Ajuste da embalagem"
+                        tone={
+                          packagingAdjustment === 'cobrar'
+                            ? 'positive'
+                            : packagingAdjustment === 'descontar'
+                              ? 'negative'
+                              : 'default'
+                        }
+                        value={
+                          packagingAdjustment === 'nenhum'
+                            ? 'Sem cobrança ou desconto'
+                            : `${packagingAdjustment === 'cobrar' ? 'Cobrado' : 'Concedido desconto'}: R$ ${Math.abs(packagingPerTon).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/t · Total R$ ${Math.abs(packagingTotal).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                        }
+                      />
+                      <DetailItem
+                        label="Fator"
+                        value={Number(calcFactors?.factor || 0).toLocaleString('pt-BR', {
+                          maximumFractionDigits: 4,
+                        })}
+                      />
+                      <DetailItem
+                        label="Margem"
+                        value={`R$ ${Number(calcFactors?.margin || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/t`}
+                      />
+                      <DetailItem
+                        label="Desconto comercial"
+                        tone={Number(calcFactors?.discount || 0) > 0 ? 'negative' : 'default'}
+                        value={`R$ ${Number(calcFactors?.discount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/t`}
+                      />
+                      <DetailItem
+                        label="Alíquota"
+                        value={`${Number(calcFactors?.taxRate || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}% · R$ ${Number(calcSummary.taxValue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/t`}
+                      />
+                      <DetailItem
+                        label="Juros utilizados"
+                        value={`${Number(calcFactors?.monthlyInterestRate || 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 })}% a.m. · R$ ${Number(calcSummary.interestValue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/t`}
+                      />
+                      <DetailItem label="Condição financeira" value={paymentLabel} />
+                      <DetailItem
+                        label="Data de carregamento"
+                        value={
+                          calcFactors?.dataCarregamento
+                            ? formatDatePtBr(calcFactors.dataCarregamento)
+                            : 'Não informada'
+                        }
+                      />
+                      <DetailItem
+                        label="Vencimento"
+                        value={
+                          calcFactors?.dueDate
+                            ? formatDatePtBr(calcFactors.dueDate)
+                            : 'Não informado'
+                        }
+                      />
+                      <DetailItem
+                        label="Frete"
+                        value={`${calcFactors?.tipoFrete || 'CIF'} · R$ ${Number(calcFactors?.freight || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/t`}
+                      />
+                      <DetailItem
+                        label="Cotação de frete"
+                        value={calcFactors?.cotacaoFreteNumero || 'Não vinculada'}
+                      />
+                      <DetailItem
+                        label="Isenção do mês atual"
+                        value={calcFactors?.exemptCurrentMonth ? 'Sim' : 'Não'}
+                      />
+                      <DetailItem
+                        label="Valor total da fórmula"
+                        value={Number(calcSummary.totalSaleValue || 0).toLocaleString('pt-BR', {
+                          style: 'currency',
+                          currency: 'BRL',
+                        })}
+                        tone="positive"
+                      />
                     </div>
                   </div>
 
