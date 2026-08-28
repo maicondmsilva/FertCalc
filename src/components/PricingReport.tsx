@@ -1,9 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { PricingRecord, User, AppSettings, Branch } from '../types';
 import { getPricingRecords, getAppSettings, getBranches, getUsers } from '../services/db';
-import { BarChart3, FileText, Search, Filter, TrendingUp, TrendingDown, DollarSign, Package, CheckCircle, XCircle, Clock, Trash2, Download } from 'lucide-react';
-import { getPricingTotalTons, getPricingTotalSaleValue, getPricingAverageCommissionRate } from '../utils/pricingMetrics';
+import {
+  BarChart3,
+  FileText,
+  Search,
+  Filter,
+  CheckCircle,
+  XCircle,
+  Clock,
+  Trash2,
+  Download,
+  LayoutGrid,
+  Table2,
+} from 'lucide-react';
+import {
+  getPricingTotalTons,
+  getPricingTotalSaleValue,
+  getPricingAverageCommissionRate,
+} from '../utils/pricingMetrics';
 import { formatPricingCode } from './CommissionReport';
+import { filterPricingRecords, getPricingReportPeriodLabel } from '../utils/pricingReportFilters';
 
 const PricingDetailModal = React.lazy(() => import('./PricingDetailModal'));
 
@@ -17,7 +34,10 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
   const [pricings, setPricings] = useState<PricingRecord[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [users, setUsers] = useState<User[]>([]);
-  const [appSettings, setAppSettings] = useState<AppSettings>({ companyName: 'FertCalc Pro', companyLogo: '' });
+  const [appSettings, setAppSettings] = useState<AppSettings>({
+    companyName: 'FertCalc Pro',
+    companyLogo: '',
+  });
   const [loading, setLoading] = useState(true);
 
   // Filtros
@@ -26,6 +46,7 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
   const [approvalFilter, setApprovalFilter] = useState('');
   const [branchFilter, setBranchFilter] = useState('');
   const [userFilter, setUserFilter] = useState('');
+  const [monthFilter, setMonthFilter] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('table');
@@ -36,20 +57,27 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
     const loadData = async () => {
       setLoading(true);
       const [rawPricings, settings, allBranches, allUsers] = await Promise.all([
-        getPricingRecords(), getAppSettings(), getBranches(), getUsers()
+        getPricingRecords(),
+        getAppSettings(),
+        getBranches(),
+        getUsers(),
       ]);
 
       if (settings) setAppSettings(settings);
       setBranches(allBranches);
-      setUsers(allUsers.filter(u => u.role === 'user' || u.role === 'manager'));
+      setUsers(allUsers.filter((u) => u.role === 'user' || u.role === 'manager'));
 
       // Filter pricings by user role
       let filtered = rawPricings;
       if (currentUser.role === 'manager') {
         const managedIds = currentUser.managedUserIds || [];
-        filtered = rawPricings.filter(p => p.userId === currentUser.id || managedIds.includes(p.userId));
+        filtered = rawPricings.filter(
+          (p) => p.userId === currentUser.id || managedIds.includes(p.userId)
+        );
       } else if (currentUser.role === 'user') {
-        filtered = rawPricings.filter(p => p.userId === currentUser.id || p.transferToUserId === currentUser.id);
+        filtered = rawPricings.filter(
+          (p) => p.userId === currentUser.id || p.transferToUserId === currentUser.id
+        );
       }
       setPricings(filtered);
       setLoading(false);
@@ -57,61 +85,68 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
     loadData();
   }, [currentUser]);
 
-  const filteredPricings = pricings.filter(p => {
-    const clientName = p.factors?.client?.name || '';
-    const agentName = p.factors?.agent?.name || '';
-    const userName = p.userName || '';
-    const matchesSearch = !search ||
-      clientName.toLowerCase().includes(search.toLowerCase()) ||
-      agentName.toLowerCase().includes(search.toLowerCase()) ||
-      userName.toLowerCase().includes(search.toLowerCase()) ||
-      (p.formattedCod || '').toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = !statusFilter || p.status === statusFilter;
-    const matchesApproval = !approvalFilter || p.approvalStatus === approvalFilter;
-    const matchesBranch = !branchFilter || p.factors?.branchId === branchFilter;
-    const matchesUser = !userFilter || p.userId === userFilter;
-    const pDate = new Date(p.date);
-    const start = startDate ? new Date(startDate) : null;
-    const end = endDate ? new Date(endDate + 'T23:59:59') : null;
-    const matchesDate = (!start || pDate >= start) && (!end || pDate <= end);
-    return matchesSearch && matchesStatus && matchesApproval && matchesBranch && matchesUser && matchesDate;
-  });
+  const reportFilters = {
+    search,
+    status: statusFilter,
+    approval: approvalFilter,
+    branchId: branchFilter,
+    userId: userFilter,
+    month: monthFilter,
+    startDate,
+    endDate,
+  };
+  const filteredPricings = filterPricingRecords(pricings, reportFilters);
 
   // Estatísticas
   const stats = {
     total: filteredPricings.length,
-    emAndamento: filteredPricings.filter(p => p.status === 'Em Andamento').length,
-    fechadas: filteredPricings.filter(p => p.status === 'Fechada').length,
-    perdidas: filteredPricings.filter(p => p.status === 'Perdida').length,
-    excluidas: filteredPricings.filter(p => p.status === 'Excluída').length,
-    aprovadas: filteredPricings.filter(p => p.approvalStatus === 'Aprovada').length,
-    reprovadas: filteredPricings.filter(p => p.approvalStatus === 'Reprovada').length,
-    pendentes: filteredPricings.filter(p => p.approvalStatus === 'Pendente').length,
-    ticketMedioFechadas: filteredPricings.filter(p => p.status === 'Fechada').length > 0
-      ? filteredPricings.filter(p => p.status === 'Fechada').reduce((s, p) => s + getPricingTotalSaleValue(p), 0) /
-        filteredPricings.filter(p => p.status === 'Fechada').reduce((s, p) => s + getPricingTotalTons(p), 0)
-      : 0,
-    totalFaturamentoFechado: filteredPricings.filter(p => p.status === 'Fechada').reduce((s, p) => s + getPricingTotalSaleValue(p), 0),
-    totalTonsFechadas: filteredPricings.filter(p => p.status === 'Fechada').reduce((s, p) => s + getPricingTotalTons(p), 0),
-    taxaConversao: filteredPricings.filter(p => p.status !== 'Excluída').length > 0
-      ? ((filteredPricings.filter(p => p.status === 'Fechada').length / filteredPricings.filter(p => p.status !== 'Excluída').length) * 100).toFixed(1)
-      : '0.0',
+    emAndamento: filteredPricings.filter((p) => p.status === 'Em Andamento').length,
+    fechadas: filteredPricings.filter((p) => p.status === 'Fechada').length,
+    perdidas: filteredPricings.filter((p) => p.status === 'Perdida').length,
+    excluidas: filteredPricings.filter((p) => p.status === 'Excluída').length,
+    aprovadas: filteredPricings.filter((p) => p.approvalStatus === 'Aprovada').length,
+    reprovadas: filteredPricings.filter((p) => p.approvalStatus === 'Reprovada').length,
+    pendentes: filteredPricings.filter((p) => p.approvalStatus === 'Pendente').length,
+    ticketMedioFechadas: 0,
+    totalFaturamentoFechado: filteredPricings
+      .filter((p) => p.status === 'Fechada')
+      .reduce((s, p) => s + getPricingTotalSaleValue(p), 0),
+    totalTonsFechadas: filteredPricings
+      .filter((p) => p.status === 'Fechada')
+      .reduce((s, p) => s + getPricingTotalTons(p), 0),
+    taxaConversao:
+      filteredPricings.filter((p) => p.status !== 'Excluída').length > 0
+        ? (
+            (filteredPricings.filter((p) => p.status === 'Fechada').length /
+              filteredPricings.filter((p) => p.status !== 'Excluída').length) *
+            100
+          ).toFixed(1)
+        : '0.0',
   };
+  stats.ticketMedioFechadas =
+    stats.totalTonsFechadas > 0 ? stats.totalFaturamentoFechado / stats.totalTonsFechadas : 0;
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'Fechada': return 'bg-emerald-100 text-emerald-700';
-      case 'Perdida': return 'bg-red-100 text-red-700';
-      case 'Excluída': return 'bg-stone-100 text-stone-500';
-      default: return 'bg-blue-100 text-blue-700';
+      case 'Fechada':
+        return 'bg-emerald-100 text-emerald-700';
+      case 'Perdida':
+        return 'bg-red-100 text-red-700';
+      case 'Excluída':
+        return 'bg-stone-100 text-stone-500';
+      default:
+        return 'bg-blue-100 text-blue-700';
     }
   };
 
   const getApprovalColor = (status: string) => {
     switch (status) {
-      case 'Aprovada': return 'bg-emerald-100 text-emerald-700';
-      case 'Reprovada': return 'bg-red-100 text-red-700';
-      default: return 'bg-amber-100 text-amber-700';
+      case 'Aprovada':
+        return 'bg-emerald-100 text-emerald-700';
+      case 'Reprovada':
+        return 'bg-red-100 text-red-700';
+      default:
+        return 'bg-amber-100 text-amber-700';
     }
   };
 
@@ -119,60 +154,116 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
     setExporting('pdf');
     try {
       const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
-      import('jspdf'),
-      import('jspdf-autotable'),
-    ]);
-    const doc = new jsPDF({ orientation: 'landscape' });
-    const pageWidth = doc.internal.pageSize.getWidth();
+        import('jspdf'),
+        import('jspdf-autotable'),
+      ]);
+      const doc = new jsPDF({ orientation: 'landscape' });
+      const pageWidth = doc.internal.pageSize.getWidth();
 
-    if (appSettings.companyLogo) {
-      doc.addImage(appSettings.companyLogo, 'PNG', 10, 8, 18, 18);
-    }
-    doc.setFontSize(16);
-    doc.setFont(undefined, 'bold');
-    doc.text(appSettings.companyName, appSettings.companyLogo ? 32 : 10, 16);
-    doc.setFontSize(10);
-    doc.setFont(undefined, 'normal');
-    doc.text('Relatório de Precificação', appSettings.companyLogo ? 32 : 10, 22);
-    doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')} | Por: ${currentUser.name}`, 10, 30);
-    doc.line(10, 33, pageWidth - 10, 33);
+      if (appSettings.companyLogo) {
+        doc.addImage(appSettings.companyLogo, 'PNG', 10, 8, 18, 18);
+      }
+      doc.setFontSize(16);
+      doc.setFont(undefined, 'bold');
+      doc.text(appSettings.companyName, appSettings.companyLogo ? 32 : 10, 16);
+      doc.setFontSize(10);
+      doc.setFont(undefined, 'normal');
+      doc.text('Relatório de Precificação', appSettings.companyLogo ? 32 : 10, 22);
+      doc.text(
+        `Gerado em: ${new Date().toLocaleString('pt-BR')} | Por: ${currentUser.name}`,
+        10,
+        30
+      );
+      doc.line(10, 33, pageWidth - 10, 33);
 
-    // Stats
-    doc.setFontSize(9);
-    doc.setFont(undefined, 'bold');
-    doc.text([
-      `Total: ${stats.total}`,
-      `Fechadas: ${stats.fechadas}`,
-      `Em Andamento: ${stats.emAndamento}`,
-      `Perdidas: ${stats.perdidas}`,
-      `Aprovadas: ${stats.aprovadas}`,
-      `Reprovadas: ${stats.reprovadas}`,
-      `Taxa de Conversão: ${stats.taxaConversao}%`,
-      `Faturamento Fechado: R$ ${stats.totalFaturamentoFechado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-    ].join('   |   '), 10, 40, { maxWidth: pageWidth - 20 });
+      const branchName = branches.find((branch) => branch.id === branchFilter)?.name || 'Todas';
+      const sellerName = users.find((user) => user.id === userFilter)?.name || 'Todos';
+      const filterSummary = [
+        `Período: ${getPricingReportPeriodLabel(reportFilters)}`,
+        `Filial: ${branchName}`,
+        `Vendedor: ${sellerName}`,
+        `Status: ${statusFilter || 'Todos'}`,
+        `Aprovação: ${approvalFilter || 'Todas'}`,
+        search ? `Busca: ${search}` : '',
+      ]
+        .filter(Boolean)
+        .join(' | ');
+      doc.setFontSize(8);
+      const filterLines = doc.splitTextToSize(filterSummary, pageWidth - 20);
+      doc.text(filterLines, 10, 38);
+      const statsY = 38 + filterLines.length * 4 + 3;
 
-    autoTable(doc, {
-      startY: 48,
-      head: [['COD', 'Data', 'Vendedor', 'Cliente', 'Agent', '% Age', 'Fórmulas', 'Tons', 'Preço Médio/Ton', 'Valor Total', 'Status', 'Aprovação']],
-      body: filteredPricings.map(p => [
-        formatPricingCode(p.formattedCod),
-        new Date(p.date).toLocaleDateString('pt-BR'),
-        p.userName || '---',
-        p.factors?.client?.name || '---',
-        p.factors?.agent?.name || '---',
-        getPricingAverageCommissionRate(p).toFixed(1) + '%',
-        (p.calculations?.length || 0) + ' f.',
-        getPricingTotalTons(p).toFixed(1) + ' t',
-        `R$ ${(getPricingTotalTons(p) > 0 ? getPricingTotalSaleValue(p) / getPricingTotalTons(p) : 0).toFixed(2)}`,
-        `R$ ${getPricingTotalSaleValue(p).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-        p.status,
-        p.approvalStatus || 'Pendente',
-      ]),
-      theme: 'striped',
-      headStyles: { fillColor: [28, 25, 23], fontSize: 7 },
-      bodyStyles: { fontSize: 7 },
-      columnStyles: { 0: { cellWidth: 15 } }
-    });
+      // Stats
+      doc.setFontSize(9);
+      doc.setFont(undefined, 'bold');
+      doc.text(
+        [
+          `Total: ${stats.total}`,
+          `Fechadas: ${stats.fechadas}`,
+          `Em Andamento: ${stats.emAndamento}`,
+          `Perdidas: ${stats.perdidas}`,
+          `Aprovadas: ${stats.aprovadas}`,
+          `Reprovadas: ${stats.reprovadas}`,
+          `Taxa de Conversão: ${stats.taxaConversao}%`,
+          `Faturamento Fechado: R$ ${stats.totalFaturamentoFechado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+        ].join('   |   '),
+        10,
+        statsY,
+        { maxWidth: pageWidth - 20 }
+      );
+
+      autoTable(doc, {
+        startY: statsY + 8,
+        head: [
+          [
+            'COD',
+            'Data',
+            'Filial',
+            'Vendedor',
+            'Cliente',
+            'Agente',
+            '% Ag.',
+            'Fórmulas',
+            'Tons',
+            'Preço/Ton',
+            'Valor Total',
+            'Status',
+            'Aprovação',
+          ],
+        ],
+        body: filteredPricings.map((p) => [
+          formatPricingCode(p.formattedCod),
+          new Date(p.date).toLocaleDateString('pt-BR'),
+          branches.find((b) => b.id === p.factors?.branchId)?.name || '---',
+          p.userName || '---',
+          p.factors?.client?.name || '---',
+          p.factors?.agent?.name || '---',
+          getPricingAverageCommissionRate(p).toFixed(1) + '%',
+          (p.calculations?.length || 0) + ' f.',
+          getPricingTotalTons(p).toFixed(1) + ' t',
+          `R$ ${(getPricingTotalTons(p) > 0 ? getPricingTotalSaleValue(p) / getPricingTotalTons(p) : 0).toFixed(2)}`,
+          `R$ ${getPricingTotalSaleValue(p).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+          p.status,
+          p.approvalStatus || 'Pendente',
+        ]),
+        theme: 'striped',
+        headStyles: { fillColor: [28, 25, 23], fontSize: 7 },
+        bodyStyles: { fontSize: 7 },
+        columnStyles: { 0: { cellWidth: 15 } },
+        margin: { top: 12, right: 8, bottom: 12, left: 8 },
+        didDrawPage: () => {
+          const pageNumber = doc.getNumberOfPages();
+          doc.setFont(undefined, 'normal');
+          doc.setFontSize(7);
+          doc.setTextColor(110);
+          doc.text(
+            `FertCalc | Página ${pageNumber}`,
+            pageWidth - 8,
+            doc.internal.pageSize.getHeight() - 5,
+            { align: 'right' }
+          );
+        },
+      });
 
       doc.save(`Relatorio_Precificacao_${new Date().getTime()}.pdf`);
     } finally {
@@ -185,29 +276,57 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
     try {
       const XLSX = await import('xlsx');
       const wsData = [
-      ['RELATÓRIO DE PRECIFICAÇÃO', appSettings.companyName],
-      ['Gerado em', new Date().toLocaleString('pt-BR'), 'Por', currentUser.name],
-      [],
-      ['COD', 'Data', 'Vendedor', 'Cliente', 'Agente', '% Comissao Agent', 'Filial', 'Total Fórmulas', 'Toneladas', 'Preço Médio/Ton', 'Valor Total', 'Status', 'Aprovação'],
-      ...filteredPricings.map(p => [
-        formatPricingCode(p.formattedCod),
-        new Date(p.date).toLocaleDateString('pt-BR'),
-        p.userName || '---',
-        p.factors?.client?.name || '---',
-        p.factors?.agent?.name || '---',
-        getPricingAverageCommissionRate(p),
-        branches.find(b => b.id === p.factors?.branchId)?.name || '---',
-        p.calculations?.length || 0,
-        getPricingTotalTons(p),
-        getPricingTotalTons(p) > 0 ? getPricingTotalSaleValue(p) / getPricingTotalTons(p) : 0,
-        getPricingTotalSaleValue(p),
-        p.status,
-        p.approvalStatus || 'Pendente',
-      ])
-    ];
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Precificações');
+        ['RELATÓRIO DE PRECIFICAÇÃO', appSettings.companyName],
+        ['Gerado em', new Date().toLocaleString('pt-BR'), 'Por', currentUser.name],
+        [
+          'Período',
+          getPricingReportPeriodLabel(reportFilters),
+          'Filial',
+          branches.find((b) => b.id === branchFilter)?.name || 'Todas',
+        ],
+        [
+          'Vendedor',
+          users.find((u) => u.id === userFilter)?.name || 'Todos',
+          'Status',
+          statusFilter || 'Todos',
+          'Aprovação',
+          approvalFilter || 'Todas',
+        ],
+        [],
+        [
+          'COD',
+          'Data',
+          'Vendedor',
+          'Cliente',
+          'Agente',
+          '% Comissao Agent',
+          'Filial',
+          'Total Fórmulas',
+          'Toneladas',
+          'Preço Médio/Ton',
+          'Valor Total',
+          'Status',
+          'Aprovação',
+        ],
+        ...filteredPricings.map((p) => [
+          formatPricingCode(p.formattedCod),
+          new Date(p.date).toLocaleDateString('pt-BR'),
+          p.userName || '---',
+          p.factors?.client?.name || '---',
+          p.factors?.agent?.name || '---',
+          getPricingAverageCommissionRate(p),
+          branches.find((b) => b.id === p.factors?.branchId)?.name || '---',
+          p.calculations?.length || 0,
+          getPricingTotalTons(p),
+          getPricingTotalTons(p) > 0 ? getPricingTotalSaleValue(p) / getPricingTotalTons(p) : 0,
+          getPricingTotalSaleValue(p),
+          p.status,
+          p.approvalStatus || 'Pendente',
+        ]),
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Precificações');
       XLSX.writeFile(wb, `Relatorio_Precificacao_${new Date().getTime()}.xlsx`);
     } finally {
       setExporting(null);
@@ -215,8 +334,14 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
   };
 
   const clearFilters = () => {
-    setSearch(''); setStatusFilter(''); setApprovalFilter('');
-    setBranchFilter(''); setUserFilter(''); setStartDate(''); setEndDate('');
+    setSearch('');
+    setStatusFilter('');
+    setApprovalFilter('');
+    setBranchFilter('');
+    setUserFilter('');
+    setMonthFilter('');
+    setStartDate('');
+    setEndDate('');
   };
 
   if (loading) {
@@ -236,7 +361,9 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
             <BarChart3 className="w-8 h-8 text-emerald-600" />
             Relatório de Precificação
           </h1>
-          <p className="text-stone-500 mt-1 text-sm">Análise completa de todas as precificações do sistema</p>
+          <p className="text-stone-500 mt-1 text-sm">
+            Análise completa de todas as precificações do sistema
+          </p>
         </div>
         <div className="flex gap-2">
           <button
@@ -268,7 +395,9 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
             <p className="text-xs font-bold text-emerald-600 uppercase tracking-wide">Fechadas</p>
           </div>
           <p className="text-3xl font-black text-emerald-700">{stats.fechadas}</p>
-          <p className="text-[10px] text-emerald-500 mt-1 font-medium">{stats.taxaConversao}% conversão</p>
+          <p className="text-[10px] text-emerald-500 mt-1 font-medium">
+            {stats.taxaConversao}% conversão
+          </p>
         </div>
         <div className="bg-white rounded-xl p-4 shadow-sm border border-blue-100">
           <div className="flex items-center gap-1 mb-1">
@@ -296,19 +425,33 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
       {/* Financial Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-gradient-to-br from-emerald-600 to-emerald-800 rounded-xl p-5 text-white shadow-lg shadow-emerald-200">
-          <p className="text-xs font-bold text-emerald-200 uppercase tracking-wide mb-1">Faturamento Fechado</p>
-          <p className="text-2xl font-black">R$ {stats.totalFaturamentoFechado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+          <p className="text-xs font-bold text-emerald-200 uppercase tracking-wide mb-1">
+            Faturamento Fechado
+          </p>
+          <p className="text-2xl font-black">
+            R$ {stats.totalFaturamentoFechado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          </p>
         </div>
         <div className="bg-white rounded-xl p-5 shadow-sm border border-stone-200">
-          <p className="text-xs font-bold text-stone-400 uppercase tracking-wide mb-1">Toneladas Fechadas</p>
-          <p className="text-2xl font-black text-stone-800">{stats.totalTonsFechadas.toLocaleString('pt-BR', { minimumFractionDigits: 1 })} t</p>
+          <p className="text-xs font-bold text-stone-400 uppercase tracking-wide mb-1">
+            Toneladas Fechadas
+          </p>
+          <p className="text-2xl font-black text-stone-800">
+            {stats.totalTonsFechadas.toLocaleString('pt-BR', { minimumFractionDigits: 1 })} t
+          </p>
         </div>
         <div className="bg-white rounded-xl p-5 shadow-sm border border-stone-200">
-          <p className="text-xs font-bold text-stone-400 uppercase tracking-wide mb-1">Ticket Médio/Ton (Fechadas)</p>
-          <p className="text-2xl font-black text-stone-800">R$ {stats.ticketMedioFechadas.toFixed(2)}</p>
+          <p className="text-xs font-bold text-stone-400 uppercase tracking-wide mb-1">
+            Ticket Médio/Ton (Fechadas)
+          </p>
+          <p className="text-2xl font-black text-stone-800">
+            R$ {stats.ticketMedioFechadas.toFixed(2)}
+          </p>
         </div>
         <div className="bg-white rounded-xl p-5 shadow-sm border border-stone-200">
-          <p className="text-xs font-bold text-stone-400 uppercase tracking-wide mb-1">Aprovações</p>
+          <p className="text-xs font-bold text-stone-400 uppercase tracking-wide mb-1">
+            Aprovações
+          </p>
           <div className="flex items-end justify-between">
             <div>
               <span className="text-lg font-black text-emerald-600">{stats.aprovadas}</span>
@@ -333,44 +476,132 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 w-4 h-4" />
             <input
               type="text"
-              placeholder="Buscar cliente, vendedor, cod..."
+              placeholder="Buscar código, cliente, IE, vendedor ou fórmula..."
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-9 pr-4 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
             />
           </div>
-          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+          >
             <option value="">Todos os Status</option>
             <option value="Em Andamento">Em Andamento</option>
             <option value="Fechada">Fechada</option>
             <option value="Perdida">Perdida</option>
             <option value="Excluída">Excluída</option>
           </select>
-          <select value={approvalFilter} onChange={e => setApprovalFilter(e.target.value)} className="px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+          <select
+            value={approvalFilter}
+            onChange={(e) => setApprovalFilter(e.target.value)}
+            className="px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+          >
             <option value="">Todas Aprovações</option>
             <option value="Pendente">Pendente</option>
             <option value="Aprovada">Aprovada</option>
             <option value="Reprovada">Reprovada</option>
           </select>
-          {(currentUser.role === 'admin' || currentUser.role === 'master' || currentUser.role === 'manager') && (
-            <select value={userFilter} onChange={e => setUserFilter(e.target.value)} className="px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+          <select
+            value={branchFilter}
+            onChange={(e) => setBranchFilter(e.target.value)}
+            className="px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+          >
+            <option value="">Todas as Filiais</option>
+            {branches.map((branch) => (
+              <option key={branch.id} value={branch.id}>
+                {branch.name}
+              </option>
+            ))}
+          </select>
+          {(currentUser.role === 'admin' ||
+            currentUser.role === 'master' ||
+            currentUser.role === 'manager') && (
+            <select
+              value={userFilter}
+              onChange={(e) => setUserFilter(e.target.value)}
+              className="px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+            >
               <option value="">Todos Vendedores</option>
-              {users.map(u => <option key={u.id} value={u.id}>{u.name} (@{u.nickname})</option>)}
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name} (@{u.nickname})
+                </option>
+              ))}
             </select>
           )}
           <div className="flex items-center gap-1">
+            <label className="text-xs font-bold text-stone-400 uppercase">Mês:</label>
+            <input
+              type="month"
+              value={monthFilter}
+              onChange={(e) => {
+                setMonthFilter(e.target.value);
+                if (e.target.value) {
+                  setStartDate('');
+                  setEndDate('');
+                }
+              }}
+              className="px-2 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+            />
+          </div>
+          <div className="flex items-center gap-1">
             <label className="text-xs font-bold text-stone-400 uppercase">De:</label>
-            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="px-2 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none" />
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                if (e.target.value) setMonthFilter('');
+              }}
+              className="px-2 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+            />
           </div>
           <div className="flex items-center gap-1">
             <label className="text-xs font-bold text-stone-400 uppercase">Até:</label>
-            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="px-2 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none" />
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => {
+                setEndDate(e.target.value);
+                if (e.target.value) setMonthFilter('');
+              }}
+              className="px-2 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+            />
           </div>
-          <button onClick={clearFilters} className="px-3 py-2 bg-stone-100 text-stone-600 text-sm font-bold rounded-lg hover:bg-stone-200 transition-colors flex items-center gap-1">
+          <button
+            onClick={clearFilters}
+            className="px-3 py-2 bg-stone-100 text-stone-600 text-sm font-bold rounded-lg hover:bg-stone-200 transition-colors flex items-center gap-1"
+          >
             <Filter className="w-3.5 h-3.5" /> Limpar
           </button>
         </div>
-        <p className="text-xs text-stone-400 mt-2 font-medium">{filteredPricings.length} precificações encontradas</p>
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <p className="text-xs text-stone-400 font-medium">
+            {filteredPricings.length} precificações encontradas ·{' '}
+            {getPricingReportPeriodLabel(reportFilters)}
+          </p>
+          <div
+            className="inline-flex rounded-lg border border-stone-200 bg-stone-50 p-1"
+            aria-label="Modo de visualização"
+          >
+            <button
+              onClick={() => setViewMode('table')}
+              className={`rounded-md p-1.5 ${viewMode === 'table' ? 'bg-white text-emerald-700 shadow-sm' : 'text-stone-400'}`}
+              title="Tabela"
+            >
+              <Table2 className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => setViewMode('cards')}
+              className={`rounded-md p-1.5 ${viewMode === 'cards' ? 'bg-white text-emerald-700 shadow-sm' : 'text-stone-400'}`}
+              title="Cards"
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Table */}
@@ -395,8 +626,11 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100 bg-white">
-                {filteredPricings.map(p => {
-                  const avgPrice = getPricingTotalTons(p) > 0 ? getPricingTotalSaleValue(p) / getPricingTotalTons(p) : 0;
+                {filteredPricings.map((p) => {
+                  const avgPrice =
+                    getPricingTotalTons(p) > 0
+                      ? getPricingTotalSaleValue(p) / getPricingTotalTons(p)
+                      : 0;
                   return (
                     <tr key={p.id} className="hover:bg-stone-50 transition-colors">
                       <td className="px-4 py-3 text-center">
@@ -415,9 +649,7 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
                       <td className="px-4 py-3 text-stone-800 font-medium text-sm">
                         {p.factors?.client?.name || '---'}
                       </td>
-                      <td className="px-4 py-3 text-stone-600 text-sm">
-                        {p.userName || '---'}
-                      </td>
+                      <td className="px-4 py-3 text-stone-600 text-sm">{p.userName || '---'}</td>
                       <td className="px-4 py-3 text-stone-600 text-sm">
                         {p.factors?.agent?.name || '---'}
                       </td>
@@ -428,21 +660,30 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
                         {p.calculations?.length || 0}
                       </td>
                       <td className="px-4 py-3 text-emerald-700 font-bold text-sm text-right">
-                        {getPricingTotalTons(p).toLocaleString('pt-BR', { minimumFractionDigits: 1 })}
+                        {getPricingTotalTons(p).toLocaleString('pt-BR', {
+                          minimumFractionDigits: 1,
+                        })}
                       </td>
                       <td className="px-4 py-3 text-stone-600 font-bold text-sm text-right whitespace-nowrap">
                         R$ {avgPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </td>
                       <td className="px-4 py-3 text-emerald-600 font-black text-sm text-right whitespace-nowrap">
-                        R$ {getPricingTotalSaleValue(p).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        R${' '}
+                        {getPricingTotalSaleValue(p).toLocaleString('pt-BR', {
+                          minimumFractionDigits: 2,
+                        })}
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${getStatusColor(p.status)}`}>
+                        <span
+                          className={`inline-flex px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${getStatusColor(p.status)}`}
+                        >
                           {p.status}
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${getApprovalColor(p.approvalStatus || 'Pendente')}`}>
+                        <span
+                          className={`inline-flex px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${getApprovalColor(p.approvalStatus || 'Pendente')}`}
+                        >
                           {p.approvalStatus || 'Pendente'}
                         </span>
                       </td>
@@ -460,8 +701,67 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
             </table>
           </div>
         ) : (
-          <div className="p-12 text-center text-stone-500">
-            Modo de visualização em cards em construção...
+          <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2 xl:grid-cols-3">
+            {filteredPricings.map((p) => {
+              const tons = getPricingTotalTons(p);
+              const total = getPricingTotalSaleValue(p);
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => setSelectedPricing(p)}
+                  className="rounded-xl border border-stone-200 bg-white p-4 text-left shadow-sm transition hover:border-emerald-300 hover:shadow-md"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-black text-emerald-700">
+                        {formatPricingCode(p.formattedCod)}
+                      </p>
+                      <p className="mt-1 font-bold text-stone-800">
+                        {p.factors?.client?.name || 'Cliente não informado'}
+                      </p>
+                    </div>
+                    <span
+                      className={`rounded px-2 py-1 text-[10px] font-bold uppercase ${getStatusColor(p.status)}`}
+                    >
+                      {p.status}
+                    </span>
+                  </div>
+                  <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <span className="block text-stone-400">Vendedor</span>
+                      <strong className="text-stone-700">{p.userName || '---'}</strong>
+                    </div>
+                    <div>
+                      <span className="block text-stone-400">Filial</span>
+                      <strong className="text-stone-700">
+                        {branches.find((b) => b.id === p.factors?.branchId)?.name || '---'}
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="block text-stone-400">Toneladas</span>
+                      <strong className="text-stone-700">
+                        {tons.toLocaleString('pt-BR', { minimumFractionDigits: 1 })} t
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="block text-stone-400">Valor total</span>
+                      <strong className="text-emerald-700">
+                        R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </strong>
+                    </div>
+                  </div>
+                  <p className="mt-3 border-t border-stone-100 pt-3 text-xs text-stone-500">
+                    {new Date(p.date).toLocaleDateString('pt-BR')} · {p.calculations?.length || 0}{' '}
+                    fórmula(s)
+                  </p>
+                </button>
+              );
+            })}
+            {filteredPricings.length === 0 && (
+              <p className="col-span-full p-8 text-center text-stone-500">
+                Nenhuma precificação encontrada com os filtros atuais.
+              </p>
+            )}
           </div>
         )}
       </div>
