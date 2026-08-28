@@ -3,9 +3,14 @@ import html2canvas from 'html2canvas';
 import { PricingRecord, AppSettings } from '../types';
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-const fmtN = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtN = (v: number) =>
+  v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export const generatePricingPDF = (record: PricingRecord, settings: AppSettings, showAgent: boolean = true) => {
+export const generatePricingPDF = (
+  record: PricingRecord,
+  settings: AppSettings,
+  showAgent: boolean = true
+) => {
   const el = document.createElement('div');
   el.style.cssText = [
     'font-family: "Segoe UI", Arial, sans-serif',
@@ -29,11 +34,12 @@ export const generatePricingPDF = (record: PricingRecord, settings: AppSettings,
   const obs = record.factors?.commercialObservation || '—';
 
   // Formulas / calcs
-  const calcs = record.calculations && record.calculations.length > 0
-    ? record.calculations.filter(c => c.selected || true)
-    : [];
+  const calcs =
+    record.calculations && record.calculations.length > 0
+      ? record.calculations.filter((c) => c.selected !== false)
+      : [];
 
-  const validCalcs = calcs.filter(c => c.summary);
+  const validCalcs = calcs.filter((c) => c.summary);
 
   // Build product rows: ONE ROW PER FORMULA (calculation)
   let productRows = '';
@@ -47,16 +53,18 @@ export const generatePricingPDF = (record: PricingRecord, settings: AppSettings,
 
       const rowDueDateStr = fCr?.dueDate || fGl?.dueDate;
       const rowDueDate = rowDueDateStr ? new Date(rowDueDateStr).toLocaleDateString('pt-BR') : '—';
-      
+
       const rowFreightPerTon = fCr?.freight ?? fGl?.freight ?? 0;
-      const rowFreightType = fCr?.tipoFrete ?? fGl?.tipoFrete ?? (rowFreightPerTon > 0 ? 'CIF' : 'FOB');
-      const rowFreightText = rowFreightType === 'CIF' ? `CIF (R$ ${rowFreightPerTon.toFixed(2)}/t)` : 'FOB';
-      
+      const rowFreightType =
+        fCr?.tipoFrete ?? fGl?.tipoFrete ?? (rowFreightPerTon > 0 ? 'CIF' : 'FOB');
+      const rowFreightText =
+        rowFreightType === 'CIF' ? `CIF (R$ ${rowFreightPerTon.toFixed(2)}/t)` : 'FOB';
+
       const qty = fCr?.totalTons || fGl?.totalTons || 0;
       const finalPrice = calc.summary?.finalPrice || 0;
       const totalRow = qty * finalPrice;
       grandTotal += totalRow;
-      
+
       const priceWithoutFreight = finalPrice - rowFreightPerTon;
       const totalFreightLine = qty * rowFreightPerTon;
 
@@ -77,17 +85,22 @@ export const generatePricingPDF = (record: PricingRecord, settings: AppSettings,
     productRows = `<tr><td colspan="8" style="padding:24px;text-align:center;color:#aaa;font-style:italic;">Nenhum produto calculado</td></tr>`;
   }
 
-  const clientDeliveryCity = record.factors?.client?.deliveryAddress?.city || record.factors?.client?.address?.city || '';
-  const clientDeliveryState = record.factors?.client?.deliveryAddress?.state || record.factors?.client?.address?.state || '';
-  const clientDeliveryText = clientDeliveryCity && clientDeliveryState ? `${clientDeliveryCity}/${clientDeliveryState}` : '';
+  const clientDeliveryCity =
+    record.factors?.client?.deliveryAddress?.city || record.factors?.client?.address?.city || '';
+  const clientDeliveryState =
+    record.factors?.client?.deliveryAddress?.state || record.factors?.client?.address?.state || '';
+  const clientDeliveryText =
+    clientDeliveryCity && clientDeliveryState ? `${clientDeliveryCity}/${clientDeliveryState}` : '';
 
   el.innerHTML = `
     <!-- HEADER -->
     <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1a1a2e;padding-bottom:10px;margin-bottom:12px;">
       <div style="display:flex;align-items:center;gap:15px;">
-        ${settings.companyLogo
-      ? `<img src="${settings.companyLogo}" style="max-height:50px;max-width:150px;object-fit:contain;" />`
-      : `<div style="width:45px;height:45px;background:#1a1a2e;border-radius:10px;display:flex;align-items:center;justify-content:center;"><span style="color:#fff;font-size:22px;font-weight:900;">${(settings.companyName || 'E')[0]}</span></div>`}
+        ${
+          settings.companyLogo
+            ? `<img src="${settings.companyLogo}" style="max-height:50px;max-width:150px;object-fit:contain;" />`
+            : `<div style="width:45px;height:45px;background:#1a1a2e;border-radius:10px;display:flex;align-items:center;justify-content:center;"><span style="color:#fff;font-size:22px;font-weight:900;">${(settings.companyName || 'E')[0]}</span></div>`
+        }
         <div>
           <div style="font-size:18px;font-weight:900;color:#1a1a2e;letter-spacing:-0.5px;line-height:1;">${settings.companyName || 'EMPRESA'}</div>
           ${settings.companyCnpj ? `<div style="font-size:10px;color:#555;margin-top:4px;">CNPJ: ${settings.companyCnpj}</div>` : ''}
@@ -119,11 +132,15 @@ export const generatePricingPDF = (record: PricingRecord, settings: AppSettings,
           ${clientDeliveryText ? `<div style="font-size:11px;color:#444;"><span style="color:#888;font-weight:600;">Entrega:</span> ${clientDeliveryText}</div>` : ''}
         </div>
       </div>
-      ${showAgent ? `
+      ${
+        showAgent
+          ? `
       <div style="background:#f9fafb;border-radius:10px;padding:12px 15px;border:1px solid #e5e7eb;border-left:6px solid #4a90d9;">
         <div style="font-size:9px;font-weight:800;text-transform:uppercase;color:#666;margin-bottom:3px;letter-spacing:0.5px;">Representante Comercial</div>
         <div style="font-size:14px;font-weight:800;color:#1a1a2e;">${agentName}</div>
-      </div>` : ''}
+      </div>`
+          : ''
+      }
     </div>
 
     <!-- PRODUTOS TABLE -->
@@ -161,10 +178,12 @@ export const generatePricingPDF = (record: PricingRecord, settings: AppSettings,
     <div style="margin-top:15px;display:grid;grid-template-columns:1fr 1fr;gap:50px;padding:0 30px;">
       <div style="text-align:center;">
         <div style="border-top:1.5px solid #000;width:90%;margin:0 auto;padding-top:6px;"> </div>
-        ${showAgent && agentName && agentName !== '—'
-          ? `<div style="font-size:11px;font-weight:800;text-transform:uppercase;">Rep.: ${agentName}</div>
+        ${
+          showAgent && agentName && agentName !== '—'
+            ? `<div style="font-size:11px;font-weight:800;text-transform:uppercase;">Rep.: ${agentName}</div>
              <div style="font-size:10px;color:#888;">Representante Comercial</div>`
-          : `<div style="font-size:10px;color:#888;">Assinatura do Vendedor</div>`}
+            : `<div style="font-size:10px;color:#888;">Assinatura do Vendedor</div>`
+        }
       </div>
       <div style="text-align:center;">
         <div style="border-top:1.5px solid #000;width:90%;margin:0 auto;padding-top:6px;"> </div>
@@ -204,7 +223,17 @@ export const generatePricingPDF = (record: PricingRecord, settings: AppSettings,
         sliceCanvas.width = canvas.width;
         sliceCanvas.height = Math.min(srcH, canvas.height - yOffset);
         const ctx = sliceCanvas.getContext('2d')!;
-        ctx.drawImage(canvas, 0, yOffset, canvas.width, sliceCanvas.height, 0, 0, canvas.width, sliceCanvas.height);
+        ctx.drawImage(
+          canvas,
+          0,
+          yOffset,
+          canvas.width,
+          sliceCanvas.height,
+          0,
+          0,
+          canvas.width,
+          sliceCanvas.height
+        );
         pdf.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', 0, 0, pageW, pageImgH);
         yOffset += srcH;
         page++;
