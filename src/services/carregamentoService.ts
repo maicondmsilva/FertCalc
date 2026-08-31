@@ -222,7 +222,8 @@ export async function getCarregamentos(
   }
 
   const { data, error } = await query;
-  if (error || !data) return [];
+  if (error) throw error;
+  if (!data) throw new Error('A consulta de carregamentos nao retornou dados.');
   return data.map((d) => {
     const pv = d.pedidos_venda as Record<string, unknown> | null;
     return {
@@ -582,7 +583,8 @@ export async function getCarregamentosRelatorio(
   if (filtros.data_fim) query = query.lte('criado_em', filtros.data_fim + 'T23:59:59');
 
   const { data, error } = await query;
-  if (error || !data) return [];
+  if (error) throw error;
+  if (!data) throw new Error('A consulta do painel de logistica nao retornou dados.');
   return data.map((d) => {
     const pv = d.pedidos_venda as Record<string, unknown> | null;
     return {
@@ -849,7 +851,10 @@ export async function getQuantidadeCarregadaPorItem(
       pedido_venda_item_id: string | null;
       quantidade_ton: number | string | null;
     }>;
-    const totalSolicitado = itens.reduce((total, item) => total + Number(item.quantidade_ton ?? 0), 0);
+    const totalSolicitado = itens.reduce(
+      (total, item) => total + Number(item.quantidade_ton ?? 0),
+      0
+    );
     const totalCarregado = Number(row.quantidade_carregada ?? 0);
     if (totalSolicitado <= 0 || totalCarregado <= 0) continue;
 

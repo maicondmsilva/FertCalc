@@ -1612,11 +1612,17 @@ function TabelaCarregamentos({
                   const farmName = cli?.fazenda || '—';
                   return (
                     <div className="text-xs">
-                      <span className="font-semibold text-stone-800 block truncate max-w-[150px]" title={clientName}>
+                      <span
+                        className="font-semibold text-stone-800 block truncate max-w-[150px]"
+                        title={clientName}
+                      >
                         {clientName}
                       </span>
                       {farmName !== '—' && (
-                        <span className="text-stone-400 text-[10px] block truncate max-w-[150px]" title={farmName}>
+                        <span
+                          className="text-stone-400 text-[10px] block truncate max-w-[150px]"
+                          title={farmName}
+                        >
                           {farmName}
                         </span>
                       )}
@@ -3879,7 +3885,7 @@ export default function CarregamentoModule({
         currentUser.role === 'admin' ||
         currentUser.permissions?.carregamento_all_filiais;
       const filtroPorFiliais = canSeeAll ? undefined : currentUser.filiais_permitidas;
-      const [cgs, cgsLogistica, fls, trs, kpiData, clientsData, pedidosData] = await Promise.all([
+      const results = await Promise.allSettled([
         getCarregamentos(undefined, filtroPorFiliais),
         getCarregamentosLogistica(filtroPorFiliais ?? undefined),
         getFiliais(),
@@ -3888,13 +3894,32 @@ export default function CarregamentoModule({
         getClients(),
         getPedidosVenda(),
       ]);
-      setCarregamentos(cgs);
-      setCarregamentosLogistica(cgsLogistica);
-      setFiliais(fls);
-      setTransportadoras(trs);
-      setKpi(kpiData);
-      setClients(clientsData);
-      setPedidos(pedidosData);
+      const labels = [
+        'visao geral',
+        'painel de logistica',
+        'filiais',
+        'transportadoras',
+        'indicadores',
+        'clientes',
+        'pedidos',
+      ];
+      const failures = results
+        .map((result, index) => (result.status === 'rejected' ? labels[index] : null))
+        .filter((label): label is string => Boolean(label));
+
+      if (results[0].status === 'fulfilled') setCarregamentos(results[0].value);
+      if (results[1].status === 'fulfilled') setCarregamentosLogistica(results[1].value);
+      if (results[2].status === 'fulfilled') setFiliais(results[2].value);
+      if (results[3].status === 'fulfilled') setTransportadoras(results[3].value);
+      if (results[4].status === 'fulfilled') setKpi(results[4].value);
+      if (results[5].status === 'fulfilled') setClients(results[5].value);
+      if (results[6].status === 'fulfilled') setPedidos(results[6].value);
+
+      if (failures.length > 0) {
+        setLoadError(
+          `Algumas informacoes nao puderam ser carregadas: ${failures.join(', ')}. Tente novamente.`
+        );
+      }
     } catch (err) {
       console.error('Erro ao carregar dados de carregamento:', err);
       setLoadError('Erro ao carregar dados. Tente novamente.');

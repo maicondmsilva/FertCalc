@@ -60,4 +60,42 @@ describe('useNotifications', () => {
     expect(getNotifications).toHaveBeenCalledTimes(1);
     expect(subscribeToNotifications).toHaveBeenCalledTimes(1);
   });
+
+  it('reconcilia notificacoes quando a assinatura conecta', async () => {
+    vi.mocked(subscribeToNotifications).mockImplementation((_userId, _callback, onStatus) => {
+      onStatus?.('SUBSCRIBED');
+      return vi.fn();
+    });
+
+    renderHook(() => useNotifications('user-1'));
+
+    await waitFor(() => expect(getNotifications).toHaveBeenCalledTimes(2));
+  });
+
+  it('nao duplica notificacao recebida novamente apos reconexao', () => {
+    const item = notification('notification-1');
+
+    act(() => {
+      useNotificationStore.getState().addNotification(item);
+      useNotificationStore.getState().addNotification(item);
+    });
+
+    const state = useNotificationStore.getState();
+    expect(state.notifications).toHaveLength(1);
+    expect(state.activeToasts).toHaveLength(1);
+    expect(state.unreadCount).toBe(1);
+  });
+
+  it('nao cria toast nem incrementa contador para notificacao ja lida', () => {
+    act(() =>
+      useNotificationStore
+        .getState()
+        .addNotification({ ...notification('notification-read'), is_read: true })
+    );
+
+    const state = useNotificationStore.getState();
+    expect(state.notifications).toHaveLength(1);
+    expect(state.activeToasts).toHaveLength(0);
+    expect(state.unreadCount).toBe(0);
+  });
 });

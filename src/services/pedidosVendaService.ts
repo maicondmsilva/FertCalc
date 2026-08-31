@@ -122,7 +122,8 @@ export async function getPedidosVenda(filtros?: {
   }
 
   const { data, error } = await query;
-  if (error || !data) return [];
+  if (error) throw error;
+  if (!data) throw new Error('A consulta de pedidos nao retornou dados.');
   return data.map(mapPedido);
 }
 

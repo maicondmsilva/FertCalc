@@ -45,8 +45,8 @@ function mapCotacaoSolicitada(d: Record<string, unknown>): CotacaoSolicitada {
   const transpRaw = d.transportadoras as Record<string, unknown> | null | undefined;
   const transportadora: Transportadora | undefined = transpRaw
     ? {
-      id: transpRaw.id as string,
-      organization_id: transpRaw.organization_id as string | undefined,
+        id: transpRaw.id as string,
+        organization_id: transpRaw.organization_id as string | undefined,
         id_numeric: transpRaw.id_numeric != null ? Number(transpRaw.id_numeric) : undefined,
         nome: transpRaw.nome as string,
         cnpj: transpRaw.cnpj as string | undefined,
@@ -157,7 +157,8 @@ export async function getCotacoesByVendedor(userId: string): Promise<CotacaoSoli
     .eq('solicitado_por', userId)
     .order('criado_em', { ascending: false });
 
-  if (error || !data) return [];
+  if (error) throw error;
+  if (!data) throw new Error('A consulta das suas cotacoes nao retornou dados.');
   return (data as Record<string, unknown>[]).map(mapCotacaoSolicitada);
 }
 
@@ -168,7 +169,8 @@ export async function getCotacoesByFiliais(filialIds: string[]): Promise<Cotacao
       .select(SELECT_FIELDS)
       .in('status', ['aguardando', 'em_analise', 'cotado'])
       .order('criado_em', { ascending: true });
-    if (error || !data) return [];
+    if (error) throw error;
+    if (!data) throw new Error('A consulta das cotacoes da filial nao retornou dados.');
     return (data as Record<string, unknown>[]).map(mapCotacaoSolicitada);
   }
 
@@ -179,7 +181,8 @@ export async function getCotacoesByFiliais(filialIds: string[]): Promise<Cotacao
     .in('status', ['aguardando', 'em_analise', 'cotado'])
     .order('criado_em', { ascending: true });
 
-  if (error || !data) return [];
+  if (error) throw error;
+  if (!data) throw new Error('A consulta das cotacoes da filial nao retornou dados.');
   return (data as Record<string, unknown>[]).map(mapCotacaoSolicitada);
 }
 
@@ -191,7 +194,8 @@ export async function getCotacoesAprovadas(userId: string): Promise<CotacaoSolic
     .eq('solicitado_por', userId)
     .order('aprovado_em', { ascending: false });
 
-  if (error || !data) return [];
+  if (error) throw error;
+  if (!data) throw new Error('A consulta das cotacoes aprovadas nao retornou dados.');
   return (data as Record<string, unknown>[]).map(mapCotacaoSolicitada);
 }
 
@@ -211,7 +215,8 @@ export async function getCotacoesAprovadasByCliente(
   }
 
   const { data, error } = await query;
-  if (error || !data) return [];
+  if (error) throw error;
+  if (!data) throw new Error('A consulta das cotacoes aprovadas nao retornou dados.');
   return (data as Record<string, unknown>[]).map(mapCotacaoSolicitada);
 }
 
@@ -227,7 +232,8 @@ export async function getCotacoesFinalizadas(filialIds?: string[]): Promise<Cota
   }
 
   const { data, error } = await query;
-  if (error || !data) return [];
+  if (error) throw error;
+  if (!data) throw new Error('A consulta das cotacoes finalizadas nao retornou dados.');
   return (data as Record<string, unknown>[]).map(mapCotacaoSolicitada);
 }
 

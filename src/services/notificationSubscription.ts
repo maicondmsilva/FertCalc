@@ -1,7 +1,17 @@
 import { supabase } from './supabase';
 import { Notification } from '../types/notification.types';
 
-export function subscribeToNotifications(userId: string, callback: (notification: Notification) => void) {
+export type NotificationSubscriptionStatus =
+  | 'SUBSCRIBED'
+  | 'TIMED_OUT'
+  | 'CLOSED'
+  | 'CHANNEL_ERROR';
+
+export function subscribeToNotifications(
+  userId: string,
+  callback: (notification: Notification) => void,
+  onStatus?: (status: NotificationSubscriptionStatus) => void
+) {
   const channel = supabase
     .channel(`notifications:${userId}`)
     .on(
@@ -10,16 +20,20 @@ export function subscribeToNotifications(userId: string, callback: (notification
         event: 'INSERT',
         schema: 'public',
         table: 'notifications',
-        filter: `user_id=eq.${userId}`
+        filter: `user_id=eq.${userId}`,
       },
       (payload) => {
-        // payload.new is the new inserted row
         callback(payload.new as Notification);
       }
     )
-    .subscribe();
-    
+    .subscribe((status) => {
+      onStatus?.(status as NotificationSubscriptionStatus);
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        console.error(`Falha na assinatura de notificacoes (${status}).`);
+      }
+    });
+
   return () => {
-    supabase.removeChannel(channel);
+    void supabase.removeChannel(channel);
   };
 }

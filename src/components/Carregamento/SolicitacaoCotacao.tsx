@@ -1147,6 +1147,7 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
   const [showForm, setShowForm] = useState(false);
   const [minhasCotacoes, setMinhasCotacoes] = useState<CotacaoSolicitada[]>([]);
   const [loadingMinhas, setLoadingMinhas] = useState(false);
+  const [erroMinhas, setErroMinhas] = useState<string | null>(null);
   const [detalheModal, setDetalheModal] = useState<CotacaoSolicitada | null>(null);
 
   // Form state
@@ -1172,11 +1173,13 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
   // Responsável state
   const [cotacoesResponsavel, setCotacoesResponsavel] = useState<CotacaoSolicitada[]>([]);
   const [loadingResponsavel, setLoadingResponsavel] = useState(false);
+  const [erroResponsavel, setErroResponsavel] = useState<string | null>(null);
   const [painelCotacao, setPainelCotacao] = useState<CotacaoSolicitada | null>(null);
 
   // Histórico / Finalizadas state (canAprovar)
   const [cotacoesFinalizadas, setCotacoesFinalizadas] = useState<CotacaoSolicitada[]>([]);
   const [loadingFinalizadas, setLoadingFinalizadas] = useState(false);
+  const [erroFinalizadas, setErroFinalizadas] = useState<string | null>(null);
   const [detalheFinalizadaModal, setDetalheFinalizadaModal] = useState<CotacaoSolicitada | null>(
     null
   );
@@ -1227,11 +1230,13 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
   const loadMinhasCotacoes = useCallback(async () => {
     if (!canSolicitar) return;
     setLoadingMinhas(true);
+    setErroMinhas(null);
     try {
       const data = await getCotacoesByVendedor(currentUser.id);
       setMinhasCotacoes(data);
-    } catch {
-      // silent
+    } catch (error) {
+      console.error('Erro ao carregar minhas cotacoes:', error);
+      setErroMinhas('Nao foi possivel carregar suas solicitacoes. Tente novamente.');
     } finally {
       setLoadingMinhas(false);
     }
@@ -1245,11 +1250,13 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
   const loadCotacoesResponsavel = useCallback(async () => {
     if (!canTratar) return;
     setLoadingResponsavel(true);
+    setErroResponsavel(null);
     try {
       const data = await getCotacoesByFiliais(filialIds);
       setCotacoesResponsavel(data);
-    } catch {
-      // silent
+    } catch (error) {
+      console.error('Erro ao carregar cotacoes da filial:', error);
+      setErroResponsavel('Nao foi possivel carregar as solicitacoes da filial.');
     } finally {
       setLoadingResponsavel(false);
     }
@@ -1258,11 +1265,13 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
   const loadCotacoesFinalizadas = useCallback(async () => {
     if (!canAprovar) return;
     setLoadingFinalizadas(true);
+    setErroFinalizadas(null);
     try {
       const data = await getCotacoesFinalizadas(filialIds.length > 0 ? filialIds : undefined);
       setCotacoesFinalizadas(data);
-    } catch {
-      // silent
+    } catch (error) {
+      console.error('Erro ao carregar cotacoes finalizadas:', error);
+      setErroFinalizadas('Nao foi possivel carregar o historico de cotacoes.');
     } finally {
       setLoadingFinalizadas(false);
     }
@@ -1960,6 +1969,17 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
               <div className="flex justify-center py-10">
                 <RefreshCw className="w-5 h-5 animate-spin text-stone-300" />
               </div>
+            ) : erroMinhas ? (
+              <div className="space-y-3 px-4 py-8 text-center text-sm text-red-700">
+                <p>{erroMinhas}</p>
+                <button
+                  type="button"
+                  onClick={loadMinhasCotacoes}
+                  className="rounded-lg bg-red-700 px-3 py-2 font-bold text-white"
+                >
+                  Tentar novamente
+                </button>
+              </div>
             ) : minhasCotacoes.length === 0 ? (
               <div className="py-10 text-center text-stone-400">
                 <Package className="w-10 h-10 mx-auto mb-2 opacity-30" />
@@ -2124,6 +2144,17 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
             {loadingResponsavel ? (
               <div className="flex justify-center py-10">
                 <RefreshCw className="w-5 h-5 animate-spin text-stone-300" />
+              </div>
+            ) : erroResponsavel ? (
+              <div className="space-y-3 px-4 py-8 text-center text-sm text-red-700">
+                <p>{erroResponsavel}</p>
+                <button
+                  type="button"
+                  onClick={loadCotacoesResponsavel}
+                  className="rounded-lg bg-red-700 px-3 py-2 font-bold text-white"
+                >
+                  Tentar novamente
+                </button>
               </div>
             ) : cotacoesResponsavelFiltradas.length === 0 ? (
               <div className="py-10 text-center text-stone-400">
@@ -2325,6 +2356,17 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
             {loadingFinalizadas ? (
               <div className="flex justify-center py-10">
                 <RefreshCw className="w-5 h-5 animate-spin text-stone-300" />
+              </div>
+            ) : erroFinalizadas ? (
+              <div className="space-y-3 px-4 py-8 text-center text-sm text-red-700">
+                <p>{erroFinalizadas}</p>
+                <button
+                  type="button"
+                  onClick={loadCotacoesFinalizadas}
+                  className="rounded-lg bg-red-700 px-3 py-2 font-bold text-white"
+                >
+                  Tentar novamente
+                </button>
               </div>
             ) : cotacoesFinalizadasFiltradas.length === 0 ? (
               <div className="py-10 text-center text-stone-400">
