@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   User,
   PedidoVenda,
@@ -19,6 +19,7 @@ import {
   GitBranch,
   Ban,
   FileText,
+  Pencil,
   X,
 } from 'lucide-react';
 import {
@@ -42,8 +43,10 @@ import { Filial } from '../types/carregamento';
 import { getStatusInicial } from '../utils/getStatusInicial';
 import HistoricoCarregamentosPedido from './HistoricoCarregamentosPedido';
 import { canReceiveSaldoPedidoAlert } from '../services/alertConfigService';
+import { subscribeToOrderLoadingChanges } from '../services/orderLoadingSubscription';
 
 const NovoPedidoVendaModal = React.lazy(() => import('./NovoPedidoVendaModal'));
+const EditarPedidoVendaModal = React.lazy(() => import('./EditarPedidoVendaModal'));
 const CancSubstituiModal = React.lazy(() => import('./CancSubstituiModal'));
 const CancelamentoDefinitivoModal = React.lazy(() => import('./CancelamentoDefinitivoModal'));
 const RelatorioCancSubstitui = React.lazy(() => import('./RelatorioCancSubstitui'));
@@ -102,8 +105,10 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
   const [filialFilter, setFilialFilter] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [selectedPedidoId, setSelectedPedidoId] = useState<string | null>(null);
+  const selectedPedidoIdRef = useRef<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [showNovoPedido, setShowNovoPedido] = useState(false);
+  const [pedidoEdicao, setPedidoEdicao] = useState<PedidoVenda | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [filiais, setFiliais] = useState<Filial[]>([]);
   const [pedidoParaCarregamento, setPedidoParaCarregamento] = useState<PedidoVenda | null>(null);
@@ -149,7 +154,9 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
       if (pricingResult.status === 'fulfilled') setPricingRecords(pricingResult.value);
       else warnings.push('precificacoes');
 
-      const firstPedido = pedidosData[pedidosData.length - 1];
+      const firstPedido =
+        pedidosData.find((pedido) => pedido.id === selectedPedidoIdRef.current) ??
+        pedidosData[pedidosData.length - 1];
       if (firstPedido) {
         setSelectedPedidoId(firstPedido.id);
         setExpandedIds(new Set([firstPedido.id]));
@@ -221,6 +228,22 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
 
   useEffect(() => {
     load();
+  }, [load]);
+
+  useEffect(() => {
+    selectedPedidoIdRef.current = selectedPedidoId;
+  }, [selectedPedidoId]);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const unsubscribe = subscribeToOrderLoadingChanges(() => {
+      clearTimeout(timer);
+      timer = setTimeout(() => void load(), 350);
+    });
+    return () => {
+      clearTimeout(timer);
+      unsubscribe();
+    };
   }, [load]);
 
   const toggleExpand = (id: string) => {
@@ -1139,25 +1162,32 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                           <HistoricoCarregamentosPedido pedidoVendaId={p.id} />
                         </div>
 
-                        {/* Action buttons — Canc/Substitui + Cancelar Definitivo */}
-                        {p.status !== 'cancelado' && (
-                          <div className="flex flex-wrap gap-2 pt-2 border-t border-stone-100">
-                            <button
-                              onClick={() => setPedidoCancSubstitui(p)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-100 text-orange-800 border border-orange-300 text-xs font-bold rounded-lg hover:bg-orange-200 transition-colors"
-                            >
-                              <GitBranch className="w-3.5 h-3.5" />
-                              Canc/Substitui
-                            </button>
-                            <button
-                              onClick={() => setPedidoCancelamentoDefinitivo(p)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 bg-red-100 text-red-800 border border-red-300 text-xs font-bold rounded-lg hover:bg-red-200 transition-colors"
-                            >
-                              <Ban className="w-3.5 h-3.5" />
-                              Cancelar Definitivo
-                            </button>
-                          </div>
-                        )}
+                        <div className="flex flex-wrap gap-2 pt-2 border-t border-stone-100">
+                          <button
+                            onClick={() => setPedidoEdicao(p)}
+                            className="flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-100 px-3 py-1.5 text-xs font-bold text-emerald-800 hover:bg-emerald-200"
+                          >
+                            <Pencil className="h-3.5 w-3.5" /> Editar pedido
+                          </button>
+                          {p.status !== 'cancelado' && (
+                            <>
+                              <button
+                                onClick={() => setPedidoCancSubstitui(p)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-100 text-orange-800 border border-orange-300 text-xs font-bold rounded-lg hover:bg-orange-200 transition-colors"
+                              >
+                                <GitBranch className="w-3.5 h-3.5" />
+                                Canc/Substitui
+                              </button>
+                              <button
+                                onClick={() => setPedidoCancelamentoDefinitivo(p)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-red-100 text-red-800 border border-red-300 text-xs font-bold rounded-lg hover:bg-red-200 transition-colors"
+                              >
+                                <Ban className="w-3.5 h-3.5" />
+                                Cancelar Definitivo
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1174,6 +1204,19 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
             pricing={null}
             currentUser={currentUser}
             onClose={() => setShowNovoPedido(false)}
+            onSuccess={load}
+          />
+        )}
+
+        {pedidoEdicao && (
+          <EditarPedidoVendaModal
+            pedido={pedidoEdicao}
+            items={itensPorPedido[pedidoEdicao.id] ?? []}
+            clients={clients}
+            pricingRecords={pricingRecords}
+            branches={branches}
+            currentUser={currentUser}
+            onClose={() => setPedidoEdicao(null)}
             onSuccess={load}
           />
         )}
