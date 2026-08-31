@@ -1,5 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { User, PedidoVenda, Branch, PedidoVendaItem, Client, PricingRecord, CancelamentoPedido } from '../types';
+import {
+  User,
+  PedidoVenda,
+  Branch,
+  PedidoVendaItem,
+  Client,
+  PricingRecord,
+  CancelamentoPedido,
+} from '../types';
 import {
   ClipboardList,
   RefreshCw,
@@ -87,6 +95,8 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
   const { showSuccess, showError } = useToast();
   const [pedidos, setPedidos] = useState<PedidoVenda[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadWarnings, setLoadWarnings] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [filialFilter, setFilialFilter] = useState('');
@@ -119,45 +129,71 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
   const [cancDataFim, setCancDataFim] = useState('');
 
   const load = useCallback(async () => {
-    setPedidos([]);
     setLoading(true);
+    setLoadError(null);
+    setLoadWarnings([]);
     try {
-      const [pedidosData, branchesData, clientsData, pricingData] = await Promise.all([
-        getPedidosVenda(),
+      const pedidosData = await getPedidosVenda();
+      setPedidos(pedidosData);
+
+      const [branchesResult, clientsResult, pricingResult] = await Promise.allSettled([
         getBranches(),
         getClients(),
         getPricingRecords(),
       ]);
-      setPedidos(pedidosData);
-      setBranches(branchesData);
-      setClients(clientsData);
-      setPricingRecords(pricingData);
+      const warnings: string[] = [];
+      if (branchesResult.status === 'fulfilled') setBranches(branchesResult.value);
+      else warnings.push('filiais');
+      if (clientsResult.status === 'fulfilled') setClients(clientsResult.value);
+      else warnings.push('clientes');
+      if (pricingResult.status === 'fulfilled') setPricingRecords(pricingResult.value);
+      else warnings.push('precificacoes');
+
       const firstPedido = pedidosData[pedidosData.length - 1];
       if (firstPedido) {
         setSelectedPedidoId(firstPedido.id);
         setExpandedIds(new Set([firstPedido.id]));
-        const [itens, progresso, preferencia, podeReceber] = await Promise.all([
-          getPedidoVendaItens(firstPedido.id),
-          getQuantidadeCarregadaPorItem(firstPedido.id),
-          getPedidoSaldoAlertaPreferencia(firstPedido.id, currentUser.id),
-          canReceiveSaldoPedidoAlert(currentUser.id, currentUser.role),
-        ]);
-        setItensPorPedido({ [firstPedido.id]: itens });
-        setCarregadoPorItem(progresso);
-        setAlertaSaldo(preferencia);
-        setPodeReceberAlertaSaldo(podeReceber);
+        const [itensResult, progressoResult, preferenciaResult, podeReceberResult] =
+          await Promise.allSettled([
+            getPedidoVendaItens(firstPedido.id),
+            getQuantidadeCarregadaPorItem(firstPedido.id),
+            getPedidoSaldoAlertaPreferencia(firstPedido.id, currentUser.id),
+            canReceiveSaldoPedidoAlert(currentUser.id, currentUser.role),
+          ]);
+        if (itensResult.status === 'fulfilled') {
+          setItensPorPedido({ [firstPedido.id]: itensResult.value });
+        } else {
+          warnings.push('itens do pedido');
+        }
+        if (progressoResult.status === 'fulfilled') {
+          setCarregadoPorItem(progressoResult.value);
+        } else {
+          warnings.push('progresso de carregamento');
+        }
+        if (preferenciaResult.status === 'fulfilled') {
+          setAlertaSaldo(preferenciaResult.value);
+        } else {
+          warnings.push('preferencia do alerta');
+        }
+        if (podeReceberResult.status === 'fulfilled') {
+          setPodeReceberAlertaSaldo(podeReceberResult.value);
+        } else {
+          warnings.push('permissao do alerta');
+        }
       } else {
         setSelectedPedidoId(null);
         setExpandedIds(new Set());
         setItensPorPedido({});
         setCarregadoPorItem({});
       }
-    } catch {
-      showError('Erro ao carregar pedidos de venda.');
+      setLoadWarnings(warnings);
+    } catch (error) {
+      console.error('Erro ao carregar pedidos de venda:', error);
+      setLoadError('Nao foi possivel carregar os pedidos de venda. Tente novamente.');
     } finally {
       setLoading(false);
     }
-  }, [currentUser.id, showError]);
+  }, [currentUser.id, currentUser.role]);
 
   const loadCancelamentos = useCallback(async () => {
     setLoadingCancelamentos(true);
@@ -199,7 +235,12 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
             .then((itens) => {
               setItensPorPedido((prev) => ({ ...prev, [id]: itens }));
             })
-            .catch(() => {});
+            .catch((error) => {
+              console.error('Erro ao carregar itens do pedido:', error);
+              setLoadWarnings((current) =>
+                current.includes('itens do pedido') ? current : [...current, 'itens do pedido']
+              );
+            });
         }
       }
       return next;
@@ -268,16 +309,29 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
     setExpandedIds(new Set([pedido.id]));
     setSearchOpen(false);
     if (!itensPorPedido[pedido.id]) {
-      const [itens, progresso, preferencia] = await Promise.all([
+      const [itensResult, progressoResult, preferenciaResult] = await Promise.allSettled([
         getPedidoVendaItens(pedido.id),
         getQuantidadeCarregadaPorItem(pedido.id),
         getPedidoSaldoAlertaPreferencia(pedido.id, currentUser.id),
       ]);
-      setItensPorPedido((current) => ({ ...current, [pedido.id]: itens }));
-      setCarregadoPorItem((current) => ({ ...current, ...progresso }));
-      setAlertaSaldo(preferencia);
+      const warnings: string[] = [];
+      if (itensResult.status === 'fulfilled') {
+        setItensPorPedido((current) => ({ ...current, [pedido.id]: itensResult.value }));
+      } else warnings.push('itens do pedido');
+      if (progressoResult.status === 'fulfilled') {
+        setCarregadoPorItem((current) => ({ ...current, ...progressoResult.value }));
+      } else warnings.push('progresso de carregamento');
+      if (preferenciaResult.status === 'fulfilled') {
+        setAlertaSaldo(preferenciaResult.value);
+      } else warnings.push('preferencia do alerta');
+      setLoadWarnings(warnings);
     } else {
-      setAlertaSaldo(await getPedidoSaldoAlertaPreferencia(pedido.id, currentUser.id));
+      try {
+        setAlertaSaldo(await getPedidoSaldoAlertaPreferencia(pedido.id, currentUser.id));
+      } catch (error) {
+        console.error('Erro ao carregar preferencia do alerta:', error);
+        setLoadWarnings(['preferencia do alerta']);
+      }
     }
   };
 
@@ -335,6 +389,26 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
           </button>
         </div>
       </div>
+
+      {loadError && (
+        <div className="flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 sm:flex-row sm:items-center sm:justify-between">
+          <span>{loadError}</span>
+          <button
+            type="button"
+            onClick={load}
+            className="rounded-lg bg-red-700 px-3 py-2 font-bold text-white hover:bg-red-800"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      )}
+
+      {!loadError && loadWarnings.length > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          Os pedidos foram carregados, mas houve falha em: {loadWarnings.join(', ')}. As demais
+          informacoes continuam disponiveis.
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-stone-200">
@@ -420,106 +494,112 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
             <div className="flex justify-center py-12">
               <RefreshCw className="w-6 h-6 animate-spin text-stone-300" />
             </div>
-          ) : (() => {
-            const filteredCancelamentos = cancelamentos.filter((c) => {
-              const pOrigem = pedidos.find((x) => x.id === c.pedido_origem_id);
-              const clientObj = clients.find((x) => x.id === pOrigem?.cliente_id);
-              const clientName = clientObj?.name || pOrigem?.cliente_nome || '';
-              const orderNum = pOrigem?.numero_pedido || '';
-              const orderBar = pOrigem?.barra_pedido || '';
-              const userNome = c.usuario_nome || '';
+          ) : (
+            (() => {
+              const filteredCancelamentos = cancelamentos.filter((c) => {
+                const pOrigem = pedidos.find((x) => x.id === c.pedido_origem_id);
+                const clientObj = clients.find((x) => x.id === pOrigem?.cliente_id);
+                const clientName = clientObj?.name || pOrigem?.cliente_nome || '';
+                const orderNum = pOrigem?.numero_pedido || '';
+                const orderBar = pOrigem?.barra_pedido || '';
+                const userNome = c.usuario_nome || '';
 
-              const matchSearch =
-                !cancSearch ||
-                clientName.toLowerCase().includes(cancSearch.toLowerCase()) ||
-                orderNum.toLowerCase().includes(cancSearch.toLowerCase()) ||
-                orderBar.toLowerCase().includes(cancSearch.toLowerCase()) ||
-                userNome.toLowerCase().includes(cancSearch.toLowerCase());
+                const matchSearch =
+                  !cancSearch ||
+                  clientName.toLowerCase().includes(cancSearch.toLowerCase()) ||
+                  orderNum.toLowerCase().includes(cancSearch.toLowerCase()) ||
+                  orderBar.toLowerCase().includes(cancSearch.toLowerCase()) ||
+                  userNome.toLowerCase().includes(cancSearch.toLowerCase());
 
-              const createdDate = c.criado_em ? c.criado_em.split('T')[0] : '';
-              const matchInicio = !cancDataInicio || createdDate >= cancDataInicio;
-              const matchFim = !cancDataFim || createdDate <= cancDataFim;
+                const createdDate = c.criado_em ? c.criado_em.split('T')[0] : '';
+                const matchInicio = !cancDataInicio || createdDate >= cancDataInicio;
+                const matchFim = !cancDataFim || createdDate <= cancDataFim;
 
-              return matchSearch && matchInicio && matchFim;
-            });
+                return matchSearch && matchInicio && matchFim;
+              });
 
-            if (filteredCancelamentos.length === 0) {
+              if (filteredCancelamentos.length === 0) {
+                return (
+                  <div className="text-center py-12 bg-white rounded-xl border border-stone-200 shadow-sm text-stone-400">
+                    <Ban className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                    <p className="text-sm">Nenhum cancelamento definitivo de saldo encontrado</p>
+                  </div>
+                );
+              }
+
               return (
-                <div className="text-center py-12 bg-white rounded-xl border border-stone-200 shadow-sm text-stone-400">
-                  <Ban className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                  <p className="text-sm">Nenhum cancelamento definitivo de saldo encontrado</p>
+                <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden animate-in fade-in duration-200">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-stone-50 border-b border-stone-200 text-stone-500 uppercase text-[10px] font-bold">
+                        <tr>
+                          <th className="px-5 py-3">Pedido</th>
+                          <th className="px-5 py-3">Cliente / Fazenda</th>
+                          <th className="px-5 py-3 text-right">Qtd. Cancelada</th>
+                          <th className="px-5 py-3">Motivo</th>
+                          <th className="px-5 py-3">Data / Hora</th>
+                          <th className="px-5 py-3">Usuário</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-stone-100">
+                        {filteredCancelamentos.map((c) => {
+                          const pOrigem = pedidos.find((x) => x.id === c.pedido_origem_id);
+                          const clientObj = clients.find((x) => x.id === pOrigem?.cliente_id);
+                          const clientName = clientObj?.name || pOrigem?.cliente_nome || '—';
+                          const farmName = clientObj?.fazenda || '—';
+
+                          return (
+                            <tr key={c.id} className="hover:bg-stone-50 transition-colors">
+                              <td className="px-5 py-4 font-mono font-bold">
+                                {pOrigem ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => void openPedidoById(pOrigem.id)}
+                                    className="text-emerald-700 underline decoration-emerald-300 underline-offset-2 hover:text-emerald-900"
+                                  >
+                                    {pOrigem.barra_pedido ||
+                                      (pOrigem.numero_pedido
+                                        ? `${pOrigem.numero_pedido}/${pOrigem.emitente ?? 1}`
+                                        : '—')}
+                                  </button>
+                                ) : (
+                                  <span className="text-stone-400">—</span>
+                                )}
+                              </td>
+                              <td className="px-5 py-4">
+                                <span className="text-stone-800 font-medium block">
+                                  {clientName}
+                                </span>
+                                {farmName !== '—' && (
+                                  <span className="text-stone-400 text-xs block">{farmName}</span>
+                                )}
+                              </td>
+                              <td className="px-5 py-4 text-right font-mono font-bold text-red-600">
+                                {c.quantidade.toLocaleString('pt-BR', { minimumFractionDigits: 3 })}{' '}
+                                ton
+                              </td>
+                              <td
+                                className="px-5 py-4 text-stone-600 max-w-xs truncate"
+                                title={c.motivo}
+                              >
+                                {c.motivo || '—'}
+                              </td>
+                              <td className="px-5 py-4 text-stone-500 text-xs">
+                                {c.criado_em ? new Date(c.criado_em).toLocaleString('pt-BR') : '—'}
+                              </td>
+                              <td className="px-5 py-4 text-stone-700 font-medium">
+                                {c.usuario_nome || '—'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               );
-            }
-
-            return (
-              <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden animate-in fade-in duration-200">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-left">
-                    <thead className="bg-stone-50 border-b border-stone-200 text-stone-500 uppercase text-[10px] font-bold">
-                      <tr>
-                        <th className="px-5 py-3">Pedido</th>
-                        <th className="px-5 py-3">Cliente / Fazenda</th>
-                        <th className="px-5 py-3 text-right">Qtd. Cancelada</th>
-                        <th className="px-5 py-3">Motivo</th>
-                        <th className="px-5 py-3">Data / Hora</th>
-                        <th className="px-5 py-3">Usuário</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-stone-100">
-                      {filteredCancelamentos.map((c) => {
-                        const pOrigem = pedidos.find((x) => x.id === c.pedido_origem_id);
-                        const clientObj = clients.find((x) => x.id === pOrigem?.cliente_id);
-                        const clientName = clientObj?.name || pOrigem?.cliente_nome || '—';
-                        const farmName = clientObj?.fazenda || '—';
-
-                        return (
-                          <tr key={c.id} className="hover:bg-stone-50 transition-colors">
-                            <td className="px-5 py-4 font-mono font-bold">
-                              {pOrigem ? (
-                                <button
-                                  type="button"
-                                  onClick={() => void openPedidoById(pOrigem.id)}
-                                  className="text-emerald-700 underline decoration-emerald-300 underline-offset-2 hover:text-emerald-900"
-                                >
-                                  {pOrigem.barra_pedido ||
-                                    (pOrigem.numero_pedido
-                                      ? `${pOrigem.numero_pedido}/${pOrigem.emitente ?? 1}`
-                                      : '—')}
-                                </button>
-                              ) : (
-                                <span className="text-stone-400">—</span>
-                              )}
-                            </td>
-                            <td className="px-5 py-4">
-                              <span className="text-stone-800 font-medium block">{clientName}</span>
-                              {farmName !== '—' && (
-                                <span className="text-stone-400 text-xs block">{farmName}</span>
-                              )}
-                            </td>
-                            <td className="px-5 py-4 text-right font-mono font-bold text-red-600">
-                              {c.quantidade.toLocaleString('pt-BR', { minimumFractionDigits: 3 })} ton
-                            </td>
-                            <td className="px-5 py-4 text-stone-600 max-w-xs truncate" title={c.motivo}>
-                              {c.motivo || '—'}
-                            </td>
-                            <td className="px-5 py-4 text-stone-500 text-xs">
-                              {c.criado_em
-                                ? new Date(c.criado_em).toLocaleString('pt-BR')
-                                : '—'}
-                            </td>
-                            <td className="px-5 py-4 text-stone-700 font-medium">
-                              {c.usuario_nome || '—'}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            );
-          })()}
+            })()
+          )}
         </div>
       ) : (
         <>
@@ -535,76 +615,78 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
           </div>
 
           {/* Filters */}
-          {searchOpen && <div className="bg-white rounded-xl border border-stone-200 shadow-sm p-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
-                <input
-                  type="text"
-                  placeholder="Pedido, nome do cliente ou I.E."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-                />
+          {searchOpen && (
+            <div className="bg-white rounded-xl border border-stone-200 shadow-sm p-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+                  <input
+                    type="text"
+                    placeholder="Pedido, nome do cliente ou I.E."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                  />
+                </div>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                >
+                  <option value="">Todos os status</option>
+                  {(Object.keys(STATUS_LABEL) as PedidoVenda['status'][]).map((s) => (
+                    <option key={s} value={s}>
+                      {STATUS_LABEL[s]}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={filialFilter}
+                  onChange={(e) => setFilialFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                >
+                  <option value="">Todas as filiais</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
               </div>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-              >
-                <option value="">Todos os status</option>
-                {(Object.keys(STATUS_LABEL) as PedidoVenda['status'][]).map((s) => (
-                  <option key={s} value={s}>
-                    {STATUS_LABEL[s]}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={filialFilter}
-                onChange={(e) => setFilialFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-              >
-                <option value="">Todas as filiais</option>
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="mt-4 max-h-72 divide-y divide-stone-100 overflow-y-auto rounded-lg border border-stone-200">
-              {filtered.map((pedido) => {
-                const client = clients.find((item) => item.id === pedido.cliente_id);
-                return (
-                  <button
-                    key={pedido.id}
-                    type="button"
-                    onClick={() => void selectPedido(pedido)}
-                    className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left hover:bg-emerald-50"
-                  >
-                    <span>
-                      <strong className="block font-mono text-sm text-stone-800">
-                        {pedido.numero_pedido
-                          ? `${pedido.numero_pedido}/${pedido.emitente ?? 1}`
-                          : pedido.barra_pedido || 'Sem número'}
-                      </strong>
-                      <span className="text-sm text-stone-500">
-                        {client?.name || pedido.cliente_nome || 'Cliente não identificado'}
+              <div className="mt-4 max-h-72 divide-y divide-stone-100 overflow-y-auto rounded-lg border border-stone-200">
+                {filtered.map((pedido) => {
+                  const client = clients.find((item) => item.id === pedido.cliente_id);
+                  return (
+                    <button
+                      key={pedido.id}
+                      type="button"
+                      onClick={() => void selectPedido(pedido)}
+                      className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left hover:bg-emerald-50"
+                    >
+                      <span>
+                        <strong className="block font-mono text-sm text-stone-800">
+                          {pedido.numero_pedido
+                            ? `${pedido.numero_pedido}/${pedido.emitente ?? 1}`
+                            : pedido.barra_pedido || 'Sem número'}
+                        </strong>
+                        <span className="text-sm text-stone-500">
+                          {client?.name || pedido.cliente_nome || 'Cliente não identificado'}
+                        </span>
                       </span>
-                    </span>
-                    <span className="text-xs text-stone-400">
-                      I.E. {client?.stateRegistration || 'não informada'}
-                    </span>
-                  </button>
-                );
-              })}
-              {filtered.length === 0 && (
-                <p className="px-4 py-6 text-center text-sm text-stone-400">
-                  Nenhum pedido encontrado.
-                </p>
-              )}
+                      <span className="text-xs text-stone-400">
+                        I.E. {client?.stateRegistration || 'não informada'}
+                      </span>
+                    </button>
+                  );
+                })}
+                {filtered.length === 0 && (
+                  <p className="px-4 py-6 text-center text-sm text-stone-400">
+                    Nenhum pedido encontrado.
+                  </p>
+                )}
+              </div>
             </div>
-          </div>}
+          )}
 
           {selectedPedido && (
             <nav
@@ -625,7 +707,10 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
               <button
                 type="button"
                 onClick={() => void navigatePedido(1)}
-                disabled={selectedPedidoPosition < 0 || selectedPedidoPosition >= pedidosCronologicos.length - 1}
+                disabled={
+                  selectedPedidoPosition < 0 ||
+                  selectedPedidoPosition >= pedidosCronologicos.length - 1
+                }
                 className="inline-flex items-center gap-1 rounded-lg border border-stone-200 px-3 py-2 text-sm font-bold text-stone-600 hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Próximo <ChevronRight className="h-4 w-4" />
@@ -650,7 +735,9 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
             <div className="space-y-3">
               {(() => {
                 const idadeDias = selectedPedido.criado_em
-                  ? Math.floor((Date.now() - new Date(selectedPedido.criado_em).getTime()) / 86400000)
+                  ? Math.floor(
+                      (Date.now() - new Date(selectedPedido.criado_em).getTime()) / 86400000
+                    )
                   : 0;
                 const itens = itensPorPedido[selectedPedido.id] ?? [];
                 const saldoReal = itens.reduce(
@@ -868,31 +955,34 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                                 const progresso =
                                   total > 0 ? Math.min(100, (carregado / total) * 100) : 0;
                                 return (
-                                <div
-                                  key={item.id ?? i}
-                                  className="space-y-2 rounded-lg border border-stone-100 p-3 text-sm"
-                                >
-                                  <div className="flex items-center justify-between gap-3">
-                                    <span className="font-bold text-stone-700">{item.produto_nome}</span>
-                                    <span className="text-xs text-stone-500">
-                                      {carregado.toFixed(3)} t carregadas · {saldoItem.toFixed(3)} t restantes
-                                    </span>
+                                  <div
+                                    key={item.id ?? i}
+                                    className="space-y-2 rounded-lg border border-stone-100 p-3 text-sm"
+                                  >
+                                    <div className="flex items-center justify-between gap-3">
+                                      <span className="font-bold text-stone-700">
+                                        {item.produto_nome}
+                                      </span>
+                                      <span className="text-xs text-stone-500">
+                                        {carregado.toFixed(3)} t carregadas · {saldoItem.toFixed(3)}{' '}
+                                        t restantes
+                                      </span>
+                                    </div>
+                                    <div className="h-2 overflow-hidden rounded-full bg-stone-100">
+                                      <div
+                                        className="h-full rounded-full bg-emerald-500 transition-all"
+                                        style={{ width: `${progresso}%` }}
+                                        role="progressbar"
+                                        aria-label={`Progresso de ${item.produto_nome}`}
+                                        aria-valuenow={Math.round(progresso)}
+                                        aria-valuemin={0}
+                                        aria-valuemax={100}
+                                      />
+                                    </div>
+                                    <p className="text-right text-[10px] font-bold text-stone-400">
+                                      {progresso.toFixed(1)}% carregado
+                                    </p>
                                   </div>
-                                  <div className="h-2 overflow-hidden rounded-full bg-stone-100">
-                                    <div
-                                      className="h-full rounded-full bg-emerald-500 transition-all"
-                                      style={{ width: `${progresso}%` }}
-                                      role="progressbar"
-                                      aria-label={`Progresso de ${item.produto_nome}`}
-                                      aria-valuenow={Math.round(progresso)}
-                                      aria-valuemin={0}
-                                      aria-valuemax={100}
-                                    />
-                                  </div>
-                                  <p className="text-right text-[10px] font-bold text-stone-400">
-                                    {progresso.toFixed(1)}% carregado
-                                  </p>
-                                </div>
                                 );
                               })}
                             </div>
@@ -907,42 +997,68 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                             </p>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
                               <div>
-                                <span className="font-semibold text-stone-500 block mb-0.5">Razão Social / Nome</span>
-                                <span className="text-stone-800 font-medium text-sm">{clientObj.name}</span>
+                                <span className="font-semibold text-stone-500 block mb-0.5">
+                                  Razão Social / Nome
+                                </span>
+                                <span className="text-stone-800 font-medium text-sm">
+                                  {clientObj.name}
+                                </span>
                               </div>
                               {clientObj.document && (
                                 <div>
-                                  <span className="font-semibold text-stone-500 block mb-0.5">CNPJ / CPF</span>
-                                  <span className="text-stone-800 font-medium">{clientObj.document}</span>
+                                  <span className="font-semibold text-stone-500 block mb-0.5">
+                                    CNPJ / CPF
+                                  </span>
+                                  <span className="text-stone-800 font-medium">
+                                    {clientObj.document}
+                                  </span>
                                 </div>
                               )}
                               {clientObj.stateRegistration && (
                                 <div>
-                                  <span className="font-semibold text-stone-500 block mb-0.5">Inscrição Estadual (IE)</span>
-                                  <span className="text-stone-800 font-medium">{clientObj.stateRegistration}</span>
+                                  <span className="font-semibold text-stone-500 block mb-0.5">
+                                    Inscrição Estadual (IE)
+                                  </span>
+                                  <span className="text-stone-800 font-medium">
+                                    {clientObj.stateRegistration}
+                                  </span>
                                 </div>
                               )}
                               {clientObj.phone && (
                                 <div>
-                                  <span className="font-semibold text-stone-500 block mb-0.5">Telefone</span>
-                                  <span className="text-stone-800 font-medium">{clientObj.phone}</span>
+                                  <span className="font-semibold text-stone-500 block mb-0.5">
+                                    Telefone
+                                  </span>
+                                  <span className="text-stone-800 font-medium">
+                                    {clientObj.phone}
+                                  </span>
                                 </div>
                               )}
                               {clientObj.email && (
                                 <div>
-                                  <span className="font-semibold text-stone-500 block mb-0.5">E-mail</span>
-                                  <span className="text-stone-800 font-medium truncate block">{clientObj.email}</span>
+                                  <span className="font-semibold text-stone-500 block mb-0.5">
+                                    E-mail
+                                  </span>
+                                  <span className="text-stone-800 font-medium truncate block">
+                                    {clientObj.email}
+                                  </span>
                                 </div>
                               )}
                               {clientObj.fazenda && (
                                 <div>
-                                  <span className="font-semibold text-stone-500 block mb-0.5">Fazenda</span>
-                                  <span className="text-stone-800 font-medium">{clientObj.fazenda}</span>
+                                  <span className="font-semibold text-stone-500 block mb-0.5">
+                                    Fazenda
+                                  </span>
+                                  <span className="text-stone-800 font-medium">
+                                    {clientObj.fazenda}
+                                  </span>
                                 </div>
                               )}
                               {(clientObj.deliveryAddress || clientObj.address) && (
                                 <div className="md:col-span-3 border-t border-stone-200/60 pt-2">
-                                  <span className="font-semibold text-stone-500 block mb-1">Endereço de Entrega</span>
+                                  <span className="font-semibold text-stone-500 block mb-1">
+                                    Endereço de Entrega
+                                  </span>
                                   <span className="text-stone-700">
                                     {(() => {
                                       const addr = clientObj.deliveryAddress || clientObj.address;
@@ -960,9 +1076,12 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs pt-2 border-t border-stone-100">
                           {p.precificacao_id && (
                             <div>
-                              <p className="font-bold text-stone-400 uppercase mb-0.5">Precificação</p>
+                              <p className="font-bold text-stone-400 uppercase mb-0.5">
+                                Precificação
+                              </p>
                               <p className="text-stone-700 font-mono font-bold">
-                                {pricingRecords.find((x) => x.id === p.precificacao_id)?.cod || p.precificacao_id.slice(0, 8)}
+                                {pricingRecords.find((x) => x.id === p.precificacao_id)?.cod ||
+                                  p.precificacao_id.slice(0, 8)}
                               </p>
                             </div>
                           )}
@@ -1039,7 +1158,6 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                             </button>
                           </div>
                         )}
-
                       </div>
                     )}
                   </div>

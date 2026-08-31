@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useNotificationStore } from '../store/notificationStore';
 import { subscribeToNotifications } from '../services/notificationSubscription';
 import { useNotificationPreferences } from './useNotificationPreferences';
@@ -22,6 +22,13 @@ export function useNotifications(userId: string) {
   const setNotifications = useNotificationStore((state) => state.setNotifications);
   const { preferences, isLoading: prefsLoading } = useNotificationPreferences(userId);
   const { playSound } = useNotificationSound();
+  const preferencesRef = useRef(preferences);
+  const playSoundRef = useRef(playSound);
+
+  useEffect(() => {
+    preferencesRef.current = preferences;
+    playSoundRef.current = playSound;
+  }, [playSound, preferences]);
 
   const loadNotifications = useCallback(async () => {
     if (!userId) return;
@@ -41,32 +48,58 @@ export function useNotifications(userId: string) {
   useEffect(() => {
     if (!userId || prefsLoading) return;
 
-    const unsubscribe = subscribeToNotifications(userId, (notification) => {
-      // Check if user has completely disabled in-app notifications
-      const inAppEnabled = preferences?.in_app_enabled ?? true;
-      if (!inAppEnabled) return;
+    const unsubscribe = subscribeToNotifications(
+      userId,
+      (notification) => {
+        const currentPreferences = preferencesRef.current;
+        // Check if user has completely disabled in-app notifications
+        const inAppEnabled = currentPreferences?.in_app_enabled ?? true;
+        if (!inAppEnabled) return;
 
-      // Check if this specific group/type is disabled
-      if (
-        preferences?.disabled_types?.includes(notification.group_type) ||
-        preferences?.disabled_types?.includes(notification.type)
-      ) {
-        return;
+        // Check if this specific group/type is disabled
+        if (
+          currentPreferences?.disabled_types?.includes(notification.group_type) ||
+          currentPreferences?.disabled_types?.includes(notification.type)
+        ) {
+          return;
+        }
+
+        addNotification(notification);
+
+        // Play sound
+        const soundEnabled = currentPreferences?.sound_enabled ?? true;
+        if (soundEnabled) {
+          playSoundRef.current(notification.group_type);
+        }
+      },
+      (status) => {
+        // Reconcile events that may have happened while the socket was offline.
+        if (status === 'SUBSCRIBED') void loadNotifications();
       }
-
-      addNotification(notification);
-
-      // Play sound
-      const soundEnabled = preferences?.sound_enabled ?? true;
-      if (soundEnabled) {
-        playSound(notification.group_type);
-      }
-    });
+    );
 
     return () => {
       unsubscribe();
     };
-  }, [addNotification, playSound, preferences, prefsLoading, userId]);
+  }, [addNotification, loadNotifications, prefsLoading, userId]);
+
+  useEffect(() => {
+    if (!userId) return;
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void loadNotifications();
+    };
+    const refreshWhenOnline = () => void loadNotifications();
+
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    window.addEventListener('focus', refreshWhenOnline);
+    window.addEventListener('online', refreshWhenOnline);
+    return () => {
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+      window.removeEventListener('focus', refreshWhenOnline);
+      window.removeEventListener('online', refreshWhenOnline);
+    };
+  }, [loadNotifications, userId]);
 
   // Optionally extend markAsRead to also update Supabase
   const markAsReadDb = useCallback(
