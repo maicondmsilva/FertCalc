@@ -64,9 +64,11 @@ interface UseCalculatorProps {
   initialData?: PricingRecord | null;
   initialFormulaToLoad?: SavedFormula | null;
   initialBranchId?: string;
+  initialLoadingLocationId?: string;
   initialPriceListId?: string;
   onClearEditing?: () => void;
   onSaveSuccess?: (record: PricingRecord) => void;
+  onSavedFormulaSuccess?: () => void;
   currentUser: AppUser;
 }
 
@@ -78,9 +80,11 @@ export function useCalculator({
   initialData,
   initialFormulaToLoad,
   initialBranchId,
+  initialLoadingLocationId,
   initialPriceListId,
   onClearEditing,
   onSaveSuccess,
+  onSavedFormulaSuccess,
   currentUser,
 }: UseCalculatorProps) {
   const { showSuccess, showError } = useToast();
@@ -206,6 +210,7 @@ export function useCalculator({
         ...prev,
         targetFormula: initialFormulaToLoad.targetFormula,
         branchId: initialBranchId || prev.branchId,
+        local_carregamento_id: initialLoadingLocationId || prev.local_carregamento_id,
         priceListId: initialPriceListId || prev.priceListId,
       }));
       setCalculations([
@@ -213,12 +218,16 @@ export function useCalculator({
           id: `f_${Date.now()}`,
           formula: initialFormulaToLoad.targetFormula,
           selected: true,
+          category: initialFormulaToLoad.category ?? 'all',
+          targetCa: initialFormulaToLoad.targetCa,
+          targetS: initialFormulaToLoad.targetS,
           modo_calculo: DEFAULT_CALCULATION_MODE,
           produtos_livres: [],
           factors: {
             ...factors,
             targetFormula: initialFormulaToLoad.targetFormula,
             branchId: initialBranchId || factors.branchId,
+            local_carregamento_id: initialLoadingLocationId || factors.local_carregamento_id,
             priceListId: initialPriceListId || factors.priceListId,
           },
           macros: initialFormulaToLoad.macros,
@@ -228,7 +237,7 @@ export function useCalculator({
       setFormulaProductSelections({});
       setFormulaProductSnapshots({});
     }
-  }, [initialFormulaToLoad, initialBranchId, initialPriceListId]);
+  }, [initialFormulaToLoad, initialBranchId, initialLoadingLocationId, initialPriceListId]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -1184,6 +1193,22 @@ export function useCalculator({
         try {
           const existing = await getSavedFormulas();
 
+          if (initialFormulaToLoad?.isRevisionFromSavedFormula) {
+            await updateSavedFormula(initialFormulaToLoad.id, {
+              name: name.trim(),
+              date: new Date().toISOString(),
+              targetFormula: selectedCalc.formula,
+              category: selectedCalc.category ?? 'all',
+              targetCa: selectedCalc.targetCa,
+              targetS: selectedCalc.targetS,
+              macros: selectedCalc.macros || macros,
+              micros: selectedCalc.micros || micros,
+            });
+            showSuccess('Batida atualizada com sucesso!');
+            onSavedFormulaSuccess?.();
+            return;
+          }
+
           const currentSuffixes = Array.from(new Set(suffixes)).sort().join(',');
           const currentFormula = selectedCalc.formula;
           const currentMicros = JSON.stringify(
@@ -1232,10 +1257,14 @@ export function useCalculator({
                 name: name.trim(),
                 date: new Date().toISOString(),
                 targetFormula: selectedCalc.formula,
+                category: selectedCalc.category ?? 'all',
+                targetCa: selectedCalc.targetCa,
+                targetS: selectedCalc.targetS,
                 macros: selectedCalc.macros || macros,
                 micros: selectedCalc.micros || micros,
               });
               showSuccess('Batida existente atualizada com sucesso!');
+              onSavedFormulaSuccess?.();
               return;
             }
           }
@@ -1257,6 +1286,9 @@ export function useCalculator({
             name: name.trim(),
             date: new Date().toISOString(),
             targetFormula: selectedCalc.formula,
+            category: selectedCalc.category ?? 'all',
+            targetCa: selectedCalc.targetCa,
+            targetS: selectedCalc.targetS,
             macros: selectedCalc.macros || macros,
             micros: selectedCalc.micros || micros,
           });
@@ -1275,6 +1307,7 @@ export function useCalculator({
             showError('Batida salva, mas houve um erro ao registrar em Produtos Formulados.');
           }
           showSuccess('Batida salva com sucesso nas suas Fórmulas!');
+          onSavedFormulaSuccess?.();
         } catch (error: unknown) {
           const e = error as { message?: string; error_description?: string };
           const msg = e?.message || e?.error_description || 'Tente novamente.';

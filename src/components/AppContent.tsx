@@ -54,7 +54,6 @@ interface AppContentProps {
   onEditPricing: (pricing: PricingRecord) => void;
   onCalculatorSaved: (record: PricingRecord) => void;
   onClearCalculator: () => void;
-  onSendFormulaToCalculator: (formula: SavedFormula, branchId: string, priceListId: string) => void;
 }
 
 function AppContentRoute({
@@ -68,7 +67,6 @@ function AppContentRoute({
   onEditPricing,
   onCalculatorSaved,
   onClearCalculator,
-  onSendFormulaToCalculator,
 }: AppContentProps) {
   if (!activeModule) {
     return <Home currentUser={currentUser} onSelectModule={onSelectModule} />;
@@ -98,9 +96,7 @@ function AppContentRoute({
       );
     }
     if (activeTab === 'saved_formulas' && hasPermission('calculator')) {
-      return (
-        <SavedFormulas currentUser={currentUser} onSendToCalculator={onSendFormulaToCalculator} />
-      );
+      return <SavedFormulas currentUser={currentUser} />;
     }
     if (activeTab === 'produtos_formulados' && hasPermission('produtosFormulados')) {
       return <ProdutosFormulados />;

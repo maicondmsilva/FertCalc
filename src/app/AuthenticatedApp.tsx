@@ -88,7 +88,6 @@ export default function AuthenticatedApp({
         onEditPricing={pricingWorkspace.editPricing}
         onCalculatorSaved={pricingWorkspace.calculatorSaved}
         onClearCalculator={pricingWorkspace.clearCalculator}
-        onSendFormulaToCalculator={pricingWorkspace.sendFormulaToCalculator}
       />
     </AppShell>
   );

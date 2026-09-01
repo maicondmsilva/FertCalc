@@ -14,7 +14,6 @@ import { formatId } from '../utils/formatId';
 import {
   Beaker,
   Trash2,
-  ArrowRight,
   Save,
   Calendar,
   Database,
@@ -28,6 +27,7 @@ import {
   FileText,
   Star,
   Search,
+  X,
 } from 'lucide-react';
 import { useToast } from './Toast';
 import { useConfirm } from '../hooks/useConfirm';
@@ -36,10 +36,10 @@ import {
   getFormulaUpdateProtection,
   getPriceListsForLoadingLocation,
 } from '../utils/savedFormulaWorkflow';
+import Calculator from './Calculator';
 
 interface SavedFormulasProps {
   currentUser: User;
-  onSendToCalculator: (formula: SavedFormula, branchId: string, priceListId: string) => void;
 }
 
 interface ModalGerarRelatorioProps {
@@ -428,7 +428,7 @@ function ModalGerarRelatorio({
   );
 }
 
-export default function SavedFormulas({ currentUser, onSendToCalculator }: SavedFormulasProps) {
+export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
   const { showSuccess, showError } = useToast();
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
   const [formulas, setFormulas] = useState<SavedFormula[]>([]);
@@ -438,6 +438,7 @@ export default function SavedFormulas({ currentUser, onSendToCalculator }: Saved
   const [selectedPriceListId, setSelectedPriceListId] = useState<string>('');
   const [selectedFormulas, setSelectedFormulas] = useState<string[]>([]);
   const [formulaToUpdateId, setFormulaToUpdateId] = useState<string>('');
+  const [formulaInEditor, setFormulaInEditor] = useState<SavedFormula | null>(null);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [linhasDiferenciadas, setLinhasDiferenciadas] = useState<Record<string, boolean>>({});
   const [appSettings, setAppSettings] = useState<AppSettings>({
@@ -568,15 +569,9 @@ export default function SavedFormulas({ currentUser, onSendToCalculator }: Saved
 
   useEffect(() => {
     setSelectedFormulas((current) =>
-      current.filter((id) =>
-        formulas.some(
-          (formula) =>
-            formula.id === id &&
-            (!selectedLocalId || formula.local_carregamento_id === selectedLocalId)
-        )
-      )
+      current.filter((id) => formulas.some((formula) => formula.id === id))
     );
-  }, [selectedLocalId, formulas]);
+  }, [formulas]);
 
   useEffect(() => {
     const updateableIds = selectedFormulas.filter((id) => linhasDiferenciadas[id] !== true);
@@ -585,7 +580,7 @@ export default function SavedFormulas({ currentUser, onSendToCalculator }: Saved
     );
   }, [selectedFormulas, linhasDiferenciadas]);
 
-  const sendFormulaToCalculator = (formula: SavedFormula) => {
+  const openFormulaEditor = (formula: SavedFormula) => {
     if (!selectedLocalId) {
       showError('Selecione o local de carregamento antes de abrir a calculadora.');
       return;
@@ -604,15 +599,11 @@ export default function SavedFormulas({ currentUser, onSendToCalculator }: Saved
       return;
     }
 
-    onSendToCalculator(
-      {
-        ...formula,
-        protectedMaterialIds: protection.protectedMaterialIds,
-        isRevisionFromSavedFormula: true,
-      },
-      selectedLocalId,
-      selectedPriceListId
-    );
+    setFormulaInEditor({
+      ...formula,
+      protectedMaterialIds: protection.protectedMaterialIds,
+      isRevisionFromSavedFormula: true,
+    });
   };
 
   if (loading) {
@@ -625,10 +616,8 @@ export default function SavedFormulas({ currentUser, onSendToCalculator }: Saved
 
   const selectedList = compatiblePriceLists.find((l) => l.id === selectedPriceListId);
 
-  // Filter by local de carregamento if selected
-  const filteredFormulas = selectedLocalId
-    ? formulas.filter((f) => f.local_carregamento_id === selectedLocalId)
-    : formulas;
+  // Batidas belong to the organization and can be priced at every loading location.
+  const filteredFormulas = formulas;
 
   const allSelected =
     filteredFormulas.length > 0 && selectedFormulas.length === filteredFormulas.length;
@@ -723,6 +712,42 @@ export default function SavedFormulas({ currentUser, onSendToCalculator }: Saved
           </div>
         </div>
 
+        {formulaInEditor && (
+          <section className="rounded-2xl border-2 border-emerald-300 bg-stone-50 p-3 shadow-lg sm:p-5">
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-black uppercase tracking-wider text-emerald-700">
+                  Atualização rápida da batida
+                </p>
+                <h3 className="text-lg font-bold text-stone-900">{formulaInEditor.name}</h3>
+                <p className="text-sm text-stone-600">
+                  A calculadora foi aberta aqui com o local e a tabela de preços selecionados.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFormulaInEditor(null)}
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm font-bold text-stone-700 hover:bg-stone-100"
+              >
+                <X className="h-4 w-4" /> Fechar calculadora
+              </button>
+            </div>
+            <Calculator
+              key={`${formulaInEditor.id}-${selectedLocalId}-${selectedPriceListId}`}
+              currentUser={currentUser}
+              isSimplified
+              initialFormulaToLoad={formulaInEditor}
+              initialBranchId={locais.find((local) => local.id === selectedLocalId)?.filial_id}
+              initialLoadingLocationId={selectedLocalId}
+              initialPriceListId={selectedPriceListId}
+              onSavedFormulaSuccess={() => {
+                setFormulaInEditor(null);
+                void loadData();
+              }}
+            />
+          </section>
+        )}
+
         {filteredFormulas.length === 0 ? (
           <div className="bg-white rounded-xl shadow-sm border border-stone-200 p-12 text-center">
             <div className="w-16 h-16 bg-stone-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -731,7 +756,7 @@ export default function SavedFormulas({ currentUser, onSendToCalculator }: Saved
             <h3 className="text-lg font-bold text-stone-800 mb-2">Nenhuma fórmula salva</h3>
             <p className="text-stone-500 max-w-md mx-auto">
               {selectedLocalId
-                ? 'Nenhuma batida encontrada para este local de carregamento.'
+                ? 'Nenhuma batida salva está disponível para esta organização.'
                 : 'Acesse a Calculadora, faça uma batida e clique em "Salvar Batida".'}
             </p>
           </div>
@@ -794,13 +819,13 @@ export default function SavedFormulas({ currentUser, onSendToCalculator }: Saved
                       type="button"
                       onClick={() => {
                         const formula = formulas.find((item) => item.id === formulaToUpdateId);
-                        if (formula) sendFormulaToCalculator(formula);
+                        if (formula) openFormulaEditor(formula);
                       }}
                       disabled={!formulaToUpdateId}
                       className="flex items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      Atualizar na calculadora
-                      <ArrowRight className="h-4 w-4" />
+                      Atualizar nesta página
+                      <Beaker className="h-4 w-4" />
                     </button>
                   </div>
                 </div>
@@ -952,7 +977,7 @@ export default function SavedFormulas({ currentUser, onSendToCalculator }: Saved
 
                     <div className="bg-stone-50 p-3 border-t border-stone-100">
                       <button
-                        onClick={() => sendFormulaToCalculator(formula)}
+                        onClick={() => openFormulaEditor(formula)}
                         disabled={isLinhaDiferenciada || !selectedLocalId || !selectedList}
                         className="w-full flex justify-center items-center gap-2 bg-white border border-stone-200 hover:border-emerald-500 hover:text-emerald-600 text-stone-700 font-medium py-2 rounded-lg transition-colors text-sm shadow-sm disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-400"
                         title={
@@ -962,11 +987,11 @@ export default function SavedFormulas({ currentUser, onSendToCalculator }: Saved
                               ? 'Selecione o local de carregamento'
                               : !selectedList
                                 ? 'Não existe lista de preços vinculada ao local'
-                                : 'Atualizar esta batida na calculadora'
+                                : 'Atualizar esta batida nesta página'
                         }
                       >
-                        {isLinhaDiferenciada ? 'Composição protegida' : 'Atualizar na Calculadora'}
-                        <ArrowRight className="w-4 h-4" />
+                        {isLinhaDiferenciada ? 'Composição protegida' : 'Atualizar nesta página'}
+                        <Beaker className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
