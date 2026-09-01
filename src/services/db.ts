@@ -965,7 +965,9 @@ const EMPTY_PRICING_SUMMARY: PricingRecord['summary'] = {
 };
 const FREE_PRODUCTS_FORMULA_LABEL = 'Produtos Livres';
 type CalculationDbInput =
-  Partial<NonNullable<PricingRecord['calculations']>[number]> | null | undefined;
+  | Partial<NonNullable<PricingRecord['calculations']>[number]>
+  | null
+  | undefined;
 
 const parseFiniteNumber = (value: unknown, fallback = 0) => {
   const parsed = Number(value);
@@ -1170,6 +1172,9 @@ export async function getSavedFormulas(): Promise<SavedFormula[]> {
     name: d.name,
     date: d.date,
     targetFormula: d.target_formula,
+    category: d.category as SavedFormula['category'],
+    targetCa: d.target_ca != null ? Number(d.target_ca) : undefined,
+    targetS: d.target_s != null ? Number(d.target_s) : undefined,
     macros: d.macros || [],
     micros: d.micros || [],
     local_carregamento_id: d.local_carregamento_id as string | undefined,
@@ -1189,6 +1194,9 @@ export async function createSavedFormula(formula: Omit<SavedFormula, 'id'>): Pro
       name: formula.name,
       date: formula.date,
       target_formula: formula.targetFormula,
+      category: formula.category ?? 'all',
+      target_ca: formula.targetCa ?? null,
+      target_s: formula.targetS ?? null,
       macros: formula.macros,
       micros: formula.micros,
     })
@@ -1206,6 +1214,9 @@ export async function createSavedFormula(formula: Omit<SavedFormula, 'id'>): Pro
     name: data.name,
     date: data.date,
     targetFormula: data.target_formula,
+    category: data.category as SavedFormula['category'],
+    targetCa: data.target_ca != null ? Number(data.target_ca) : undefined,
+    targetS: data.target_s != null ? Number(data.target_s) : undefined,
     macros: data.macros || [],
     micros: data.micros || [],
     local_carregamento_id: data.local_carregamento_id as string | undefined,
@@ -1218,7 +1229,11 @@ export async function updateSavedFormula(
 ): Promise<void> {
   const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (formula.name !== undefined) payload.name = formula.name;
+  if (formula.date !== undefined) payload.date = formula.date;
   if (formula.targetFormula !== undefined) payload.target_formula = formula.targetFormula;
+  if (formula.category !== undefined) payload.category = formula.category;
+  if (formula.targetCa !== undefined) payload.target_ca = formula.targetCa;
+  if (formula.targetS !== undefined) payload.target_s = formula.targetS;
   if (formula.macros !== undefined) payload.macros = formula.macros;
   if (formula.micros !== undefined) payload.micros = formula.micros;
 

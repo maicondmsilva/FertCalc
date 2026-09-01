@@ -403,6 +403,9 @@ export interface SavedFormula {
   name: string;
   date: string;
   targetFormula: string;
+  category?: TargetFormula['category'];
+  targetCa?: number;
+  targetS?: number;
   macros: RawMaterial[];
   micros: RawMaterial[];
   local_carregamento_id?: string;

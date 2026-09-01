@@ -71,7 +71,6 @@ const renderContent = (activeModule: ActiveModule, activeTab: string, permission
       onEditPricing={vi.fn()}
       onCalculatorSaved={vi.fn()}
       onClearCalculator={vi.fn()}
-      onSendFormulaToCalculator={vi.fn()}
     />
   );
 
@@ -115,7 +114,6 @@ describe('AppContent', () => {
       onEditPricing,
       onCalculatorSaved,
       onClearCalculator: vi.fn(),
-      onSendFormulaToCalculator: vi.fn(),
     };
 
     const view = render(<AppContent {...commonProps} activeTab="calculator" />);

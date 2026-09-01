@@ -48,9 +48,11 @@ interface CalculatorProps {
   initialData?: PricingRecord | null;
   initialFormulaToLoad?: SavedFormula | null;
   initialBranchId?: string;
+  initialLoadingLocationId?: string;
   initialPriceListId?: string;
   onClearEditing?: () => void;
   onSaveSuccess?: (record: PricingRecord) => void;
+  onSavedFormulaSuccess?: () => void;
   currentUser: AppUser;
   isSimplified?: boolean;
 }
@@ -59,9 +61,11 @@ export default function Calculator({
   initialData,
   initialFormulaToLoad,
   initialBranchId,
+  initialLoadingLocationId,
   initialPriceListId,
   onClearEditing,
   onSaveSuccess,
+  onSavedFormulaSuccess,
   currentUser,
   isSimplified,
 }: CalculatorProps) {
@@ -131,9 +135,11 @@ export default function Calculator({
     initialData,
     initialFormulaToLoad,
     initialBranchId,
+    initialLoadingLocationId,
     initialPriceListId,
     onClearEditing,
     onSaveSuccess,
+    onSavedFormulaSuccess,
     currentUser,
   });
 
@@ -781,16 +787,23 @@ export default function Calculator({
                                                 (sf) => sf.id === prod.saved_formula_id
                                               );
                                               if (savedF) {
-                                                // Map macros
+                                                // Restore the saved composition while retaining
+                                                // current material prices and nutrient metadata.
                                                 const updatedMacros = calc.macros.map((m) => {
                                                   const savedM = savedF.macros.find(
                                                     (sm) => sm.id === m.id || sm.name === m.name
                                                   );
                                                   return {
                                                     ...m,
+                                                    ...savedM,
+                                                    id: m.id,
+                                                    name: m.name,
                                                     selected: savedM ? !!savedM.selected : false,
                                                     minQty: savedM ? Number(savedM.minQty || 0) : 0,
-                                                    quantity: 0,
+                                                    quantity: savedM
+                                                      ? Number(savedM.quantity || 0)
+                                                      : 0,
+                                                    price: m.price,
                                                   };
                                                 });
                                                 // Map micros
@@ -800,9 +813,15 @@ export default function Calculator({
                                                   );
                                                   return {
                                                     ...m,
+                                                    ...savedM,
+                                                    id: m.id,
+                                                    name: m.name,
                                                     selected: savedM ? !!savedM.selected : false,
                                                     minQty: savedM ? Number(savedM.minQty || 0) : 0,
-                                                    quantity: 0,
+                                                    quantity: savedM
+                                                      ? Number(savedM.quantity || 0)
+                                                      : 0,
+                                                    price: m.price,
                                                   };
                                                 });
                                                 setCalculations((prev) =>
@@ -811,6 +830,9 @@ export default function Calculator({
                                                       ? {
                                                           ...c,
                                                           formula: formulaName,
+                                                          category: savedF.category ?? 'all',
+                                                          targetCa: savedF.targetCa,
+                                                          targetS: savedF.targetS,
                                                           macros: updatedMacros,
                                                           micros: updatedMicros,
                                                         }
