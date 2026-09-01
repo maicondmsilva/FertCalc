@@ -46,6 +46,7 @@ import {
 } from '../../services/notificationService';
 import { useToast } from '../Toast';
 import HistoricoModificacoes from '../HistoricoModificacoes';
+import { subscribeToOrderLoadingChanges } from '../../services/orderLoadingSubscription';
 
 // ─────────────────────────────────────────────────────────────
 //  Props
@@ -1294,6 +1295,23 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
     loadCotacoesResponsavel,
     loadCotacoesFinalizadas,
   ]);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const unsubscribe = subscribeToOrderLoadingChanges(() => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        void loadMinhasCotacoes();
+        void loadCotacoesResponsavel();
+        void loadCotacoesFinalizadas();
+      }, 350);
+    });
+
+    return () => {
+      clearTimeout(timer);
+      unsubscribe();
+    };
+  }, [loadMinhasCotacoes, loadCotacoesResponsavel, loadCotacoesFinalizadas]);
 
   // Close client autocomplete on outside click
   useEffect(() => {
