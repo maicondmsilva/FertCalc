@@ -48,7 +48,7 @@ import { useConfirm } from './useConfirm';
 import { getLocaisAtivos } from '../services/locaisCarregamentoService';
 import { LocalCarregamento } from '../types/carregamento';
 import {
-  createProdutoFormulado,
+  syncProdutoFormuladoWithSavedFormula,
   getProdutoFormuladoBySavedFormulaId,
 } from '../services/produtosFormuladosService';
 import { addHistoricoPreco } from '../services/historicoPrecoService';
@@ -1204,6 +1204,12 @@ export function useCalculator({
               macros: selectedCalc.macros || macros,
               micros: selectedCalc.micros || micros,
             });
+            await syncProdutoFormuladoWithSavedFormula({
+              saved_formula_id: initialFormulaToLoad.id,
+              nome: name.trim(),
+              formula_npk: selectedCalc.formula,
+              criado_por: currentUser.id,
+            });
             showSuccess('Batida atualizada com sucesso!');
             onSavedFormulaSuccess?.();
             return;
@@ -1263,6 +1269,12 @@ export function useCalculator({
                 macros: selectedCalc.macros || macros,
                 micros: selectedCalc.micros || micros,
               });
+              await syncProdutoFormuladoWithSavedFormula({
+                saved_formula_id: duplicate.id,
+                nome: name.trim(),
+                formula_npk: selectedCalc.formula,
+                criado_por: currentUser.id,
+              });
               showSuccess('Batida existente atualizada com sucesso!');
               onSavedFormulaSuccess?.();
               return;
@@ -1294,12 +1306,10 @@ export function useCalculator({
           });
           // Also save to produtos_formulados
           try {
-            await createProdutoFormulado({
+            await syncProdutoFormuladoWithSavedFormula({
               nome: name.trim(),
               formula_npk: selectedCalc.formula,
               saved_formula_id: savedFormula.id,
-              linha_diferenciada: false,
-              ativo: true,
               criado_por: currentUser.id,
             });
           } catch (pfError) {
