@@ -839,7 +839,9 @@ export async function getQuantidadeCarregadaPorItem(
 ): Promise<Record<string, number>> {
   const { data, error } = await supabase
     .from('carregamentos')
-    .select('quantidade_carregada, carregamento_itens(pedido_venda_item_id, quantidade_ton)')
+    .select(
+      'quantidade_carregada, carregamento_itens!carregamento_itens_carregamento_id_fkey(pedido_venda_item_id, quantidade_ton)'
+    )
     .eq('pedido_venda_id', pedidoVendaId)
     .gt('quantidade_carregada', 0);
 
