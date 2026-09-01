@@ -8,7 +8,8 @@ import {
 } from '../services/db';
 import { getLocaisAtivos } from '../services/locaisCarregamentoService';
 import { getProdutoFormuladoBySavedFormulaId } from '../services/produtosFormuladosService';
-import { SavedFormula, User, PriceList, AppSettings, Client } from '../types';
+import { SavedFormula, User, PriceList, AppSettings, Client, Embalagem } from '../types';
+import { getEmbalagens } from '../services/embalagensService';
 import { LocalCarregamento } from '../types/carregamento';
 import { formatId } from '../utils/formatId';
 import {
@@ -33,8 +34,11 @@ import { useToast } from './Toast';
 import { useConfirm } from '../hooks/useConfirm';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import {
+  calculateReportPrice,
+  DEFAULT_REPORT_COMMERCIAL_FACTORS,
   getFormulaUpdateProtection,
   getPriceListsForLoadingLocation,
+  ReportCommercialFactors,
 } from '../utils/savedFormulaWorkflow';
 import Calculator from './Calculator';
 
@@ -55,6 +59,246 @@ interface ModalGerarRelatorioProps {
   onClose: () => void;
 }
 
+const addDaysToReportDate = (date: string, days: number) => {
+  if (!date) return '';
+  const result = new Date(`${date}T12:00:00`);
+  result.setDate(result.getDate() + Number(days || 0));
+  return result.toISOString().split('T')[0];
+};
+
+interface ReportFactorsFormProps {
+  id: string;
+  factors: ReportCommercialFactors;
+  embalagens: Embalagem[];
+  onChange: <K extends keyof ReportCommercialFactors>(
+    field: K,
+    value: ReportCommercialFactors[K]
+  ) => void;
+}
+
+function ReportFactorsForm({ id, factors, embalagens, onChange }: ReportFactorsFormProps) {
+  const selectedPackage = embalagens.find((item) => item.id === factors.embalagem_id);
+  const packageAdjustment = factors.embalagem_ajuste || 'nenhum';
+
+  const setPackageAdjustment = (adjustment: 'nenhum' | 'cobrar' | 'descontar') => {
+    onChange('embalagem_ajuste', adjustment);
+    if (!selectedPackage || adjustment === 'nenhum') {
+      onChange('embalagem_valor', 0);
+      return;
+    }
+    const value =
+      adjustment === 'cobrar'
+        ? Number(selectedPackage.valor_cobrar ?? selectedPackage.valor ?? 0)
+        : -Number(selectedPackage.valor_descontar ?? selectedPackage.valor ?? 0);
+    onChange('embalagem_valor', value);
+  };
+
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <label className="text-xs font-medium text-stone-600">
+        Fator (×)
+        <input
+          type="number"
+          step="0.01"
+          value={factors.factor}
+          onChange={(event) => onChange('factor', Number(event.target.value || 0))}
+          className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2"
+        />
+      </label>
+      <label className="text-xs font-medium text-stone-600">
+        Desconto (R$/t)
+        <input
+          type="number"
+          step="0.01"
+          value={factors.discount || ''}
+          onChange={(event) => onChange('discount', Number(event.target.value || 0))}
+          className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2"
+        />
+      </label>
+      <label className="text-xs font-medium text-stone-600">
+        Alíquota (%)
+        <input
+          type="number"
+          step="0.01"
+          value={factors.taxRate || ''}
+          onChange={(event) => onChange('taxRate', Number(event.target.value || 0))}
+          className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2"
+        />
+      </label>
+      <label className="text-xs font-medium text-stone-600">
+        Comissão (%)
+        <input
+          type="number"
+          step="0.01"
+          value={factors.commission || ''}
+          onChange={(event) => onChange('commission', Number(event.target.value || 0))}
+          className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2"
+        />
+      </label>
+      <div className="text-xs font-medium text-stone-600">
+        Tipo de frete
+        <div className="mt-1 flex gap-2">
+          {(['CIF', 'FOB'] as const).map((type) => (
+            <button
+              key={type}
+              type="button"
+              onClick={() => onChange('tipoFrete', type)}
+              className={`flex-1 rounded-lg px-3 py-2 font-bold ${factors.tipoFrete === type ? 'bg-emerald-600 text-white' : 'bg-stone-100 text-stone-600'}`}
+            >
+              {type}
+            </button>
+          ))}
+        </div>
+      </div>
+      <label className="text-xs font-medium text-stone-600">
+        Frete (R$/t)
+        <input
+          type="number"
+          step="0.01"
+          value={factors.freight || ''}
+          onChange={(event) => onChange('freight', Number(event.target.value || 0))}
+          className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2"
+        />
+      </label>
+      <label className="text-xs font-medium text-stone-600">
+        Embalagem
+        <select
+          value={factors.embalagem_id || ''}
+          onChange={(event) => {
+            const embalagem = embalagens.find((item) => item.id === event.target.value);
+            onChange('embalagem_id', embalagem?.id || '');
+            onChange('embalagem_nome', embalagem?.nome || '');
+            onChange('embalagem_ajuste', 'nenhum');
+            onChange('embalagem_valor', 0);
+          }}
+          className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2"
+        >
+          <option value="">— Sem embalagem —</option>
+          {embalagens.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.nome}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="text-xs font-medium text-stone-600">
+        Ajuste da embalagem
+        <select
+          value={packageAdjustment}
+          disabled={!selectedPackage}
+          onChange={(event) =>
+            setPackageAdjustment(event.target.value as 'nenhum' | 'cobrar' | 'descontar')
+          }
+          className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 disabled:bg-stone-100"
+        >
+          <option value="nenhum">Sem ajuste</option>
+          <option value="cobrar" disabled={!selectedPackage?.cobrar}>
+            Cobrar
+          </option>
+          <option
+            value="descontar"
+            disabled={!(selectedPackage?.descontar ?? selectedPackage?.desconto)}
+          >
+            Descontar
+          </option>
+        </select>
+      </label>
+      <label className="text-xs font-medium text-stone-600">
+        Juros mensal (%)
+        <input
+          type="number"
+          step="0.01"
+          value={factors.monthlyInterestRate || ''}
+          onChange={(event) => onChange('monthlyInterestRate', Number(event.target.value || 0))}
+          className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2"
+        />
+      </label>
+      <label className="text-xs font-medium text-stone-600">
+        Quantidade total (t)
+        <input
+          type="number"
+          step="0.01"
+          min="0"
+          value={factors.totalTons || ''}
+          onChange={(event) => onChange('totalTons', Number(event.target.value || 0))}
+          className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2"
+        />
+      </label>
+      <div className="sm:col-span-2 lg:col-span-3">
+        <span className="text-xs font-medium text-stone-600">Condição de pagamento</span>
+        <div className="mt-1 flex flex-wrap gap-4">
+          <label className="flex items-center gap-2 text-xs">
+            <input
+              type="radio"
+              name={`payment-${id}`}
+              checked={(factors.paymentCondition || 'vencimento') === 'vencimento'}
+              onChange={() => onChange('paymentCondition', 'vencimento')}
+            />
+            Vencimento direto
+          </label>
+          <label className="flex items-center gap-2 text-xs">
+            <input
+              type="radio"
+              name={`payment-${id}`}
+              checked={factors.paymentCondition === 'ddf'}
+              onChange={() => onChange('paymentCondition', 'ddf')}
+            />
+            DDF
+          </label>
+        </div>
+      </div>
+      {(factors.paymentCondition || 'vencimento') === 'vencimento' ? (
+        <label className="text-xs font-medium text-stone-600">
+          Vencimento
+          <input
+            type="date"
+            value={factors.dueDate || ''}
+            onChange={(event) => onChange('dueDate', event.target.value)}
+            className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2"
+          />
+        </label>
+      ) : (
+        <>
+          <label className="text-xs font-medium text-stone-600">
+            Data de carregamento
+            <input
+              type="date"
+              value={factors.dataCarregamento || ''}
+              onChange={(event) => {
+                onChange('dataCarregamento', event.target.value);
+                onChange('dueDate', addDaysToReportDate(event.target.value, factors.ddfDias || 0));
+              }}
+              className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2"
+            />
+          </label>
+          <label className="text-xs font-medium text-stone-600">
+            Dias DDF
+            <input
+              type="number"
+              min="0"
+              value={factors.ddfDias || ''}
+              onChange={(event) => {
+                const days = Number(event.target.value || 0);
+                onChange('ddfDias', days);
+                onChange('dueDate', addDaysToReportDate(factors.dataCarregamento || '', days));
+              }}
+              className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2"
+            />
+          </label>
+        </>
+      )}
+      <label className="flex items-center gap-2 text-xs font-medium text-stone-600">
+        <input
+          type="checkbox"
+          checked={factors.exemptCurrentMonth}
+          onChange={(event) => onChange('exemptCurrentMonth', event.target.checked)}
+        />
+        Isentar juros do mês atual
+      </label>
+    </div>
+  );
+}
+
 function ModalGerarRelatorio({
   isOpen,
   formulas,
@@ -67,28 +311,51 @@ function ModalGerarRelatorio({
   const { showError } = useToast();
   const selectedFormulas = formulas.filter((f) => selectedIds.includes(f.id));
   const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [applyToAll, setApplyToAll] = useState(true);
   const [includeComposicao, setIncludeComposicao] = useState(false);
+  const [globalFactors, setGlobalFactors] = useState<ReportCommercialFactors>({
+    ...DEFAULT_REPORT_COMMERCIAL_FACTORS,
+  });
+  const [perFormulaFactors, setPerFormulaFactors] = useState<
+    Record<string, ReportCommercialFactors>
+  >({});
 
   const [clients, setClients] = useState<Client[]>([]);
+  const [embalagens, setEmbalagens] = useState<Embalagem[]>([]);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [clientSearch, setClientSearch] = useState('');
   const [showClientResults, setShowClientResults] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
-      getClients()
-        .then(setClients)
+      void Promise.all([getClients(), getEmbalagens(true)])
+        .then(([nextClients, nextEmbalagens]) => {
+          setClients(nextClients);
+          setEmbalagens(nextEmbalagens);
+        })
         .catch(() => {});
       setSelectedClient(null);
       setClientSearch('');
+      setApplyToAll(true);
+      setGlobalFactors({ ...DEFAULT_REPORT_COMMERCIAL_FACTORS });
+      setPerFormulaFactors(
+        Object.fromEntries(
+          formulas
+            .filter((formula) => selectedIds.includes(formula.id))
+            .map((formula) => [formula.id, { ...DEFAULT_REPORT_COMMERCIAL_FACTORS }])
+        )
+      );
     }
-  }, [isOpen]);
+  }, [isOpen, formulas, selectedIds]);
 
   if (!isOpen) return null;
 
+  const getFactors = (formulaId: string) =>
+    applyToAll ? globalFactors : perFormulaFactors[formulaId] || DEFAULT_REPORT_COMMERCIAL_FACTORS;
+
   const calcPrecoFinal = (formula: SavedFormula): number => {
     const { total } = getFormulaCost(formula, selectedList);
-    return total;
+    return calculateReportPrice(total, getFactors(formula.id));
   };
 
   const handleGeneratePDF = async () => {
@@ -158,19 +425,25 @@ function ModalGerarRelatorio({
       const tableBody: (string | number)[][] = selectedFormulas.map((formula) => {
         const idFormatado = formatId(formula.id_numeric, 'BAT-');
         const precoFinal = calcPrecoFinal(formula);
+        const reportFactors = getFactors(formula.id);
+        const totalSale = precoFinal * Number(reportFactors.totalTons || 0);
         return [
           idFormatado,
           formula.name,
           formula.targetFormula,
+          Number(reportFactors.totalTons || 0).toLocaleString('pt-BR'),
           precoFinal > 0
             ? precoFinal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+            : '—',
+          totalSale > 0
+            ? totalSale.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
             : '—',
         ];
       });
 
       autoTable(doc, {
         startY: currentY,
-        head: [['ID', 'Nome do Produto / Fórmula', 'NPK Alvo', 'Custo referência R$/t']],
+        head: [['ID', 'Produto / Fórmula', 'NPK', 'Ton.', 'Preço R$/t', 'Total']],
         body: tableBody,
         styles: { fontSize: 9, cellPadding: 4, font: 'helvetica' },
         headStyles: { fillColor: [16, 124, 65], textColor: 255, fontStyle: 'bold' },
@@ -261,7 +534,7 @@ function ModalGerarRelatorio({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-stone-100 flex justify-between items-center">
           <div>
             <h2 className="text-xl font-bold text-stone-800">Gerar Relatório de Preços</h2>
@@ -364,6 +637,17 @@ function ModalGerarRelatorio({
             <label className="flex items-center gap-2 cursor-pointer select-none">
               <input
                 type="checkbox"
+                checked={applyToAll}
+                onChange={(event) => setApplyToAll(event.target.checked)}
+                className="w-4 h-4 accent-emerald-600"
+              />
+              <span className="text-sm font-medium text-stone-700">
+                Aplicar os mesmos fatores a todas as formulações
+              </span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
                 checked={includeComposicao}
                 onChange={(e) => setIncludeComposicao(e.target.checked)}
                 className="w-4 h-4 accent-emerald-600"
@@ -374,10 +658,48 @@ function ModalGerarRelatorio({
             </label>
           </div>
 
-          <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-            Os fatores comerciais foram centralizados na Calculadora. Esta prévia usa somente o
-            custo da composição na lista selecionada.
-          </div>
+          {applyToAll ? (
+            <div className="rounded-xl border border-stone-200 bg-stone-50 p-4">
+              <h3 className="mb-3 text-sm font-bold uppercase tracking-wider text-stone-700">
+                Fatores comerciais
+              </h3>
+              <ReportFactorsForm
+                id="all"
+                factors={globalFactors}
+                embalagens={embalagens}
+                onChange={(field, value) =>
+                  setGlobalFactors((current) => ({ ...current, [field]: value }))
+                }
+              />
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {selectedFormulas.map((formula) => (
+                <div
+                  key={formula.id}
+                  className="rounded-xl border border-stone-200 bg-stone-50 p-4"
+                >
+                  <h3 className="mb-3 text-sm font-bold text-stone-700">
+                    {formatId(formula.id_numeric, 'BAT-')} — {formula.name}
+                  </h3>
+                  <ReportFactorsForm
+                    id={formula.id}
+                    factors={perFormulaFactors[formula.id] || DEFAULT_REPORT_COMMERCIAL_FACTORS}
+                    embalagens={embalagens}
+                    onChange={(field, value) =>
+                      setPerFormulaFactors((current) => ({
+                        ...current,
+                        [formula.id]: {
+                          ...(current[formula.id] || DEFAULT_REPORT_COMMERCIAL_FACTORS),
+                          [field]: value,
+                        },
+                      }))
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Preview */}
           <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-200">
@@ -736,6 +1058,7 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
               key={`${formulaInEditor.id}-${selectedLocalId}-${selectedPriceListId}`}
               currentUser={currentUser}
               isSimplified
+              disableConditions
               initialFormulaToLoad={formulaInEditor}
               initialBranchId={locais.find((local) => local.id === selectedLocalId)?.filial_id}
               initialLoadingLocationId={selectedLocalId}
