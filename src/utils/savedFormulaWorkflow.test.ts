@@ -1,9 +1,43 @@
 import { describe, expect, it } from 'vitest';
 import type { PriceList, RawMaterial, SavedFormula } from '../types';
 import {
+  calculateReportPrice,
+  DEFAULT_REPORT_COMMERCIAL_FACTORS,
   getFormulaUpdateProtection,
   getPriceListsForLoadingLocation,
 } from './savedFormulaWorkflow';
+
+describe('calculateReportPrice', () => {
+  it('uses the same commercial calculation order as the calculator', () => {
+    const result = calculateReportPrice(
+      1000,
+      {
+        ...DEFAULT_REPORT_COMMERCIAL_FACTORS,
+        factor: 1,
+        discount: 100,
+        freight: 50,
+        tipoFrete: 'CIF',
+        taxRate: 10,
+        commission: 5,
+        embalagem_valor: 20,
+      },
+      new Date('2026-09-01T12:00:00')
+    );
+
+    expect(result).toBe(1105);
+  });
+
+  it('does not add freight when the sale is FOB', () => {
+    expect(
+      calculateReportPrice(1000, {
+        ...DEFAULT_REPORT_COMMERCIAL_FACTORS,
+        factor: 1,
+        freight: 250,
+        tipoFrete: 'FOB',
+      })
+    ).toBe(1000);
+  });
+});
 
 const material = (id: string, type: 'macro' | 'micro'): RawMaterial => ({
   id,

@@ -35,7 +35,11 @@ export async function getProdutosFormulados(): Promise<ProdutoFormulado[]> {
     .from('produtos_formulados')
     .select('*')
     .order('id_numeric', { ascending: true });
-  if (error || !data) return [];
+  if (error) {
+    console.error('[getProdutosFormulados] Supabase error:', error);
+    throw error;
+  }
+  if (!data) return [];
   return data.map(mapProduto);
 }
 
@@ -56,6 +60,33 @@ export async function createProdutoFormulado(
     .single();
   if (error) {
     console.error('[createProdutoFormulado] Supabase error:', error);
+    throw error;
+  }
+  return mapProduto(data);
+}
+
+export async function syncProdutoFormuladoWithSavedFormula(payload: {
+  saved_formula_id: string;
+  nome: string;
+  formula_npk?: string;
+  criado_por?: string;
+}): Promise<ProdutoFormulado> {
+  const { data, error } = await supabase
+    .from('produtos_formulados')
+    .upsert(
+      {
+        saved_formula_id: payload.saved_formula_id,
+        nome: payload.nome,
+        formula_npk: payload.formula_npk || null,
+        criado_por: payload.criado_por || null,
+      },
+      { onConflict: 'saved_formula_id' }
+    )
+    .select()
+    .single();
+
+  if (error) {
+    console.error('[syncProdutoFormuladoWithSavedFormula] Supabase error:', error);
     throw error;
   }
   return mapProduto(data);
@@ -90,6 +121,10 @@ export async function getProdutoFormuladoBySavedFormulaId(
     .select('*')
     .eq('saved_formula_id', savedFormulaId)
     .maybeSingle();
-  if (error || !data) return null;
+  if (error) {
+    console.error('[getProdutoFormuladoBySavedFormulaId] Supabase error:', error);
+    throw error;
+  }
+  if (!data) return null;
   return mapProduto(data);
 }

@@ -14,7 +14,6 @@ import {
   ToggleRight,
   Filter,
   ChevronDown,
-  ChevronRight,
   TrendingUp,
 } from 'lucide-react';
 import {
@@ -35,6 +34,7 @@ export default function ProdutosFormulados() {
   const [filterLinha, setFilterLinha] = useState<'all' | 'sim' | 'nao'>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [historicos, setHistoricos] = useState<Record<string, HistoricoPrecoFormulado[]>>({});
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -53,6 +53,8 @@ export default function ProdutosFormulados() {
   };
 
   const handleToggleLinhaDiferenciada = async (produto: ProdutoFormulado) => {
+    if (updatingId) return;
+    setUpdatingId(produto.id);
     try {
       await updateProdutoFormulado(produto.id, {
         linha_diferenciada: !produto.linha_diferenciada,
@@ -63,16 +65,22 @@ export default function ProdutosFormulados() {
       await loadData();
     } catch {
       showError('Erro ao atualizar produto');
+    } finally {
+      setUpdatingId(null);
     }
   };
 
   const handleToggleAtivo = async (produto: ProdutoFormulado) => {
+    if (updatingId) return;
+    setUpdatingId(produto.id);
     try {
       await updateProdutoFormulado(produto.id, { ativo: !produto.ativo });
       showSuccess(`Produto ${!produto.ativo ? 'ativado' : 'inativado'} com sucesso!`);
       await loadData();
     } catch {
       showError('Erro ao atualizar produto');
+    } finally {
+      setUpdatingId(null);
     }
   };
 
@@ -188,6 +196,9 @@ export default function ProdutosFormulados() {
                     Criado em
                   </th>
                   <th className="px-4 py-3 text-center text-xs font-bold text-stone-500 uppercase tracking-wider">
+                    Origem
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-bold text-stone-500 uppercase tracking-wider">
                     Histórico
                   </th>
                 </tr>
@@ -216,9 +227,11 @@ export default function ProdutosFormulados() {
                             </span>
                           )}
                           <button
+                            type="button"
                             onClick={() => handleToggleLinhaDiferenciada(produto)}
+                            disabled={updatingId === produto.id}
                             title="Alternar Linha Diferenciada"
-                            className="text-stone-400 hover:text-amber-500 transition-colors"
+                            className="text-stone-400 hover:text-amber-500 transition-colors disabled:cursor-wait disabled:opacity-40"
                           >
                             {produto.linha_diferenciada ? (
                               <ToggleRight className="w-5 h-5 text-amber-500" />
@@ -240,9 +253,11 @@ export default function ProdutosFormulados() {
                             </span>
                           )}
                           <button
+                            type="button"
                             onClick={() => handleToggleAtivo(produto)}
+                            disabled={updatingId === produto.id}
                             title="Alternar Ativo/Inativo"
-                            className="text-stone-400 hover:text-emerald-600 transition-colors"
+                            className="text-stone-400 hover:text-emerald-600 transition-colors disabled:cursor-wait disabled:opacity-40"
                           >
                             {produto.ativo ? (
                               <ToggleRight className="w-5 h-5 text-emerald-500" />
@@ -256,6 +271,13 @@ export default function ProdutosFormulados() {
                         {produto.criado_em
                           ? new Date(produto.criado_em).toLocaleDateString('pt-BR')
                           : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span
+                          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-bold ${produto.saved_formula_id ? 'bg-blue-50 text-blue-700' : 'bg-stone-100 text-stone-500'}`}
+                        >
+                          {produto.saved_formula_id ? 'Batida sincronizada' : 'Cadastro legado'}
+                        </span>
                       </td>
                       <td className="px-4 py-3 text-center">
                         <button
@@ -274,7 +296,7 @@ export default function ProdutosFormulados() {
                     {expandedId === produto.id && (
                       <tr>
                         <td
-                          colSpan={7}
+                          colSpan={8}
                           className="px-4 py-4 bg-emerald-50 border-b border-stone-200"
                         >
                           <div className="flex items-center gap-2 mb-3">

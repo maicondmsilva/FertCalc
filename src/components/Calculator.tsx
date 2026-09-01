@@ -55,6 +55,7 @@ interface CalculatorProps {
   onSavedFormulaSuccess?: () => void;
   currentUser: AppUser;
   isSimplified?: boolean;
+  disableConditions?: boolean;
 }
 
 export default function Calculator({
@@ -68,6 +69,7 @@ export default function Calculator({
   onSavedFormulaSuccess,
   currentUser,
   isSimplified,
+  disableConditions = false,
 }: CalculatorProps) {
   const { showSuccess } = useToast();
 
@@ -921,11 +923,19 @@ export default function Calculator({
                               <span className="hidden xl:inline">Produtos</span>
                             </button>
                             <button
-                              onClick={() =>
-                                setExpandedCalc(expandedCalc === calc.id ? null : calc.id)
+                              type="button"
+                              disabled={disableConditions}
+                              onClick={() => {
+                                if (!disableConditions) {
+                                  setExpandedCalc(expandedCalc === calc.id ? null : calc.id);
+                                }
+                              }}
+                              className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:border-stone-200 disabled:bg-stone-100 disabled:text-stone-400 ${expandedCalc === calc.id ? 'border-indigo-300 bg-indigo-100 text-indigo-800' : 'border-indigo-200 text-indigo-700 hover:bg-indigo-50'}`}
+                              title={
+                                disableConditions
+                                  ? 'Defina as condições ao gerar o relatório de preços.'
+                                  : 'Fatores e Micronutrientes'
                               }
-                              className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-bold transition-colors ${expandedCalc === calc.id ? 'border-indigo-300 bg-indigo-100 text-indigo-800' : 'border-indigo-200 text-indigo-700 hover:bg-indigo-50'}`}
-                              title="Fatores e Micronutrientes"
                             >
                               <ChevronDown
                                 className={`w-3.5 h-3.5 transition-transform ${expandedCalc === calc.id ? 'rotate-180' : ''}`}
