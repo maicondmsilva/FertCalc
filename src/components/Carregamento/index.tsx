@@ -74,6 +74,7 @@ import { formatCarregamentoId } from '../../utils/formatId';
 import KanbanLogistico from './KanbanLogistico';
 import PainelExecucoes from './PainelExecucoes';
 import { getStatusInicial } from '../../utils/getStatusInicial';
+import { subscribeToOrderLoadingChanges } from '../../services/orderLoadingSubscription';
 
 // ─── Permission helper ────────────────────────────────────────────────────────
 function canEditDeleteCarregamento(
@@ -2852,6 +2853,18 @@ function CalendarioCarregamentos({ currentUser }: { currentUser: User }) {
     load();
   }, [load]);
 
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const unsubscribe = subscribeToOrderLoadingChanges(() => {
+      clearTimeout(timer);
+      timer = setTimeout(() => void load(), 350);
+    });
+    return () => {
+      clearTimeout(timer);
+      unsubscribe();
+    };
+  }, [load]);
+
   const navigate = (dir: number) => {
     setMes((m) => {
       let nm = m + dir;
@@ -3926,10 +3939,22 @@ export default function CarregamentoModule({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentUser.filiais_permitidas, currentUser.permissions, currentUser.role]);
 
   useEffect(() => {
     load();
+  }, [load]);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const unsubscribe = subscribeToOrderLoadingChanges(() => {
+      clearTimeout(timer);
+      timer = setTimeout(() => void load(), 350);
+    });
+    return () => {
+      clearTimeout(timer);
+      unsubscribe();
+    };
   }, [load]);
 
   // ── Action handler ────────────────────────────────────────────────────────

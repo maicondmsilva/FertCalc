@@ -6,6 +6,42 @@ export interface PedidoSaldoAlertaPreferencia {
   desativado: boolean;
 }
 
+export interface PedidoVendaAuditEntry {
+  id: string;
+  pedido_venda_id: string;
+  usuario_id: string;
+  motivo: string;
+  campos_alterados: string[];
+  criado_em: string;
+}
+
+export interface UpdatePedidoVendaProtegidoPayload {
+  pedidoId: string;
+  expectedUpdatedAt?: string;
+  reason: string;
+  force?: boolean;
+  header: {
+    numero_pedido: string;
+    emitente: number;
+    data_pedido?: string;
+    data_vencimento?: string;
+    cliente_id?: string;
+    precificacao_id?: string;
+    filial_id?: string;
+    tipo_frete?: string;
+    valor_frete?: number;
+    preco_unitario?: number;
+    condicao_pagamento?: string;
+    observacoes?: string;
+  };
+  items: PedidoVendaItem[];
+}
+
+export interface PedidoVendaEditContext {
+  hasRequest: boolean;
+  hasProgress: boolean;
+}
+
 /** Computes saldo_disponivel: prefers the DB-generated column, falls back to manual calculation. */
 function computeSaldoDisponivel(d: Record<string, unknown>): number | undefined {
   if (d.saldo_disponivel != null) return Number(d.saldo_disponivel);
@@ -229,37 +265,79 @@ export async function createPedidoVenda(
 }
 
 export async function updatePedidoVenda(id: string, updates: Partial<PedidoVenda>): Promise<void> {
-  const { error } = await supabase
-    .from('pedidos_venda')
-    .update({
-      numero_pedido: updates.numero_pedido,
-      barra_pedido: updates.barra_pedido,
-      data_pedido: updates.data_pedido,
-      quantidade_real: updates.quantidade_real,
-      quantidade_original: updates.quantidade_original,
-      quantidade_desmembrada: updates.quantidade_desmembrada,
-      quantidade_cancelada_definitiva: updates.quantidade_cancelada_definitiva,
-      embalagem: updates.embalagem,
-      valor_unitario_negociado: updates.valor_unitario_negociado,
-      valor_total_negociado: updates.valor_total_negociado,
-      tipo_frete: updates.tipo_frete,
-      valor_frete: updates.valor_frete,
-      status: updates.status,
-      status_pedido: updates.status_pedido,
-      pdf_url: updates.pdf_url,
-      dados_extraidos: updates.dados_extraidos,
-      // Extended fields
-      cliente_id: updates.cliente_id,
-      preco_unitario: updates.preco_unitario,
-      condicao_pagamento: updates.condicao_pagamento,
-      observacoes: updates.observacoes,
-      filial_id: updates.filial_id,
-      formulacao_alterada: updates.formulacao_alterada,
-      atualizado_em: new Date().toISOString(),
-      emitente: updates.emitente,
-    })
-    .eq('id', id);
+  const allowedFields: Array<keyof PedidoVenda> = [
+    'numero_pedido',
+    'barra_pedido',
+    'data_pedido',
+    'data_vencimento',
+    'quantidade_real',
+    'quantidade_original',
+    'quantidade_desmembrada',
+    'quantidade_cancelada_definitiva',
+    'embalagem',
+    'valor_unitario_negociado',
+    'valor_total_negociado',
+    'tipo_frete',
+    'valor_frete',
+    'status',
+    'status_pedido',
+    'pdf_url',
+    'dados_extraidos',
+    'cliente_id',
+    'preco_unitario',
+    'condicao_pagamento',
+    'observacoes',
+    'filial_id',
+    'formulacao_alterada',
+    'emitente',
+  ];
+  const payload: Record<string, unknown> = { atualizado_em: new Date().toISOString() };
+  allowedFields.forEach((field) => {
+    if (updates[field] !== undefined) payload[field] = updates[field];
+  });
+  const { error } = await supabase.from('pedidos_venda').update(payload).eq('id', id);
   if (error) throw error;
+}
+
+export async function updatePedidoVendaProtegido(
+  payload: UpdatePedidoVendaProtegidoPayload
+): Promise<void> {
+  const { error } = await supabase.rpc('update_pedido_venda_protegido', {
+    p_pedido_id: payload.pedidoId,
+    p_expected_updated_at: payload.expectedUpdatedAt ?? null,
+    p_reason: payload.reason,
+    p_header: payload.header,
+    p_items: payload.items.map((item) => ({
+      id: item.id ?? null,
+      produto_nome: item.produto_nome,
+      quantidade_ton: item.quantidade_ton,
+      preco_unitario: item.preco_unitario ?? null,
+      embalagem: item.embalagem ?? null,
+      precificacao_id: item.precificacao_id ?? null,
+    })),
+    p_force: payload.force ?? false,
+  });
+  if (error) throw error;
+}
+
+export async function getPedidoVendaAudit(pedidoVendaId: string): Promise<PedidoVendaAuditEntry[]> {
+  const { data, error } = await supabase
+    .from('pedido_venda_audit')
+    .select('id,pedido_venda_id,usuario_id,motivo,campos_alterados,criado_em')
+    .eq('pedido_venda_id', pedidoVendaId)
+    .order('criado_em', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as PedidoVendaAuditEntry[];
+}
+
+export async function getPedidoVendaEditContext(
+  pedidoVendaId: string
+): Promise<PedidoVendaEditContext> {
+  const { data, error } = await supabase.rpc('get_pedido_venda_edit_context', {
+    p_pedido_id: pedidoVendaId,
+  });
+  if (error) throw error;
+  return data as unknown as PedidoVendaEditContext;
 }
 
 export async function cancelarPedidoVenda(id: string): Promise<void> {
