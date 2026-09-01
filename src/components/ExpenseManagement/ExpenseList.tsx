@@ -217,17 +217,16 @@ export default function ExpenseList({
                             <ClipboardCheck className="w-4 h-4" />
                           </button>
                         )}
-                        {canApprove &&
-                          (expense.status === 'pendente' || expense.status === 'conferido') && (
-                            <button
-                              onClick={() => onApprove(expense.id)}
-                              className="p-1.5 text-stone-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
-                              title="Aprovar"
-                            >
-                              <CheckCircle className="w-4 h-4" />
-                            </button>
-                          )}
-                        {canApprove &&
+                        {canApprove && expense.status === 'conferido' && (
+                          <button
+                            onClick={() => onApprove(expense.id)}
+                            className="p-1.5 text-stone-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                            title="Aprovar"
+                          >
+                            <CheckCircle className="w-4 h-4" />
+                          </button>
+                        )}
+                        {(canCheck || canApprove) &&
                           (expense.status === 'pendente' || expense.status === 'conferido') && (
                             <button
                               onClick={() => setRejectingId(expense.id)}

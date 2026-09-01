@@ -2,7 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { CreditCardExpense, ExpenseAudit, ExpenseStatus } from '../../types/expense.types';
 import { User } from '../../types';
 import { getExpenseAudit } from '../../services/expenseService';
-import { X, CheckCircle, XCircle, ClipboardCheck, Clock, Edit3, Trash2, FileText } from 'lucide-react';
+import {
+  X,
+  CheckCircle,
+  XCircle,
+  ClipboardCheck,
+  Clock,
+  Edit3,
+  Trash2,
+  FileText,
+} from 'lucide-react';
+import { useExpensePermissions } from '../../hooks/useExpensePermissions';
 
 interface ExpenseDetailModalProps {
   expense: CreditCardExpense;
@@ -36,14 +46,21 @@ const auditIcons: Record<string, React.ReactNode> = {
   excluido: <Trash2 className="w-4 h-4 text-red-500" />,
 };
 
-export default function ExpenseDetailModal({ expense, currentUser, onClose, onCheck, onApprove, onReject }: ExpenseDetailModalProps) {
+export default function ExpenseDetailModal({
+  expense,
+  currentUser,
+  onClose,
+  onCheck,
+  onApprove,
+  onReject,
+}: ExpenseDetailModalProps) {
   const [audit, setAudit] = useState<ExpenseAudit[]>([]);
   const [loadingAudit, setLoadingAudit] = useState(true);
   const [rejectMode, setRejectMode] = useState(false);
   const [rejectObservation, setRejectObservation] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
-  const isAdmin = currentUser.role === 'master' || currentUser.role === 'admin';
+  const { canCheck, canApprove } = useExpensePermissions(currentUser);
 
   useEffect(() => {
     setLoadingAudit(true);
@@ -68,7 +85,10 @@ export default function ExpenseDetailModal({ expense, currentUser, onClose, onCh
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-stone-100">
           <h2 className="text-lg font-bold text-stone-800">Detalhes do Gasto</h2>
-          <button onClick={onClose} className="p-2 text-stone-400 hover:text-stone-600 rounded-lg hover:bg-stone-100">
+          <button
+            onClick={onClose}
+            className="p-2 text-stone-400 hover:text-stone-600 rounded-lg hover:bg-stone-100"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -77,7 +97,9 @@ export default function ExpenseDetailModal({ expense, currentUser, onClose, onCh
         <div className="p-6 space-y-5">
           {/* Status */}
           <div className="flex items-center justify-between">
-            <span className={`inline-flex px-3 py-1.5 rounded-full text-xs font-bold ${statusColors[expense.status]}`}>
+            <span
+              className={`inline-flex px-3 py-1.5 rounded-full text-xs font-bold ${statusColors[expense.status]}`}
+            >
               {statusLabels[expense.status]}
             </span>
             <span className="text-xs text-stone-400">
@@ -99,7 +121,9 @@ export default function ExpenseDetailModal({ expense, currentUser, onClose, onCh
                 </p>
               </div>
               <div>
-                <p className="text-xs font-bold text-stone-400 uppercase tracking-wider">Categoria</p>
+                <p className="text-xs font-bold text-stone-400 uppercase tracking-wider">
+                  Categoria
+                </p>
                 <p className="text-sm text-stone-600 mt-0.5">{expense.categoryName || '—'}</p>
               </div>
               <div>
@@ -107,7 +131,9 @@ export default function ExpenseDetailModal({ expense, currentUser, onClose, onCh
                 <p className="text-sm text-stone-600 mt-0.5">{expense.cardName || '—'}</p>
               </div>
               <div>
-                <p className="text-xs font-bold text-stone-400 uppercase tracking-wider">Parcelas</p>
+                <p className="text-xs font-bold text-stone-400 uppercase tracking-wider">
+                  Parcelas
+                </p>
                 <p className="text-sm text-stone-600 mt-0.5">
                   {expense.installments > 1
                     ? `${expense.currentInstallment || 1}/${expense.installments}`
@@ -115,13 +141,17 @@ export default function ExpenseDetailModal({ expense, currentUser, onClose, onCh
                 </p>
               </div>
               <div>
-                <p className="text-xs font-bold text-stone-400 uppercase tracking-wider">Registrado por</p>
+                <p className="text-xs font-bold text-stone-400 uppercase tracking-wider">
+                  Registrado por
+                </p>
                 <p className="text-sm text-stone-600 mt-0.5">{expense.userName}</p>
               </div>
             </div>
             {expense.observation && (
               <div>
-                <p className="text-xs font-bold text-stone-400 uppercase tracking-wider">Observação</p>
+                <p className="text-xs font-bold text-stone-400 uppercase tracking-wider">
+                  Observação
+                </p>
                 <p className="text-sm text-stone-600 mt-0.5">{expense.observation}</p>
               </div>
             )}
@@ -129,7 +159,9 @@ export default function ExpenseDetailModal({ expense, currentUser, onClose, onCh
 
           {/* Audit Trail */}
           <div>
-            <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-3">Histórico</p>
+            <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-3">
+              Histórico
+            </p>
             {loadingAudit ? (
               <div className="flex items-center justify-center py-4">
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-600" />
@@ -140,11 +172,12 @@ export default function ExpenseDetailModal({ expense, currentUser, onClose, onCh
               <div className="space-y-2">
                 {audit.map((entry) => (
                   <div key={entry.id} className="flex items-start gap-3 p-3 bg-stone-50 rounded-xl">
-                    <div className="mt-0.5">{auditIcons[entry.action] || <Clock className="w-4 h-4 text-stone-400" />}</div>
+                    <div className="mt-0.5">
+                      {auditIcons[entry.action] || <Clock className="w-4 h-4 text-stone-400" />}
+                    </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-stone-700">
-                        <span className="font-bold">{entry.userName}</span>
-                        {' '}
+                        <span className="font-bold">{entry.userName}</span>{' '}
                         {entry.action === 'criado' && 'registrou o gasto'}
                         {entry.action === 'conferido' && 'conferiu o gasto'}
                         {entry.action === 'aprovado' && 'aprovou o gasto'}
@@ -178,7 +211,10 @@ export default function ExpenseDetailModal({ expense, currentUser, onClose, onCh
               />
               <div className="flex justify-end gap-2">
                 <button
-                  onClick={() => { setRejectMode(false); setRejectObservation(''); }}
+                  onClick={() => {
+                    setRejectMode(false);
+                    setRejectObservation('');
+                  }}
                   className="px-3 py-1.5 text-sm font-bold text-stone-500 rounded-lg"
                 >
                   Cancelar
@@ -196,36 +232,40 @@ export default function ExpenseDetailModal({ expense, currentUser, onClose, onCh
         </div>
 
         {/* Action Buttons */}
-        {isAdmin && !rejectMode && (expense.status === 'pendente' || expense.status === 'conferido') && (
-          <div className="flex items-center justify-end gap-2 p-6 border-t border-stone-100">
-            {expense.status === 'pendente' && (
+        {(canCheck || canApprove) &&
+          !rejectMode &&
+          (expense.status === 'pendente' || expense.status === 'conferido') && (
+            <div className="flex items-center justify-end gap-2 p-6 border-t border-stone-100">
+              {canCheck && expense.status === 'pendente' && (
+                <button
+                  onClick={() => handleAction(onCheck)}
+                  disabled={actionLoading}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-bold bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                >
+                  <ClipboardCheck className="w-4 h-4" />
+                  Conferir
+                </button>
+              )}
+              {canApprove && expense.status === 'conferido' && (
+                <button
+                  onClick={() => handleAction(onApprove)}
+                  disabled={actionLoading}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-bold bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  Aprovar
+                </button>
+              )}
               <button
-                onClick={() => handleAction(onCheck)}
+                onClick={() => setRejectMode(true)}
                 disabled={actionLoading}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-bold bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                className="flex items-center gap-2 px-4 py-2 text-sm font-bold bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:opacity-50 transition-colors"
               >
-                <ClipboardCheck className="w-4 h-4" />
-                Conferir
+                <XCircle className="w-4 h-4" />
+                Rejeitar
               </button>
-            )}
-            <button
-              onClick={() => handleAction(onApprove)}
-              disabled={actionLoading}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-bold bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 disabled:opacity-50 transition-colors"
-            >
-              <CheckCircle className="w-4 h-4" />
-              Aprovar
-            </button>
-            <button
-              onClick={() => setRejectMode(true)}
-              disabled={actionLoading}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-bold bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:opacity-50 transition-colors"
-            >
-              <XCircle className="w-4 h-4" />
-              Rejeitar
-            </button>
-          </div>
-        )}
+            </div>
+          )}
       </div>
     </div>
   );

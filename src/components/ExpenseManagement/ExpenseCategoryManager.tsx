@@ -9,15 +9,20 @@ import {
 import { Plus, Edit3, Trash2, Save, X } from 'lucide-react';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { useConfirm } from '../../hooks/useConfirm';
+import { User } from '../../types';
+import { useExpensePermissions } from '../../hooks/useExpensePermissions';
 
 // ExpenseCategoryManager — gerencia categorias de despesas
 interface ExpenseCategoryManagerProps {
+  currentUser: User;
   onCategoriesChanged?: () => void;
 }
 
 export default function ExpenseCategoryManager({
+  currentUser,
   onCategoriesChanged,
 }: ExpenseCategoryManagerProps) {
+  const { canAdmin } = useExpensePermissions(currentUser);
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,6 +51,15 @@ export default function ExpenseCategoryManager({
   useEffect(() => {
     loadCategories();
   }, []);
+
+  if (!canAdmin) {
+    return (
+      <div className="py-16 text-center text-stone-400">
+        <p className="text-lg font-bold">Acesso restrito</p>
+        <p className="mt-1 text-sm">Apenas administradores do módulo podem gerenciar categorias.</p>
+      </div>
+    );
+  }
 
   const resetForm = () => {
     setName('');
