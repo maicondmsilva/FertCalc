@@ -10,6 +10,7 @@ interface CalculatorSettingsModalProps {
   globalMicros: RawMaterial[];
   isMaterialsLoading?: boolean;
   hasNoMaterialsInDatabase?: boolean;
+  protectedMaterialIds?: string[];
   onConfirm: (updatedFormula: TargetFormula) => void;
 }
 
@@ -21,6 +22,7 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
   globalMicros,
   isMaterialsLoading = false,
   hasNoMaterialsInDatabase = false,
+  protectedMaterialIds = [],
   onConfirm,
 }) => {
   const [activeTab, setActiveTab] = useState<'macros' | 'micros'>('macros');
@@ -39,6 +41,12 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
 
   const handleSelectProduct = (productId: string, type: 'macro' | 'micro') => {
     if (!localFormula) return;
+    if (
+      protectedMaterialIds.includes(productId) ||
+      (type === 'micro' && protectedMaterialIds.length > 0)
+    ) {
+      return;
+    }
 
     const arrKey = type === 'macro' ? 'macros' : 'micros';
     const savedArr = localFormula[arrKey] || [];
@@ -120,115 +128,131 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
 
     return (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-4">
-        {filtered.map((p) => (
-          <div
-            key={p.id}
-            className={`p-3 rounded-lg border transition-colors flex flex-col ${
-              p.selected
-                ? 'bg-blue-50 border-blue-500'
-                : 'bg-white border-stone-200 hover:border-blue-300'
-            }`}
-          >
-            {/* Header / Selection Toggle */}
-            <div
-              className="flex items-start gap-3 cursor-pointer"
-              onClick={() => handleSelectProduct(p.id, type)}
-            >
-              <div className="mt-1">
-                <input
-                  type="checkbox"
-                  checked={!!p.selected}
-                  readOnly
-                  className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 cursor-pointer"
-                />
-              </div>
-              <div className="flex-1">
+        {filtered.map((p) =>
+          (() => {
+            const isProtected =
+              protectedMaterialIds.includes(p.id) ||
+              (type === 'micro' && protectedMaterialIds.length > 0);
+            return (
+              <div
+                key={p.id}
+                className={`p-3 rounded-lg border transition-colors flex flex-col ${
+                  p.selected
+                    ? 'bg-blue-50 border-blue-500'
+                    : 'bg-white border-stone-200 hover:border-blue-300'
+                }`}
+              >
+                {/* Header / Selection Toggle */}
                 <div
-                  className={`text-sm font-medium ${p.selected ? 'text-blue-800' : 'text-stone-700'}`}
+                  className={`flex items-start gap-3 ${isProtected ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'}`}
+                  onClick={() => handleSelectProduct(p.id, type)}
                 >
-                  {p.name}
+                  <div className="mt-1">
+                    <input
+                      type="checkbox"
+                      checked={!!p.selected}
+                      readOnly
+                      disabled={isProtected}
+                      className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 disabled:cursor-not-allowed"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <div
+                      className={`text-sm font-medium ${p.selected ? 'text-blue-800' : 'text-stone-700'}`}
+                    >
+                      {p.name}
+                    </div>
+                    <div className="text-xs opacity-70 mt-1 pb-2">
+                      {type === 'macro'
+                        ? `N: ${p.n}% | P: ${p.p}% | K: ${p.k}%`
+                        : `Garantias: ${p.microGuarantees?.length ? p.microGuarantees.map((g: { name: string; value: number }) => `${g.name} ${g.value}%`).join(', ') : 'N/A'}`}
+                    </div>
+                    {isProtected && (
+                      <div className="text-[10px] font-bold text-amber-700">
+                        Protegido para preservar a descrição da formulação
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="text-xs opacity-70 mt-1 pb-2">
-                  {type === 'macro'
-                    ? `N: ${p.n}% | P: ${p.p}% | K: ${p.k}%`
-                    : `Garantias: ${p.microGuarantees?.length ? p.microGuarantees.map((g: { name: string; value: number }) => `${g.name} ${g.value}%`).join(', ') : 'N/A'}`}
-                </div>
+
+                {/* Extended Input Fields */}
+                {p.selected && (
+                  <div className="mt-2 pt-3 border-t border-blue-200/50 flex flex-wrap gap-2 text-xs">
+                    <div className="flex flex-col flex-1 min-w-[30%]">
+                      <label className="text-stone-500 font-semibold mb-1">Mínimo (kg)</label>
+                      <input
+                        type="number"
+                        value={p.minQty === 0 && p.minQuantity === 0 ? '' : p.minQty}
+                        onChange={(e) => {
+                          if (!localFormula) return;
+                          const val = Number(e.target.value);
+                          const arrKey = type === 'macro' ? 'macros' : 'micros';
+                          setLocalFormula({
+                            ...localFormula,
+                            [arrKey]: localFormula[arrKey].map((m) =>
+                              m.id === p.id ? { ...m, minQty: val } : m
+                            ),
+                          });
+                        }}
+                        placeholder={`Ex: ${p.minQuantity || 0}`}
+                        min={0}
+                        disabled={isProtected}
+                        className="w-full px-2 py-1.5 border border-blue-300 rounded focus:outline-none focus:border-blue-500 bg-white text-stone-800"
+                      />
+                    </div>
+
+                    <div className="flex flex-col flex-1 min-w-[30%]">
+                      <label className="text-stone-500 font-semibold mb-1">Máximo (kg)</label>
+                      <input
+                        type="number"
+                        value={p.maxQty === 0 ? '' : p.maxQty}
+                        onChange={(e) => {
+                          if (!localFormula) return;
+                          const val = Number(e.target.value);
+                          const arrKey = type === 'macro' ? 'macros' : 'micros';
+                          setLocalFormula({
+                            ...localFormula,
+                            [arrKey]: localFormula[arrKey].map((m) =>
+                              m.id === p.id ? { ...m, maxQty: val } : m
+                            ),
+                          });
+                        }}
+                        placeholder="Sem Limite"
+                        min={0}
+                        disabled={isProtected}
+                        className="w-full px-2 py-1.5 border border-blue-300 rounded focus:outline-none focus:border-blue-500 bg-white text-stone-800"
+                      />
+                    </div>
+
+                    <div className="flex flex-col flex-1 min-w-[30%]">
+                      <label className="text-stone-500 font-semibold mb-1">Fixo (kg)</label>
+                      <input
+                        type="number"
+                        value={p.minQty === p.maxQty && p.minQty > 0 ? p.minQty : ''}
+                        onChange={(e) => {
+                          if (!localFormula) return;
+                          const val = Number(e.target.value);
+                          const arrKey = type === 'macro' ? 'macros' : 'micros';
+                          setLocalFormula({
+                            ...localFormula,
+                            [arrKey]: localFormula[arrKey].map((m) =>
+                              m.id === p.id ? { ...m, minQty: val, maxQty: val } : m
+                            ),
+                          });
+                        }}
+                        placeholder="Auto"
+                        min={0}
+                        disabled={isProtected}
+                        className="w-full px-2 py-1.5 border border-blue-300 rounded focus:outline-none focus:border-blue-500 bg-white text-stone-800"
+                        title="Preencher isso força a usar exatamente essa quantidade (iguala min e max)"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-
-            {/* Extended Input Fields */}
-            {p.selected && (
-              <div className="mt-2 pt-3 border-t border-blue-200/50 flex flex-wrap gap-2 text-xs">
-                <div className="flex flex-col flex-1 min-w-[30%]">
-                  <label className="text-stone-500 font-semibold mb-1">Mínimo (kg)</label>
-                  <input
-                    type="number"
-                    value={p.minQty === 0 && p.minQuantity === 0 ? '' : p.minQty}
-                    onChange={(e) => {
-                      if (!localFormula) return;
-                      const val = Number(e.target.value);
-                      const arrKey = type === 'macro' ? 'macros' : 'micros';
-                      setLocalFormula({
-                        ...localFormula,
-                        [arrKey]: localFormula[arrKey].map((m) =>
-                          m.id === p.id ? { ...m, minQty: val } : m
-                        ),
-                      });
-                    }}
-                    placeholder={`Ex: ${p.minQuantity || 0}`}
-                    min={0}
-                    className="w-full px-2 py-1.5 border border-blue-300 rounded focus:outline-none focus:border-blue-500 bg-white text-stone-800"
-                  />
-                </div>
-
-                <div className="flex flex-col flex-1 min-w-[30%]">
-                  <label className="text-stone-500 font-semibold mb-1">Máximo (kg)</label>
-                  <input
-                    type="number"
-                    value={p.maxQty === 0 ? '' : p.maxQty}
-                    onChange={(e) => {
-                      if (!localFormula) return;
-                      const val = Number(e.target.value);
-                      const arrKey = type === 'macro' ? 'macros' : 'micros';
-                      setLocalFormula({
-                        ...localFormula,
-                        [arrKey]: localFormula[arrKey].map((m) =>
-                          m.id === p.id ? { ...m, maxQty: val } : m
-                        ),
-                      });
-                    }}
-                    placeholder="Sem Limite"
-                    min={0}
-                    className="w-full px-2 py-1.5 border border-blue-300 rounded focus:outline-none focus:border-blue-500 bg-white text-stone-800"
-                  />
-                </div>
-
-                <div className="flex flex-col flex-1 min-w-[30%]">
-                  <label className="text-stone-500 font-semibold mb-1">Fixo (kg)</label>
-                  <input
-                    type="number"
-                    value={p.minQty === p.maxQty && p.minQty > 0 ? p.minQty : ''}
-                    onChange={(e) => {
-                      if (!localFormula) return;
-                      const val = Number(e.target.value);
-                      const arrKey = type === 'macro' ? 'macros' : 'micros';
-                      setLocalFormula({
-                        ...localFormula,
-                        [arrKey]: localFormula[arrKey].map((m) =>
-                          m.id === p.id ? { ...m, minQty: val, maxQty: val } : m
-                        ),
-                      });
-                    }}
-                    placeholder="Auto"
-                    min={0}
-                    className="w-full px-2 py-1.5 border border-blue-300 rounded focus:outline-none focus:border-blue-500 bg-white text-stone-800"
-                    title="Preencher isso força a usar exatamente essa quantidade (iguala min e max)"
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-        ))}
+            );
+          })()
+        )}
       </div>
     );
   };

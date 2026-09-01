@@ -160,6 +160,8 @@ export default function Calculator({
   const [savedFormulas, setSavedFormulas] = useState<SavedFormula[]>([]);
   const [activeSearchCalcId, setActiveSearchCalcId] = useState<string | null>(null);
   const [formulaSearchTerm, setFormulaSearchTerm] = useState<Record<string, string>>({});
+  const protectedMaterialIds = initialFormulaToLoad?.protectedMaterialIds || [];
+  const isSavedFormulaRevision = initialFormulaToLoad?.isRevisionFromSavedFormula === true;
 
   useEffect(() => {
     getEmbalagens(true)
@@ -300,6 +302,15 @@ export default function Calculator({
             </div>
           </div>
         </nav>
+        {isSavedFormulaRevision && (
+          <div className="lg:col-span-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <p className="font-bold">Revisão de batida salva</p>
+            <p>
+              A fórmula e os micronutrientes estão protegidos. Ajuste somente as matérias-primas
+              permitidas e recalcule antes de gerar o relatório de preços.
+            </p>
+          </div>
+        )}
         <div className="lg:col-span-2 space-y-6">
           {/* Header Info */}
           <div
@@ -680,6 +691,7 @@ export default function Calculator({
                               <button
                                 type="button"
                                 onClick={() => setCalculationMode(calc.id, 'produtos_livres')}
+                                disabled={isSavedFormulaRevision}
                                 className={`px-2 py-1 rounded-full text-xs font-bold transition-colors ${
                                   isProdutosLivresMode
                                     ? 'bg-emerald-600 text-white'
@@ -722,7 +734,7 @@ export default function Calculator({
                                   }, 250);
                                 }}
                                 placeholder="Ex: 04-14-08 (opcional)"
-                                disabled={isProdutosLivresMode}
+                                disabled={isProdutosLivresMode || isSavedFormulaRevision}
                                 className={`w-full px-2 py-1 text-sm border rounded focus:ring-2 focus:ring-emerald-500 ${
                                   isProdutosLivresMode
                                     ? 'border-stone-200 bg-stone-100 text-stone-400 cursor-not-allowed'
@@ -730,6 +742,7 @@ export default function Calculator({
                                 }`}
                               />
                               {!isProdutosLivresMode &&
+                                !isSavedFormulaRevision &&
                                 activeSearchCalcId === calc.id &&
                                 (formulaSearchTerm[calc.id] || '').trim() && (
                                   <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-stone-200 rounded-lg shadow-xl max-h-48 overflow-y-auto min-w-[220px]">
@@ -1089,6 +1102,7 @@ export default function Calculator({
                                     type="number"
                                     min="0"
                                     value={m.minQty === 0 ? '' : m.minQty}
+                                    disabled={protectedMaterialIds.includes(m.id)}
                                     onChange={(e) => {
                                       const val = Number(e.target.value);
                                       if (m.type === 'macro') {
@@ -1134,6 +1148,7 @@ export default function Calculator({
                                         );
                                       }
                                     }}
+                                    disabled={protectedMaterialIds.includes(m.id)}
                                     className="text-stone-400 hover:text-red-500 ml-1 transition-colors"
                                     title="Remover produto da fórmula"
                                   >
@@ -2109,6 +2124,7 @@ export default function Calculator({
         globalMicros={micros}
         isMaterialsLoading={isMaterialsLoading}
         hasNoMaterialsInDatabase={hasNoMaterialsInDatabase}
+        protectedMaterialIds={protectedMaterialIds}
         onConfirm={(updatedFormula) => {
           setCalculations(
             calculations.map((c) => (c.id === updatedFormula.id ? updatedFormula : c))

@@ -94,4 +94,35 @@ describe('CalculatorSettingsModal', () => {
       )
     ).toBeDefined();
   });
+
+  it('does not allow a protected material to be changed', () => {
+    const handleConfirm = vi.fn();
+    const protectedFormula = {
+      ...mockFormula,
+      macros: [{ ...mockGlobalMacros[0], selected: true, minQty: 10, maxQty: 20 }],
+    };
+
+    render(
+      <CalculatorSettingsModal
+        isOpen={true}
+        onClose={vi.fn()}
+        formula={protectedFormula}
+        globalMacros={mockGlobalMacros}
+        globalMicros={[]}
+        protectedMaterialIds={['1']}
+        onConfirm={handleConfirm}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Ureia'));
+    fireEvent.click(screen.getByText('Confirmar Seleção'));
+
+    expect(screen.getByText('Protegido para preservar a descrição da formulação')).toBeDefined();
+    expect(handleConfirm.mock.calls[0][0].macros[0]).toMatchObject({
+      id: '1',
+      selected: true,
+      minQty: 10,
+      maxQty: 20,
+    });
+  });
 });
