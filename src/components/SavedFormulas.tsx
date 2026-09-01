@@ -32,19 +32,14 @@ import {
 import { useToast } from './Toast';
 import { useConfirm } from '../hooks/useConfirm';
 import { ConfirmDialog } from './ui/ConfirmDialog';
+import {
+  getFormulaUpdateProtection,
+  getPriceListsForLoadingLocation,
+} from '../utils/savedFormulaWorkflow';
 
 interface SavedFormulasProps {
   currentUser: User;
   onSendToCalculator: (formula: SavedFormula, branchId: string, priceListId: string) => void;
-}
-
-interface ReportFactors {
-  fator: number;
-  desconto: number;
-  frete: number;
-  aliquota: number;
-  comissao: number;
-  vencimento: string;
 }
 
 interface ModalGerarRelatorioProps {
@@ -72,23 +67,7 @@ function ModalGerarRelatorio({
   const { showError } = useToast();
   const selectedFormulas = formulas.filter((f) => selectedIds.includes(f.id));
   const [generatingPdf, setGeneratingPdf] = useState(false);
-  const [applyToAll, setApplyToAll] = useState(true);
   const [includeComposicao, setIncludeComposicao] = useState(false);
-  const [globalFactors, setGlobalFactors] = useState<ReportFactors>({
-    fator: 1,
-    desconto: 0,
-    frete: 0,
-    aliquota: 0,
-    comissao: 0,
-    vencimento: '',
-  });
-  const [perFormulaFactors, setPerFormulaFactors] = useState<Record<string, ReportFactors>>(() => {
-    const initial: Record<string, ReportFactors> = {};
-    selectedFormulas.forEach((f) => {
-      initial[f.id] = { fator: 1, desconto: 0, frete: 0, aliquota: 0, comissao: 0, vencimento: '' };
-    });
-    return initial;
-  });
 
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
@@ -97,7 +76,9 @@ function ModalGerarRelatorio({
 
   useEffect(() => {
     if (isOpen) {
-      getClients().then(setClients).catch(() => {});
+      getClients()
+        .then(setClients)
+        .catch(() => {});
       setSelectedClient(null);
       setClientSearch('');
     }
@@ -105,18 +86,9 @@ function ModalGerarRelatorio({
 
   if (!isOpen) return null;
 
-  const getFactors = (id: string): ReportFactors =>
-    applyToAll ? globalFactors : perFormulaFactors[id] || globalFactors;
-
   const calcPrecoFinal = (formula: SavedFormula): number => {
     const { total } = getFormulaCost(formula, selectedList);
-    const f = getFactors(formula.id);
-    let preco = total * f.fator;
-    preco -= f.desconto;
-    preco += f.frete;
-    preco *= 1 + f.aliquota / 100;
-    preco *= 1 + f.comissao / 100;
-    return preco;
+    return total;
   };
 
   const handleGeneratePDF = async () => {
@@ -127,147 +99,156 @@ function ModalGerarRelatorio({
         import('jspdf-autotable'),
       ]);
       const doc = new jsPDF();
-    const now = new Date();
-    const dateStr = now.toLocaleDateString('pt-BR');
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('pt-BR');
 
-    // Header Design (Premium Theme)
-    doc.setFillColor(16, 124, 65); // Forest green primary header accent bar
-    doc.rect(0, 0, 210, 8, 'F');
+      // Header Design (Premium Theme)
+      doc.setFillColor(16, 124, 65); // Forest green primary header accent bar
+      doc.rect(0, 0, 210, 8, 'F');
 
-    doc.setFontSize(20);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(16, 124, 65);
-    doc.text(companyName, 14, 22);
-
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(120, 120, 120);
-    doc.text(`RELATÓRIO DE PREÇOS — EMITIDO EM ${dateStr}`, 14, 28);
-    
-    doc.setDrawColor(220, 220, 220);
-    doc.setLineWidth(0.5);
-    doc.line(14, 31, 196, 31);
-
-    let currentY = 36;
-
-    // Optional Client Details Card
-    if (selectedClient) {
-      // Draw background
-      doc.setFillColor(248, 250, 248);
-      doc.setDrawColor(220, 230, 220);
-      doc.roundedRect(14, currentY, 182, 30, 3, 3, 'FD');
-
-      // Client Title
-      doc.setFontSize(9);
+      doc.setFontSize(20);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(16, 124, 65);
-      doc.text('DADOS DO CLIENTE', 19, currentY + 6);
+      doc.text(companyName, 14, 22);
 
-      // Client Data columns
-      doc.setFontSize(8.5);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(60, 60, 60);
-      
-      doc.text(`Razão Social / Nome: ${selectedClient.name}`, 19, currentY + 12);
-      doc.text(`CPF / CNPJ: ${selectedClient.document}`, 19, currentY + 18);
-      doc.text(`IE: ${selectedClient.stateRegistration || 'Isento'}`, 19, currentY + 24);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(120, 120, 120);
+      doc.text(`RELATÓRIO DE PREÇOS — EMITIDO EM ${dateStr}`, 14, 28);
 
-      doc.text(`Fazenda: ${selectedClient.fazenda || '—'}`, 110, currentY + 12);
-      doc.text(`Cidade / UF: ${selectedClient.address?.city || ''} / ${selectedClient.address?.state || ''}`, 110, currentY + 18);
-      
-      currentY += 36;
-    }
-
-    // Main table
-    const tableBody: (string | number)[][] = selectedFormulas.map((formula) => {
-      const idFormatado = formatId(formula.id_numeric, 'BAT-');
-      const precoFinal = calcPrecoFinal(formula);
-      return [
-        idFormatado,
-        formula.name,
-        formula.targetFormula,
-        precoFinal > 0
-          ? precoFinal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-          : '—',
-      ];
-    });
-
-    autoTable(doc, {
-      startY: currentY,
-      head: [['ID', 'Nome do Produto / Fórmula', 'NPK Alvo', 'Preço Final R$/t']],
-      body: tableBody,
-      styles: { fontSize: 9, cellPadding: 4, font: 'helvetica' },
-      headStyles: { fillColor: [16, 124, 65], textColor: 255, fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: [248, 250, 248] },
-      margin: { left: 14, right: 14 },
-    });
-
-    // If include composition
-    if (includeComposicao) {
-      selectedFormulas.forEach((formula) => {
-        const activeMacros = formula.macros.filter((m) => m.quantity > 0);
-        const activeMicros = formula.micros.filter((m) => m.quantity > 0);
-        if (activeMacros.length === 0 && activeMicros.length === 0) return;
-
-        const lastY = (doc as any).lastAutoTable?.finalY ?? currentY + 20;
-        
-        // Page break if composition section is too low
-        if (lastY > 240) {
-          doc.addPage();
-          doc.setFillColor(16, 124, 65);
-          doc.rect(0, 0, 210, 8, 'F');
-        }
-
-        const compY = lastY > 240 ? 20 : lastY + 10;
-
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(30, 30, 30);
-        doc.text(`Detalhamento da Composição: ${formula.name} (${formula.targetFormula})`, 14, compY);
-
-        const composicaoBody = [
-          ...activeMacros.map((m) => [m.name, `${m.quantity.toFixed(0)} kg`, 'Macro']),
-          ...activeMicros.map((m) => [m.name, `${m.quantity.toFixed(0)} kg`, 'Micro']),
-        ];
-
-        autoTable(doc, {
-          startY: compY + 4,
-          head: [['Matéria-Prima Utilizada', 'Quantidade', 'Tipo de Nutriente']],
-          body: composicaoBody,
-          styles: { fontSize: 8, cellPadding: 3 },
-          headStyles: { fillColor: [80, 90, 80], textColor: 255 },
-          alternateRowStyles: { fillColor: [250, 250, 250] },
-          margin: { left: 14, right: 14 },
-        });
-      });
-    }
-
-    // Footer
-    const pageCount = (doc as any).internal.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-      doc.setPage(i);
-      const pageHeight = doc.internal.pageSize.height;
-      
-      // Footer line separator
-      doc.setDrawColor(240, 240, 240);
+      doc.setDrawColor(220, 220, 220);
       doc.setLineWidth(0.5);
-      doc.line(14, pageHeight - 15, 196, pageHeight - 15);
+      doc.line(14, 31, 196, 31);
 
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'italic');
-      doc.setTextColor(120);
-      
-      const venc = globalFactors.vencimento
-        ? `Válido até: ${new Date(globalFactors.vencimento + 'T12:00:00').toLocaleDateString('pt-BR')}`
-        : '';
-      doc.text(venc, 14, pageHeight - 9);
-      doc.text('Este documento é um relatório comercial confidencial emitido por FertCalc.', doc.internal.pageSize.width / 2, pageHeight - 9, {
-        align: 'center',
+      let currentY = 36;
+
+      // Optional Client Details Card
+      if (selectedClient) {
+        // Draw background
+        doc.setFillColor(248, 250, 248);
+        doc.setDrawColor(220, 230, 220);
+        doc.roundedRect(14, currentY, 182, 30, 3, 3, 'FD');
+
+        // Client Title
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(16, 124, 65);
+        doc.text('DADOS DO CLIENTE', 19, currentY + 6);
+
+        // Client Data columns
+        doc.setFontSize(8.5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(60, 60, 60);
+
+        doc.text(`Razão Social / Nome: ${selectedClient.name}`, 19, currentY + 12);
+        doc.text(`CPF / CNPJ: ${selectedClient.document}`, 19, currentY + 18);
+        doc.text(`IE: ${selectedClient.stateRegistration || 'Isento'}`, 19, currentY + 24);
+
+        doc.text(`Fazenda: ${selectedClient.fazenda || '—'}`, 110, currentY + 12);
+        doc.text(
+          `Cidade / UF: ${selectedClient.address?.city || ''} / ${selectedClient.address?.state || ''}`,
+          110,
+          currentY + 18
+        );
+
+        currentY += 36;
+      }
+
+      // Main table
+      const tableBody: (string | number)[][] = selectedFormulas.map((formula) => {
+        const idFormatado = formatId(formula.id_numeric, 'BAT-');
+        const precoFinal = calcPrecoFinal(formula);
+        return [
+          idFormatado,
+          formula.name,
+          formula.targetFormula,
+          precoFinal > 0
+            ? precoFinal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+            : '—',
+        ];
       });
-      doc.text(`Pág. ${i}/${pageCount}`, doc.internal.pageSize.width - 14, pageHeight - 9, {
-        align: 'right',
+
+      autoTable(doc, {
+        startY: currentY,
+        head: [['ID', 'Nome do Produto / Fórmula', 'NPK Alvo', 'Custo referência R$/t']],
+        body: tableBody,
+        styles: { fontSize: 9, cellPadding: 4, font: 'helvetica' },
+        headStyles: { fillColor: [16, 124, 65], textColor: 255, fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [248, 250, 248] },
+        margin: { left: 14, right: 14 },
       });
-    }
+
+      // If include composition
+      if (includeComposicao) {
+        selectedFormulas.forEach((formula) => {
+          const activeMacros = formula.macros.filter((m) => m.quantity > 0);
+          const activeMicros = formula.micros.filter((m) => m.quantity > 0);
+          if (activeMacros.length === 0 && activeMicros.length === 0) return;
+
+          const lastY = (doc as any).lastAutoTable?.finalY ?? currentY + 20;
+
+          // Page break if composition section is too low
+          if (lastY > 240) {
+            doc.addPage();
+            doc.setFillColor(16, 124, 65);
+            doc.rect(0, 0, 210, 8, 'F');
+          }
+
+          const compY = lastY > 240 ? 20 : lastY + 10;
+
+          doc.setFontSize(10);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(30, 30, 30);
+          doc.text(
+            `Detalhamento da Composição: ${formula.name} (${formula.targetFormula})`,
+            14,
+            compY
+          );
+
+          const composicaoBody = [
+            ...activeMacros.map((m) => [m.name, `${m.quantity.toFixed(0)} kg`, 'Macro']),
+            ...activeMicros.map((m) => [m.name, `${m.quantity.toFixed(0)} kg`, 'Micro']),
+          ];
+
+          autoTable(doc, {
+            startY: compY + 4,
+            head: [['Matéria-Prima Utilizada', 'Quantidade', 'Tipo de Nutriente']],
+            body: composicaoBody,
+            styles: { fontSize: 8, cellPadding: 3 },
+            headStyles: { fillColor: [80, 90, 80], textColor: 255 },
+            alternateRowStyles: { fillColor: [250, 250, 250] },
+            margin: { left: 14, right: 14 },
+          });
+        });
+      }
+
+      // Footer
+      const pageCount = (doc as any).internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        const pageHeight = doc.internal.pageSize.height;
+
+        // Footer line separator
+        doc.setDrawColor(240, 240, 240);
+        doc.setLineWidth(0.5);
+        doc.line(14, pageHeight - 15, 196, pageHeight - 15);
+
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'italic');
+        doc.setTextColor(120);
+
+        doc.text(
+          'Este documento é um relatório comercial confidencial emitido por FertCalc.',
+          doc.internal.pageSize.width / 2,
+          pageHeight - 9,
+          {
+            align: 'center',
+          }
+        );
+        doc.text(`Pág. ${i}/${pageCount}`, doc.internal.pageSize.width - 14, pageHeight - 9, {
+          align: 'right',
+        });
+      }
 
       doc.save(`relatorio-precos-${dateStr.replace(/\//g, '-')}.pdf`);
       onClose();
@@ -276,17 +257,6 @@ function ModalGerarRelatorio({
     } finally {
       setGeneratingPdf(false);
     }
-  };
-
-  const updateGlobal = (field: keyof ReportFactors, value: string | number) => {
-    setGlobalFactors((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const updatePerFormula = (id: string, field: keyof ReportFactors, value: string | number) => {
-    setPerFormulaFactors((prev) => ({
-      ...prev,
-      [id]: { ...(prev[id] || globalFactors), [field]: value },
-    }));
   };
 
   return (
@@ -352,7 +322,10 @@ function ModalGerarRelatorio({
                       className="w-full text-left px-4 py-2 hover:bg-stone-50 border-b border-stone-100 last:border-0 text-xs flex flex-col"
                     >
                       <span className="font-bold text-stone-800">{c.name}</span>
-                      <span className="text-[10px] text-stone-500">Doc: {c.document} IE: {c.stateRegistration || 'Isento'} | Fazenda: {c.fazenda || '—'}</span>
+                      <span className="text-[10px] text-stone-500">
+                        Doc: {c.document} IE: {c.stateRegistration || 'Isento'} | Fazenda:{' '}
+                        {c.fazenda || '—'}
+                      </span>
                     </button>
                   ));
                 })()}
@@ -363,10 +336,13 @@ function ModalGerarRelatorio({
                 <div>
                   <p className="font-bold">✓ {selectedClient.name}</p>
                   <p className="text-[10px] text-emerald-600 mt-0.5">
-                    Doc: {selectedClient.document} IE: {selectedClient.stateRegistration || 'Isento'} | Fazenda: {selectedClient.fazenda || '—'}
+                    Doc: {selectedClient.document} IE:{' '}
+                    {selectedClient.stateRegistration || 'Isento'} | Fazenda:{' '}
+                    {selectedClient.fazenda || '—'}
                   </p>
                   <p className="text-[10px] text-emerald-600">
-                    Cidade/UF: {selectedClient.address?.city || ''} / {selectedClient.address?.state || ''}
+                    Cidade/UF: {selectedClient.address?.city || ''} /{' '}
+                    {selectedClient.address?.state || ''}
                   </p>
                 </div>
                 <button
@@ -388,17 +364,6 @@ function ModalGerarRelatorio({
             <label className="flex items-center gap-2 cursor-pointer select-none">
               <input
                 type="checkbox"
-                checked={applyToAll}
-                onChange={(e) => setApplyToAll(e.target.checked)}
-                className="w-4 h-4 accent-emerald-600"
-              />
-              <span className="text-sm font-medium text-stone-700">
-                Aplicar fatores iguais para todas as fórmulas
-              </span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
                 checked={includeComposicao}
                 onChange={(e) => setIncludeComposicao(e.target.checked)}
                 className="w-4 h-4 accent-emerald-600"
@@ -409,40 +374,15 @@ function ModalGerarRelatorio({
             </label>
           </div>
 
-          {/* Global factors */}
-          {applyToAll && (
-            <div className="bg-stone-50 rounded-xl p-4 border border-stone-200">
-              <h3 className="text-sm font-bold text-stone-700 mb-3 uppercase tracking-wider">
-                Fatores Comerciais
-              </h3>
-              <FactorsForm factors={globalFactors} onChange={updateGlobal} />
-            </div>
-          )}
-
-          {/* Per-formula factors */}
-          {!applyToAll && (
-            <div className="space-y-4">
-              {selectedFormulas.map((formula) => (
-                <div
-                  key={formula.id}
-                  className="bg-stone-50 rounded-xl p-4 border border-stone-200"
-                >
-                  <h3 className="text-sm font-bold text-stone-700 mb-3">
-                    {formatId(formula.id_numeric, 'BAT-')} — {formula.name}
-                  </h3>
-                  <FactorsForm
-                    factors={perFormulaFactors[formula.id] || globalFactors}
-                    onChange={(field, val) => updatePerFormula(formula.id, field, val)}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+            Os fatores comerciais foram centralizados na Calculadora. Esta prévia usa somente o
+            custo da composição na lista selecionada.
+          </div>
 
           {/* Preview */}
           <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-200">
             <h3 className="text-sm font-bold text-emerald-700 mb-2 uppercase tracking-wider">
-              Prévia de Preços
+              Prévia de custos da composição
             </h3>
             <div className="space-y-1">
               {selectedFormulas.map((formula) => {
@@ -488,87 +428,6 @@ function ModalGerarRelatorio({
   );
 }
 
-interface FactorsFormProps {
-  factors: ReportFactors;
-  onChange: (field: keyof ReportFactors, value: string | number) => void;
-}
-
-function parseNumericInput(value: string, defaultValue: number): number {
-  const parsed = parseFloat(value);
-  return isNaN(parsed) ? defaultValue : parsed;
-}
-
-function FactorsForm({ factors, onChange }: FactorsFormProps) {
-  return (
-    <div className="grid grid-cols-2 gap-3">
-      <div>
-        <label className="text-xs font-medium text-stone-500 block mb-1">Fator Multiplicador</label>
-        <input
-          type="number"
-          step="0.01"
-          min="0.01"
-          value={factors.fator}
-          onChange={(e) => onChange('fator', parseNumericInput(e.target.value, 1))}
-          className="w-full border border-stone-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-        />
-      </div>
-      <div>
-        <label className="text-xs font-medium text-stone-500 block mb-1">Desconto R$/t</label>
-        <input
-          type="number"
-          step="0.01"
-          min="0"
-          value={factors.desconto}
-          onChange={(e) => onChange('desconto', parseNumericInput(e.target.value, 0))}
-          className="w-full border border-stone-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-        />
-      </div>
-      <div>
-        <label className="text-xs font-medium text-stone-500 block mb-1">Frete R$/t</label>
-        <input
-          type="number"
-          step="0.01"
-          min="0"
-          value={factors.frete}
-          onChange={(e) => onChange('frete', parseNumericInput(e.target.value, 0))}
-          className="w-full border border-stone-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-        />
-      </div>
-      <div>
-        <label className="text-xs font-medium text-stone-500 block mb-1">Alíquota %</label>
-        <input
-          type="number"
-          step="0.01"
-          min="0"
-          value={factors.aliquota}
-          onChange={(e) => onChange('aliquota', parseNumericInput(e.target.value, 0))}
-          className="w-full border border-stone-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-        />
-      </div>
-      <div>
-        <label className="text-xs font-medium text-stone-500 block mb-1">Comissão %</label>
-        <input
-          type="number"
-          step="0.01"
-          min="0"
-          value={factors.comissao}
-          onChange={(e) => onChange('comissao', parseNumericInput(e.target.value, 0))}
-          className="w-full border border-stone-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-        />
-      </div>
-      <div>
-        <label className="text-xs font-medium text-stone-500 block mb-1">Vencimento</label>
-        <input
-          type="date"
-          value={factors.vencimento}
-          onChange={(e) => onChange('vencimento', e.target.value)}
-          className="w-full border border-stone-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-        />
-      </div>
-    </div>
-  );
-}
-
 export default function SavedFormulas({ currentUser, onSendToCalculator }: SavedFormulasProps) {
   const { showSuccess, showError } = useToast();
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
@@ -578,6 +437,7 @@ export default function SavedFormulas({ currentUser, onSendToCalculator }: Saved
   const [selectedLocalId, setSelectedLocalId] = useState<string>('');
   const [selectedPriceListId, setSelectedPriceListId] = useState<string>('');
   const [selectedFormulas, setSelectedFormulas] = useState<string[]>([]);
+  const [formulaToUpdateId, setFormulaToUpdateId] = useState<string>('');
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [linhasDiferenciadas, setLinhasDiferenciadas] = useState<Record<string, boolean>>({});
   const [appSettings, setAppSettings] = useState<AppSettings>({
@@ -607,9 +467,7 @@ export default function SavedFormulas({ currentUser, onSendToCalculator }: Saved
       setLocais(allLocais);
       if (settings) setAppSettings(settings);
 
-      if (allLists.length > 0) {
-        setSelectedPriceListId(allLists[0].id);
-      }
+      setSelectedPriceListId('');
 
       // Load linha_diferenciada for each formula
       const ldMap: Record<string, boolean> = {};
@@ -697,6 +555,66 @@ export default function SavedFormulas({ currentUser, onSendToCalculator }: Saved
     }
   };
 
+  const compatiblePriceLists = getPriceListsForLoadingLocation(priceLists, selectedLocalId);
+
+  useEffect(() => {
+    const firstCompatibleList = compatiblePriceLists[0];
+    setSelectedPriceListId((current) =>
+      compatiblePriceLists.some((list) => list.id === current)
+        ? current
+        : firstCompatibleList?.id || ''
+    );
+  }, [selectedLocalId, priceLists]);
+
+  useEffect(() => {
+    setSelectedFormulas((current) =>
+      current.filter((id) =>
+        formulas.some(
+          (formula) =>
+            formula.id === id &&
+            (!selectedLocalId || formula.local_carregamento_id === selectedLocalId)
+        )
+      )
+    );
+  }, [selectedLocalId, formulas]);
+
+  useEffect(() => {
+    const updateableIds = selectedFormulas.filter((id) => linhasDiferenciadas[id] !== true);
+    setFormulaToUpdateId((current) =>
+      updateableIds.includes(current) ? current : updateableIds[0] || ''
+    );
+  }, [selectedFormulas, linhasDiferenciadas]);
+
+  const sendFormulaToCalculator = (formula: SavedFormula) => {
+    if (!selectedLocalId) {
+      showError('Selecione o local de carregamento antes de abrir a calculadora.');
+      return;
+    }
+    if (!selectedPriceListId) {
+      showError('Este local não possui uma lista de preços disponível.');
+      return;
+    }
+
+    const protection = getFormulaUpdateProtection(
+      formula,
+      linhasDiferenciadas[formula.id] === true
+    );
+    if (!protection.canUpdate) {
+      showError(protection.reason || 'Esta batida não pode ser alterada.');
+      return;
+    }
+
+    onSendToCalculator(
+      {
+        ...formula,
+        protectedMaterialIds: protection.protectedMaterialIds,
+        isRevisionFromSavedFormula: true,
+      },
+      selectedLocalId,
+      selectedPriceListId
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -705,7 +623,7 @@ export default function SavedFormulas({ currentUser, onSendToCalculator }: Saved
     );
   }
 
-  const selectedList = priceLists.find((l) => l.id === selectedPriceListId);
+  const selectedList = compatiblePriceLists.find((l) => l.id === selectedPriceListId);
 
   // Filter by local de carregamento if selected
   const filteredFormulas = selectedLocalId
@@ -742,7 +660,7 @@ export default function SavedFormulas({ currentUser, onSendToCalculator }: Saved
                   onChange={(e) => setSelectedLocalId(e.target.value)}
                   className="bg-transparent text-stone-700 font-medium outline-none text-sm cursor-pointer max-w-[160px]"
                 >
-                  <option value="">Todos os locais</option>
+                  <option value="">Selecione o local</option>
                   {locais.map((local) => (
                     <option key={local.id} value={local.id}>
                       {local.nome}
@@ -764,14 +682,18 @@ export default function SavedFormulas({ currentUser, onSendToCalculator }: Saved
                   onChange={(e) => setSelectedPriceListId(e.target.value)}
                   className="bg-transparent text-stone-700 font-medium outline-none text-sm cursor-pointer max-w-[160px]"
                 >
-                  {priceLists.length > 0 ? (
-                    priceLists.map((list) => (
+                  {compatiblePriceLists.length > 0 ? (
+                    compatiblePriceLists.map((list) => (
                       <option key={list.id} value={list.id}>
                         {list.name}
                       </option>
                     ))
                   ) : (
-                    <option value="">Sem tabelas cadastradas</option>
+                    <option value="">
+                      {selectedLocalId
+                        ? 'Sem tabela para este local'
+                        : 'Selecione o local primeiro'}
+                    </option>
                   )}
                 </select>
               </div>
@@ -780,7 +702,18 @@ export default function SavedFormulas({ currentUser, onSendToCalculator }: Saved
             {/* Generate report button */}
             {selectedFormulas.length > 0 && (
               <button
-                onClick={() => setIsReportModalOpen(true)}
+                onClick={() => {
+                  if (!selectedLocalId) {
+                    showError('Selecione o local de carregamento para gerar o relatório.');
+                    return;
+                  }
+                  if (!selectedList) {
+                    showError('Selecione uma lista de preços vinculada ao local.');
+                    return;
+                  }
+                  setIsReportModalOpen(true);
+                }}
+                disabled={!selectedLocalId || !selectedList}
                 className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm"
               >
                 <FileText className="w-4 h-4" />
@@ -823,6 +756,56 @@ export default function SavedFormulas({ currentUser, onSendToCalculator }: Saved
                 </span>
               )}
             </div>
+
+            {selectedFormulas.length > 0 && (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                  <div>
+                    <p className="font-bold text-emerald-900">
+                      Revisar uma batida antes do relatório
+                    </p>
+                    <p className="text-sm text-emerald-800">
+                      Escolha a fórmula que precisa ser recalculada. Micros são preservados e
+                      produtos de linha diferenciada não podem ser alterados.
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                    <label className="flex min-w-64 flex-col gap-1 text-xs font-bold uppercase tracking-wide text-emerald-800">
+                      Batida para atualizar
+                      <select
+                        value={formulaToUpdateId}
+                        onChange={(event) => setFormulaToUpdateId(event.target.value)}
+                        className="rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm font-medium normal-case tracking-normal text-stone-700"
+                      >
+                        {selectedFormulas.map((id) => {
+                          const formula = formulas.find((item) => item.id === id);
+                          if (!formula) return null;
+                          const blocked = linhasDiferenciadas[formula.id] === true;
+                          return (
+                            <option key={formula.id} value={formula.id} disabled={blocked}>
+                              {formula.name}
+                              {blocked ? ' — linha diferenciada' : ''}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const formula = formulas.find((item) => item.id === formulaToUpdateId);
+                        if (formula) sendFormulaToCalculator(formula);
+                      }}
+                      disabled={!formulaToUpdateId}
+                      className="flex items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Atualizar na calculadora
+                      <ArrowRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredFormulas.map((formula) => {
@@ -969,10 +952,20 @@ export default function SavedFormulas({ currentUser, onSendToCalculator }: Saved
 
                     <div className="bg-stone-50 p-3 border-t border-stone-100">
                       <button
-                        onClick={() => onSendToCalculator(formula, '', selectedPriceListId)}
-                        className="w-full flex justify-center items-center gap-2 bg-white border border-stone-200 hover:border-emerald-500 hover:text-emerald-600 text-stone-700 font-medium py-2 rounded-lg transition-colors text-sm shadow-sm"
+                        onClick={() => sendFormulaToCalculator(formula)}
+                        disabled={isLinhaDiferenciada || !selectedLocalId || !selectedList}
+                        className="w-full flex justify-center items-center gap-2 bg-white border border-stone-200 hover:border-emerald-500 hover:text-emerald-600 text-stone-700 font-medium py-2 rounded-lg transition-colors text-sm shadow-sm disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-400"
+                        title={
+                          isLinhaDiferenciada
+                            ? 'A composição de produtos de linha diferenciada é protegida'
+                            : !selectedLocalId
+                              ? 'Selecione o local de carregamento'
+                              : !selectedList
+                                ? 'Não existe lista de preços vinculada ao local'
+                                : 'Atualizar esta batida na calculadora'
+                        }
                       >
-                        Usar na Calculadora
+                        {isLinhaDiferenciada ? 'Composição protegida' : 'Atualizar na Calculadora'}
                         <ArrowRight className="w-4 h-4" />
                       </button>
                     </div>

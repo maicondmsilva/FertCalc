@@ -406,6 +406,8 @@ export interface SavedFormula {
   macros: RawMaterial[];
   micros: RawMaterial[];
   local_carregamento_id?: string;
+  protectedMaterialIds?: string[];
+  isRevisionFromSavedFormula?: boolean;
 }
 
 export interface PricingFactors {
