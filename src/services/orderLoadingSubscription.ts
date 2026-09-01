@@ -10,6 +10,18 @@ export function subscribeToOrderLoadingChanges(onChange: () => void) {
       onChange
     )
     .on('postgres_changes', { event: '*', schema: 'public', table: 'carregamentos' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'carregamento_itens' }, onChange)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'carregamento_execucoes' },
+      onChange
+    )
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'cotacoes_frete' }, onChange)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'cotacoes_solicitadas' },
+      onChange
+    )
     .subscribe();
 
   return () => {
