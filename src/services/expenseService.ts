@@ -23,7 +23,10 @@ function mapExpense(d: Record<string, unknown>): CreditCardExpense {
     categoryName: (d.category_name ??
       (d.expense_categories as Record<string, unknown> | null)?.name) as string | undefined,
     status: d.status as ExpenseStatus,
-    cardName: d.card_name as string | undefined,
+    cardId: d.card_id as string | undefined,
+    cardName: (d.card_name ?? (d.credit_cards as Record<string, unknown> | null)?.name) as
+      | string
+      | undefined,
     installments: (d.installments ?? 1) as number,
     currentInstallment: d.current_installment as number | undefined,
     receipt: d.receipt as string | undefined,
@@ -70,7 +73,8 @@ function mapAudit(d: Record<string, unknown>): ExpenseAudit {
 export async function getExpenses(period?: ExpensePeriod): Promise<CreditCardExpense[]> {
   let query = supabase
     .from('credit_card_expenses')
-    .select('*, expense_categories(name)')
+    .select('*, expense_categories(name), credit_cards(name,last_four)')
+    .is('deleted_at', null)
     .order('date', { ascending: false });
 
   if (period) {
@@ -85,8 +89,9 @@ export async function getExpenses(period?: ExpensePeriod): Promise<CreditCardExp
 export async function getExpenseById(id: string): Promise<CreditCardExpense | null> {
   const { data, error } = await supabase
     .from('credit_card_expenses')
-    .select('*, expense_categories(name)')
+    .select('*, expense_categories(name), credit_cards(name,last_four)')
     .eq('id', id)
+    .is('deleted_at', null)
     .single();
   if (error || !data) return null;
   return mapExpense(data);
@@ -105,7 +110,7 @@ export async function createExpense(
       date: expense.date,
       category_id: expense.categoryId,
       status: expense.status || 'pendente',
-      card_name: expense.cardName,
+      card_id: expense.cardId,
       installments: expense.installments || 1,
       current_installment: expense.currentInstallment,
       receipt: expense.receipt,
@@ -115,12 +120,12 @@ export async function createExpense(
       period_month: expense.periodMonth,
       period_year: expense.periodYear,
     })
-    .select('*, expense_categories(name)')
+    .select('*, expense_categories(name), credit_cards(name,last_four)')
     .single();
   if (error) throw error;
 
-  // Create audit entry
-  await createAuditEntry(data.id, 'criado', auditUserId, auditUserName);
+  void auditUserId;
+  void auditUserName;
 
   return mapExpense(data);
 }
@@ -136,8 +141,7 @@ export async function updateExpense(
   if (expense.amount !== undefined) payload.amount = expense.amount;
   if (expense.date !== undefined) payload.date = expense.date;
   if (expense.categoryId !== undefined) payload.category_id = expense.categoryId;
-  if (expense.status !== undefined) payload.status = expense.status;
-  if (expense.cardName !== undefined) payload.card_name = expense.cardName;
+  if (expense.cardId !== undefined) payload.card_id = expense.cardId;
   if (expense.installments !== undefined) payload.installments = expense.installments;
   if (expense.currentInstallment !== undefined)
     payload.current_installment = expense.currentInstallment;
@@ -149,7 +153,8 @@ export async function updateExpense(
   const { error } = await supabase.from('credit_card_expenses').update(payload).eq('id', id);
   if (error) throw error;
 
-  await createAuditEntry(id, 'editado', auditUserId, auditUserName);
+  void auditUserId;
+  void auditUserName;
 }
 
 export async function deleteExpense(
@@ -157,9 +162,13 @@ export async function deleteExpense(
   auditUserId: string,
   auditUserName: string
 ): Promise<void> {
-  await createAuditEntry(id, 'excluido', auditUserId, auditUserName);
-  const { error } = await supabase.from('credit_card_expenses').delete().eq('id', id);
+  const { error } = await supabase
+    .from('credit_card_expenses')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', id);
   if (error) throw error;
+  void auditUserId;
+  void auditUserName;
 }
 
 export async function checkExpense(id: string, userId: string, userName: string): Promise<void> {
@@ -168,7 +177,8 @@ export async function checkExpense(id: string, userId: string, userName: string)
     .update({ status: 'conferido', updated_at: new Date().toISOString() })
     .eq('id', id);
   if (error) throw error;
-  await createAuditEntry(id, 'conferido', userId, userName);
+  void userId;
+  void userName;
 }
 
 export async function approveExpense(id: string, userId: string, userName: string): Promise<void> {
@@ -177,7 +187,8 @@ export async function approveExpense(id: string, userId: string, userName: strin
     .update({ status: 'aprovado', updated_at: new Date().toISOString() })
     .eq('id', id);
   if (error) throw error;
-  await createAuditEntry(id, 'aprovado', userId, userName);
+  void userId;
+  void userName;
 }
 
 export async function rejectExpense(
@@ -188,10 +199,15 @@ export async function rejectExpense(
 ): Promise<void> {
   const { error } = await supabase
     .from('credit_card_expenses')
-    .update({ status: 'rejeitado', updated_at: new Date().toISOString() })
+    .update({
+      status: 'rejeitado',
+      observation: observation.trim(),
+      updated_at: new Date().toISOString(),
+    })
     .eq('id', id);
   if (error) throw error;
-  await createAuditEntry(id, 'rejeitado', userId, userName, observation);
+  void userId;
+  void userName;
 }
 
 // ============================================================
@@ -205,26 +221,6 @@ export async function getExpenseAudit(expenseId: string): Promise<ExpenseAudit[]
     .order('created_at', { ascending: true });
   if (error || !data) return [];
   return data.map(mapAudit);
-}
-
-async function createAuditEntry(
-  expenseId: string,
-  action: AuditAction,
-  userId: string,
-  userName: string,
-  observation?: string
-): Promise<void> {
-  const { error } = await supabase.from('expense_audit').insert({
-    expense_id: expenseId,
-    action,
-    user_id: userId,
-    user_name: userName,
-    observation: observation || null,
-  });
-  if (error) {
-    console.error('Failed to create audit entry:', error);
-    throw new Error(`Falha ao registrar auditoria: ${error.message}`);
-  }
 }
 
 // ============================================================
@@ -283,7 +279,8 @@ export async function getPendingCount(): Promise<number> {
   const { count, error } = await supabase
     .from('credit_card_expenses')
     .select('*', { count: 'exact', head: true })
-    .eq('status', 'pendente');
+    .eq('status', 'pendente')
+    .is('deleted_at', null);
   if (error) return 0;
   return count || 0;
 }
@@ -292,7 +289,8 @@ export async function getCheckedCount(): Promise<number> {
   const { count, error } = await supabase
     .from('credit_card_expenses')
     .select('*', { count: 'exact', head: true })
-    .eq('status', 'conferido');
+    .eq('status', 'conferido')
+    .is('deleted_at', null);
   if (error) return 0;
   return count || 0;
 }
@@ -308,7 +306,9 @@ export async function getCategoryBudgetStatus(
   return categories
     .filter((c) => c.active)
     .map((category) => {
-      const categoryExpenses = expenses.filter((e) => e.categoryId === category.id);
+      const categoryExpenses = expenses.filter(
+        (expense) => expense.categoryId === category.id && expense.status !== 'rejeitado'
+      );
       const totalSpent = categoryExpenses.reduce((sum, e) => sum + e.amount, 0);
       const budgetLimit = category.budgetLimit || 0;
       return {

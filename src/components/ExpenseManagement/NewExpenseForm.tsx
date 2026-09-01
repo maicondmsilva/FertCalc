@@ -1,7 +1,13 @@
-import React, { useState } from 'react';
-import { CreditCardExpense, ExpenseCategory, ExpensePeriod } from '../../types/expense.types';
+import React, { useEffect, useState } from 'react';
+import {
+  CreditCard,
+  CreditCardExpense,
+  ExpenseCategory,
+  ExpensePeriod,
+} from '../../types/expense.types';
 import { User } from '../../types';
 import { Save, X } from 'lucide-react';
+import { getCardsByUser } from '../../services/cardService';
 
 interface NewExpenseFormProps {
   currentUser: User;
@@ -12,20 +18,40 @@ interface NewExpenseFormProps {
   onCancel: () => void;
 }
 
-export default function NewExpenseForm({ currentUser, categories, period, initialData, onSave, onCancel }: NewExpenseFormProps) {
+export default function NewExpenseForm({
+  currentUser,
+  categories,
+  period,
+  initialData,
+  onSave,
+  onCancel,
+}: NewExpenseFormProps) {
   const [description, setDescription] = useState(initialData?.description || '');
   const [amount, setAmount] = useState(initialData ? String(initialData.amount) : '');
   const [date, setDate] = useState(initialData?.date || new Date().toISOString().split('T')[0]);
   const [categoryId, setCategoryId] = useState(initialData?.categoryId || '');
-  const [cardName, setCardName] = useState(initialData?.cardName || '');
+  const [cards, setCards] = useState<CreditCard[]>([]);
+  const [cardId, setCardId] = useState(initialData?.cardId || '');
+  const [cardsLoading, setCardsLoading] = useState(true);
   const [installments, setInstallments] = useState(initialData?.installments || 1);
-  const [currentInstallment, setCurrentInstallment] = useState(initialData?.currentInstallment || 1);
+  const [currentInstallment, setCurrentInstallment] = useState(
+    initialData?.currentInstallment || 1
+  );
   const [observation, setObservation] = useState(initialData?.observation || '');
   const [saving, setSaving] = useState(false);
 
+  useEffect(() => {
+    getCardsByUser(currentUser.id)
+      .then((availableCards) => {
+        setCards(availableCards);
+        if (availableCards.length === 1) setCardId((current) => current || availableCards[0].id);
+      })
+      .finally(() => setCardsLoading(false));
+  }, [currentUser.id]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!description.trim() || !amount || !categoryId) return;
+    if (!description.trim() || !amount || !categoryId || !cardId) return;
 
     setSaving(true);
     try {
@@ -34,7 +60,7 @@ export default function NewExpenseForm({ currentUser, categories, period, initia
         amount: parseFloat(amount),
         date,
         categoryId,
-        cardName: cardName.trim() || undefined,
+        cardId,
         installments,
         currentInstallment: installments > 1 ? currentInstallment : undefined,
         observation: observation.trim() || undefined,
@@ -117,24 +143,41 @@ export default function NewExpenseForm({ currentUser, categories, period, initia
               className="w-full border border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none"
             >
               <option value="">Selecione...</option>
-              {categories.filter(c => c.active).map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
+              {categories
+                .filter((c) => c.active)
+                .map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
             </select>
           </div>
 
-          {/* Card Name */}
+          {/* Corporate card */}
           <div>
             <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-1.5">
-              Cartão
+              Cartão *
             </label>
-            <input
-              type="text"
-              value={cardName}
-              onChange={(e) => setCardName(e.target.value)}
-              placeholder="Ex: Visa Final 1234"
+            <select
+              value={cardId}
+              onChange={(e) => setCardId(e.target.value)}
+              required
+              disabled={cardsLoading}
               className="w-full border border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none"
-            />
+            >
+              <option value="">{cardsLoading ? 'Carregando...' : 'Selecione...'}</option>
+              {cards.map((card) => (
+                <option key={card.id} value={card.id}>
+                  {card.name}
+                  {card.lastFour ? ` •••• ${card.lastFour}` : ''}
+                </option>
+              ))}
+            </select>
+            {!cardsLoading && cards.length === 0 && (
+              <p className="mt-1 text-xs font-medium text-amber-700">
+                Nenhum cartão ativo está associado ao seu usuário.
+              </p>
+            )}
           </div>
 
           {/* Installments */}
@@ -196,11 +239,11 @@ export default function NewExpenseForm({ currentUser, categories, period, initia
           </button>
           <button
             type="submit"
-            disabled={saving || !description.trim() || !amount || !categoryId}
+            disabled={saving || !description.trim() || !amount || !categoryId || !cardId}
             className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold bg-purple-600 text-white rounded-xl hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <Save className="w-4 h-4" />
-            {saving ? 'Salvando...' : (initialData ? 'Atualizar' : 'Salvar')}
+            {saving ? 'Salvando...' : initialData ? 'Atualizar' : 'Salvar'}
           </button>
         </div>
       </form>

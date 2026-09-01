@@ -4,6 +4,8 @@ import { User } from '../../types';
 import { getCards, createCard, updateCard, toggleCardActive } from '../../services/cardService';
 import { getUsers } from '../../services/db';
 import { Plus, Edit3, Save, X, CreditCard as CreditCardIcon } from 'lucide-react';
+import { useExpensePermissions } from '../../hooks/useExpensePermissions';
+import { subscribeToExpenseChanges } from '../../services/expenseSubscription';
 
 interface CardManagerProps {
   currentUser: User;
@@ -40,7 +42,7 @@ export default function CardManager({ currentUser }: CardManagerProps) {
   const [userResults, setUserResults] = useState<User[]>([]);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
 
-  const isAdmin = currentUser.role === 'master' || currentUser.role === 'admin';
+  const { canAdmin } = useExpensePermissions(currentUser);
 
   const loadCards = useCallback(async () => {
     setLoading(true);
@@ -57,6 +59,18 @@ export default function CardManager({ currentUser }: CardManagerProps) {
 
   useEffect(() => {
     loadCards();
+  }, [loadCards]);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const unsubscribe = subscribeToExpenseChanges(() => {
+      clearTimeout(timer);
+      timer = setTimeout(() => void loadCards(), 300);
+    });
+    return () => {
+      clearTimeout(timer);
+      unsubscribe();
+    };
   }, [loadCards]);
 
   const userMap = useMemo(() => {
@@ -166,7 +180,7 @@ export default function CardManager({ currentUser }: CardManagerProps) {
     }
   };
 
-  if (!isAdmin) {
+  if (!canAdmin) {
     return (
       <div className="text-center py-16 text-stone-400">
         <CreditCardIcon className="w-12 h-12 mx-auto mb-3 opacity-30" />

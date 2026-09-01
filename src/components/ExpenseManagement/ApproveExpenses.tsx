@@ -8,6 +8,7 @@ import {
   getExpenseAudit,
 } from '../../services/expenseService';
 import { Eye, CheckCircle, XCircle, Search, X } from 'lucide-react';
+import { subscribeToExpenseChanges } from '../../services/expenseSubscription';
 
 interface ApproveExpensesProps {
   currentUser: User;
@@ -41,6 +42,18 @@ export default function ApproveExpenses({ currentUser }: ApproveExpensesProps) {
 
   useEffect(() => {
     loadData();
+  }, [loadData]);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const unsubscribe = subscribeToExpenseChanges(() => {
+      clearTimeout(timer);
+      timer = setTimeout(() => void loadData(), 300);
+    });
+    return () => {
+      clearTimeout(timer);
+      unsubscribe();
+    };
   }, [loadData]);
 
   const handleApprove = async (id: string) => {

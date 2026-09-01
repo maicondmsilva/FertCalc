@@ -193,7 +193,9 @@ function AppContentRoute({
     }
     if (activeTab === 'expenses_conferencia') return <CheckExpenses currentUser={currentUser} />;
     if (activeTab === 'expenses_aprovacao') return <ApproveExpenses currentUser={currentUser} />;
-    if (activeTab === 'expenses_categorias') return <ExpenseCategoryManager />;
+    if (activeTab === 'expenses_categorias') {
+      return <ExpenseCategoryManager currentUser={currentUser} />;
+    }
     if (activeTab === 'expenses_cartoes') return <CardManager currentUser={currentUser} />;
   }
 

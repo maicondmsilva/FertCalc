@@ -1,8 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { CreditCardExpense, ExpenseCategory } from '../../types/expense.types';
 import { User } from '../../types';
-import { getExpenses, checkExpense, getExpenseAudit, getExpenseCategories } from '../../services/expenseService';
+import {
+  getExpenses,
+  checkExpense,
+  getExpenseAudit,
+  getExpenseCategories,
+} from '../../services/expenseService';
 import { Eye, ClipboardCheck, Search, X } from 'lucide-react';
+import { subscribeToExpenseChanges } from '../../services/expenseSubscription';
 
 interface CheckExpensesProps {
   currentUser: User;
@@ -21,11 +27,8 @@ export default function CheckExpenses({ currentUser }: CheckExpensesProps) {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [all, cats] = await Promise.all([
-        getExpenses(),
-        getExpenseCategories(),
-      ]);
-      setExpenses(all.filter(e => e.status === 'pendente'));
+      const [all, cats] = await Promise.all([getExpenses(), getExpenseCategories()]);
+      setExpenses(all.filter((e) => e.status === 'pendente'));
       setCategories(cats);
     } catch (err) {
       console.error('Erro ao carregar dados:', err);
@@ -38,11 +41,23 @@ export default function CheckExpenses({ currentUser }: CheckExpensesProps) {
     loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const unsubscribe = subscribeToExpenseChanges(() => {
+      clearTimeout(timer);
+      timer = setTimeout(() => void loadData(), 300);
+    });
+    return () => {
+      clearTimeout(timer);
+      unsubscribe();
+    };
+  }, [loadData]);
+
   const handleCheck = async (id: string) => {
     setProcessing(id);
     try {
       await checkExpense(id, currentUser.id, currentUser.name);
-      setExpenses(prev => prev.filter(e => e.id !== id));
+      setExpenses((prev) => prev.filter((e) => e.id !== id));
       setConfirmId(null);
     } catch (err) {
       console.error('Erro ao conferir:', err);
@@ -61,7 +76,7 @@ export default function CheckExpenses({ currentUser }: CheckExpensesProps) {
     }
   };
 
-  const filtered = expenses.filter(e => {
+  const filtered = expenses.filter((e) => {
     const q = search.toLowerCase();
     return (
       e.description.toLowerCase().includes(q) ||
@@ -74,8 +89,7 @@ export default function CheckExpenses({ currentUser }: CheckExpensesProps) {
   const formatCurrency = (v: number) =>
     v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  const formatDate = (d: string) =>
-    new Date(d + 'T00:00:00').toLocaleDateString('pt-BR');
+  const formatDate = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('pt-BR');
 
   if (loading) {
     return (
@@ -124,19 +138,35 @@ export default function CheckExpenses({ currentUser }: CheckExpensesProps) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-stone-100 bg-stone-50">
-                  <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Data</th>
-                  <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Usuário</th>
-                  <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Cartão</th>
-                  <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Categoria</th>
-                  <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Descrição</th>
-                  <th className="text-right py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Valor</th>
-                  <th className="text-center py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">Ações</th>
+                  <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">
+                    Data
+                  </th>
+                  <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">
+                    Usuário
+                  </th>
+                  <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">
+                    Cartão
+                  </th>
+                  <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">
+                    Categoria
+                  </th>
+                  <th className="text-left py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">
+                    Descrição
+                  </th>
+                  <th className="text-right py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">
+                    Valor
+                  </th>
+                  <th className="text-center py-3 px-4 font-bold text-stone-500 text-xs uppercase tracking-wider">
+                    Ações
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
                 {filtered.map((expense) => (
                   <tr key={expense.id} className="hover:bg-stone-50 transition-colors">
-                    <td className="py-3 px-4 text-stone-600 whitespace-nowrap">{formatDate(expense.date)}</td>
+                    <td className="py-3 px-4 text-stone-600 whitespace-nowrap">
+                      {formatDate(expense.date)}
+                    </td>
                     <td className="py-3 px-4 text-stone-700 font-medium">{expense.userName}</td>
                     <td className="py-3 px-4 text-stone-600">{expense.cardName || '—'}</td>
                     <td className="py-3 px-4 text-stone-600">{expense.categoryName || '—'}</td>
@@ -177,7 +207,8 @@ export default function CheckExpenses({ currentUser }: CheckExpensesProps) {
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
             <h3 className="text-lg font-bold text-stone-800 mb-3">Confirmar Conferência</h3>
             <p className="text-stone-600 text-sm mb-6">
-              Confirma a conferência deste lançamento? O status será alterado para <span className="font-bold text-blue-700">Conferido</span>.
+              Confirma a conferência deste lançamento? O status será alterado para{' '}
+              <span className="font-bold text-blue-700">Conferido</span>.
             </p>
             <div className="flex justify-end gap-3">
               <button
@@ -205,7 +236,10 @@ export default function CheckExpenses({ currentUser }: CheckExpensesProps) {
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-stone-800">Detalhes do Lançamento</h3>
               <button
-                onClick={() => { setDetailExpense(null); setAuditLog([]); }}
+                onClick={() => {
+                  setDetailExpense(null);
+                  setAuditLog([]);
+                }}
                 className="p-1.5 text-stone-400 hover:text-stone-700 rounded-lg"
               >
                 <X className="w-5 h-5" />
@@ -245,12 +279,19 @@ export default function CheckExpenses({ currentUser }: CheckExpensesProps) {
             </dl>
             {auditLog.length > 0 && (
               <div className="mt-5">
-                <h4 className="text-xs font-bold text-stone-500 uppercase tracking-wider mb-2">Histórico</h4>
+                <h4 className="text-xs font-bold text-stone-500 uppercase tracking-wider mb-2">
+                  Histórico
+                </h4>
                 <div className="space-y-2">
-                  {auditLog.map(entry => (
-                    <div key={entry.id} className="text-xs text-stone-600 bg-stone-50 rounded-lg px-3 py-2">
+                  {auditLog.map((entry) => (
+                    <div
+                      key={entry.id}
+                      className="text-xs text-stone-600 bg-stone-50 rounded-lg px-3 py-2"
+                    >
                       <span className="font-bold">{entry.userName}</span> — {entry.action}
-                      {entry.observation && <span className="text-stone-400"> ({entry.observation})</span>}
+                      {entry.observation && (
+                        <span className="text-stone-400"> ({entry.observation})</span>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -258,13 +299,20 @@ export default function CheckExpenses({ currentUser }: CheckExpensesProps) {
             )}
             <div className="flex justify-end gap-3 mt-6">
               <button
-                onClick={() => { setDetailExpense(null); setAuditLog([]); }}
+                onClick={() => {
+                  setDetailExpense(null);
+                  setAuditLog([]);
+                }}
                 className="px-4 py-2 text-sm font-bold text-stone-500 hover:text-stone-700 rounded-xl hover:bg-stone-100"
               >
                 Fechar
               </button>
               <button
-                onClick={() => { setDetailExpense(null); setAuditLog([]); setConfirmId(detailExpense.id); }}
+                onClick={() => {
+                  setDetailExpense(null);
+                  setAuditLog([]);
+                  setConfirmId(detailExpense.id);
+                }}
                 disabled={processing === detailExpense.id}
                 className="px-4 py-2 text-sm font-bold bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50"
               >

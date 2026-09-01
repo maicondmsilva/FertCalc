@@ -1,6 +1,12 @@
 export type ExpenseStatus = 'pendente' | 'conferido' | 'aprovado' | 'rejeitado';
 
-export type AuditAction = 'criado' | 'conferido' | 'aprovado' | 'rejeitado' | 'editado' | 'excluido';
+export type AuditAction =
+  | 'criado'
+  | 'conferido'
+  | 'aprovado'
+  | 'rejeitado'
+  | 'editado'
+  | 'excluido';
 
 export type ExpenseRole = 'none' | 'viewer' | 'launcher' | 'checker' | 'approver' | 'admin';
 
@@ -37,6 +43,7 @@ export interface CreditCardExpense {
   categoryId: string;
   categoryName?: string;
   status: ExpenseStatus;
+  cardId?: string;
   cardName?: string;
   installments: number;
   currentInstallment?: number;

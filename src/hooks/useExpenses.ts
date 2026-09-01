@@ -16,6 +16,7 @@ import {
   rejectExpense as rejectExpenseService,
   getCategoryBudgetStatus,
 } from '../services/expenseService';
+import { subscribeToExpenseChanges } from '../services/expenseSubscription';
 
 export function useExpenses(userId: string, userName: string) {
   const [expenses, setExpenses] = useState<CreditCardExpense[]>([]);
@@ -52,7 +53,21 @@ export function useExpenses(userId: string, userName: string) {
     loadExpenses();
   }, [loadExpenses]);
 
-  const addExpense = async (expense: Omit<CreditCardExpense, 'id' | 'createdAt' | 'updatedAt' | 'categoryName'>) => {
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const unsubscribe = subscribeToExpenseChanges(() => {
+      clearTimeout(timer);
+      timer = setTimeout(() => void loadExpenses(), 300);
+    });
+    return () => {
+      clearTimeout(timer);
+      unsubscribe();
+    };
+  }, [loadExpenses]);
+
+  const addExpense = async (
+    expense: Omit<CreditCardExpense, 'id' | 'createdAt' | 'updatedAt' | 'categoryName'>
+  ) => {
     try {
       await createExpense(expense, userId, userName);
       await loadExpenses();
