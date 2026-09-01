@@ -15,6 +15,7 @@ const { removeChannel, subscribe, registeredTables, channel } = vi.hoisted(() =>
     registeredTables.push(filter.table);
     return channel;
   });
+  subscribe.mockReturnValue(channel);
   return { removeChannel, subscribe, registeredTables, channel };
 });
 
