@@ -261,44 +261,49 @@ export default function Calculator({
   };
 
   return (
-    <div className="grid grid-cols-1 gap-6 pb-28 lg:grid-cols-3">
+    <div className="grid min-w-0 grid-cols-1 gap-4 pb-44 sm:gap-6 sm:pb-32 lg:grid-cols-3">
       <>
         <nav
-          className="lg:col-span-3 sticky top-2 z-30 rounded-xl border border-stone-200 bg-white/95 px-3 py-2 shadow-md backdrop-blur"
+          className="sticky top-2 z-30 min-w-0 rounded-xl border border-stone-200 bg-white/95 px-2 py-2 shadow-md backdrop-blur lg:col-span-3 sm:px-3"
           aria-label="Atalhos da calculadora"
         >
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-1">
+          <div className="flex min-w-0 items-center justify-between gap-2">
+            <div className="flex min-w-0 flex-1 snap-x items-center gap-1 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
               <a
                 href="#dados-comerciais"
-                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold text-stone-600 hover:bg-stone-100 hover:text-emerald-700"
+                className="inline-flex shrink-0 snap-start items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold text-stone-600 hover:bg-stone-100 hover:text-emerald-700"
               >
                 <UserRound className="h-4 w-4" /> Dados comerciais
               </a>
               <a
                 href="#formulas-calculo"
-                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold text-stone-600 hover:bg-stone-100 hover:text-emerald-700"
+                className="inline-flex shrink-0 snap-start items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold text-stone-600 hover:bg-stone-100 hover:text-emerald-700"
               >
                 <Layers3 className="h-4 w-4" /> Produtos e fórmulas
               </a>
               <a
                 href="#resumo-calculo"
-                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold text-stone-600 hover:bg-stone-100 hover:text-emerald-700"
+                className="inline-flex shrink-0 snap-start items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold text-stone-600 hover:bg-stone-100 hover:text-emerald-700"
               >
                 <CalculatorIcon className="h-4 w-4" /> Resultado
               </a>
             </div>
             <div
-              className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold ${pendingIssues.length === 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800'}`}
+              className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-bold sm:px-3 ${pendingIssues.length === 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800'}`}
             >
               {pendingIssues.length === 0 ? (
                 <CheckCircle2 className="h-4 w-4" />
               ) : (
                 <AlertTriangle className="h-4 w-4" />
               )}
-              {pendingIssues.length === 0
-                ? 'Pronta para salvar'
-                : `${pendingIssues.length} pendência(s)`}
+              <span className="hidden sm:inline">
+                {pendingIssues.length === 0
+                  ? 'Pronta para salvar'
+                  : `${pendingIssues.length} pendência(s)`}
+              </span>
+              <span className="sm:hidden" aria-label={`${pendingIssues.length} pendências`}>
+                {pendingIssues.length}
+              </span>
             </div>
           </div>
         </nav>
@@ -317,9 +322,9 @@ export default function Calculator({
             id="dados-comerciais"
             className="scroll-mt-24 bg-white p-4 md:p-6 rounded-xl shadow-sm border border-stone-200"
           >
-            <div className="flex justify-between items-center mb-4">
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="text-lg font-semibold text-stone-800">Informações Gerais</h2>
-              <div className="flex items-center gap-4">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-4">
                 {isLocked && (
                   <span className="text-xs font-bold text-red-500 bg-red-50 px-2 py-1 rounded border border-red-100 uppercase">
                     Bloqueada para Edição
@@ -343,7 +348,7 @@ export default function Calculator({
             {!isSimplified && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Status Selection */}
-                <div className="md:col-span-2 bg-stone-50 p-4 rounded-lg border border-stone-200 flex items-center justify-between">
+                <div className="flex flex-col gap-3 rounded-lg border border-stone-200 bg-stone-50 p-4 sm:flex-row sm:items-center sm:justify-between md:col-span-2">
                   <div className="flex items-center gap-2">
                     <Tag className="w-4 h-4 text-stone-400" />
                     <span className="text-sm font-bold text-stone-600 uppercase">
@@ -1203,7 +1208,7 @@ export default function Calculator({
                           <p className="text-[10px] font-bold text-stone-400 uppercase mb-2">
                             Fatores Comerciais
                           </p>
-                          <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
                             <div>
                               <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">
                                 Fator (×)
@@ -1909,7 +1914,7 @@ export default function Calculator({
           {/* O Modal de configurações substituiu as tabelas de Macros e Micros */}
 
           {!isSimplified && (
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
+            <div className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm sm:p-6">
               <h2 className="text-lg font-semibold text-stone-800 mb-4">
                 Observação Comercial (para PDF)
               </h2>
@@ -1926,7 +1931,7 @@ export default function Calculator({
 
         {/* Summary Panel */}
         <div id="resumo-calculo" className="scroll-mt-24 space-y-6">
-          <div className="bg-stone-900 text-white p-4 md:p-5 rounded-xl shadow-lg sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto">
+          <div className="rounded-xl bg-stone-900 p-4 text-white shadow-lg md:p-5 lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto">
             <div className="mb-5 border-b border-stone-700 pb-4">
               <h2 className="text-lg font-bold">Resumo da precificação</h2>
               <p className="mt-1 text-xs text-stone-400">
@@ -2055,8 +2060,8 @@ export default function Calculator({
           </div>
         </div>
 
-        <div className="fixed bottom-3 left-1/2 z-40 w-[calc(100%-1.5rem)] max-w-4xl -translate-x-1/2 rounded-2xl border border-stone-200 bg-white/95 p-3 shadow-2xl backdrop-blur">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="fixed inset-x-2 bottom-2 z-40 rounded-2xl border border-stone-200 bg-white/95 p-3 shadow-2xl backdrop-blur sm:bottom-3 sm:left-1/2 sm:right-auto sm:w-[calc(100%-1.5rem)] sm:max-w-4xl sm:-translate-x-1/2">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
             <div className="min-w-0 flex-1">
               <p
                 className={`truncate text-xs font-bold ${pendingIssues.length === 0 ? 'text-emerald-700' : 'text-amber-700'}`}
@@ -2069,12 +2074,12 @@ export default function Calculator({
                 {calculations.filter((calc) => calc.selected).length} fórmula(s) selecionada(s)
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="grid w-full grid-cols-1 gap-2 min-[420px]:grid-cols-2 sm:flex sm:w-auto sm:items-center">
               <button
                 type="button"
                 onClick={() => calculateFormula()}
                 disabled={!calculations.some((calc) => calc.selected)}
-                className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 px-3 py-2.5 text-sm font-bold text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-emerald-200 px-3 py-2.5 text-sm font-bold text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <CalculatorIcon className="h-4 w-4" /> Calcular selecionadas
               </button>
@@ -2083,7 +2088,7 @@ export default function Calculator({
                   type="button"
                   onClick={savePricing}
                   disabled={isLocked}
-                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-stone-400"
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-stone-400"
                 >
                   <Save className="h-4 w-4" /> {initialData ? 'Atualizar' : 'Salvar precificação'}
                 </button>
