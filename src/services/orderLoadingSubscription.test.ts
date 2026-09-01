@@ -1,15 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const removeChannel = vi.fn();
-const subscribe = vi.fn();
-const registeredTables: string[] = [];
-const channel = {
-  on: vi.fn((_event: string, filter: { table: string }) => {
+const { removeChannel, subscribe, registeredTables, channel } = vi.hoisted(() => {
+  const registeredTables: string[] = [];
+  const removeChannel = vi.fn();
+  const subscribe = vi.fn();
+  const channel: {
+    on: ReturnType<typeof vi.fn>;
+    subscribe: ReturnType<typeof vi.fn>;
+  } = {
+    on: vi.fn(),
+    subscribe,
+  };
+  channel.on.mockImplementation((_event: string, filter: { table: string }) => {
     registeredTables.push(filter.table);
     return channel;
-  }),
-  subscribe,
-};
+  });
+  return { removeChannel, subscribe, registeredTables, channel };
+});
 
 vi.mock('./supabase', () => ({
   supabase: {
