@@ -51,7 +51,7 @@ import {
   syncProdutoFormuladoWithSavedFormula,
   getProdutoFormuladoBySavedFormulaId,
 } from '../services/produtosFormuladosService';
-import { addHistoricoPreco } from '../services/historicoPrecoService';
+import { addHistoricoPrecos } from '../services/historicoPrecoService';
 import {
   applyFreeCompositionSummary,
   calculateTargetFormula,
@@ -216,6 +216,7 @@ export function useCalculator({
       setCalculations([
         {
           id: `f_${Date.now()}`,
+          savedFormulaId: initialFormulaToLoad.id,
           formula: initialFormulaToLoad.targetFormula,
           selected: true,
           category: initialFormulaToLoad.category ?? 'all',
@@ -1055,6 +1056,71 @@ export function useCalculator({
       return;
     }
 
+    // Record one contextual history point for each linked formulated product.
+    try {
+      const historyEntries = (
+        await Promise.all(
+          selectedCalculations.map(async (calculation) => {
+            const savedFormulaId =
+              calculation.savedFormulaId ||
+              (selectedCalculations.length === 1 ? initialFormulaToLoad?.id : undefined);
+            if (!savedFormulaId || !calculation.summary) return null;
+
+            const product = await getProdutoFormuladoBySavedFormulaId(savedFormulaId);
+            if (!product) return null;
+
+            const calculationFactors = calculation.factors || mergedFactors;
+            const loadingLocationId =
+              calculationFactors.local_carregamento_id || mergedFactors.local_carregamento_id;
+            const priceListId = calculationFactors.priceListId || mergedFactors.priceListId;
+            const loadingLocation = locaisCarregamento.find(
+              (location) => location.id === loadingLocationId
+            );
+            const priceList = priceLists.find((list) => list.id === priceListId);
+
+            return {
+              produto_formulado_id: product.id,
+              saved_formula_id: savedFormulaId,
+              organization_id: currentUser.organizationId,
+              pricing_id: savedRecord.id,
+              local_carregamento_id: loadingLocationId,
+              local_carregamento_nome: loadingLocation?.nome,
+              price_list_id: priceListId,
+              price_list_name: priceList?.name,
+              formula_nome: calculation.formula,
+              preco_base: calculation.summary.baseCost,
+              preco_final: calculation.summary.finalPrice,
+              quantidade_tons: calculationFactors.totalTons,
+              valor_total: calculation.summary.totalSaleValue,
+              fatores_comerciais: {
+                factor: calculationFactors.factor,
+                discount: calculationFactors.discount,
+                freight: calculationFactors.freight,
+                tipoFrete: calculationFactors.tipoFrete,
+                taxRate: calculationFactors.taxRate,
+                commission: calculationFactors.commission,
+                monthlyInterestRate: calculationFactors.monthlyInterestRate,
+                dueDate: calculationFactors.dueDate,
+                paymentCondition: calculationFactors.paymentCondition,
+                dataCarregamento: calculationFactors.dataCarregamento,
+                ddfDias: calculationFactors.ddfDias,
+                embalagem_id: calculationFactors.embalagem_id,
+                embalagem_nome: calculationFactors.embalagem_nome,
+                embalagem_valor: calculationFactors.embalagem_valor,
+                embalagem_ajuste: calculationFactors.embalagem_ajuste,
+              },
+              origem: 'precificacao' as const,
+              registrado_por: currentUser.name,
+            };
+          })
+        )
+      ).filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+
+      await addHistoricoPrecos(historyEntries);
+    } catch (historyError) {
+      console.warn('[savePricing] Failed to record formulated price history:', historyError);
+    }
+
     // === BLOCO 2: Notificações — falha silenciosa, não bloqueia o sucesso ===
     try {
       if (initialData) {
@@ -1093,26 +1159,6 @@ export function useCalculator({
         }
       } else {
         await notifyPricingCreated(savedRecord, currentUser);
-
-        // Record price history for linked produto_formulado
-        if (initialFormulaToLoad?.id) {
-          try {
-            const produto = await getProdutoFormuladoBySavedFormulaId(initialFormulaToLoad.id);
-            if (produto) {
-              const finalPrice = savedRecord.summary?.finalPrice;
-              if (finalPrice != null && finalPrice > 0) {
-                await addHistoricoPreco({
-                  produto_formulado_id: produto.id,
-                  preco_final: finalPrice,
-                  pricing_id: savedRecord.id,
-                  registrado_por: currentUser.name,
-                });
-              }
-            }
-          } catch (histErr) {
-            console.warn('[useCalculator] Failed to record historico_preco:', histErr);
-          }
-        }
 
         const managersList = await getManagersOfUser(currentUser.id);
         const approversList = await getUsers();

@@ -5,6 +5,11 @@ import {
   ProdutoFormulado,
 } from '../services/produtosFormuladosService';
 import { getHistoricoPrecos, HistoricoPrecoFormulado } from '../services/historicoPrecoService';
+import { getLocaisAtivos } from '../services/locaisCarregamentoService';
+import { getPriceLists } from '../services/db';
+import { LocalCarregamento } from '../types/carregamento';
+import { PriceList } from '../types';
+import { filterFormulatedPriceHistory } from '../utils/formulatedPriceHistory';
 import { useToast } from './Toast';
 import {
   Package,
@@ -35,6 +40,12 @@ export default function ProdutosFormulados() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [historicos, setHistoricos] = useState<Record<string, HistoricoPrecoFormulado[]>>({});
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [locais, setLocais] = useState<LocalCarregamento[]>([]);
+  const [priceLists, setPriceLists] = useState<PriceList[]>([]);
+  const [historyLocalId, setHistoryLocalId] = useState('');
+  const [historyPriceListId, setHistoryPriceListId] = useState('');
+  const [historyDateFrom, setHistoryDateFrom] = useState('');
+  const [historyDateTo, setHistoryDateTo] = useState('');
 
   useEffect(() => {
     loadData();
@@ -43,8 +54,14 @@ export default function ProdutosFormulados() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const data = await getProdutosFormulados();
+      const [data, activeLocations, lists] = await Promise.all([
+        getProdutosFormulados(),
+        getLocaisAtivos(),
+        getPriceLists(),
+      ]);
       setProdutos(data);
+      setLocais(activeLocations);
+      setPriceLists(lists);
     } catch {
       showError('Erro ao carregar produtos formulados');
     } finally {
@@ -96,6 +113,7 @@ export default function ProdutosFormulados() {
         setHistoricos((prev) => ({ ...prev, [produto.id]: data }));
       } catch {
         setHistoricos((prev) => ({ ...prev, [produto.id]: [] }));
+        showError('Erro ao carregar o histórico de preços deste produto.');
       }
     }
   };
@@ -112,6 +130,14 @@ export default function ProdutosFormulados() {
       (filterLinha === 'nao' && !p.linha_diferenciada);
     return matchSearch && matchLinha;
   });
+
+  const getFilteredHistory = (produtoId: string) =>
+    filterFormulatedPriceHistory(historicos[produtoId] || [], {
+      localId: historyLocalId || undefined,
+      priceListId: historyPriceListId || undefined,
+      dateFrom: historyDateFrom || undefined,
+      dateTo: historyDateTo || undefined,
+    });
 
   if (loading) {
     return (
@@ -158,6 +184,62 @@ export default function ProdutosFormulados() {
             <option value="sim">Linha Diferenciada</option>
             <option value="nao">Linha Padrão</option>
           </select>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-stone-200 p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <TrendingUp className="w-4 h-4 text-emerald-600" />
+          <p className="text-sm font-bold text-stone-700">Filtros do histórico de preços</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+          <select
+            value={historyLocalId}
+            onChange={(e) => {
+              setHistoryLocalId(e.target.value);
+              setHistoryPriceListId('');
+            }}
+            className="text-sm border border-stone-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500"
+          >
+            <option value="">Todos os locais</option>
+            {locais.map((local) => (
+              <option key={local.id} value={local.id}>
+                {local.nome}
+              </option>
+            ))}
+          </select>
+          <select
+            value={historyPriceListId}
+            onChange={(e) => setHistoryPriceListId(e.target.value)}
+            className="text-sm border border-stone-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500"
+          >
+            <option value="">Todas as listas</option>
+            {priceLists
+              .filter((list) => !historyLocalId || list.local_carregamento_id === historyLocalId)
+              .map((list) => (
+                <option key={list.id} value={list.id}>
+                  {list.name}
+                </option>
+              ))}
+          </select>
+          <label className="flex items-center gap-2 text-xs text-stone-500">
+            De
+            <input
+              type="date"
+              value={historyDateFrom}
+              onChange={(e) => setHistoryDateFrom(e.target.value)}
+              className="min-w-0 flex-1 text-sm border border-stone-200 rounded-lg px-3 py-2"
+            />
+          </label>
+          <label className="flex items-center gap-2 text-xs text-stone-500">
+            Até
+            <input
+              type="date"
+              value={historyDateTo}
+              onChange={(e) => setHistoryDateTo(e.target.value)}
+              className="min-w-0 flex-1 text-sm border border-stone-200 rounded-lg px-3 py-2"
+            />
+          </label>
         </div>
       </div>
 
@@ -307,43 +389,103 @@ export default function ProdutosFormulados() {
                           </div>
                           {!historicos[produto.id] ? (
                             <p className="text-xs text-stone-400">Carregando...</p>
-                          ) : historicos[produto.id].length === 0 ? (
+                          ) : getFilteredHistory(produto.id).length === 0 ? (
                             <p className="text-xs text-stone-400">
-                              Nenhum histórico de preço registrado para este produto.
+                              Nenhum histórico de preço encontrado para os filtros selecionados.
                             </p>
                           ) : (
-                            <ResponsiveContainer width="100%" height={200}>
-                              <LineChart
-                                data={historicos[produto.id].map((h) => ({
-                                  data: new Date(h.registrado_em).toLocaleDateString('pt-BR'),
-                                  preco: h.preco_final,
-                                }))}
-                                margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
-                              >
-                                <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
-                                <XAxis dataKey="data" tick={{ fontSize: 10, fill: '#78716c' }} />
-                                <YAxis
-                                  tick={{ fontSize: 10, fill: '#78716c' }}
-                                  tickFormatter={(v) =>
-                                    `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`
-                                  }
-                                />
-                                <Tooltip
-                                  formatter={(value: number) => [
-                                    `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-                                    'Preço R$/t',
-                                  ]}
-                                />
-                                <Line
-                                  type="monotone"
-                                  dataKey="preco"
-                                  stroke="#059669"
-                                  strokeWidth={2}
-                                  dot={{ r: 4, fill: '#059669' }}
-                                  activeDot={{ r: 6 }}
-                                />
-                              </LineChart>
-                            </ResponsiveContainer>
+                            <div className="space-y-4">
+                              <ResponsiveContainer width="100%" height={220}>
+                                <LineChart
+                                  data={getFilteredHistory(produto.id).map((h) => ({
+                                    data: new Date(h.registrado_em).toLocaleDateString('pt-BR'),
+                                    preco: h.preco_final,
+                                    local: h.local_carregamento_nome || 'Local não registrado',
+                                    lista: h.price_list_name || 'Lista não registrada',
+                                  }))}
+                                  margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
+                                >
+                                  <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
+                                  <XAxis dataKey="data" tick={{ fontSize: 10, fill: '#78716c' }} />
+                                  <YAxis
+                                    tick={{ fontSize: 10, fill: '#78716c' }}
+                                    tickFormatter={(v) =>
+                                      `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`
+                                    }
+                                  />
+                                  <Tooltip
+                                    formatter={(value: number, name: string, item) => [
+                                      `R$ ${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · ${item.payload.local} · ${item.payload.lista}`,
+                                      name === 'preco' ? 'Preço R$/t' : name,
+                                    ]}
+                                  />
+                                  <Line
+                                    type="monotone"
+                                    dataKey="preco"
+                                    stroke="#059669"
+                                    strokeWidth={2}
+                                    dot={{ r: 4, fill: '#059669' }}
+                                    activeDot={{ r: 6 }}
+                                  />
+                                </LineChart>
+                              </ResponsiveContainer>
+                              <div className="overflow-x-auto rounded-lg border border-stone-200 bg-white">
+                                <table className="w-full min-w-[760px] text-xs">
+                                  <thead className="bg-stone-50 text-stone-500">
+                                    <tr>
+                                      <th className="px-3 py-2 text-left">Data</th>
+                                      <th className="px-3 py-2 text-left">Local</th>
+                                      <th className="px-3 py-2 text-left">Lista</th>
+                                      <th className="px-3 py-2 text-right">Preço R$/t</th>
+                                      <th className="px-3 py-2 text-right">Toneladas</th>
+                                      <th className="px-3 py-2 text-right">Total</th>
+                                      <th className="px-3 py-2 text-left">Origem</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-stone-100">
+                                    {getFilteredHistory(produto.id)
+                                      .slice()
+                                      .reverse()
+                                      .map((history) => (
+                                        <tr key={history.id}>
+                                          <td className="px-3 py-2 whitespace-nowrap">
+                                            {new Date(history.registrado_em).toLocaleString(
+                                              'pt-BR'
+                                            )}
+                                          </td>
+                                          <td className="px-3 py-2">
+                                            {history.local_carregamento_nome || 'Não registrado'}
+                                          </td>
+                                          <td className="px-3 py-2">
+                                            {history.price_list_name || 'Não registrada'}
+                                          </td>
+                                          <td className="px-3 py-2 text-right font-semibold">
+                                            {history.preco_final.toLocaleString('pt-BR', {
+                                              style: 'currency',
+                                              currency: 'BRL',
+                                            })}
+                                          </td>
+                                          <td className="px-3 py-2 text-right">
+                                            {history.quantidade_tons?.toLocaleString('pt-BR') ||
+                                              '—'}
+                                          </td>
+                                          <td className="px-3 py-2 text-right">
+                                            {history.valor_total?.toLocaleString('pt-BR', {
+                                              style: 'currency',
+                                              currency: 'BRL',
+                                            }) || '—'}
+                                          </td>
+                                          <td className="px-3 py-2">
+                                            {history.origem === 'relatorio_precos'
+                                              ? 'Relatório de preços'
+                                              : 'Precificação'}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
                           )}
                         </td>
                       </tr>

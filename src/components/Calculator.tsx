@@ -831,6 +831,7 @@ export default function Calculator({
                                                     c.id === calc.id
                                                       ? {
                                                           ...c,
+                                                          savedFormulaId: savedF.id,
                                                           formula: formulaName,
                                                           category: savedF.category ?? 'all',
                                                           targetCa: savedF.targetCa,
