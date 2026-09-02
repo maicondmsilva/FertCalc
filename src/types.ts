@@ -374,6 +374,7 @@ export interface ProfitabilityAnalysis {
 
 export interface TargetFormula {
   id: string;
+  savedFormulaId?: string;
   formula: string;
   selected: boolean;
   modo_calculo?: 'formulacao' | 'produtos_livres';
