@@ -8,6 +8,7 @@ import {
 } from '../services/db';
 import { getLocaisAtivos } from '../services/locaisCarregamentoService';
 import { getProdutoFormuladoBySavedFormulaId } from '../services/produtosFormuladosService';
+import { addHistoricoPrecos } from '../services/historicoPrecoService';
 import { SavedFormula, User, PriceList, AppSettings, Client, Embalagem } from '../types';
 import { getEmbalagens } from '../services/embalagensService';
 import { LocalCarregamento } from '../types/carregamento';
@@ -51,6 +52,8 @@ interface ModalGerarRelatorioProps {
   formulas: SavedFormula[];
   selectedIds: string[];
   selectedList: PriceList | undefined;
+  selectedLocal?: LocalCarregamento;
+  currentUser: User;
   getFormulaCost: (
     f: SavedFormula,
     list: PriceList | undefined
@@ -304,6 +307,8 @@ function ModalGerarRelatorio({
   formulas,
   selectedIds,
   selectedList,
+  selectedLocal,
+  currentUser,
   getFormulaCost,
   companyName,
   onClose,
@@ -522,6 +527,36 @@ function ModalGerarRelatorio({
           align: 'right',
         });
       }
+
+      const historyEntries = (
+        await Promise.all(
+          selectedFormulas.map(async (formula) => {
+            const product = await getProdutoFormuladoBySavedFormulaId(formula.id);
+            if (!product) return null;
+            const reportFactors = getFactors(formula.id);
+            const { total: baseCost } = getFormulaCost(formula, selectedList);
+            const finalPrice = calcPrecoFinal(formula);
+            return {
+              produto_formulado_id: product.id,
+              saved_formula_id: formula.id,
+              organization_id: formula.organizationId || currentUser.organizationId,
+              local_carregamento_id: selectedLocal?.id,
+              local_carregamento_nome: selectedLocal?.nome,
+              price_list_id: selectedList?.id,
+              price_list_name: selectedList?.name,
+              formula_nome: formula.name,
+              preco_base: baseCost,
+              preco_final: finalPrice,
+              quantidade_tons: reportFactors.totalTons,
+              valor_total: finalPrice * Number(reportFactors.totalTons || 0),
+              fatores_comerciais: { ...reportFactors },
+              origem: 'relatorio_precos' as const,
+              registrado_por: currentUser.name,
+            };
+          })
+        )
+      ).filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+      await addHistoricoPrecos(historyEntries);
 
       doc.save(`relatorio-precos-${dateStr.replace(/\//g, '-')}.pdf`);
       onClose();
@@ -1332,6 +1367,8 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
         formulas={formulas}
         selectedIds={selectedFormulas}
         selectedList={selectedList}
+        selectedLocal={locais.find((local) => local.id === selectedLocalId)}
+        currentUser={currentUser}
         getFormulaCost={getFormulaCost}
         companyName={appSettings.companyName}
         onClose={() => setIsReportModalOpen(false)}
