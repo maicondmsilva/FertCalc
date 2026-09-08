@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, Search } from 'lucide-react';
+import { X, Search, GripVertical, ChevronUp, ChevronDown } from 'lucide-react';
 import { TargetFormula, RawMaterial } from '../types';
+import { microGuaranteePercentToKg, microKgToGuaranteePercent } from '../utils/microGuarantee';
 
 interface CalculatorSettingsModalProps {
   isOpen: boolean;
@@ -28,14 +29,27 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
   const [activeTab, setActiveTab] = useState<'macros' | 'micros'>('macros');
   const [localFormula, setLocalFormula] = useState<TargetFormula | null>(null);
   const [search, setSearch] = useState('');
+  const [productOrder, setProductOrder] = useState<Record<'macro' | 'micro', string[]>>({
+    macro: [],
+    micro: [],
+  });
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [microInputMode, setMicroInputMode] = useState<Record<string, 'kg' | 'percent'>>({});
+  const [microGuaranteeName, setMicroGuaranteeName] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (isOpen && formula) {
       setLocalFormula(JSON.parse(JSON.stringify(formula)));
       setSearch('');
       setActiveTab('macros');
+      setProductOrder({
+        macro: globalMacros.map((product) => product.id),
+        micro: globalMicros.map((product) => product.id),
+      });
+      setMicroInputMode({});
+      setMicroGuaranteeName({});
     }
-  }, [isOpen, formula]);
+  }, [isOpen, formula, globalMacros, globalMicros]);
 
   if (!isOpen) return null;
 
@@ -83,9 +97,28 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
 
   const handleConfirm = () => {
     if (localFormula) {
-      onConfirm(localFormula);
+      onConfirm({
+        ...localFormula,
+        macros: [...localFormula.macros].sort(
+          (a, b) => productOrder.macro.indexOf(a.id) - productOrder.macro.indexOf(b.id)
+        ),
+        micros: [...localFormula.micros].sort(
+          (a, b) => productOrder.micro.indexOf(a.id) - productOrder.micro.indexOf(b.id)
+        ),
+      });
     }
     onClose();
+  };
+
+  const moveProduct = (type: 'macro' | 'micro', productId: string, direction: -1 | 1) => {
+    setProductOrder((current) => {
+      const next = [...current[type]];
+      const from = next.indexOf(productId);
+      const to = from + direction;
+      if (from < 0 || to < 0 || to >= next.length) return current;
+      [next[from], next[to]] = [next[to], next[from]];
+      return { ...current, [type]: next };
+    });
   };
 
   const renderProducts = (f: TargetFormula, type: 'macro' | 'micro') => {
@@ -93,10 +126,12 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
     const globalSource = type === 'macro' ? globalMacros : globalMicros;
 
     // Map all global products to show them all, but inject state if they are selected
-    const currentProducts = globalSource.map((globalP) => {
-      const savedP = savedProducts.find((s) => s.id === globalP.id);
-      return savedP ? savedP : { ...globalP, selected: false, minQty: 0, maxQty: 0, quantity: 0 };
-    });
+    const currentProducts = globalSource
+      .map((globalP) => {
+        const savedP = savedProducts.find((s) => s.id === globalP.id);
+        return savedP ? savedP : { ...globalP, selected: false, minQty: 0, maxQty: 0, quantity: 0 };
+      })
+      .sort((a, b) => productOrder[type].indexOf(a.id) - productOrder[type].indexOf(b.id));
 
     const filtered = currentProducts.filter((p) =>
       p.name.toLowerCase().includes(search.toLowerCase())
@@ -127,7 +162,7 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
     }
 
     return (
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-4">
+      <div className="mt-4 overflow-hidden rounded-xl border border-stone-200 bg-white divide-y divide-stone-100">
         {filtered.map((p) =>
           (() => {
             const isProtected =
@@ -136,18 +171,33 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
             return (
               <div
                 key={p.id}
-                className={`p-3 rounded-lg border transition-colors flex flex-col ${
-                  p.selected
-                    ? 'bg-blue-50 border-blue-500'
-                    : 'bg-white border-stone-200 hover:border-blue-300'
+                draggable={!search && !isProtected}
+                onDragStart={() => setDraggedId(p.id)}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={() => {
+                  if (!draggedId || draggedId === p.id) return;
+                  setProductOrder((current) => {
+                    const next = [...current[type]];
+                    const from = next.indexOf(draggedId);
+                    const to = next.indexOf(p.id);
+                    if (from < 0 || to < 0) return current;
+                    next.splice(from, 1);
+                    next.splice(to, 0, draggedId);
+                    return { ...current, [type]: next };
+                  });
+                  setDraggedId(null);
+                }}
+                className={`p-3 transition-colors ${
+                  p.selected ? 'bg-blue-50' : 'bg-white hover:bg-stone-50'
                 }`}
               >
                 {/* Header / Selection Toggle */}
                 <div
-                  className={`flex items-start gap-3 ${isProtected ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'}`}
+                  className={`grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 sm:grid-cols-[auto_minmax(180px,1fr)_minmax(220px,1.2fr)] ${isProtected ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'}`}
                   onClick={() => handleSelectProduct(p.id, type)}
                 >
-                  <div className="mt-1">
+                  <div className="mt-1 flex items-center gap-2">
+                    <GripVertical className="h-4 w-4 text-stone-300" aria-hidden="true" />
                     <input
                       type="checkbox"
                       checked={!!p.selected}
@@ -155,17 +205,41 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
                       disabled={isProtected}
                       className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 disabled:cursor-not-allowed"
                     />
+                    <div className="flex flex-col sm:hidden">
+                      <button
+                        type="button"
+                        aria-label={`Mover ${p.name} para cima`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          moveProduct(type, p.id, -1);
+                        }}
+                        disabled={isProtected || productOrder[type].indexOf(p.id) === 0}
+                        className="text-stone-400 disabled:opacity-20"
+                      >
+                        <ChevronUp className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Mover ${p.name} para baixo`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          moveProduct(type, p.id, 1);
+                        }}
+                        disabled={
+                          isProtected ||
+                          productOrder[type].indexOf(p.id) === productOrder[type].length - 1
+                        }
+                        className="text-stone-400 disabled:opacity-20"
+                      >
+                        <ChevronDown className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex-1">
+                  <div className="min-w-0">
                     <div
                       className={`text-sm font-medium ${p.selected ? 'text-blue-800' : 'text-stone-700'}`}
                     >
                       {p.name}
-                    </div>
-                    <div className="text-xs opacity-70 mt-1 pb-2">
-                      {type === 'macro'
-                        ? `N: ${p.n}% | P: ${p.p}% | K: ${p.k}%`
-                        : `Garantias: ${p.microGuarantees?.length ? p.microGuarantees.map((g: { name: string; value: number }) => `${g.name} ${g.value}%`).join(', ') : 'N/A'}`}
                     </div>
                     {isProtected && (
                       <div className="text-[10px] font-bold text-amber-700">
@@ -173,79 +247,173 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
                       </div>
                     )}
                   </div>
+                  <div className="col-start-2 text-xs text-stone-500 sm:col-start-3">
+                    {type === 'macro'
+                      ? `N ${p.n}% · P ${p.p}% · K ${p.k}% · S ${p.s || 0}% · Ca ${p.ca || 0}%`
+                      : p.microGuarantees?.length
+                        ? p.microGuarantees
+                            .map((g: { name: string; value: number }) => `${g.name} ${g.value}%`)
+                            .join(' · ')
+                        : 'Garantias não cadastradas'}
+                  </div>
                 </div>
 
                 {/* Extended Input Fields */}
                 {p.selected && (
-                  <div className="mt-2 pt-3 border-t border-blue-200/50 flex flex-wrap gap-2 text-xs">
-                    <div className="flex flex-col flex-1 min-w-[30%]">
-                      <label className="text-stone-500 font-semibold mb-1">Mínimo (kg)</label>
-                      <input
-                        type="number"
-                        value={p.minQty === 0 && p.minQuantity === 0 ? '' : p.minQty}
-                        onChange={(e) => {
-                          if (!localFormula) return;
-                          const val = Number(e.target.value);
-                          const arrKey = type === 'macro' ? 'macros' : 'micros';
-                          setLocalFormula({
-                            ...localFormula,
-                            [arrKey]: localFormula[arrKey].map((m) =>
-                              m.id === p.id ? { ...m, minQty: val } : m
-                            ),
-                          });
-                        }}
-                        placeholder={`Ex: ${p.minQuantity || 0}`}
-                        min={0}
-                        disabled={isProtected}
-                        className="w-full px-2 py-1.5 border border-blue-300 rounded focus:outline-none focus:border-blue-500 bg-white text-stone-800"
-                      />
-                    </div>
+                  <div className="mt-3 border-t border-blue-200/50 pt-3 text-xs">
+                    {type === 'micro' && p.microGuarantees?.length > 0 && (
+                      <div className="mb-3 grid gap-2 rounded-lg bg-white/70 p-3 sm:grid-cols-3">
+                        <label className="flex flex-col gap-1 font-semibold text-stone-500">
+                          Informar por
+                          <select
+                            value={microInputMode[p.id] || 'kg'}
+                            onChange={(event) =>
+                              setMicroInputMode((current) => ({
+                                ...current,
+                                [p.id]: event.target.value as 'kg' | 'percent',
+                              }))
+                            }
+                            className="rounded border border-blue-300 bg-white px-2 py-1.5 text-stone-800"
+                          >
+                            <option value="kg">Quantidade em kg</option>
+                            <option value="percent">Garantia desejada (%)</option>
+                          </select>
+                        </label>
+                        {(microInputMode[p.id] || 'kg') === 'percent' && (
+                          <>
+                            <label className="flex flex-col gap-1 font-semibold text-stone-500">
+                              Garantia
+                              <select
+                                value={microGuaranteeName[p.id] || p.microGuarantees[0].name}
+                                onChange={(event) =>
+                                  setMicroGuaranteeName((current) => ({
+                                    ...current,
+                                    [p.id]: event.target.value,
+                                  }))
+                                }
+                                className="rounded border border-blue-300 bg-white px-2 py-1.5 text-stone-800"
+                              >
+                                {p.microGuarantees.map((guarantee) => (
+                                  <option key={guarantee.name} value={guarantee.name}>
+                                    {guarantee.name} ({guarantee.value}%)
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="flex flex-col gap-1 font-semibold text-stone-500">
+                              Garantia final desejada (%)
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.001"
+                                value={(() => {
+                                  const guarantee = p.microGuarantees.find(
+                                    (item) =>
+                                      item.name ===
+                                      (microGuaranteeName[p.id] || p.microGuarantees[0].name)
+                                  );
+                                  const fixedKg = p.minQty === p.maxQty ? p.minQty : 0;
+                                  return fixedKg && guarantee
+                                    ? microKgToGuaranteePercent(fixedKg, guarantee.value)
+                                    : '';
+                                })()}
+                                onChange={(event) => {
+                                  if (!localFormula) return;
+                                  const guarantee = p.microGuarantees.find(
+                                    (item) =>
+                                      item.name ===
+                                      (microGuaranteeName[p.id] || p.microGuarantees[0].name)
+                                  );
+                                  const kg = microGuaranteePercentToKg(
+                                    Number(event.target.value),
+                                    guarantee?.value || 0
+                                  );
+                                  setLocalFormula({
+                                    ...localFormula,
+                                    micros: localFormula.micros.map((micro) =>
+                                      micro.id === p.id
+                                        ? { ...micro, minQty: kg, maxQty: kg }
+                                        : micro
+                                    ),
+                                  });
+                                }}
+                                className="rounded border border-blue-300 bg-white px-2 py-1.5 text-stone-800"
+                              />
+                            </label>
+                          </>
+                        )}
+                      </div>
+                    )}
+                    <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-col flex-1 min-w-[30%]">
+                        <label className="text-stone-500 font-semibold mb-1">Mínimo (kg)</label>
+                        <input
+                          type="number"
+                          value={p.minQty === 0 && p.minQuantity === 0 ? '' : p.minQty}
+                          onChange={(e) => {
+                            if (!localFormula) return;
+                            const val = Number(e.target.value);
+                            const arrKey = type === 'macro' ? 'macros' : 'micros';
+                            setLocalFormula({
+                              ...localFormula,
+                              [arrKey]: localFormula[arrKey].map((m) =>
+                                m.id === p.id ? { ...m, minQty: val } : m
+                              ),
+                            });
+                          }}
+                          placeholder={`Ex: ${p.minQuantity || 0}`}
+                          min={0}
+                          disabled={isProtected}
+                          className="w-full px-2 py-1.5 border border-blue-300 rounded focus:outline-none focus:border-blue-500 bg-white text-stone-800"
+                        />
+                      </div>
 
-                    <div className="flex flex-col flex-1 min-w-[30%]">
-                      <label className="text-stone-500 font-semibold mb-1">Máximo (kg)</label>
-                      <input
-                        type="number"
-                        value={p.maxQty === 0 ? '' : p.maxQty}
-                        onChange={(e) => {
-                          if (!localFormula) return;
-                          const val = Number(e.target.value);
-                          const arrKey = type === 'macro' ? 'macros' : 'micros';
-                          setLocalFormula({
-                            ...localFormula,
-                            [arrKey]: localFormula[arrKey].map((m) =>
-                              m.id === p.id ? { ...m, maxQty: val } : m
-                            ),
-                          });
-                        }}
-                        placeholder="Sem Limite"
-                        min={0}
-                        disabled={isProtected}
-                        className="w-full px-2 py-1.5 border border-blue-300 rounded focus:outline-none focus:border-blue-500 bg-white text-stone-800"
-                      />
-                    </div>
+                      <div className="flex flex-col flex-1 min-w-[30%]">
+                        <label className="text-stone-500 font-semibold mb-1">Máximo (kg)</label>
+                        <input
+                          type="number"
+                          value={p.maxQty === 0 ? '' : p.maxQty}
+                          onChange={(e) => {
+                            if (!localFormula) return;
+                            const val = Number(e.target.value);
+                            const arrKey = type === 'macro' ? 'macros' : 'micros';
+                            setLocalFormula({
+                              ...localFormula,
+                              [arrKey]: localFormula[arrKey].map((m) =>
+                                m.id === p.id ? { ...m, maxQty: val } : m
+                              ),
+                            });
+                          }}
+                          placeholder="Sem Limite"
+                          min={0}
+                          disabled={isProtected}
+                          className="w-full px-2 py-1.5 border border-blue-300 rounded focus:outline-none focus:border-blue-500 bg-white text-stone-800"
+                        />
+                      </div>
 
-                    <div className="flex flex-col flex-1 min-w-[30%]">
-                      <label className="text-stone-500 font-semibold mb-1">Fixo (kg)</label>
-                      <input
-                        type="number"
-                        value={p.minQty === p.maxQty && p.minQty > 0 ? p.minQty : ''}
-                        onChange={(e) => {
-                          if (!localFormula) return;
-                          const val = Number(e.target.value);
-                          const arrKey = type === 'macro' ? 'macros' : 'micros';
-                          setLocalFormula({
-                            ...localFormula,
-                            [arrKey]: localFormula[arrKey].map((m) =>
-                              m.id === p.id ? { ...m, minQty: val, maxQty: val } : m
-                            ),
-                          });
-                        }}
-                        placeholder="Auto"
-                        min={0}
-                        disabled={isProtected}
-                        className="w-full px-2 py-1.5 border border-blue-300 rounded focus:outline-none focus:border-blue-500 bg-white text-stone-800"
-                        title="Preencher isso força a usar exatamente essa quantidade (iguala min e max)"
-                      />
+                      <div className="flex flex-col flex-1 min-w-[30%]">
+                        <label className="text-stone-500 font-semibold mb-1">Fixo (kg)</label>
+                        <input
+                          type="number"
+                          value={p.minQty === p.maxQty && p.minQty > 0 ? p.minQty : ''}
+                          onChange={(e) => {
+                            if (!localFormula) return;
+                            const val = Number(e.target.value);
+                            const arrKey = type === 'macro' ? 'macros' : 'micros';
+                            setLocalFormula({
+                              ...localFormula,
+                              [arrKey]: localFormula[arrKey].map((m) =>
+                                m.id === p.id ? { ...m, minQty: val, maxQty: val } : m
+                              ),
+                            });
+                          }}
+                          placeholder="Auto"
+                          min={0}
+                          disabled={isProtected}
+                          className="w-full px-2 py-1.5 border border-blue-300 rounded focus:outline-none focus:border-blue-500 bg-white text-stone-800"
+                          title="Preencher isso força a usar exatamente essa quantidade (iguala min e max)"
+                        />
+                      </div>
                     </div>
                   </div>
                 )}
@@ -318,7 +486,7 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
                   <span className="text-blue-600">{localFormula.formula || 'Sem nome'}</span>
                 </span>
                 <span className="text-xs font-normal text-stone-500 hidden sm:block">
-                  Selecione os produtos e defina suas restrições (Mín/Máx/Fixo)
+                  Ordem inicial da lista de preços · arraste para reorganizar
                 </span>
               </h3>
               {renderProducts(localFormula, activeTab === 'macros' ? 'macro' : 'micro')}

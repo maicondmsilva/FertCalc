@@ -125,4 +125,43 @@ describe('CalculatorSettingsModal', () => {
       maxQty: 20,
     });
   });
+
+  it('converts a desired micro guarantee into a fixed quantity in kg', () => {
+    const handleConfirm = vi.fn();
+    const micro: any = {
+      id: 'micro-1',
+      name: 'Boro 5%',
+      type: 'micro',
+      selected: false,
+      microGuarantees: [{ name: 'B', value: 5 }],
+      minQty: 0,
+      maxQty: 0,
+      minQuantity: 0,
+      quantity: 0,
+    };
+
+    render(
+      <CalculatorSettingsModal
+        isOpen={true}
+        onClose={vi.fn()}
+        formula={mockFormula}
+        globalMacros={mockGlobalMacros}
+        globalMicros={[micro]}
+        onConfirm={handleConfirm}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Micronutrientes'));
+    fireEvent.click(screen.getByText('Boro 5%'));
+    fireEvent.change(screen.getByLabelText('Informar por'), { target: { value: 'percent' } });
+    fireEvent.change(screen.getByLabelText('Garantia final desejada (%)'), {
+      target: { value: '0.25' },
+    });
+    fireEvent.click(screen.getByText('Confirmar Seleção'));
+
+    expect(handleConfirm.mock.calls[0][0].micros[0]).toMatchObject({
+      minQty: 50,
+      maxQty: 50,
+    });
+  });
 });

@@ -15,11 +15,8 @@ import {
   Package,
   MapPin,
   AlertTriangle,
-  CheckCircle2,
   Copy,
   ChevronDown,
-  UserRound,
-  Layers3,
 } from 'lucide-react';
 import { PricingRecord, SavedFormula, User as AppUser, Embalagem } from '../types';
 import { useToast } from './Toast';
@@ -269,52 +266,8 @@ export default function Calculator({
   };
 
   return (
-    <div className="grid min-w-0 grid-cols-1 gap-4 pb-44 sm:gap-6 sm:pb-32 lg:grid-cols-3">
+    <div className="grid min-w-0 grid-cols-1 gap-4 pb-12 sm:gap-6 lg:grid-cols-3">
       <>
-        <nav
-          className="sticky top-2 z-30 min-w-0 rounded-xl border border-stone-200 bg-white/95 px-2 py-2 shadow-md backdrop-blur lg:col-span-3 sm:px-3"
-          aria-label="Atalhos da calculadora"
-        >
-          <div className="flex min-w-0 items-center justify-between gap-2">
-            <div className="flex min-w-0 flex-1 snap-x items-center gap-1 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
-              <a
-                href="#dados-comerciais"
-                className="inline-flex shrink-0 snap-start items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold text-stone-600 hover:bg-stone-100 hover:text-emerald-700"
-              >
-                <UserRound className="h-4 w-4" /> Dados comerciais
-              </a>
-              <a
-                href="#formulas-calculo"
-                className="inline-flex shrink-0 snap-start items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold text-stone-600 hover:bg-stone-100 hover:text-emerald-700"
-              >
-                <Layers3 className="h-4 w-4" /> Produtos e fórmulas
-              </a>
-              <a
-                href="#resumo-calculo"
-                className="inline-flex shrink-0 snap-start items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold text-stone-600 hover:bg-stone-100 hover:text-emerald-700"
-              >
-                <CalculatorIcon className="h-4 w-4" /> Resultado
-              </a>
-            </div>
-            <div
-              className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-bold sm:px-3 ${pendingIssues.length === 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800'}`}
-            >
-              {pendingIssues.length === 0 ? (
-                <CheckCircle2 className="h-4 w-4" />
-              ) : (
-                <AlertTriangle className="h-4 w-4" />
-              )}
-              <span className="hidden sm:inline">
-                {pendingIssues.length === 0
-                  ? 'Pronta para salvar'
-                  : `${pendingIssues.length} pendência(s)`}
-              </span>
-              <span className="sm:hidden" aria-label={`${pendingIssues.length} pendências`}>
-                {pendingIssues.length}
-              </span>
-            </div>
-          </div>
-        </nav>
         {isSavedFormulaRevision && (
           <div className="lg:col-span-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             <p className="font-bold">Revisão de batida salva</p>
@@ -1940,6 +1893,14 @@ export default function Calculator({
                     <Plus className="w-4 h-4 mr-1" /> Adicionar Fórmula Alvo
                   </button>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => calculateFormula()}
+                  disabled={!calculations.some((calc) => calc.selected)}
+                  className="inline-flex w-full min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-stone-300"
+                >
+                  <CalculatorIcon className="h-4 w-4" /> Calcular selecionadas
+                </button>
               </div>
             </div>
           </div>
@@ -2025,6 +1986,18 @@ export default function Calculator({
                             S: {calc.summary!.resultingS.toFixed(2)}%
                           </p>
                         )}
+                        {Object.keys(calc.summary?.resultingMicros || {}).length > 0 && (
+                          <div className="mt-2 flex flex-wrap justify-end gap-1">
+                            {Object.entries(calc.summary!.resultingMicros).map(([name, value]) => (
+                              <span
+                                key={name}
+                                className="rounded bg-blue-950 px-2 py-1 text-[10px] font-bold text-blue-300"
+                              >
+                                {name}: {Number(value).toFixed(3)}%
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -2089,39 +2062,12 @@ export default function Calculator({
                   Salvar Fórmula/Batida
                 </button>
               )}
-            </div>
-          </div>
-        </div>
-
-        <div className="fixed inset-x-2 bottom-2 z-40 rounded-2xl border border-stone-200 bg-white/95 p-3 shadow-2xl backdrop-blur sm:bottom-3 sm:left-1/2 sm:right-auto sm:w-[calc(100%-1.5rem)] sm:max-w-4xl sm:-translate-x-1/2">
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-            <div className="min-w-0 flex-1">
-              <p
-                className={`truncate text-xs font-bold ${pendingIssues.length === 0 ? 'text-emerald-700' : 'text-amber-700'}`}
-              >
-                {pendingIssues.length === 0
-                  ? 'Todos os dados obrigatórios foram informados.'
-                  : pendingIssues[0]}
-              </p>
-              <p className="text-[11px] text-stone-500">
-                {calculations.filter((calc) => calc.selected).length} fórmula(s) selecionada(s)
-              </p>
-            </div>
-            <div className="grid w-full grid-cols-1 gap-2 min-[420px]:grid-cols-2 sm:flex sm:w-auto sm:items-center">
-              <button
-                type="button"
-                onClick={() => calculateFormula()}
-                disabled={!calculations.some((calc) => calc.selected)}
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-emerald-200 px-3 py-2.5 text-sm font-bold text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <CalculatorIcon className="h-4 w-4" /> Calcular selecionadas
-              </button>
               {canSavePricing && (
                 <button
                   type="button"
                   onClick={savePricing}
                   disabled={isLocked}
-                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-stone-400"
+                  className="mt-3 inline-flex w-full min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-emerald-950/30 hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-stone-600"
                 >
                   <Save className="h-4 w-4" /> {initialData ? 'Atualizar' : 'Salvar precificação'}
                 </button>
