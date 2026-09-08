@@ -154,7 +154,7 @@ describe('CalculatorSettingsModal', () => {
     fireEvent.click(screen.getByText('Micronutrientes'));
     fireEvent.click(screen.getByText('Boro 5%'));
     fireEvent.change(screen.getByLabelText('Informar por'), { target: { value: 'percent' } });
-    fireEvent.change(screen.getByLabelText('Garantia final desejada (%)'), {
+    fireEvent.change(screen.getByLabelText(/^Garantia final desejada/), {
       target: { value: '0.25' },
     });
     fireEvent.click(screen.getByText('Confirmar Seleção'));
@@ -162,6 +162,32 @@ describe('CalculatorSettingsModal', () => {
     expect(handleConfirm.mock.calls[0][0].micros[0]).toMatchObject({
       minQty: 50,
       maxQty: 50,
+      microInputMode: 'percent',
+      selectedMicroGuarantee: 'B',
+      desiredGuaranteePercent: 0.25,
     });
+  });
+
+  it('persists a custom order and can restore the price-list order', () => {
+    const handleConfirm = vi.fn();
+    render(
+      <CalculatorSettingsModal
+        isOpen={true}
+        onClose={vi.fn()}
+        formula={{
+          ...mockFormula,
+          macros: [
+            { ...mockGlobalMacros[0], selected: true, materialOrder: 1 },
+            { ...mockGlobalMacros[1], selected: true, materialOrder: 0 },
+          ],
+        }}
+        globalMacros={mockGlobalMacros}
+        globalMicros={[]}
+        onConfirm={handleConfirm}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Confirmar Seleção'));
+    expect(handleConfirm.mock.calls[0][0].macros.map((item: any) => item.id)).toEqual(['2', '1']);
   });
 });

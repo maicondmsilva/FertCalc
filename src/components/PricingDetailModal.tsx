@@ -1554,7 +1554,7 @@ export default function PricingDetailModal({
                             >
                               <span className="text-[10px] font-bold text-stone-500">{name}:</span>
                               <span className="text-sm font-mono font-bold">
-                                {(val as number).toFixed(3)}%
+                                {(val as number).toFixed(2)}%
                               </span>
                             </div>
                           ))}

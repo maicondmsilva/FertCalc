@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Search, GripVertical, ChevronUp, ChevronDown } from 'lucide-react';
 import { TargetFormula, RawMaterial } from '../types';
-import { microGuaranteePercentToKg, microKgToGuaranteePercent } from '../utils/microGuarantee';
+import { microGuaranteePercentToKg } from '../utils/microGuarantee';
 
 interface CalculatorSettingsModalProps {
   isOpen: boolean;
@@ -34,20 +34,26 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
     micro: [],
   });
   const [draggedId, setDraggedId] = useState<string | null>(null);
-  const [microInputMode, setMicroInputMode] = useState<Record<string, 'kg' | 'percent'>>({});
-  const [microGuaranteeName, setMicroGuaranteeName] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (isOpen && formula) {
       setLocalFormula(JSON.parse(JSON.stringify(formula)));
       setSearch('');
       setActiveTab('macros');
+      const resolveOrder = (globalProducts: RawMaterial[], savedProducts: RawMaterial[]) => {
+        const customIds = savedProducts
+          .filter((product) => product.materialOrder != null)
+          .sort((a, b) => Number(a.materialOrder) - Number(b.materialOrder))
+          .map((product) => product.id);
+        return [
+          ...customIds,
+          ...globalProducts.map((product) => product.id).filter((id) => !customIds.includes(id)),
+        ];
+      };
       setProductOrder({
-        macro: globalMacros.map((product) => product.id),
-        micro: globalMicros.map((product) => product.id),
+        macro: resolveOrder(globalMacros, formula.macros || []),
+        micro: resolveOrder(globalMicros, formula.micros || []),
       });
-      setMicroInputMode({});
-      setMicroGuaranteeName({});
     }
   }, [isOpen, formula, globalMacros, globalMicros]);
 
@@ -88,6 +94,10 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
               minQty: globalP.minQuantity || 0,
               maxQty: 0,
               quantity: 0,
+              microInputMode: type === 'micro' ? 'kg' : undefined,
+              selectedMicroGuarantee:
+                type === 'micro' ? globalP.microGuarantees?.[0]?.name : undefined,
+              materialOrder: productOrder[type].indexOf(globalP.id),
             },
           ],
         });
@@ -99,12 +109,12 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
     if (localFormula) {
       onConfirm({
         ...localFormula,
-        macros: [...localFormula.macros].sort(
-          (a, b) => productOrder.macro.indexOf(a.id) - productOrder.macro.indexOf(b.id)
-        ),
-        micros: [...localFormula.micros].sort(
-          (a, b) => productOrder.micro.indexOf(a.id) - productOrder.micro.indexOf(b.id)
-        ),
+        macros: [...localFormula.macros]
+          .sort((a, b) => productOrder.macro.indexOf(a.id) - productOrder.macro.indexOf(b.id))
+          .map((product, index) => ({ ...product, materialOrder: index })),
+        micros: [...localFormula.micros]
+          .sort((a, b) => productOrder.micro.indexOf(a.id) - productOrder.micro.indexOf(b.id))
+          .map((product, index) => ({ ...product, materialOrder: index })),
       });
     }
     onClose();
@@ -118,6 +128,26 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
       if (from < 0 || to < 0 || to >= next.length) return current;
       [next[from], next[to]] = [next[to], next[from]];
       return { ...current, [type]: next };
+    });
+  };
+
+  const resetProductOrder = (type: 'macro' | 'micro') => {
+    const source = type === 'macro' ? globalMacros : globalMicros;
+    setProductOrder((current) => ({ ...current, [type]: source.map((product) => product.id) }));
+  };
+
+  const updateLocalProduct = (
+    type: 'macro' | 'micro',
+    productId: string,
+    patch: Partial<RawMaterial>
+  ) => {
+    if (!localFormula) return;
+    const arrKey = type === 'macro' ? 'macros' : 'micros';
+    setLocalFormula({
+      ...localFormula,
+      [arrKey]: localFormula[arrKey].map((material) =>
+        material.id === productId ? { ...material, ...patch } : material
+      ),
     });
   };
 
@@ -266,12 +296,13 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
                         <label className="flex flex-col gap-1 font-semibold text-stone-500">
                           Informar por
                           <select
-                            value={microInputMode[p.id] || 'kg'}
+                            value={p.microInputMode || 'kg'}
                             onChange={(event) =>
-                              setMicroInputMode((current) => ({
-                                ...current,
-                                [p.id]: event.target.value as 'kg' | 'percent',
-                              }))
+                              updateLocalProduct('micro', p.id, {
+                                microInputMode: event.target.value as 'kg' | 'percent',
+                                selectedMicroGuarantee:
+                                  p.selectedMicroGuarantee || p.microGuarantees[0].name,
+                              })
                             }
                             className="rounded border border-blue-300 bg-white px-2 py-1.5 text-stone-800"
                           >
@@ -279,18 +310,26 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
                             <option value="percent">Garantia desejada (%)</option>
                           </select>
                         </label>
-                        {(microInputMode[p.id] || 'kg') === 'percent' && (
+                        {(p.microInputMode || 'kg') === 'percent' && (
                           <>
                             <label className="flex flex-col gap-1 font-semibold text-stone-500">
                               Garantia
                               <select
-                                value={microGuaranteeName[p.id] || p.microGuarantees[0].name}
-                                onChange={(event) =>
-                                  setMicroGuaranteeName((current) => ({
-                                    ...current,
-                                    [p.id]: event.target.value,
-                                  }))
-                                }
+                                value={p.selectedMicroGuarantee || p.microGuarantees[0].name}
+                                onChange={(event) => {
+                                  const selectedGuarantee = p.microGuarantees.find(
+                                    (guarantee) => guarantee.name === event.target.value
+                                  );
+                                  const kg = microGuaranteePercentToKg(
+                                    p.desiredGuaranteePercent || 0,
+                                    selectedGuarantee?.value || 0
+                                  );
+                                  updateLocalProduct('micro', p.id, {
+                                    selectedMicroGuarantee: event.target.value,
+                                    minQty: kg,
+                                    maxQty: kg,
+                                  });
+                                }}
                                 className="rounded border border-blue-300 bg-white px-2 py-1.5 text-stone-800"
                               >
                                 {p.microGuarantees.map((guarantee) => (
@@ -305,40 +344,30 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
                               <input
                                 type="number"
                                 min="0"
-                                step="0.001"
-                                value={(() => {
-                                  const guarantee = p.microGuarantees.find(
-                                    (item) =>
-                                      item.name ===
-                                      (microGuaranteeName[p.id] || p.microGuarantees[0].name)
-                                  );
-                                  const fixedKg = p.minQty === p.maxQty ? p.minQty : 0;
-                                  return fixedKg && guarantee
-                                    ? microKgToGuaranteePercent(fixedKg, guarantee.value)
-                                    : '';
-                                })()}
+                                step="0.01"
+                                value={p.desiredGuaranteePercent || ''}
                                 onChange={(event) => {
-                                  if (!localFormula) return;
                                   const guarantee = p.microGuarantees.find(
                                     (item) =>
                                       item.name ===
-                                      (microGuaranteeName[p.id] || p.microGuarantees[0].name)
+                                      (p.selectedMicroGuarantee || p.microGuarantees[0].name)
                                   );
+                                  const desiredGuaranteePercent = Number(event.target.value);
                                   const kg = microGuaranteePercentToKg(
-                                    Number(event.target.value),
+                                    desiredGuaranteePercent,
                                     guarantee?.value || 0
                                   );
-                                  setLocalFormula({
-                                    ...localFormula,
-                                    micros: localFormula.micros.map((micro) =>
-                                      micro.id === p.id
-                                        ? { ...micro, minQty: kg, maxQty: kg }
-                                        : micro
-                                    ),
+                                  updateLocalProduct('micro', p.id, {
+                                    desiredGuaranteePercent,
+                                    minQty: kg,
+                                    maxQty: kg,
                                   });
                                 }}
                                 className="rounded border border-blue-300 bg-white px-2 py-1.5 text-stone-800"
                               />
+                              <span className="text-[10px] font-bold text-blue-700">
+                                Quantidade calculada: {Number(p.minQty || 0).toFixed(2)} kg
+                              </span>
                             </label>
                           </>
                         )}
@@ -400,11 +429,15 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
                             if (!localFormula) return;
                             const val = Number(e.target.value);
                             const arrKey = type === 'macro' ? 'macros' : 'micros';
-                            setLocalFormula({
-                              ...localFormula,
-                              [arrKey]: localFormula[arrKey].map((m) =>
-                                m.id === p.id ? { ...m, minQty: val, maxQty: val } : m
-                              ),
+                            updateLocalProduct(type, p.id, {
+                              minQty: val,
+                              maxQty: val,
+                              ...(type === 'micro'
+                                ? {
+                                    microInputMode: 'kg' as const,
+                                    desiredGuaranteePercent: undefined,
+                                  }
+                                : {}),
                             });
                           }}
                           placeholder="Auto"
@@ -480,15 +513,24 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
             <div className="text-center text-stone-500 py-8">Nenhuma fórmula selecionada.</div>
           ) : (
             <div className="bg-white p-5 rounded-xl border border-stone-200 shadow-sm">
-              <h3 className="font-semibold text-stone-800 border-b border-stone-100 pb-3 mb-4 flex justify-between items-center">
+              <div className="font-semibold text-stone-800 border-b border-stone-100 pb-3 mb-4 flex flex-wrap justify-between items-center gap-2">
                 <span>
                   Configurando Fórmula:{' '}
                   <span className="text-blue-600">{localFormula.formula || 'Sem nome'}</span>
                 </span>
-                <span className="text-xs font-normal text-stone-500 hidden sm:block">
-                  Ordem inicial da lista de preços · arraste para reorganizar
-                </span>
-              </h3>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-normal text-stone-500 hidden sm:block">
+                    Ordem inicial da lista de preços · arraste para reorganizar
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => resetProductOrder(activeTab === 'macros' ? 'macro' : 'micro')}
+                    className="rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-bold text-stone-600 hover:border-blue-300 hover:text-blue-700"
+                  >
+                    Restaurar ordem da lista
+                  </button>
+                </div>
+              </div>
               {renderProducts(localFormula, activeTab === 'macros' ? 'macro' : 'micro')}
             </div>
           )}
