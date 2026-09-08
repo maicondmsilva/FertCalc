@@ -68,6 +68,10 @@ export interface RawMaterial {
   isPremiumLine?: boolean;
   isFertigranP?: boolean;
   minQuantity?: number;
+  microInputMode?: 'kg' | 'percent';
+  selectedMicroGuarantee?: string;
+  desiredGuaranteePercent?: number;
+  materialOrder?: number;
 }
 
 export interface CompatibilityCategory {

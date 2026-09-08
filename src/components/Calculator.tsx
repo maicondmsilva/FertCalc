@@ -1804,7 +1804,7 @@ export default function Calculator({
                                       {name}:
                                     </span>
                                     <span className="text-[10px] font-bold text-blue-600">
-                                      {(val as number).toFixed(3)}%
+                                      {(val as number).toFixed(2)}%
                                     </span>
                                   </div>
                                 ))}
@@ -1993,7 +1993,7 @@ export default function Calculator({
                                 key={name}
                                 className="rounded bg-blue-950 px-2 py-1 text-[10px] font-bold text-blue-300"
                               >
-                                {name}: {Number(value).toFixed(3)}%
+                                {name}: {Number(value).toFixed(2)}%
                               </span>
                             ))}
                           </div>
