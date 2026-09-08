@@ -5,11 +5,12 @@ import {
   getPriceLists,
   getAppSettings,
   getClients,
+  getBrands,
 } from '../services/db';
 import { getLocaisAtivos } from '../services/locaisCarregamentoService';
 import { getProdutoFormuladoBySavedFormulaId } from '../services/produtosFormuladosService';
 import { addHistoricoPrecos } from '../services/historicoPrecoService';
-import { SavedFormula, User, PriceList, AppSettings, Client, Embalagem } from '../types';
+import { SavedFormula, User, PriceList, AppSettings, Client, Embalagem, Brand } from '../types';
 import { getEmbalagens } from '../services/embalagensService';
 import { LocalCarregamento } from '../types/carregamento';
 import { formatId } from '../utils/formatId';
@@ -794,6 +795,8 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
   const [selectedLocalId, setSelectedLocalId] = useState<string>('');
   const [selectedPriceListId, setSelectedPriceListId] = useState<string>('');
   const [selectedFormulas, setSelectedFormulas] = useState<string[]>([]);
+  const [formulaSearch, setFormulaSearch] = useState('');
+  const [brands, setBrands] = useState<Brand[]>([]);
   const [formulaToUpdateId, setFormulaToUpdateId] = useState<string>('');
   const [formulaInEditor, setFormulaInEditor] = useState<SavedFormula | null>(null);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
@@ -812,20 +815,29 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
     setFormulas([]);
     setLoading(true);
     try {
-      const [allFormulas, allLists, allLocais, settings] = await Promise.all([
+      const [allFormulas, allLists, allLocais, settings, allBrands] = await Promise.all([
         getSavedFormulas(),
         getPriceLists(),
         getLocaisAtivos(),
         getAppSettings(),
+        getBrands(),
       ]);
 
       // All users with permission see all batidas (remove userId restriction)
       setFormulas(allFormulas);
       setPriceLists(allLists);
       setLocais(allLocais);
+      setBrands(allBrands);
       if (settings) setAppSettings(settings);
-
-      setSelectedPriceListId('');
+      setSelectedLocalId((current) => {
+        if (allLocais.some((local) => local.id === current)) return current;
+        return (
+          allLocais.find((local) => local.nome.toLocaleLowerCase('pt-BR').includes('uberaba'))
+            ?.id ||
+          allLocais[0]?.id ||
+          ''
+        );
+      });
 
       // Load linha_diferenciada for each formula
       const ldMap: Record<string, boolean> = {};
@@ -906,14 +918,18 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
   };
 
   const toggleSelectAll = () => {
-    if (selectedFormulas.length === filteredFormulas.length) {
-      setSelectedFormulas([]);
+    const visibleIds = filteredFormulas.map((formula) => formula.id);
+    const allVisibleSelected = visibleIds.every((id) => selectedFormulas.includes(id));
+    if (allVisibleSelected) {
+      setSelectedFormulas((current) => current.filter((id) => !visibleIds.includes(id)));
     } else {
-      setSelectedFormulas(filteredFormulas.map((f) => f.id));
+      setSelectedFormulas((current) => Array.from(new Set([...current, ...visibleIds])));
     }
   };
 
-  const compatiblePriceLists = getPriceListsForLoadingLocation(priceLists, selectedLocalId);
+  const compatiblePriceLists = getPriceListsForLoadingLocation(priceLists, selectedLocalId)
+    .slice()
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   useEffect(() => {
     const firstCompatibleList = compatiblePriceLists[0];
@@ -974,10 +990,27 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
   const selectedList = compatiblePriceLists.find((l) => l.id === selectedPriceListId);
 
   // Batidas belong to the organization and can be priced at every loading location.
-  const filteredFormulas = formulas;
+  const normalizedSearch = formulaSearch.trim().toLocaleLowerCase('pt-BR');
+  const filteredFormulas = formulas.filter((formula) => {
+    if (!normalizedSearch) return true;
+    const materialBrandNames = [...formula.macros, ...formula.micros]
+      .map((material) => brands.find((brand) => brand.id === material.brandId)?.name || '')
+      .join(' ');
+    return [
+      formula.name,
+      formula.targetFormula,
+      materialBrandNames,
+      ...formula.macros.map((material) => material.name),
+      ...formula.micros.map((material) => material.name),
+    ]
+      .join(' ')
+      .toLocaleLowerCase('pt-BR')
+      .includes(normalizedSearch);
+  });
 
   const allSelected =
-    filteredFormulas.length > 0 && selectedFormulas.length === filteredFormulas.length;
+    filteredFormulas.length > 0 &&
+    filteredFormulas.every((formula) => selectedFormulas.includes(formula.id));
 
   return (
     <React.Fragment>
@@ -1067,6 +1100,17 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
               </button>
             )}
           </div>
+        </div>
+
+        <div className="relative rounded-xl border border-stone-200 bg-white shadow-sm">
+          <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-stone-400" />
+          <input
+            type="search"
+            value={formulaSearch}
+            onChange={(event) => setFormulaSearch(event.target.value)}
+            placeholder="Pesquisar batida por fórmula NPK, nome, produto ou marca..."
+            className="w-full rounded-xl bg-transparent py-3 pl-12 pr-4 text-sm text-stone-700 outline-none focus:ring-2 focus:ring-emerald-500"
+          />
         </div>
 
         {formulaInEditor && (

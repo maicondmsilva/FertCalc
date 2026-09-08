@@ -49,6 +49,7 @@ export interface IncompatibilityRule {
 export interface RawMaterial {
   id: string;
   code?: string;
+  brandId?: string;
   type: NutrientType;
   name: string;
   price: number;
