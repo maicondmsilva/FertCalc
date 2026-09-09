@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, RefreshCw, History, FileEdit, FilePlus, Trash2 } from 'lucide-react';
 import { getAuditLog, AuditLogCarregamento } from '../services/auditLogService';
+import { closeModalOnBackdrop } from '../utils/modalUtils';
 
 interface HistoricoModificacoesProps {
   tabela: 'carregamentos' | 'cotacoes_solicitadas';
@@ -73,7 +74,10 @@ export default function HistoricoModificacoes({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4">
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4"
+      onMouseDown={(event) => closeModalOnBackdrop(event, onClose)}
+    >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-stone-100 flex-shrink-0">

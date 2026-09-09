@@ -10,6 +10,7 @@ import {
 } from '../services/pedidosVendaService';
 import { getProdutosFormulados, ProdutoFormulado } from '../services/produtosFormuladosService';
 import { getEmbalagens } from '../services/embalagensService';
+import { closeModalOnBackdrop } from '../utils/modalUtils';
 import { useToast } from './Toast';
 import {
   formatDatePtBr,
@@ -370,7 +371,10 @@ export default function NovoPedidoVendaModal({
     [embalagens]
   );
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      onMouseDown={(event) => closeModalOnBackdrop(event, onClose, saving)}
+    >
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="p-5 border-b border-stone-100 flex justify-between items-center bg-emerald-600 text-white">

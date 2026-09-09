@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { User, Branch } from '../types';
 import { getUsers, updateUser, deleteUser, getBranches } from '../services/db';
+import { closeModalOnBackdrop } from '../utils/modalUtils';
 import {
   createAuthUser,
   adminUpdateAuthPassword,
@@ -607,7 +608,10 @@ export default function UserManager({ currentUser }: UserManagerProps) {
   // Modal
   // ---------------------------------------------------------------------------
   const renderModal = () => (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onMouseDown={(event) => closeModalOnBackdrop(event, handleCloseModal, loading)}
+    >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200">

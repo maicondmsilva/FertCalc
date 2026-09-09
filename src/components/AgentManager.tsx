@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { closeModalOnBackdrop } from '../utils/modalUtils';
 import {
   Plus,
   Trash2,
@@ -396,7 +397,10 @@ export default function AgentManager({ currentUser }: { currentUser: User }) {
       </div>
 
       {viewingAgent && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onMouseDown={(event) => closeModalOnBackdrop(event, () => setViewingAgent(null))}
+        >
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
             <div className="p-6 border-b border-stone-100 flex justify-between items-center bg-blue-600 text-white">
               <h2 className="text-xl font-bold flex items-center gap-2">

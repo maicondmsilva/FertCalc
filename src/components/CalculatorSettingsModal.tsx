@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Search, GripVertical, ChevronUp, ChevronDown } from 'lucide-react';
 import { TargetFormula, RawMaterial } from '../types';
 import { microGuaranteePercentToKg } from '../utils/microGuarantee';
+import { closeModalOnBackdrop } from '../utils/modalUtils';
 
 interface CalculatorSettingsModalProps {
   isOpen: boolean;
@@ -502,7 +503,10 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+    <div
+      className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4"
+      onMouseDown={(event) => closeModalOnBackdrop(event, onClose)}
+    >
       <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-stone-100">

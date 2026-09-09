@@ -13,6 +13,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { useExpensePermissions } from '../../hooks/useExpensePermissions';
+import { closeModalOnBackdrop } from '../../utils/modalUtils';
 
 interface ExpenseDetailModalProps {
   expense: CreditCardExpense;
@@ -80,7 +81,10 @@ export default function ExpenseDetailModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onMouseDown={(event) => closeModalOnBackdrop(event, onClose)}
+    >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-stone-100">

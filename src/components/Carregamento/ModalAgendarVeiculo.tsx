@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import { Carregamento, ExecucaoCarregamento } from '../../types/carregamento';
 import { createExecucao } from '../../services/execucaoCarregamentoService';
+import { closeModalOnBackdrop } from '../../utils/modalUtils';
 
 interface ModalAgendarVeiculoProps {
   carregamento: Carregamento;
@@ -51,7 +52,10 @@ export default function ModalAgendarVeiculo({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+    <div
+      className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+      onMouseDown={(event) => closeModalOnBackdrop(event, onClose, saving)}
+    >
       <form onSubmit={handleSubmit} className="w-full max-w-lg bg-white rounded-xl shadow-xl">
         <div className="p-4 border-b border-stone-200 flex justify-between items-center">
           <h3 className="font-bold text-stone-800">Agendar Veículo</h3>

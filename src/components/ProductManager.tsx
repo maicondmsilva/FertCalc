@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { closeModalOnBackdrop } from '../utils/modalUtils';
 import {
   Plus,
   Trash2,
@@ -580,7 +581,10 @@ export default function ProductManager() {
       )}
 
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          onMouseDown={(event) => closeModalOnBackdrop(event, () => setIsModalOpen(false), saving)}
+        >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
             <div className="px-6 py-4 border-b border-stone-100 flex justify-between items-center bg-emerald-600 text-white">
               <h2 className="text-lg font-bold">
@@ -877,7 +881,15 @@ export default function ProductManager() {
 
       {/* Category Manager Modal shared */}
       {isCategoryModalOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4"
+          onMouseDown={(event) =>
+            closeModalOnBackdrop(event, () => {
+              setIsCategoryModalOpen(false);
+              loadAll();
+            })
+          }
+        >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col relative">
             <button
               onClick={() => {
@@ -897,7 +909,12 @@ export default function ProductManager() {
 
       {/* Embalagem Modal */}
       {isEmbalagemModalOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          onMouseDown={(event) =>
+            closeModalOnBackdrop(event, () => setIsEmbalagemModalOpen(false), savingEmbalagem)
+          }
+        >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col">
             <div className="px-6 py-4 border-b border-stone-100 flex justify-between items-center bg-emerald-600 text-white">
               <h2 className="text-lg font-bold">

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import { Carregamento } from '../../types/carregamento';
 import { updateCarregamento } from '../../services/carregamentoService';
+import { closeModalOnBackdrop } from '../../utils/modalUtils';
 
 interface ModalCancelarSaldoSolicitacaoProps {
   carregamento: Carregamento;
@@ -36,7 +37,10 @@ export default function ModalCancelarSaldoSolicitacao({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+    <div
+      className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+      onMouseDown={(event) => closeModalOnBackdrop(event, onClose, saving)}
+    >
       <form onSubmit={handleSubmit} className="w-full max-w-md bg-white rounded-xl shadow-xl">
         <div className="p-4 border-b border-stone-200 flex justify-between items-center">
           <h3 className="font-bold text-stone-800">Cancelar Saldo Restante</h3>
