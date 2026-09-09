@@ -9,6 +9,7 @@ import {
 } from '../../services/expenseService';
 import { Eye, ClipboardCheck, Search, X } from 'lucide-react';
 import { subscribeToExpenseChanges } from '../../services/expenseSubscription';
+import { closeModalOnBackdrop } from '../../utils/modalUtils';
 
 interface CheckExpensesProps {
   currentUser: User;
@@ -203,7 +204,12 @@ export default function CheckExpenses({ currentUser }: CheckExpensesProps) {
 
       {/* Confirm Modal */}
       {confirmId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onMouseDown={(event) =>
+            closeModalOnBackdrop(event, () => setConfirmId(null), processing === confirmId)
+          }
+        >
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
             <h3 className="text-lg font-bold text-stone-800 mb-3">Confirmar Conferência</h3>
             <p className="text-stone-600 text-sm mb-6">
@@ -231,7 +237,15 @@ export default function CheckExpenses({ currentUser }: CheckExpensesProps) {
 
       {/* Detail Modal */}
       {detailExpense && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onMouseDown={(event) =>
+            closeModalOnBackdrop(event, () => {
+              setDetailExpense(null);
+              setAuditLog([]);
+            })
+          }
+        >
           <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-stone-800">Detalhes do Lançamento</h3>

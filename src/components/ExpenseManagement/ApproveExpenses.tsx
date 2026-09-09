@@ -9,6 +9,7 @@ import {
 } from '../../services/expenseService';
 import { Eye, CheckCircle, XCircle, Search, X } from 'lucide-react';
 import { subscribeToExpenseChanges } from '../../services/expenseSubscription';
+import { closeModalOnBackdrop } from '../../utils/modalUtils';
 
 interface ApproveExpensesProps {
   currentUser: User;
@@ -318,7 +319,12 @@ export default function ApproveExpenses({ currentUser }: ApproveExpensesProps) {
 
       {/* Approve Confirm Modal */}
       {approveId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onMouseDown={(event) =>
+            closeModalOnBackdrop(event, () => setApproveId(null), processing === approveId)
+          }
+        >
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
             <h3 className="text-lg font-bold text-stone-800 mb-3">Confirmar Aprovação</h3>
             <p className="text-stone-600 text-sm mb-6">
@@ -346,7 +352,19 @@ export default function ApproveExpenses({ currentUser }: ApproveExpensesProps) {
 
       {/* Reject Modal */}
       {rejectId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onMouseDown={(event) =>
+            closeModalOnBackdrop(
+              event,
+              () => {
+                setRejectId(null);
+                setRejectionNote('');
+              },
+              processing === rejectId
+            )
+          }
+        >
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
             <h3 className="text-lg font-bold text-stone-800 mb-3">Rejeitar Lançamento</h3>
             <p className="text-stone-500 text-sm mb-4">
@@ -383,7 +401,15 @@ export default function ApproveExpenses({ currentUser }: ApproveExpensesProps) {
 
       {/* Batch Action Modal */}
       {batchAction && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onMouseDown={(event) =>
+            closeModalOnBackdrop(event, () => {
+              setBatchAction(null);
+              setBatchNote('');
+            })
+          }
+        >
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
             <h3 className="text-lg font-bold text-stone-800 mb-3">
               {batchAction === 'approve' ? 'Aprovar em Lote' : 'Rejeitar em Lote'}
@@ -426,7 +452,15 @@ export default function ApproveExpenses({ currentUser }: ApproveExpensesProps) {
 
       {/* Detail Modal */}
       {detailExpense && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onMouseDown={(event) =>
+            closeModalOnBackdrop(event, () => {
+              setDetailExpense(null);
+              setAuditLog([]);
+            })
+          }
+        >
           <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-stone-800">Detalhes do Lançamento</h3>

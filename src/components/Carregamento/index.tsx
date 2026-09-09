@@ -75,6 +75,7 @@ import KanbanLogistico from './KanbanLogistico';
 import PainelExecucoes from './PainelExecucoes';
 import { getStatusInicial } from '../../utils/getStatusInicial';
 import { subscribeToOrderLoadingChanges } from '../../services/orderLoadingSubscription';
+import { closeModalOnBackdrop } from '../../utils/modalUtils';
 
 // ─── Permission helper ────────────────────────────────────────────────────────
 function canEditDeleteCarregamento(
@@ -605,7 +606,10 @@ export function ModalNovoCarregamento({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div
+      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+      onMouseDown={(event) => closeModalOnBackdrop(event, onClose, saving)}
+    >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between p-6 border-b border-stone-100">
           <h3 className="text-lg font-bold text-stone-800 flex items-center gap-2">
@@ -1057,7 +1061,10 @@ function ModalCotacao({ carregamento, transportadoras, onSave, onClose }: ModalC
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div
+      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+      onMouseDown={(event) => closeModalOnBackdrop(event, onClose, saving)}
+    >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
         <div className="flex items-center justify-between p-6 border-b border-stone-100">
           <h3 className="text-lg font-bold text-stone-800 flex items-center gap-2">
@@ -1223,7 +1230,10 @@ function ModalSolicitarCotacao({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div
+      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+      onMouseDown={(event) => closeModalOnBackdrop(event, onClose, saving)}
+    >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between p-6 border-b border-stone-100 flex-shrink-0">
           <h3 className="text-lg font-bold text-stone-800 flex items-center gap-2">
@@ -1415,7 +1425,10 @@ function ModalLiberacao({ carregamento, onSave, onClose }: ModalLiberacaoProps) 
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div
+      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+      onMouseDown={(event) => closeModalOnBackdrop(event, onClose, saving)}
+    >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
         <div className="flex items-center justify-between p-6 border-b border-stone-100">
           <h3 className="text-lg font-bold text-stone-800 flex items-center gap-2">
@@ -2381,7 +2394,12 @@ function SolicitacaoCotacao({
 
       {/* Confirmation: archive cotação */}
       {confirmArquivar && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onMouseDown={(event) =>
+            closeModalOnBackdrop(event, () => setConfirmArquivar(null), arquivando)
+          }
+        >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
             <div className="p-5 border-b border-stone-100 flex items-center gap-3">
               <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
@@ -3285,7 +3303,10 @@ function ModalInformarTransportador({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div
+      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+      onMouseDown={(event) => closeModalOnBackdrop(event, onClose, saving)}
+    >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
         <div className="flex items-center justify-between p-6 border-b border-stone-100">
           <h3 className="text-lg font-bold text-stone-800 flex items-center gap-2">
@@ -3402,7 +3423,10 @@ function ModalCancelarCarregamento({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      onMouseDown={(event) => closeModalOnBackdrop(event, onClose, saving)}
+    >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
         <div className="flex items-center gap-2 text-red-600">
           <X className="w-5 h-5" />
@@ -3701,7 +3725,10 @@ function TransportadoraManager() {
 
       {/* Formulário de criação/edição */}
       {criando && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onMouseDown={(event) => closeModalOnBackdrop(event, () => setCriando(false))}
+        >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
             <div className="flex items-center justify-between p-6 border-b border-stone-100">
               <h3 className="text-lg font-bold text-stone-800 flex items-center gap-2">
@@ -4401,7 +4428,19 @@ export default function CarregamentoModule({
       )}
       {/* Delete confirmation dialog */}
       {excluindoCarregamento && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onMouseDown={(event) =>
+            closeModalOnBackdrop(
+              event,
+              () => {
+                setExcluindoCarregamento(null);
+                setMotivoExclusao('');
+              },
+              excluindoLoading
+            )
+          }
+        >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
             <div className="flex items-center gap-3 p-5 border-b border-stone-100">
               <div className="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
@@ -4500,7 +4539,10 @@ export default function CarregamentoModule({
       )}
 
       {modalExecucoes && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+        <div
+          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+          onMouseDown={(event) => closeModalOnBackdrop(event, () => setModalExecucoes(null))}
+        >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-stone-800">

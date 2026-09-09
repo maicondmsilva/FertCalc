@@ -26,6 +26,7 @@ import { CalculatorSettingsModal } from './CalculatorSettingsModal';
 import ProfitabilityModal from './ProfitabilityModal';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { PromptDialog } from './ui/PromptDialog';
+import { closeModalOnBackdrop } from '../utils/modalUtils';
 import { useCalculator } from '../hooks/useCalculator';
 import { getCalculationMode } from '../utils/calculationMode';
 import { getCotacoesAprovadasByCliente } from '../services/cotacaoSolicitadaService';
@@ -2197,7 +2198,10 @@ export default function Calculator({
 
       {/* Modal: Buscar Cotação Aprovada */}
       {showCotacaoModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          onMouseDown={(event) => closeModalOnBackdrop(event, () => setShowCotacaoModal(false))}
+        >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
             <div className="px-6 py-4 bg-emerald-600 text-white flex justify-between items-center">
               <h2 className="text-lg font-bold flex items-center gap-2">

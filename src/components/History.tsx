@@ -31,6 +31,7 @@ import {
 } from '../services/db';
 import { useToast } from './Toast';
 import { ConfirmDialog } from './ui/ConfirmDialog';
+import { closeModalOnBackdrop } from '../utils/modalUtils';
 import { useConfirm } from '../hooks/useConfirm';
 import { getPricingTotalTons, getPricingTotalSaleValue } from '../utils/pricingMetrics';
 import {
@@ -859,11 +860,11 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                           </span>
                           <span>
                             <strong className="text-stone-600">Período de juros:</strong>{' '}
-                              {calcFactors?.exemptCurrentMonth
-                                ? 'mês atual isento'
-                                : calcFactors?.interestStartDate
-                                  ? `desde ${formatDatePtBr(calcFactors.interestStartDate)}`
-                                  : 'desde a data atual'}
+                            {calcFactors?.exemptCurrentMonth
+                              ? 'mês atual isento'
+                              : calcFactors?.interestStartDate
+                                ? `desde ${formatDatePtBr(calcFactors.interestStartDate)}`
+                                : 'desde a data atual'}
                           </span>
                           <span>
                             <strong className="text-stone-600">Frete:</strong>{' '}
@@ -1053,7 +1054,10 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
 
       {/* Modal de confirmação de exclusão */}
       {isDeleting && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
+          onMouseDown={(event) => closeModalOnBackdrop(event, () => setIsDeleting(false))}
+        >
           <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="p-6 border-b border-stone-100 flex justify-between items-center">
               <h3 className="text-lg font-black text-stone-800 uppercase tracking-tight flex items-center gap-2">
