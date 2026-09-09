@@ -34,12 +34,23 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
     micro: [],
   });
   const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [microPercentInputs, setMicroPercentInputs] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (isOpen && formula) {
       setLocalFormula(JSON.parse(JSON.stringify(formula)));
       setSearch('');
       setActiveTab('macros');
+      setMicroPercentInputs(
+        Object.fromEntries(
+          (formula.micros || [])
+            .filter((product) => product.desiredGuaranteePercent != null)
+            .map((product) => [
+              product.id,
+              String(product.desiredGuaranteePercent).replace('.', ','),
+            ])
+        )
+      );
       const resolveOrder = (globalProducts: RawMaterial[], savedProducts: RawMaterial[]) => {
         const customIds = savedProducts
           .filter((product) => product.materialOrder != null)
@@ -352,17 +363,30 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
                             <label className="flex flex-col gap-1 font-semibold text-stone-500">
                               Garantia final desejada (%)
                               <input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={p.desiredGuaranteePercent || ''}
+                                type="text"
+                                inputMode="decimal"
+                                value={
+                                  microPercentInputs[p.id] ??
+                                  (p.desiredGuaranteePercent != null
+                                    ? String(p.desiredGuaranteePercent).replace('.', ',')
+                                    : '')
+                                }
                                 onChange={(event) => {
+                                  const inputValue = event.target.value;
+                                  if (!/^\d*(?:[.,]\d*)?$/.test(inputValue)) return;
+                                  setMicroPercentInputs((current) => ({
+                                    ...current,
+                                    [p.id]: inputValue,
+                                  }));
                                   const guarantee = p.microGuarantees.find(
                                     (item) =>
                                       item.name ===
                                       (p.selectedMicroGuarantee || p.microGuarantees[0].name)
                                   );
-                                  const desiredGuaranteePercent = Number(event.target.value);
+                                  const desiredGuaranteePercent = Number(
+                                    inputValue.replace(',', '.')
+                                  );
+                                  if (!Number.isFinite(desiredGuaranteePercent)) return;
                                   const kg = microGuaranteePercentToKg(
                                     desiredGuaranteePercent,
                                     guarantee?.value || 0
