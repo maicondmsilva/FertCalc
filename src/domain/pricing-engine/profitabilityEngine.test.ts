@@ -49,6 +49,31 @@ describe('profitability engine', () => {
     expect(result.daysOfInterest).toBe(92);
   });
 
+  it('trata embalagem negativa como crédito na receita líquida', () => {
+    const withoutPackaging = calculateProfitability(
+      { ...input, packagingValue: 0 },
+      { today: new Date('2026-01-16T12:00:00') }
+    );
+    const withPackagingCredit = calculateProfitability(
+      { ...input, packagingValue: -50 },
+      { today: new Date('2026-01-16T12:00:00') }
+    );
+
+    expect(withPackagingCredit.packagingDeduction).toBe(-50);
+    expect(withPackagingCredit.netRevenue).toBeCloseTo(withoutPackaging.netRevenue + 50);
+    expect(withPackagingCredit.profitability).toBeCloseTo(withoutPackaging.profitability + 50);
+  });
+
+  it('não gera crédito de juros quando o frete supera o valor da venda', () => {
+    const result = calculateProfitability(
+      { ...input, unitaryPrice: 100, freightDeduction: 150 },
+      { today: new Date('2026-01-16T12:00:00') }
+    );
+
+    expect(result.interestDeduction).toBe(0);
+    expect(Number.isFinite(result.netRevenue)).toBe(true);
+  });
+
   it('cria o registro persistível com autoria e horário controlados', () => {
     const analyzedAt = new Date('2026-03-01T10:00:00Z');
     const analysis = createProfitabilityAnalysis(
@@ -59,6 +84,9 @@ describe('profitability engine', () => {
         formulaName: '16-07-23',
         analyzedByUserId: 'user-1',
         analyzedByName: 'Analista',
+        paymentCondition: 'ddf',
+        dataCarregamento: '2026-01-16',
+        ddfDias: 30,
       },
       { today: new Date('2026-01-16T12:00:00'), analyzedAt }
     );
@@ -67,5 +95,8 @@ describe('profitability engine', () => {
     expect(analysis.analyzedByUserId).toBe('user-1');
     expect(analysis.analyzedAt).toBe(analyzedAt.toISOString());
     expect(analysis.profitability).toBeCloseTo(122);
+    expect(analysis.paymentCondition).toBe('ddf');
+    expect(analysis.dataCarregamento).toBe('2026-01-16');
+    expect(analysis.ddfDias).toBe(30);
   });
 });
