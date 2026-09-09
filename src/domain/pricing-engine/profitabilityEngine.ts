@@ -11,6 +11,7 @@ export interface ProfitabilityInput {
   taxRate: number;
   dueDate?: string;
   exemptCurrentMonth?: boolean;
+  interestStartDate?: string;
   packagingValue?: number;
 }
 
@@ -26,7 +27,9 @@ export interface ProfitabilityResult {
   packagingDeduction: number;
 }
 
-export interface ProfitabilityEngineOptions { today?: Date; }
+export interface ProfitabilityEngineOptions {
+  today?: Date;
+}
 const numeric = (value: unknown): number => Number(value) || 0;
 
 export function calculateProfitability(
@@ -39,24 +42,37 @@ export function calculateProfitability(
   const daysOfInterest = calculateInterestDays(
     input.dueDate,
     Boolean(input.exemptCurrentMonth),
-    options.today ?? new Date()
+    options.today ?? new Date(),
+    input.interestStartDate
   );
   const interestBase = unitaryPrice - freightDeduction;
   const monthlyRate = numeric(input.interestRate) / 100;
-  const interestDeduction = daysOfInterest > 0 && monthlyRate > 0
-    ? interestBase * (1 - Math.pow(1 - monthlyRate, daysOfInterest / 30))
-    : 0;
+  const interestDeduction =
+    daysOfInterest > 0 && monthlyRate > 0
+      ? interestBase * (1 - Math.pow(1 - monthlyRate, daysOfInterest / 30))
+      : 0;
   const taxDeduction = unitaryPrice * (numeric(input.taxRate) / 100);
   const commissionDeduction = unitaryPrice * (numeric(input.commissionRate) / 100);
   const packagingDeduction = numeric(input.packagingValue);
-  const netRevenue = unitaryPrice - taxDeduction - freightDeduction - commissionDeduction - interestDeduction - packagingDeduction;
+  const netRevenue =
+    unitaryPrice -
+    taxDeduction -
+    freightDeduction -
+    commissionDeduction -
+    interestDeduction -
+    packagingDeduction;
   const profitability = netRevenue - baseCostAfterFactor;
 
   return {
-    baseCostAfterFactor, commissionDeduction, interestDeduction, taxDeduction,
-    netRevenue, profitability,
+    baseCostAfterFactor,
+    commissionDeduction,
+    interestDeduction,
+    taxDeduction,
+    netRevenue,
+    profitability,
     profitabilityPercent: baseCostAfterFactor > 0 ? (profitability / baseCostAfterFactor) * 100 : 0,
-    daysOfInterest, packagingDeduction,
+    daysOfInterest,
+    packagingDeduction,
   };
 }
 
@@ -87,6 +103,7 @@ export function createProfitabilityAnalysis(
     taxRate: input.taxRate,
     dueDate: input.dueDate,
     exemptCurrentMonth: input.exemptCurrentMonth,
+    interestStartDate: input.interestStartDate,
     packagingValue: input.packagingValue,
     analyzedByUserId: input.analyzedByUserId,
     analyzedByName: input.analyzedByName,

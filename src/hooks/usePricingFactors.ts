@@ -13,6 +13,7 @@ const defaultFactors: PricingFactors = {
   monthlyInterestRate: 0,
   dueDate: '',
   exemptCurrentMonth: false,
+  interestStartDate: '',
   client: { id: '', code: '', name: '', document: '' },
   agent: { id: '', code: '', name: '', document: '' },
   branchId: '',

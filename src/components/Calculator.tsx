@@ -1653,6 +1653,31 @@ export default function Calculator({
                                   </div>
                                 </div>
                               )}
+
+                              <div className="mt-3 border-t border-stone-100 pt-3">
+                                <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">
+                                  Cobrar juros a partir de
+                                </label>
+                                <input
+                                  type="date"
+                                  max={calc.factors.dueDate || undefined}
+                                  value={calc.factors.interestStartDate || ''}
+                                  disabled={calc.factors.exemptCurrentMonth}
+                                  onChange={(e) =>
+                                    updateCalculationFactors(
+                                      calc.id,
+                                      'interestStartDate',
+                                      e.target.value
+                                    )
+                                  }
+                                  className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500 outline-none disabled:bg-stone-100 disabled:text-stone-400"
+                                />
+                                <p className="mt-1 text-[10px] text-stone-500">
+                                  {calc.factors.exemptCurrentMonth
+                                    ? 'Inativo porque o mês atual está isento.'
+                                    : 'Opcional. Sem data, os juros começam na data atual.'}
+                                </p>
+                              </div>
                             </div>
                             <div className="order-4 col-span-2 flex items-center pt-1 lg:col-span-10">
                               <input

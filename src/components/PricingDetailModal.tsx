@@ -1332,6 +1332,16 @@ export default function PricingDetailModal({
                       />
                       <DetailItem label="Condição financeira" value={paymentLabel} />
                       <DetailItem
+                        label="Período de juros"
+                        value={
+                          calcFactors?.exemptCurrentMonth
+                            ? 'Após o mês atual até o vencimento'
+                            : calcFactors?.interestStartDate
+                              ? `De ${formatDatePtBr(calcFactors.interestStartDate)} até o vencimento`
+                              : 'Da data atual até o vencimento'
+                        }
+                      />
+                      <DetailItem
                         label="Data de carregamento"
                         value={
                           calcFactors?.dataCarregamento
