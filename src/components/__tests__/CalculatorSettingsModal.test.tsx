@@ -63,6 +63,7 @@ describe('CalculatorSettingsModal', () => {
     // Toggle Ureia selection
     const ureiaCard = screen.getByText('Ureia');
     fireEvent.click(ureiaCard);
+    expect(screen.getByText('Selecionado')).toBeDefined();
 
     const confirmButton = screen.getByText('Confirmar Seleção');
     fireEvent.click(confirmButton);

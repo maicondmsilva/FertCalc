@@ -203,7 +203,7 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
     }
 
     return (
-      <div className="mt-4 overflow-hidden rounded-xl border border-stone-200 bg-white divide-y divide-stone-100">
+      <div className="mt-4 space-y-3">
         {filtered.map((p) =>
           (() => {
             const isProtected =
@@ -230,10 +230,15 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
                   });
                   setDraggedId(null);
                 }}
-                className={`p-3 transition-colors ${
-                  p.selected ? 'bg-blue-50' : 'bg-white hover:bg-stone-50'
+                className={`relative overflow-hidden rounded-xl border p-3 shadow-sm transition-all ${
+                  p.selected
+                    ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200 shadow-blue-100'
+                    : 'border-stone-200 bg-white hover:border-stone-300 hover:bg-stone-50'
                 }`}
               >
+                {p.selected && (
+                  <div className="absolute inset-y-0 left-0 w-1 bg-blue-600" aria-hidden="true" />
+                )}
                 {/* Header / Selection Toggle */}
                 <div
                   className={`grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 sm:grid-cols-[auto_minmax(180px,1fr)_minmax(220px,1.2fr)] ${isUnavailable ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'}`}
@@ -279,10 +284,17 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
                     </div>
                   </div>
                   <div className="min-w-0">
-                    <div
-                      className={`text-sm font-medium ${p.selected ? 'text-blue-800' : 'text-stone-700'}`}
-                    >
-                      {p.name}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={`text-sm font-medium ${p.selected ? 'text-blue-800' : 'text-stone-700'}`}
+                      >
+                        {p.name}
+                      </span>
+                      {p.selected && (
+                        <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-white">
+                          Selecionado
+                        </span>
+                      )}
                     </div>
                     {isProtected && (
                       <div className="text-[10px] font-bold text-amber-700">
