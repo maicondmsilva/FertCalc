@@ -181,9 +181,11 @@ describe('CalculatorSettingsModal', () => {
     fireEvent.click(screen.getByText('Micronutrientes'));
     fireEvent.click(screen.getByText('Boro 5%'));
     fireEvent.change(screen.getByLabelText('Informar por'), { target: { value: 'percent' } });
-    fireEvent.change(screen.getByLabelText(/^Garantia final desejada/), {
-      target: { value: '0.25' },
+    const desiredGuaranteeInput = screen.getByLabelText(/^Garantia final desejada/);
+    fireEvent.change(desiredGuaranteeInput, {
+      target: { value: '0,25' },
     });
+    expect(desiredGuaranteeInput).toHaveValue('0,25');
     fireEvent.click(screen.getByText('Confirmar Seleção'));
 
     expect(handleConfirm.mock.calls[0][0].micros[0]).toMatchObject({
