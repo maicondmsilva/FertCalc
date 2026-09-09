@@ -603,301 +603,377 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {visiblePricings.map((p) => (
-            <div
-              key={p.id}
-              id={`pricing-card-${p.id}`}
-              className={`bg-white rounded-xl shadow-sm border ${
-                p.status === 'Excluída'
-                  ? 'border-red-100 opacity-75'
-                  : p.approvalStatus === 'Reprovada'
-                    ? 'border-red-500 bg-red-50/20'
-                    : 'border-stone-200 hover:shadow-md'
-              } transition-shadow cursor-pointer relative`}
-              onClick={() => setSelectedPricing(p)}
-            >
-              {p.transferToUserId && (
-                <div className="absolute top-0 right-0 bg-amber-500 text-white text-[10px] font-black px-3 py-1 uppercase tracking-tighter rounded-bl-lg shadow-sm z-10 animate-pulse">
-                  {p.transferToUserId === currentUser.id
-                    ? 'PENDENTE ACEITE'
-                    : 'TRANSFERÊNCIA ENVIADA'}
-                </div>
-              )}
-              {p.deletionRequest?.status === 'Pendente' && (
-                <div className="absolute top-0 left-0 right-0 bg-amber-500 text-white text-[10px] font-bold py-1 px-3 flex items-center justify-center gap-2 z-10 transition-colors">
-                  <AlertTriangle className="w-3 h-3" /> Exclusão Pendente de Aprovação
-                </div>
-              )}
-              {p.approvalStatus === 'Reprovada' && (
-                <div className="absolute top-0 left-0 right-0 bg-red-600 text-white text-[10px] font-bold py-1 px-3 flex items-center justify-center gap-2 z-10 animate-pulse">
-                  <XCircle className="w-3 h-3" /> REPROVADA - REVISE OS DADOS
-                </div>
-              )}
-              <div className="p-5 border-b border-stone-100">
-                <div className="flex justify-between items-start mb-2">
-                  <div className="flex-1">
-                    <h3 className="font-bold text-lg text-stone-800 flex items-center flex-wrap gap-1">
-                      <User className="w-4 h-4 text-stone-400" />
-                      <span className="text-emerald-600 font-mono text-sm mr-1">
-                        #{p.factors?.client?.code || '---'}
-                      </span>
-                      {p.factors?.client?.name || 'Cliente não identificado'}
-                    </h3>
-                    <div className="mt-1 space-y-0.5">
-                      <p className="text-[10px] font-bold text-stone-400 uppercase">
-                        IE: {p.factors?.client?.stateRegistration || '---'}
-                      </p>
-                      <p className="text-[10px] font-bold text-emerald-600 uppercase">
-                        Precificação: {p.formattedCod}
-                      </p>
-                    </div>
+          <div
+            key={p.id}
+            id={`pricing-card-${p.id}`}
+            className={`bg-white rounded-xl shadow-sm border ${
+              p.status === 'Excluída'
+                ? 'border-red-100 opacity-75'
+                : p.approvalStatus === 'Reprovada'
+                  ? 'border-red-500 bg-red-50/20'
+                  : 'border-stone-200 hover:shadow-md'
+            } transition-shadow cursor-pointer relative`}
+            onClick={() => setSelectedPricing(p)}
+          >
+            {p.transferToUserId && (
+              <div className="absolute top-0 right-0 bg-amber-500 text-white text-[10px] font-black px-3 py-1 uppercase tracking-tighter rounded-bl-lg shadow-sm z-10 animate-pulse">
+                {p.transferToUserId === currentUser.id
+                  ? 'PENDENTE ACEITE'
+                  : 'TRANSFERÊNCIA ENVIADA'}
+              </div>
+            )}
+            {p.deletionRequest?.status === 'Pendente' && (
+              <div className="absolute top-0 left-0 right-0 bg-amber-500 text-white text-[10px] font-bold py-1 px-3 flex items-center justify-center gap-2 z-10 transition-colors">
+                <AlertTriangle className="w-3 h-3" /> Exclusão Pendente de Aprovação
+              </div>
+            )}
+            {p.approvalStatus === 'Reprovada' && (
+              <div className="absolute top-0 left-0 right-0 bg-red-600 text-white text-[10px] font-bold py-1 px-3 flex items-center justify-center gap-2 z-10 animate-pulse">
+                <XCircle className="w-3 h-3" /> REPROVADA - REVISE OS DADOS
+              </div>
+            )}
+            <div className="p-5 border-b border-stone-100">
+              <div className="flex justify-between items-start mb-2">
+                <div className="flex-1">
+                  <h3 className="font-bold text-lg text-stone-800 flex items-center flex-wrap gap-1">
+                    <User className="w-4 h-4 text-stone-400" />
+                    <span className="text-emerald-600 font-mono text-sm mr-1">
+                      #{p.factors?.client?.code || '---'}
+                    </span>
+                    {p.factors?.client?.name || 'Cliente não identificado'}
+                  </h3>
+                  <div className="mt-1 space-y-0.5">
+                    <p className="text-[10px] font-bold text-stone-400 uppercase">
+                      IE: {p.factors?.client?.stateRegistration || '---'}
+                    </p>
+                    <p className="text-[10px] font-bold text-emerald-600 uppercase">
+                      Precificação: {p.formattedCod}
+                    </p>
                   </div>
-                  <span
-                    className={`px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(p.status)}`}
-                  >
-                    {p.status}
-                  </span>
                 </div>
-                <div className="space-y-2 text-sm text-stone-600 mt-4">
-                  <div className="flex items-center">
-                    <User className="w-4 h-4 mr-2 text-stone-400" />
-                    Vendedor: <span className="ml-1 font-medium">{p.userName || '—'}</span>
-                  </div>
+                <span
+                  className={`px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(p.status)}`}
+                >
+                  {p.status}
+                </span>
+              </div>
+              <div className="space-y-2 text-sm text-stone-600 mt-4">
+                <div className="flex items-center">
+                  <User className="w-4 h-4 mr-2 text-stone-400" />
+                  Vendedor: <span className="ml-1 font-medium">{p.userName || '—'}</span>
+                </div>
+                {(() => {
+                  const cCity =
+                    p.factors?.client?.deliveryAddress?.city || p.factors?.client?.address?.city;
+                  const cState =
+                    p.factors?.client?.deliveryAddress?.state || p.factors?.client?.address?.state;
+                  if (cCity && cState) {
+                    return (
+                      <div className="flex items-center">
+                        <MapPin className="w-4 h-4 mr-2 text-emerald-500" />
+                        Entrega:{' '}
+                        <span className="ml-1 font-medium">
+                          {cCity}/{cState}
+                        </span>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+                <div className="flex items-center">
+                  <Calendar className="w-4 h-4 mr-2 text-stone-400" />
+                  Emissão: {formatDatePtBr(p.date)}
+                </div>
+                <div className="flex items-center">
+                  <Calendar className="w-4 h-4 mr-2 text-emerald-500" />
+                  Vencimento:{' '}
+                  <span className="ml-1 font-medium">{formatDatePtBr(getPricingDueDate(p))}</span>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Truck className="w-4 h-4 text-stone-400" />
                   {(() => {
-                    const cCity = p.factors?.client?.deliveryAddress?.city || p.factors?.client?.address?.city;
-                    const cState = p.factors?.client?.deliveryAddress?.state || p.factors?.client?.address?.state;
-                    if (cCity && cState) {
+                    const tipoFrete = getPricingFreightType(p);
+                    if (tipoFrete === 'FOB') {
                       return (
-                        <div className="flex items-center">
-                          <MapPin className="w-4 h-4 mr-2 text-emerald-500" />
-                          Entrega: <span className="ml-1 font-medium">{cCity}/{cState}</span>
-                        </div>
-                      );
-                    }
-                    return null;
-                  })()}
-                  <div className="flex items-center">
-                    <Calendar className="w-4 h-4 mr-2 text-stone-400" />
-                    Emissão: {formatDatePtBr(p.date)}
-                  </div>
-                  <div className="flex items-center">
-                    <Calendar className="w-4 h-4 mr-2 text-emerald-500" />
-                    Vencimento:{' '}
-                    <span className="ml-1 font-medium">{formatDatePtBr(getPricingDueDate(p))}</span>
-                  </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Truck className="w-4 h-4 text-stone-400" />
-                    {(() => {
-                      const tipoFrete = getPricingFreightType(p);
-                      if (tipoFrete === 'FOB') {
-                        return (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-green-100 text-green-700">
-                            FOB
-                          </span>
-                        );
-                      }
-                      const freightVal = getPricingFreightValue(p);
-                      return (
-                        <span className="flex items-center gap-1 flex-wrap">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-700">
-                            CIF
-                          </span>
-                          <span className="text-sm font-medium text-stone-700">
-                            R$ {freightVal.toFixed(2)}/t
-                          </span>
-                          {p.factors?.cotacaoFreteNumero && (
-                            <span className="text-xs text-stone-400">
-                              · {p.factors.cotacaoFreteNumero}
-                            </span>
-                          )}
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-green-100 text-green-700">
+                          FOB
                         </span>
                       );
-                    })()}
-                  </div>
-                  {p.factors?.embalagem_nome && (
-                    <div className="flex items-center">
-                      <span className="mr-2 text-stone-400">📦</span>
-                      Embalagem:{' '}
-                      <span className="ml-1 font-medium">
-                        {p.factors.embalagem_nome}
-                        {p.factors.embalagem_valor != null && p.factors.embalagem_valor !== 0 && (
-                          <span
-                            className={`ml-1 text-xs font-bold ${(p.factors.embalagem_valor || 0) > 0 ? 'text-orange-600' : 'text-blue-600'}`}
-                          >
-                            {(p.factors.embalagem_valor || 0) > 0
-                              ? `+R$ ${(p.factors.embalagem_valor || 0).toFixed(2)}/t`
-                              : `-R$ ${Math.abs(p.factors.embalagem_valor || 0).toFixed(2)}/t`}
+                    }
+                    const freightVal = getPricingFreightValue(p);
+                    return (
+                      <span className="flex items-center gap-1 flex-wrap">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-700">
+                          CIF
+                        </span>
+                        <span className="text-sm font-medium text-stone-700">
+                          R$ {freightVal.toFixed(2)}/t
+                        </span>
+                        {p.factors?.cotacaoFreteNumero && (
+                          <span className="text-xs text-stone-400">
+                            · {p.factors.cotacaoFreteNumero}
                           </span>
                         )}
                       </span>
-                    </div>
-                  )}
-                  {p.factors?.local_carregamento_id && (
-                    <div className="flex items-center gap-1 text-xs text-stone-500">
-                      <MapPin className="w-3 h-3 text-amber-500" />
-                      <span>
-                        {locaisCarregamento.find((l) => l.id === p.factors?.local_carregamento_id)
-                          ?.nome ?? '—'}
-                      </span>
-                    </div>
-                  )}
+                    );
+                  })()}
+                </div>
+                {p.factors?.embalagem_nome && (
                   <div className="flex items-center">
-                    <Tag className="w-4 h-4 mr-2 text-stone-400" />
-                    Aprovação:{' '}
-                    <span
-                      className={`ml-1 font-bold ${
-                        p.approvalStatus === 'Aprovada'
-                          ? 'text-emerald-600'
-                          : p.approvalStatus === 'Reprovada'
-                            ? 'text-red-600'
-                            : 'text-amber-600'
-                      }`}
-                    >
-                      {p.approvalStatus || 'Pendente'}
+                    <span className="mr-2 text-stone-400">📦</span>
+                    Embalagem:{' '}
+                    <span className="ml-1 font-medium">
+                      {p.factors.embalagem_nome}
+                      {p.factors.embalagem_valor != null && p.factors.embalagem_valor !== 0 && (
+                        <span
+                          className={`ml-1 text-xs font-bold ${(p.factors.embalagem_valor || 0) > 0 ? 'text-orange-600' : 'text-blue-600'}`}
+                        >
+                          {(p.factors.embalagem_valor || 0) > 0
+                            ? `+R$ ${(p.factors.embalagem_valor || 0).toFixed(2)}/t`
+                            : `-R$ ${Math.abs(p.factors.embalagem_valor || 0).toFixed(2)}/t`}
+                        </span>
+                      )}
                     </span>
                   </div>
-                  <div className="flex items-center">
-                    <Tag className="w-4 h-4 mr-2 text-stone-400" />
-                    Fórmulas:{' '}
-                    <span className="ml-1 font-bold text-emerald-600">
-                      {p.calculations?.length || 0} precificadas
+                )}
+                {p.factors?.local_carregamento_id && (
+                  <div className="flex items-center gap-1 text-xs text-stone-500">
+                    <MapPin className="w-3 h-3 text-amber-500" />
+                    <span>
+                      {locaisCarregamento.find((l) => l.id === p.factors?.local_carregamento_id)
+                        ?.nome ?? '—'}
                     </span>
                   </div>
-                  <div className="mt-2 space-y-1">
-                    {p.calculations?.map((calc, idx) => {
-                      const calcFactors = calc.factors || p.factors;
-                      const tons = Number(calcFactors?.totalTons) || 0;
-                      const packagingValue = Number(calcFactors?.embalagem_valor) || 0;
-                      const packagingAdjustment = calcFactors?.embalagem_ajuste ||
-                        (packagingValue > 0 ? 'cobrar' : packagingValue < 0 ? 'descontar' : 'nenhum');
-                      const branchName = branches.find((branch) => branch.id === calcFactors?.branchId)?.name;
-                      const locationName = locaisCarregamento.find((location) => location.id === calcFactors?.local_carregamento_id)?.nome;
-                      const priceListName = priceLists.find((list) => list.id === calcFactors?.priceListId)?.name;
-
-                      return (
-                        <div key={idx} className="bg-stone-50 px-3 py-2 rounded-lg text-[10px] border border-stone-200 space-y-2">
-                          <div className="flex justify-between items-center gap-2">
-                            <span className="font-black text-stone-700 truncate">{calc.formula}</span>
-                            <span className="text-emerald-600 font-mono font-bold whitespace-nowrap">
-                              R$ {Number(calc.summary?.finalPrice || 0).toFixed(2)}/t
-                            </span>
-                          </div>
-                          <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-stone-500">
-                            <span><strong className="text-stone-600">Quantidade:</strong> {tons.toFixed(2)} t</span>
-                            <span><strong className="text-stone-600">Filial:</strong> {branchName || calcFactors?.branchId || '—'}</span>
-                            <span><strong className="text-stone-600">Local:</strong> {locationName || calcFactors?.local_carregamento_id || '—'}</span>
-                            <span><strong className="text-stone-600">Lista:</strong> {priceListName || calcFactors?.priceListId || '—'}</span>
-                            <span><strong className="text-stone-600">Agente:</strong> {p.factors?.agent?.name || 'Sem agente'}</span>
-                            <span><strong className="text-stone-600">Comissão:</strong> {Number(calcFactors?.commission || 0).toFixed(2)}%</span>
-                            <span><strong className="text-stone-600">Embalagem:</strong> {calcFactors?.embalagem_nome || 'Sem embalagem'}</span>
-                            <span><strong className="text-stone-600">Ajuste embalagem:</strong> {packagingAdjustment === 'nenhum' ? 'Nenhum' : `${packagingAdjustment === 'cobrar' ? 'Cobrar' : 'Descontar'} R$ ${Math.abs(packagingValue).toFixed(2)}/t`}</span>
-                            <span><strong className="text-stone-600">Fator:</strong> {Number(calcFactors?.factor || 0).toFixed(4)}</span>
-                            <span><strong className="text-stone-600">Margem:</strong> R$ {Number(calcFactors?.margin || 0).toFixed(2)}/t</span>
-                            <span><strong className="text-stone-600">Desconto:</strong> R$ {Number(calcFactors?.discount || 0).toFixed(2)}/t</span>
-                            <span><strong className="text-stone-600">Alíquota:</strong> {Number(calcFactors?.taxRate || 0).toFixed(2)}%</span>
-                            <span><strong className="text-stone-600">Juros:</strong> {Number(calcFactors?.monthlyInterestRate || 0).toFixed(3)}% a.m.</span>
-                            <span><strong className="text-stone-600">Pagamento:</strong> {calcFactors?.paymentCondition === 'ddf' ? `${calcFactors.ddfDias || 0} DDF` : 'Vencimento'}</span>
-                            <span><strong className="text-stone-600">Frete:</strong> {calcFactors?.tipoFrete || 'CIF'} · R$ {Number(calcFactors?.freight || 0).toFixed(2)}/t</span>
-                            <span><strong className="text-stone-600">Vencimento:</strong> {formatDatePtBr(calcFactors?.dueDate)}</span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {p.factors?.commercialObservation && (
-                    <div className="flex items-start mt-2 p-2 bg-stone-50 rounded border border-stone-100 italic text-stone-500 text-[10px] line-clamp-2">
-                      <Info className="w-3 h-3 mr-1 mt-0.5 flex-shrink-0" />
-                      {p.factors.commercialObservation}
-                    </div>
-                  )}
-                  {p.approvalStatus === 'Reprovada' && p.rejectionObservation && (
-                    <div className="mt-3 p-3 bg-red-100/50 border border-red-200 rounded-lg animate-in slide-in-from-top-1">
-                      <p className="text-[10px] font-bold text-red-700 uppercase mb-1 flex items-center gap-1">
-                        <XCircle className="w-3 h-3" /> Motivo da Reprovação:
-                      </p>
-                      <p className="text-sm text-red-900 font-medium">"{p.rejectionObservation}"</p>
-                      <p className="text-[9px] text-red-500 mt-2 italic font-bold">
-                        Clique em editar para corrigir e reenviar.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="bg-stone-50 p-5 flex justify-between items-center">
-                <div>
-                  <p className="text-xs text-stone-500 font-medium uppercase tracking-wider mb-1">
-                    Venda Total ({getPricingTotalTons(p).toFixed(1)} tons)
-                  </p>
-                  <p className="text-xl font-bold text-emerald-600">
-                    R${' '}
-                    {getPricingTotalSaleValue(p).toLocaleString('pt-BR', {
-                      minimumFractionDigits: 2,
-                    })}
-                  </p>
-                  <p className="text-[10px] text-stone-400">
-                    Tonnage: {getPricingTotalTons(p).toFixed(1)} t | R${' '}
-                    {getPricingTotalTons(p) > 0
-                      ? (getPricingTotalSaleValue(p) / getPricingTotalTons(p)).toFixed(2)
-                      : '0.00'}{' '}
-                    / ton
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {p.status !== 'Excluída' &&
-                    p.status === 'Em Andamento' &&
-                    (currentUser.permissions as any)?.history_editPricing !== false && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (onEdit) onEdit(p);
-                        }}
-                        className="p-2.5 hover:bg-blue-100 text-blue-600 rounded-full transition-all active:scale-95 bg-blue-50/50"
-                        title="Editar"
-                      >
-                        <Edit3 className="w-5 h-5" />
-                      </button>
-                    )}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDuplicate(p);
-                    }}
-                    className="p-2.5 hover:bg-emerald-100 text-emerald-600 rounded-full transition-all active:scale-95 bg-emerald-50/50"
-                    title="Duplicar"
+                )}
+                <div className="flex items-center">
+                  <Tag className="w-4 h-4 mr-2 text-stone-400" />
+                  Aprovação:{' '}
+                  <span
+                    className={`ml-1 font-bold ${
+                      p.approvalStatus === 'Aprovada'
+                        ? 'text-emerald-600'
+                        : p.approvalStatus === 'Reprovada'
+                          ? 'text-red-600'
+                          : 'text-amber-600'
+                    }`}
                   >
-                    <Copy className="w-5 h-5" />
-                  </button>
-                  {p.status !== 'Excluída' && (
+                    {p.approvalStatus || 'Pendente'}
+                  </span>
+                </div>
+                <div className="flex items-center">
+                  <Tag className="w-4 h-4 mr-2 text-stone-400" />
+                  Fórmulas:{' '}
+                  <span className="ml-1 font-bold text-emerald-600">
+                    {p.calculations?.length || 0} precificadas
+                  </span>
+                </div>
+                <div className="mt-2 space-y-1">
+                  {p.calculations?.map((calc, idx) => {
+                    const calcFactors = calc.factors || p.factors;
+                    const tons = Number(calcFactors?.totalTons) || 0;
+                    const packagingValue = Number(calcFactors?.embalagem_valor) || 0;
+                    const packagingAdjustment =
+                      calcFactors?.embalagem_ajuste ||
+                      (packagingValue > 0 ? 'cobrar' : packagingValue < 0 ? 'descontar' : 'nenhum');
+                    const branchName = branches.find(
+                      (branch) => branch.id === calcFactors?.branchId
+                    )?.name;
+                    const locationName = locaisCarregamento.find(
+                      (location) => location.id === calcFactors?.local_carregamento_id
+                    )?.nome;
+                    const priceListName = priceLists.find(
+                      (list) => list.id === calcFactors?.priceListId
+                    )?.name;
+
+                    return (
+                      <div
+                        key={idx}
+                        className="bg-stone-50 px-3 py-2 rounded-lg text-[10px] border border-stone-200 space-y-2"
+                      >
+                        <div className="flex justify-between items-center gap-2">
+                          <span className="font-black text-stone-700 truncate">{calc.formula}</span>
+                          <span className="text-emerald-600 font-mono font-bold whitespace-nowrap">
+                            R$ {Number(calc.summary?.finalPrice || 0).toFixed(2)}/t
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-stone-500">
+                          <span>
+                            <strong className="text-stone-600">Quantidade:</strong>{' '}
+                            {tons.toFixed(2)} t
+                          </span>
+                          <span>
+                            <strong className="text-stone-600">Filial:</strong>{' '}
+                            {branchName || calcFactors?.branchId || '—'}
+                          </span>
+                          <span>
+                            <strong className="text-stone-600">Local:</strong>{' '}
+                            {locationName || calcFactors?.local_carregamento_id || '—'}
+                          </span>
+                          <span>
+                            <strong className="text-stone-600">Lista:</strong>{' '}
+                            {priceListName || calcFactors?.priceListId || '—'}
+                          </span>
+                          <span>
+                            <strong className="text-stone-600">Agente:</strong>{' '}
+                            {p.factors?.agent?.name || 'Sem agente'}
+                          </span>
+                          <span>
+                            <strong className="text-stone-600">Comissão:</strong>{' '}
+                            {Number(calcFactors?.commission || 0).toFixed(2)}%
+                          </span>
+                          <span>
+                            <strong className="text-stone-600">Embalagem:</strong>{' '}
+                            {calcFactors?.embalagem_nome || 'Sem embalagem'}
+                          </span>
+                          <span>
+                            <strong className="text-stone-600">Ajuste embalagem:</strong>{' '}
+                            {packagingAdjustment === 'nenhum'
+                              ? 'Nenhum'
+                              : `${packagingAdjustment === 'cobrar' ? 'Cobrar' : 'Descontar'} R$ ${Math.abs(packagingValue).toFixed(2)}/t`}
+                          </span>
+                          <span>
+                            <strong className="text-stone-600">Fator:</strong>{' '}
+                            {Number(calcFactors?.factor || 0).toFixed(4)}
+                          </span>
+                          <span>
+                            <strong className="text-stone-600">Margem:</strong> R${' '}
+                            {Number(calcFactors?.margin || 0).toFixed(2)}/t
+                          </span>
+                          <span>
+                            <strong className="text-stone-600">Desconto:</strong> R${' '}
+                            {Number(calcFactors?.discount || 0).toFixed(2)}/t
+                          </span>
+                          <span>
+                            <strong className="text-stone-600">Alíquota:</strong>{' '}
+                            {Number(calcFactors?.taxRate || 0).toFixed(2)}%
+                          </span>
+                          <span>
+                            <strong className="text-stone-600">Juros:</strong>{' '}
+                            {Number(calcFactors?.monthlyInterestRate || 0).toFixed(3)}% a.m.
+                          </span>
+                          <span>
+                            <strong className="text-stone-600">Pagamento:</strong>{' '}
+                            {calcFactors?.paymentCondition === 'ddf'
+                              ? `${calcFactors.ddfDias || 0} DDF`
+                              : 'Vencimento'}
+                          </span>
+                          <span>
+                            <strong className="text-stone-600">Período de juros:</strong>{' '}
+                              {calcFactors?.exemptCurrentMonth
+                                ? 'mês atual isento'
+                                : calcFactors?.interestStartDate
+                                  ? `desde ${formatDatePtBr(calcFactors.interestStartDate)}`
+                                  : 'desde a data atual'}
+                          </span>
+                          <span>
+                            <strong className="text-stone-600">Frete:</strong>{' '}
+                            {calcFactors?.tipoFrete || 'CIF'} · R${' '}
+                            {Number(calcFactors?.freight || 0).toFixed(2)}/t
+                          </span>
+                          <span>
+                            <strong className="text-stone-600">Vencimento:</strong>{' '}
+                            {formatDatePtBr(calcFactors?.dueDate)}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {p.factors?.commercialObservation && (
+                  <div className="flex items-start mt-2 p-2 bg-stone-50 rounded border border-stone-100 italic text-stone-500 text-[10px] line-clamp-2">
+                    <Info className="w-3 h-3 mr-1 mt-0.5 flex-shrink-0" />
+                    {p.factors.commercialObservation}
+                  </div>
+                )}
+                {p.approvalStatus === 'Reprovada' && p.rejectionObservation && (
+                  <div className="mt-3 p-3 bg-red-100/50 border border-red-200 rounded-lg animate-in slide-in-from-top-1">
+                    <p className="text-[10px] font-bold text-red-700 uppercase mb-1 flex items-center gap-1">
+                      <XCircle className="w-3 h-3" /> Motivo da Reprovação:
+                    </p>
+                    <p className="text-sm text-red-900 font-medium">"{p.rejectionObservation}"</p>
+                    <p className="text-[9px] text-red-500 mt-2 italic font-bold">
+                      Clique em editar para corrigir e reenviar.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="bg-stone-50 p-5 flex justify-between items-center">
+              <div>
+                <p className="text-xs text-stone-500 font-medium uppercase tracking-wider mb-1">
+                  Venda Total ({getPricingTotalTons(p).toFixed(1)} tons)
+                </p>
+                <p className="text-xl font-bold text-emerald-600">
+                  R${' '}
+                  {getPricingTotalSaleValue(p).toLocaleString('pt-BR', {
+                    minimumFractionDigits: 2,
+                  })}
+                </p>
+                <p className="text-[10px] text-stone-400">
+                  Tonnage: {getPricingTotalTons(p).toFixed(1)} t | R${' '}
+                  {getPricingTotalTons(p) > 0
+                    ? (getPricingTotalSaleValue(p) / getPricingTotalTons(p)).toFixed(2)
+                    : '0.00'}{' '}
+                  / ton
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {p.status !== 'Excluída' &&
+                  p.status === 'Em Andamento' &&
+                  (currentUser.permissions as any)?.history_editPricing !== false && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        setNovoPedidoPricing(p);
-                        setShowNovoPedido(true);
+                        if (onEdit) onEdit(p);
                       }}
-                      className="p-2.5 hover:bg-emerald-100 text-emerald-600 rounded-full transition-all active:scale-95 bg-emerald-50/50"
-                      title="Novo Pedido de Venda"
+                      className="p-2.5 hover:bg-blue-100 text-blue-600 rounded-full transition-all active:scale-95 bg-blue-50/50"
+                      title="Editar"
                     >
-                      📋
+                      <Edit3 className="w-5 h-5" />
                     </button>
                   )}
-                  {p.status !== 'Excluída' &&
-                    (currentUser.role === 'master' ||
-                      currentUser.role === 'admin' ||
-                      (currentUser.permissions as any)?.history_changeStatus !== false) && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(p.id);
-                        }}
-                        className="p-2.5 hover:bg-red-100 text-red-600 rounded-full transition-all active:scale-95 bg-red-50/50"
-                        title={p.approvalStatus === 'Aprovada' ? 'Solicitar Exclusão' : 'Excluir'}
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
-                    )}
-                  <ChevronRight className="w-6 h-6 text-stone-300 ml-1" />
-                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDuplicate(p);
+                  }}
+                  className="p-2.5 hover:bg-emerald-100 text-emerald-600 rounded-full transition-all active:scale-95 bg-emerald-50/50"
+                  title="Duplicar"
+                >
+                  <Copy className="w-5 h-5" />
+                </button>
+                {p.status !== 'Excluída' && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setNovoPedidoPricing(p);
+                      setShowNovoPedido(true);
+                    }}
+                    className="p-2.5 hover:bg-emerald-100 text-emerald-600 rounded-full transition-all active:scale-95 bg-emerald-50/50"
+                    title="Novo Pedido de Venda"
+                  >
+                    📋
+                  </button>
+                )}
+                {p.status !== 'Excluída' &&
+                  (currentUser.role === 'master' ||
+                    currentUser.role === 'admin' ||
+                    (currentUser.permissions as any)?.history_changeStatus !== false) && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(p.id);
+                      }}
+                      className="p-2.5 hover:bg-red-100 text-red-600 rounded-full transition-all active:scale-95 bg-red-50/50"
+                      title={p.approvalStatus === 'Aprovada' ? 'Solicitar Exclusão' : 'Excluir'}
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  )}
+                <ChevronRight className="w-6 h-6 text-stone-300 ml-1" />
               </div>
             </div>
+          </div>
         ))}
 
         {tabPricings.length === 0 && (

@@ -134,6 +134,22 @@ describe('pricing engine compatibility', () => {
     expect(calculateInterestDays('data-invalida', false, today)).toBe(0);
   });
 
+  it('cobra juros somente a partir da data inicial informada', () => {
+    const today = new Date('2026-01-15T12:00:00');
+
+    expect(
+      calculateInterestDays('2026-06-15T12:00:00', false, today, '2026-03-15T12:00:00')
+    ).toBe(92);
+  });
+
+  it('ignora a data inicial quando o mês atual está isento', () => {
+    const today = new Date('2026-01-15T12:00:00');
+
+    expect(
+      calculateInterestDays('2026-03-01T12:00:00', true, today, '2026-01-01T12:00:00')
+    ).toBe(30);
+  });
+
   it('produz composição finita e zerada quando não há materiais', () => {
     const result = calculateMaterialComposition([], []);
 

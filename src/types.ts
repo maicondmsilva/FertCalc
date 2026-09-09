@@ -375,6 +375,7 @@ export interface ProfitabilityAnalysis {
   profitabilityPercent: number;
   dueDate?: string;
   exemptCurrentMonth?: boolean;
+  interestStartDate?: string;
   daysOfInterest?: number;
   packagingValue?: number;
   packagingDeduction?: number;
@@ -439,6 +440,7 @@ export interface PricingFactors {
   monthlyInterestRate: number;
   dueDate: string;
   exemptCurrentMonth: boolean;
+  interestStartDate?: string;
   paymentCondition?: 'vencimento' | 'ddf';
   dataCarregamento?: string;
   ddfDias?: number;

@@ -12,6 +12,7 @@ export type ReportCommercialFactors = Pick<
   | 'monthlyInterestRate'
   | 'dueDate'
   | 'exemptCurrentMonth'
+  | 'interestStartDate'
   | 'paymentCondition'
   | 'dataCarregamento'
   | 'ddfDias'
@@ -32,6 +33,7 @@ export const DEFAULT_REPORT_COMMERCIAL_FACTORS: ReportCommercialFactors = {
   monthlyInterestRate: 0,
   dueDate: '',
   exemptCurrentMonth: false,
+  interestStartDate: '',
   paymentCondition: 'vencimento',
   dataCarregamento: '',
   ddfDias: 0,
@@ -48,7 +50,12 @@ export function calculateReportPrice(
   today = new Date()
 ): number {
   const basePrice = baseCost * (Number(factors.factor) || 1) - Number(factors.discount || 0);
-  const days = calculateInterestDays(factors.dueDate, factors.exemptCurrentMonth, today);
+  const days = calculateInterestDays(
+    factors.dueDate,
+    factors.exemptCurrentMonth,
+    today,
+    factors.interestStartDate
+  );
   const interest = basePrice * (Number(factors.monthlyInterestRate || 0) / 30 / 100) * days;
   const tax = basePrice * (Number(factors.taxRate || 0) / 100);
   const commission = basePrice * (Number(factors.commission || 0) / 100);

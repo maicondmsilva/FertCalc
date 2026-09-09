@@ -50,12 +50,19 @@ export function calculateMaterialComposition(macros: RawMaterial[], micros: RawM
 export function calculateInterestDays(
   dueDate: string | undefined,
   exemptCurrentMonth: boolean,
-  today: Date
+  today: Date,
+  interestStartDate?: string
 ): number {
   if (!dueDate) return 0;
   const due = new Date(dueDate);
   if (Number.isNaN(due.getTime())) return 0;
-  const start = exemptCurrentMonth ? new Date(today.getFullYear(), today.getMonth() + 1, 0) : today;
+  const configuredStart = !exemptCurrentMonth && interestStartDate
+    ? new Date(interestStartDate)
+    : null;
+  if (configuredStart && Number.isNaN(configuredStart.getTime())) return 0;
+  const start =
+    configuredStart ??
+    (exemptCurrentMonth ? new Date(today.getFullYear(), today.getMonth() + 1, 0) : today);
   return Math.max(0, Math.ceil((due.getTime() - start.getTime()) / 86_400_000));
 }
 
@@ -71,7 +78,8 @@ export function calculatePricingSummary(
   const days = calculateInterestDays(
     factors.dueDate,
     Boolean(factors.exemptCurrentMonth),
-    options.today ?? new Date()
+    options.today ?? new Date(),
+    factors.interestStartDate
   );
   const interestValue = basePrice * (numberOrZero(factors.monthlyInterestRate) / 30 / 100) * days;
   const taxValue = basePrice * (numberOrZero(factors.taxRate) / 100);

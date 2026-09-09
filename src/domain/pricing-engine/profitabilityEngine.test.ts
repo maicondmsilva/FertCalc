@@ -36,13 +36,29 @@ describe('profitability engine', () => {
     expect(result.interestDeduction).toBeCloseTo(1500 * (1 - Math.sqrt(0.98)));
   });
 
+  it('usa a data inicial específica também na rentabilidade', () => {
+    const result = calculateProfitability(
+      {
+        ...input,
+        dueDate: '2026-06-15T12:00:00',
+        interestStartDate: '2026-03-15T12:00:00',
+      },
+      { today: new Date('2026-01-15T12:00:00') }
+    );
+
+    expect(result.daysOfInterest).toBe(92);
+  });
+
   it('cria o registro persistível com autoria e horário controlados', () => {
     const analyzedAt = new Date('2026-03-01T10:00:00Z');
     const analysis = createProfitabilityAnalysis(
       {
         ...input,
-        pricingRecordId: 'pricing-1', calculationIndex: 2, formulaName: '16-07-23',
-        analyzedByUserId: 'user-1', analyzedByName: 'Analista',
+        pricingRecordId: 'pricing-1',
+        calculationIndex: 2,
+        formulaName: '16-07-23',
+        analyzedByUserId: 'user-1',
+        analyzedByName: 'Analista',
       },
       { today: new Date('2026-01-16T12:00:00'), analyzedAt }
     );
