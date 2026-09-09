@@ -1949,96 +1949,124 @@ export default function Calculator({
             <div className="space-y-6">
               {calculations
                 .filter((c) => c.summary)
-                .map((calc) => (
-                  <div
-                    key={calc.id}
-                    className="p-4 bg-stone-800 rounded-xl border border-stone-700 space-y-4"
-                  >
-                    <div className="flex justify-between items-center border-b border-stone-700 pb-2">
-                      <span className="text-emerald-400 font-bold">{calc.formula}</span>
-                      <span className="text-xs text-stone-500">#{calc.id.slice(-4)}</span>
-                    </div>
+                .map((calc) => {
+                  const unpricedCompositionProducts = [...calc.macros, ...calc.micros].filter(
+                    (material) => material.quantity > 0 && material.isOutsidePriceList
+                  );
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-xs text-stone-500 uppercase font-bold">Preço Final</p>
-                        <p className="text-2xl font-bold text-white">
-                          R$ {calc.summary?.finalPrice.toFixed(2)}
-                        </p>
+                  return (
+                    <div
+                      key={calc.id}
+                      className="p-4 bg-stone-800 rounded-xl border border-stone-700 space-y-4"
+                    >
+                      <div className="flex justify-between items-center border-b border-stone-700 pb-2">
+                        <span className="text-emerald-400 font-bold">{calc.formula}</span>
+                        <span className="text-xs text-stone-500">#{calc.id.slice(-4)}</span>
                       </div>
-                      <div className="text-right">
-                        <p className="text-xs text-stone-500 uppercase font-bold">N-P-K Real</p>
-                        <p className="text-lg font-mono text-emerald-400 font-bold">
-                          {formatNPK(
-                            calc.formula,
-                            calc.summary?.resultingN || 0,
-                            calc.summary?.resultingP || 0,
-                            calc.summary?.resultingK || 0
-                          )}
-                        </p>
-                        {(calc.summary?.resultingCa || 0) > 0 && (
-                          <p className="text-xs font-mono text-amber-400 mt-1">
-                            CA: {calc.summary!.resultingCa.toFixed(2)}%
-                          </p>
-                        )}
-                        {(calc.summary?.resultingS || 0) > 0 && (
-                          <p className="text-xs font-mono text-yellow-500">
-                            S: {calc.summary!.resultingS.toFixed(2)}%
-                          </p>
-                        )}
-                        {Object.keys(calc.summary?.resultingMicros || {}).length > 0 && (
-                          <div className="mt-2 flex flex-wrap justify-end gap-1">
-                            {Object.entries(calc.summary!.resultingMicros).map(([name, value]) => (
-                              <span
-                                key={name}
-                                className="rounded bg-blue-950 px-2 py-1 text-[10px] font-bold text-blue-300"
-                              >
-                                {name}: {Number(value).toFixed(2)}%
-                              </span>
-                            ))}
+
+                      {unpricedCompositionProducts.length > 0 && (
+                        <div
+                          role="alert"
+                          className="rounded-lg border border-amber-600/60 bg-amber-950/50 p-3 text-xs text-amber-100"
+                        >
+                          <div className="mb-1 flex items-center gap-2 font-black uppercase text-amber-300">
+                            <AlertTriangle className="h-4 w-4" /> Composição com produto sem preço
                           </div>
-                        )}
-                      </div>
-                    </div>
+                          <p>
+                            O preço calculado não inclui o custo de:{' '}
+                            <strong>
+                              {unpricedCompositionProducts
+                                .map((material) => material.name)
+                                .join(', ')}
+                            </strong>
+                            . Revise antes de utilizar esta precificação.
+                          </p>
+                        </div>
+                      )}
 
-                    <div className="pt-3 border-t border-stone-700 space-y-2">
-                      <div className="flex justify-between text-xs">
-                        <span className="text-stone-500">Custo Base:</span>
-                        <span className="text-stone-300 font-medium">
-                          R$ {calc.summary?.baseCost.toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-stone-500 font-bold">Venda Total:</span>
-                        <span className="text-emerald-400 font-bold">
-                          R${' '}
-                          {calc.summary?.totalSaleValue.toLocaleString('pt-BR', {
-                            minimumFractionDigits: 2,
-                          })}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Materials List in Summary */}
-                    <div className="pt-3 border-t border-stone-700 mt-3">
-                      <p className="text-xs text-stone-500 uppercase font-bold mb-2">
-                        Composição (kg)
-                      </p>
-                      <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                        {[...calc.macros, ...calc.micros]
-                          .filter((m) => m.quantity > 0)
-                          .map((m) => (
-                            <div key={m.id} className="flex justify-between text-xs">
-                              <span className="text-stone-400 truncate pr-1">{m.name}</span>
-                              <span className="text-emerald-500 font-mono font-medium">
-                                {m.quantity.toFixed(2)}
-                              </span>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-xs text-stone-500 uppercase font-bold">Preço Final</p>
+                          <p className="text-2xl font-bold text-white">
+                            R$ {calc.summary?.finalPrice.toFixed(2)}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-stone-500 uppercase font-bold">N-P-K Real</p>
+                          <p className="text-lg font-mono text-emerald-400 font-bold">
+                            {formatNPK(
+                              calc.formula,
+                              calc.summary?.resultingN || 0,
+                              calc.summary?.resultingP || 0,
+                              calc.summary?.resultingK || 0
+                            )}
+                          </p>
+                          {(calc.summary?.resultingCa || 0) > 0 && (
+                            <p className="text-xs font-mono text-amber-400 mt-1">
+                              CA: {calc.summary!.resultingCa.toFixed(2)}%
+                            </p>
+                          )}
+                          {(calc.summary?.resultingS || 0) > 0 && (
+                            <p className="text-xs font-mono text-yellow-500">
+                              S: {calc.summary!.resultingS.toFixed(2)}%
+                            </p>
+                          )}
+                          {Object.keys(calc.summary?.resultingMicros || {}).length > 0 && (
+                            <div className="mt-2 flex flex-wrap justify-end gap-1">
+                              {Object.entries(calc.summary!.resultingMicros).map(
+                                ([name, value]) => (
+                                  <span
+                                    key={name}
+                                    className="rounded bg-blue-950 px-2 py-1 text-[10px] font-bold text-blue-300"
+                                  >
+                                    {name}: {Number(value).toFixed(2)}%
+                                  </span>
+                                )
+                              )}
                             </div>
-                          ))}
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="pt-3 border-t border-stone-700 space-y-2">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-stone-500">Custo Base:</span>
+                          <span className="text-stone-300 font-medium">
+                            R$ {calc.summary?.baseCost.toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-stone-500 font-bold">Venda Total:</span>
+                          <span className="text-emerald-400 font-bold">
+                            R${' '}
+                            {calc.summary?.totalSaleValue.toLocaleString('pt-BR', {
+                              minimumFractionDigits: 2,
+                            })}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Materials List in Summary */}
+                      <div className="pt-3 border-t border-stone-700 mt-3">
+                        <p className="text-xs text-stone-500 uppercase font-bold mb-2">
+                          Composição (kg)
+                        </p>
+                        <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                          {[...calc.macros, ...calc.micros]
+                            .filter((m) => m.quantity > 0)
+                            .map((m) => (
+                              <div key={m.id} className="flex justify-between text-xs">
+                                <span className="text-stone-400 truncate pr-1">{m.name}</span>
+                                <span className="text-emerald-500 font-mono font-medium">
+                                  {m.quantity.toFixed(2)}
+                                </span>
+                              </div>
+                            ))}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
 
               {calculations.filter((c) => c.summary).length === 0 && (
                 <div className="py-8 text-center text-stone-500 italic text-sm">

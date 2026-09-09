@@ -74,10 +74,7 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
     if (!localFormula) return;
     if (
       protectedMaterialIds.includes(productId) ||
-      (type === 'micro' && protectedMaterialIds.length > 0) ||
-      (type === 'macro' ? globalMacros : globalMicros).some(
-        (product) => product.id === productId && product.isOutsidePriceList
-      )
+      (type === 'micro' && protectedMaterialIds.length > 0)
     ) {
       return;
     }
@@ -213,7 +210,7 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
               protectedMaterialIds.includes(p.id) ||
               (type === 'micro' && protectedMaterialIds.length > 0);
             const isOutsidePriceList = !!p.isOutsidePriceList;
-            const isUnavailable = isProtected || isOutsidePriceList;
+            const isUnavailable = isProtected;
             return (
               <div
                 key={p.id}
@@ -293,8 +290,8 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
                       </div>
                     )}
                     {isOutsidePriceList && (
-                      <div className="text-[10px] font-bold text-blue-700">
-                        Produto extra · sem preço na lista atual
+                      <div className="text-[10px] font-bold text-amber-700">
+                        Produto extra · sem preço na lista atual (seleção permitida)
                       </div>
                     )}
                   </div>

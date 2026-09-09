@@ -126,7 +126,7 @@ describe('CalculatorSettingsModal', () => {
     });
   });
 
-  it('shows an extra product outside the price list but prevents selecting it without a price', () => {
+  it('shows and allows selecting an extra product outside the price list', () => {
     const handleConfirm = vi.fn();
     const extraMacro = {
       ...mockGlobalMacros[0],
@@ -149,8 +149,12 @@ describe('CalculatorSettingsModal', () => {
     fireEvent.click(screen.getByText('Produto especial'));
     fireEvent.click(screen.getByText('Confirmar Seleção'));
 
-    expect(screen.getByText('Produto extra · sem preço na lista atual')).toBeDefined();
-    expect(handleConfirm.mock.calls[0][0].macros).toHaveLength(0);
+    expect(
+      screen.getByText('Produto extra · sem preço na lista atual (seleção permitida)')
+    ).toBeDefined();
+    expect(handleConfirm.mock.calls[0][0].macros).toEqual([
+      expect.objectContaining({ id: 'extra-1', selected: true, isOutsidePriceList: true }),
+    ]);
   });
 
   it('converts a desired micro guarantee into a fixed quantity in kg', () => {
