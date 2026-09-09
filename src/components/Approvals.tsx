@@ -27,6 +27,7 @@ import { processPricingApproval as persistPricingApproval } from '../services/ap
 import { useToast } from './Toast';
 import { useConfirm } from '../hooks/useConfirm';
 import { ConfirmDialog } from './ui/ConfirmDialog';
+import { closeModalOnBackdrop } from '../utils/modalUtils';
 import { formatDatePtBr, getPricingDueDate } from '../utils/pricingDisplay';
 
 interface ApprovalsProps {
@@ -580,7 +581,10 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
 
       {/* Modal de Reprovação de Precificação */}
       {showRejectionModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4"
+          onMouseDown={(event) => closeModalOnBackdrop(event, () => setShowRejectionModal(false))}
+        >
           <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
             <div className="p-6 border-b border-stone-100 flex justify-between items-center">
               <h3 className="text-lg font-black text-red-700 flex items-center gap-2">
@@ -633,7 +637,12 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
 
       {/* Modal de Reprovação de Exclusão */}
       {showDeletionRejectionModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4"
+          onMouseDown={(event) =>
+            closeModalOnBackdrop(event, () => setShowDeletionRejectionModal(false))
+          }
+        >
           <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
             <div className="p-6 border-b border-stone-100 flex justify-between items-center">
               <h3 className="text-lg font-black text-stone-800 flex items-center gap-2">

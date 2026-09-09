@@ -47,6 +47,7 @@ import {
 import { useToast } from '../Toast';
 import HistoricoModificacoes from '../HistoricoModificacoes';
 import { subscribeToOrderLoadingChanges } from '../../services/orderLoadingSubscription';
+import { closeModalOnBackdrop } from '../../utils/modalUtils';
 
 // ─────────────────────────────────────────────────────────────
 //  Props
@@ -144,7 +145,10 @@ function canEditDeleteCotacao(
 
 function DetalheModal({ cotacao, onClose }: { cotacao: CotacaoSolicitada; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onMouseDown={(event) => closeModalOnBackdrop(event, onClose)}
+    >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-5 border-b border-stone-100">
           <div>
@@ -513,7 +517,10 @@ function PainelResponsavel({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onMouseDown={(event) => closeModalOnBackdrop(event, onClose, saving)}
+    >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-5 border-b border-stone-100">
           <div>
@@ -807,7 +814,12 @@ function PainelResponsavel({
 
       {/* Modal de Recusa */}
       {showModalRecusa && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
+          onMouseDown={(event) =>
+            closeModalOnBackdrop(event, () => setShowModalRecusa(false), saving)
+          }
+        >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
             <div className="flex items-center gap-2 text-red-600">
               <XCircle className="w-5 h-5" />
@@ -926,7 +938,10 @@ function ModalEditarCotacao({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onMouseDown={(event) => closeModalOnBackdrop(event, onClose, saving)}
+    >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-5 border-b border-stone-100">
           <div>
@@ -2481,7 +2496,19 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
       )}
       {/* Delete cotação confirmation dialog */}
       {excluindoCotacao && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onMouseDown={(event) =>
+            closeModalOnBackdrop(
+              event,
+              () => {
+                setExcluindoCotacao(null);
+                setMotivoExclusaoCotacao('');
+              },
+              excluindoLoading
+            )
+          }
+        >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
             <div className="flex items-center gap-3 p-5 border-b border-stone-100">
               <div className="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">

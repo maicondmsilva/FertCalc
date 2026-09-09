@@ -5,6 +5,7 @@ import { Search, Trash2, Edit3, Eye, CheckCircle, XCircle, ClipboardCheck } from
 import { useExpensePermissions } from '../../hooks/useExpensePermissions';
 import { useConfirm } from '../../hooks/useConfirm';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { closeModalOnBackdrop } from '../../utils/modalUtils';
 
 interface ExpenseListProps {
   expenses: CreditCardExpense[];
@@ -265,7 +266,15 @@ export default function ExpenseList({
 
       {/* Reject modal */}
       {rejectingId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onMouseDown={(event) =>
+            closeModalOnBackdrop(event, () => {
+              setRejectingId(null);
+              setRejectObservation('');
+            })
+          }
+        >
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
             <h3 className="text-lg font-bold text-stone-800 mb-4">Rejeitar Gasto</h3>
             <textarea
