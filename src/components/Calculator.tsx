@@ -1297,7 +1297,7 @@ export default function Calculator({
                               />
                             </div>
                             {/* CIF / FOB toggle */}
-                            <div className="order-1 col-span-2 rounded-lg border border-stone-200 bg-stone-50/70 p-3 lg:col-span-5">
+                            <div className="order-1 col-span-2 rounded-lg border border-stone-200 bg-stone-50/70 p-3 lg:col-span-5 lg:col-start-6">
                               <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">
                                 Tipo de Frete
                               </label>
@@ -1503,7 +1503,7 @@ export default function Calculator({
                               })()}
                             </div>
 
-                            <div className="order-3 col-span-2 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3 lg:col-span-10">
+                            <div className="order-3 col-span-2 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3 lg:col-span-5 lg:col-start-6">
                               <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">
                                 Qtd Total (Tons)
                               </label>
@@ -1522,7 +1522,7 @@ export default function Calculator({
                               />
                             </div>
                             {/* Payment Condition & Due Date */}
-                            <div className="order-1 col-span-2 row-span-2 rounded-lg border border-stone-200 bg-white p-3 lg:col-span-5">
+                            <div className="order-1 col-span-2 row-span-2 rounded-lg border border-stone-200 bg-white p-3 lg:col-span-5 lg:col-start-1">
                               <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">
                                 Condição de Pagamento
                               </label>
