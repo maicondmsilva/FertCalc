@@ -29,6 +29,7 @@ export interface UnifiedProduct {
   brandId?: string;
   formulaSuffix?: string;
   isPremiumLine?: boolean;
+  availableInCalculatorWithoutPriceList?: boolean;
   description?: string;
   price?: number;
 }
@@ -72,6 +73,8 @@ export interface RawMaterial {
   selectedMicroGuarantee?: string;
   desiredGuaranteePercent?: number;
   materialOrder?: number;
+  availableInCalculatorWithoutPriceList?: boolean;
+  isOutsidePriceList?: boolean;
 }
 
 export interface CompatibilityCategory {
@@ -127,6 +130,7 @@ export interface User {
     calculator_saveFormula?: boolean;
     calculator_fertigranP?: boolean;
     calculator_profitabilityCheck?: boolean;
+    calculator_extraProducts?: boolean;
     // Sub-permissões de Histórico
     history_changeStatus?: boolean;
     history_editPricing?: boolean;
@@ -335,6 +339,7 @@ export interface MacroMaterial {
   formulaSuffix?: string;
   isPremiumLine?: boolean;
   minQuantity?: number;
+  availableInCalculatorWithoutPriceList?: boolean;
 }
 
 export interface MicroMaterial {
@@ -347,6 +352,7 @@ export interface MicroMaterial {
   formulaSuffix?: string;
   minQuantity?: number;
   isPremiumLine?: boolean;
+  availableInCalculatorWithoutPriceList?: boolean;
 }
 
 export interface ProfitabilityAnalysis {

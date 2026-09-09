@@ -63,7 +63,10 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
     if (!localFormula) return;
     if (
       protectedMaterialIds.includes(productId) ||
-      (type === 'micro' && protectedMaterialIds.length > 0)
+      (type === 'micro' && protectedMaterialIds.length > 0) ||
+      (type === 'macro' ? globalMacros : globalMicros).some(
+        (product) => product.id === productId && product.isOutsidePriceList
+      )
     ) {
       return;
     }
@@ -198,10 +201,12 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
             const isProtected =
               protectedMaterialIds.includes(p.id) ||
               (type === 'micro' && protectedMaterialIds.length > 0);
+            const isOutsidePriceList = !!p.isOutsidePriceList;
+            const isUnavailable = isProtected || isOutsidePriceList;
             return (
               <div
                 key={p.id}
-                draggable={!search && !isProtected}
+                draggable={!search && !isUnavailable}
                 onDragStart={() => setDraggedId(p.id)}
                 onDragOver={(event) => event.preventDefault()}
                 onDrop={() => {
@@ -223,7 +228,7 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
               >
                 {/* Header / Selection Toggle */}
                 <div
-                  className={`grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 sm:grid-cols-[auto_minmax(180px,1fr)_minmax(220px,1.2fr)] ${isProtected ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'}`}
+                  className={`grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 sm:grid-cols-[auto_minmax(180px,1fr)_minmax(220px,1.2fr)] ${isUnavailable ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'}`}
                   onClick={() => handleSelectProduct(p.id, type)}
                 >
                   <div className="mt-1 flex items-center gap-2">
@@ -232,7 +237,7 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
                       type="checkbox"
                       checked={!!p.selected}
                       readOnly
-                      disabled={isProtected}
+                      disabled={isUnavailable}
                       className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 disabled:cursor-not-allowed"
                     />
                     <div className="flex flex-col sm:hidden">
@@ -243,7 +248,7 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
                           event.stopPropagation();
                           moveProduct(type, p.id, -1);
                         }}
-                        disabled={isProtected || productOrder[type].indexOf(p.id) === 0}
+                        disabled={isUnavailable || productOrder[type].indexOf(p.id) === 0}
                         className="text-stone-400 disabled:opacity-20"
                       >
                         <ChevronUp className="h-4 w-4" />
@@ -256,7 +261,7 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
                           moveProduct(type, p.id, 1);
                         }}
                         disabled={
-                          isProtected ||
+                          isUnavailable ||
                           productOrder[type].indexOf(p.id) === productOrder[type].length - 1
                         }
                         className="text-stone-400 disabled:opacity-20"
@@ -274,6 +279,11 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
                     {isProtected && (
                       <div className="text-[10px] font-bold text-amber-700">
                         Protegido para preservar a descrição da formulação
+                      </div>
+                    )}
+                    {isOutsidePriceList && (
+                      <div className="text-[10px] font-bold text-blue-700">
+                        Produto extra · sem preço na lista atual
                       </div>
                     )}
                   </div>

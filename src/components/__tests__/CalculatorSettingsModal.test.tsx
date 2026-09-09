@@ -126,6 +126,33 @@ describe('CalculatorSettingsModal', () => {
     });
   });
 
+  it('shows an extra product outside the price list but prevents selecting it without a price', () => {
+    const handleConfirm = vi.fn();
+    const extraMacro = {
+      ...mockGlobalMacros[0],
+      id: 'extra-1',
+      name: 'Produto especial',
+      isOutsidePriceList: true,
+    };
+
+    render(
+      <CalculatorSettingsModal
+        isOpen={true}
+        onClose={vi.fn()}
+        formula={mockFormula}
+        globalMacros={[...mockGlobalMacros, extraMacro]}
+        globalMicros={[]}
+        onConfirm={handleConfirm}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Produto especial'));
+    fireEvent.click(screen.getByText('Confirmar Seleção'));
+
+    expect(screen.getByText('Produto extra · sem preço na lista atual')).toBeDefined();
+    expect(handleConfirm.mock.calls[0][0].macros).toHaveLength(0);
+  });
+
   it('converts a desired micro guarantee into a fixed quantity in kg', () => {
     const handleConfirm = vi.fn();
     const micro: any = {

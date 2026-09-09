@@ -453,6 +453,8 @@ function macroToDb(m: Partial<MacroMaterial>) {
   if (m.formulaSuffix !== undefined) d.formula_suffix = m.formulaSuffix;
   if (m.isPremiumLine !== undefined) d.is_premium_line = m.isPremiumLine;
   if (m.minQuantity !== undefined) d.min_quantity = m.minQuantity;
+  if (m.availableInCalculatorWithoutPriceList !== undefined)
+    d.available_in_calculator_without_price_list = m.availableInCalculatorWithoutPriceList;
   return d;
 }
 
@@ -473,6 +475,7 @@ function mapMacro(data: Record<string, unknown>): MacroMaterial {
     formulaSuffix: data.formula_suffix,
     isPremiumLine: data.is_premium_line || false,
     minQuantity: data.min_quantity ? Number(data.min_quantity) : 0,
+    availableInCalculatorWithoutPriceList: data.available_in_calculator_without_price_list || false,
   } as MacroMaterial;
 }
 
@@ -560,6 +563,8 @@ function microToDb(m: Partial<MicroMaterial>) {
   if (m.formulaSuffix !== undefined) d.formula_suffix = m.formulaSuffix;
   if (m.minQuantity !== undefined) d.min_quantity = m.minQuantity;
   if (m.isPremiumLine !== undefined) d.is_premium_line = m.isPremiumLine;
+  if (m.availableInCalculatorWithoutPriceList !== undefined)
+    d.available_in_calculator_without_price_list = m.availableInCalculatorWithoutPriceList;
   return d;
 }
 
@@ -574,6 +579,7 @@ function mapMicro(data: Record<string, unknown>): MicroMaterial {
     formulaSuffix: data.formula_suffix,
     minQuantity: data.min_quantity ? Number(data.min_quantity) : 0,
     isPremiumLine: data.is_premium_line || false,
+    availableInCalculatorWithoutPriceList: data.available_in_calculator_without_price_list || false,
   } as MicroMaterial;
 }
 
@@ -668,6 +674,7 @@ export async function getUnifiedProducts(): Promise<UnifiedProduct[]> {
       brandId: m.brandId,
       formulaSuffix: m.formulaSuffix,
       isPremiumLine: m.isPremiumLine,
+      availableInCalculatorWithoutPriceList: m.availableInCalculatorWithoutPriceList,
     })),
     ...micros.map((m) => ({
       id: m.id,
@@ -679,6 +686,7 @@ export async function getUnifiedProducts(): Promise<UnifiedProduct[]> {
       microGuarantees: m.microGuarantees,
       formulaSuffix: m.formulaSuffix,
       isPremiumLine: m.isPremiumLine,
+      availableInCalculatorWithoutPriceList: m.availableInCalculatorWithoutPriceList,
     })),
     ...finished.map((f) => ({
       id: f.id,
@@ -710,6 +718,7 @@ export async function saveUnifiedProduct(p: Partial<UnifiedProduct>, id?: string
       brandId: p.brandId,
       formulaSuffix: p.formulaSuffix,
       isPremiumLine: p.isPremiumLine,
+      availableInCalculatorWithoutPriceList: p.availableInCalculatorWithoutPriceList,
     };
     if (id) await updateMacroMaterial(id, macroData);
     else await createMacroMaterial(macroData as any);
@@ -722,6 +731,7 @@ export async function saveUnifiedProduct(p: Partial<UnifiedProduct>, id?: string
       microGuarantees: p.microGuarantees || [],
       formulaSuffix: p.formulaSuffix,
       isPremiumLine: p.isPremiumLine,
+      availableInCalculatorWithoutPriceList: p.availableInCalculatorWithoutPriceList,
     };
     if (id) await updateMicroMaterial(id, microData);
     else await createMicroMaterial(microData as any);
