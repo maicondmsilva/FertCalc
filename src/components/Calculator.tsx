@@ -1194,8 +1194,8 @@ export default function Calculator({
                           <p className="text-[10px] font-bold text-stone-400 uppercase mb-2">
                             Fatores Comerciais
                           </p>
-                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-                            <div>
+                          <div className="grid grid-cols-2 gap-3 lg:grid-cols-10">
+                            <div className="lg:col-span-2">
                               <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">
                                 Fator (×)
                               </label>
@@ -1213,7 +1213,7 @@ export default function Calculator({
                                 className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500"
                               />
                             </div>
-                            <div>
+                            <div className="lg:col-span-2">
                               <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">
                                 Desconto (R$/t)
                               </label>
@@ -1230,7 +1230,7 @@ export default function Calculator({
                                 className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500"
                               />
                             </div>
-                            <div>
+                            <div className="lg:col-span-2">
                               <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">
                                 Alíquota (%)
                               </label>
@@ -1248,7 +1248,7 @@ export default function Calculator({
                                 className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500"
                               />
                             </div>
-                            <div>
+                            <div className="lg:col-span-2">
                               <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">
                                 Comissão (%)
                               </label>
@@ -1273,8 +1273,30 @@ export default function Calculator({
                                 </p>
                               )}
                             </div>
+                            <div className="lg:col-span-2">
+                              <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">
+                                Juros Mensal (%)
+                              </label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={
+                                  calc.factors.monthlyInterestRate === 0
+                                    ? ''
+                                    : calc.factors.monthlyInterestRate
+                                }
+                                onChange={(e) =>
+                                  updateCalculationFactors(
+                                    calc.id,
+                                    'monthlyInterestRate',
+                                    e.target.value === '' ? 0 : Number(e.target.value)
+                                  )
+                                }
+                                className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500"
+                              />
+                            </div>
                             {/* CIF / FOB toggle */}
-                            <div className="col-span-2 lg:col-span-3">
+                            <div className="order-2 col-span-2 rounded-lg border border-stone-200 bg-stone-50/70 p-3 lg:col-span-5">
                               <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">
                                 Tipo de Frete
                               </label>
@@ -1350,7 +1372,7 @@ export default function Calculator({
                             </div>
 
                             {/* Embalagem */}
-                            <div className="col-span-2 lg:col-span-3">
+                            <div className="order-2 col-span-2 rounded-lg border border-stone-200 bg-stone-50/70 p-3 lg:col-span-5">
                               {(() => {
                                 const embSelecionada = embalagens.find(
                                   (em) => em.id === calc.factors.embalagem_id
@@ -1480,29 +1502,7 @@ export default function Calculator({
                               })()}
                             </div>
 
-                            <div>
-                              <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">
-                                Juros Mensal (%)
-                              </label>
-                              <input
-                                type="number"
-                                step="0.01"
-                                value={
-                                  calc.factors.monthlyInterestRate === 0
-                                    ? ''
-                                    : calc.factors.monthlyInterestRate
-                                }
-                                onChange={(e) =>
-                                  updateCalculationFactors(
-                                    calc.id,
-                                    'monthlyInterestRate',
-                                    e.target.value === '' ? 0 : Number(e.target.value)
-                                  )
-                                }
-                                className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500"
-                              />
-                            </div>
-                            <div>
+                            <div className="order-3 col-span-2 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3 lg:col-span-10">
                               <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">
                                 Qtd Total (Tons)
                               </label>
@@ -1521,7 +1521,7 @@ export default function Calculator({
                               />
                             </div>
                             {/* Payment Condition & Due Date */}
-                            <div className="col-span-2 lg:col-span-3">
+                            <div className="order-1 col-span-2 rounded-lg border border-stone-200 bg-white p-3 lg:col-span-10">
                               <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">
                                 Condição de Pagamento
                               </label>
@@ -1544,7 +1544,7 @@ export default function Calculator({
                                     }}
                                     className="accent-emerald-600"
                                   />
-                                  Vencimento Direto
+                                  Vencimento
                                 </label>
                                 <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-stone-700">
                                   <input
@@ -1654,7 +1654,7 @@ export default function Calculator({
                                 </div>
                               )}
                             </div>
-                            <div className="flex items-center pt-4">
+                            <div className="order-4 col-span-2 flex items-center pt-1 lg:col-span-10">
                               <input
                                 type="checkbox"
                                 id={`exempt-${calc.id}`}
