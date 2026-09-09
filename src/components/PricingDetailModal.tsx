@@ -9,6 +9,7 @@ import {
   PriceList,
 } from '../types';
 import type { LocalCarregamento } from '../types/carregamento';
+import { closeModalOnBackdrop } from '../utils/modalUtils';
 import {
   X,
   Edit3,
@@ -686,12 +687,25 @@ export default function PricingDetailModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      onMouseDown={(event) =>
+        closeModalOnBackdrop(event, onClose, loadingTransfer || savingPedido)
+      }
+    >
       <ConfirmDialog {...confirmState} onConfirm={handleConfirm} onCancel={handleCancel} />
 
       {/* PDF Import Confirmation Modal */}
       {showPdfImportModal && extractedData && (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
+        <div
+          className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4"
+          onMouseDown={(event) =>
+            closeModalOnBackdrop(event, () => {
+              setShowPdfImportModal(false);
+              setExtractedData(null);
+            }, savingPedido)
+          }
+        >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
             <div className="flex items-center justify-between p-6 border-b border-stone-100">
               <h3 className="text-lg font-bold text-stone-800 flex items-center gap-2">

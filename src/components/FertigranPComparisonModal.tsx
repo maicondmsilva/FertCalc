@@ -14,6 +14,7 @@ import {
   saveComparisonHistory,
   getCompatibilityCategories,
 } from '../services/db';
+import { closeModalOnBackdrop } from '../utils/modalUtils';
 import {
   FertigranPFormula,
   User as AppUser,
@@ -454,7 +455,10 @@ export function FertigranPComparisonModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 animate-in fade-in">
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 animate-in fade-in"
+      onMouseDown={(event) => closeModalOnBackdrop(event, onClose, isSaving)}
+    >
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-stone-200 bg-stone-50">

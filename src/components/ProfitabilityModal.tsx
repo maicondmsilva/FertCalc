@@ -4,6 +4,7 @@ import { TargetFormula, User, PricingRecord } from '../types';
 import { calculateProfitability, createProfitabilityAnalysis } from '../domain/pricing-engine';
 import { saveProfitabilityToCalc, getPricingRecords } from '../services/db';
 import { useToast } from './Toast';
+import { closeModalOnBackdrop } from '../utils/modalUtils';
 
 interface ProfitabilityModalProps {
   isOpen: boolean;
@@ -243,7 +244,10 @@ export default function ProfitabilityModal({
   const isPositive = result ? result.profitability >= 0 : false;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+      onMouseDown={(event) => closeModalOnBackdrop(event, onClose, isSaving)}
+    >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-stone-200">

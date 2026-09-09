@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { closeModalOnBackdrop } from '../utils/modalUtils';
 import {
   Plus,
   Trash2,
@@ -620,7 +621,10 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
 
       {/* ── MODAL: Local de Carregamento ──────────────────────── */}
       {showModalLocal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onMouseDown={(event) => closeModalOnBackdrop(event, closeModalLocal, savingLocal)}
+        >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
             <div className="flex items-center justify-between p-6 border-b border-stone-100">
               <h2 className="text-lg font-bold text-stone-800 flex items-center gap-2">

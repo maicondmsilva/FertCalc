@@ -8,6 +8,7 @@ import {
   updatePedidoVendaProtegido,
 } from '../services/pedidosVendaService';
 import { useToast } from './Toast';
+import { closeModalOnBackdrop } from '../utils/modalUtils';
 
 interface Props {
   pedido: PedidoVenda;
@@ -177,6 +178,7 @@ export default function EditarPedidoVendaModal({
   return (
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-3"
+      onMouseDown={(event) => closeModalOnBackdrop(event, onClose, saving)}
       role="dialog"
       aria-modal="true"
     >

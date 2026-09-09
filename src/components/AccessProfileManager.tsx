@@ -10,6 +10,7 @@ import {
 import { useToast } from './Toast';
 import { useConfirm } from '../hooks/useConfirm';
 import { ConfirmDialog } from './ui/ConfirmDialog';
+import { closeModalOnBackdrop } from '../utils/modalUtils';
 
 // ---------------------------------------------------------------------------
 // Estrutura de módulos agrupados por área (espelha o UserManager)
@@ -200,7 +201,10 @@ function ProfileModal({ initial, onSave, onClose, saving }: ProfileModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onMouseDown={(event) => closeModalOnBackdrop(event, onClose, saving)}
+    >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200">

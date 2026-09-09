@@ -14,6 +14,7 @@ import { SavedFormula, User, PriceList, AppSettings, Client, Embalagem, Brand } 
 import { getEmbalagens } from '../services/embalagensService';
 import { LocalCarregamento } from '../types/carregamento';
 import { formatId } from '../utils/formatId';
+import { closeModalOnBackdrop } from '../utils/modalUtils';
 import {
   Beaker,
   Trash2,
@@ -569,7 +570,10 @@ function ModalGerarRelatorio({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onMouseDown={(event) => closeModalOnBackdrop(event, onClose, generatingPdf)}
+    >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-stone-100 flex justify-between items-center">
           <div>
