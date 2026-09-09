@@ -75,6 +75,7 @@ const PERMISSION_GROUPS: PermissionGroup[] = [
       { id: 'calculator_saveFormula', label: 'Salvar Fórmula' },
       { id: 'calculator_fertigranP', label: 'Comparador Fertigran P' },
       { id: 'calculator_profitabilityCheck', label: 'Análise de Rentabilidade' },
+      { id: 'calculator_extraProducts', label: 'Ver produtos extras fora da lista de preços' },
       { id: 'history_changeStatus', label: 'Alterar Status' },
       { id: 'history_editPricing', label: 'Editar Precificação Existente' },
       { id: 'savedFormulas_delete', label: 'Excluir Batidas Salvas' },
@@ -320,6 +321,7 @@ export default function UserManager({ currentUser }: UserManagerProps) {
       prd: false,
       managementReports: false,
       calculator_profitabilityCheck: false,
+      calculator_extraProducts: false,
     };
     if (role === 'master' || role === 'admin') {
       const allCrud: Record<string, boolean> = {};
@@ -332,6 +334,7 @@ export default function UserManager({ currentUser }: UserManagerProps) {
       const all: Record<string, boolean> = {
         approvals_canApprove: true,
         calculator_profitabilityCheck: true,
+        calculator_extraProducts: true,
         ...allCrud,
       };
       Object.keys(base).forEach((key) => {

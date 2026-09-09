@@ -66,6 +66,7 @@ const emptyProduct = (type: NutrientType): Partial<UnifiedProduct> => ({
   brandId: '',
   description: '',
   price: undefined,
+  availableInCalculatorWithoutPriceList: false,
 });
 
 export default function ProductManager() {
@@ -401,6 +402,11 @@ export default function ProductManager() {
                             Premium
                           </span>
                         )}
+                        {item.availableInCalculatorWithoutPriceList && (
+                          <span className="rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">
+                            Extra na calculadora
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="px-5 py-3 text-xs text-stone-500">
@@ -656,7 +662,7 @@ export default function ProductManager() {
                 </div>
 
                 {(tab === 'macro' || tab === 'micro') && (
-                  <div className="flex items-center pt-6">
+                  <div className="space-y-3 pt-6">
                     <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-stone-700">
                       <input
                         type="checkbox"
@@ -668,6 +674,27 @@ export default function ProductManager() {
                         className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
                       />
                       Pertence à Linha Diferenciada (Premium)
+                    </label>
+                    <label className="flex items-start gap-2 cursor-pointer text-sm font-medium text-stone-700">
+                      <input
+                        type="checkbox"
+                        disabled={viewMode}
+                        checked={!!form.availableInCalculatorWithoutPriceList}
+                        onChange={(e) =>
+                          setForm((p) => ({
+                            ...p,
+                            availableInCalculatorWithoutPriceList: e.target.checked,
+                          }))
+                        }
+                        className="mt-0.5 h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500"
+                      />
+                      <span>
+                        Exibir como produto extra na calculadora
+                        <span className="block text-xs font-normal text-stone-500">
+                          Usuários autorizados verão o produto mesmo quando ele não estiver na lista
+                          de preços.
+                        </span>
+                      </span>
                     </label>
                   </div>
                 )}

@@ -28,6 +28,8 @@ import {
   getUsers,
   getManagersOfUser,
   getCompatibilityCategories,
+  getMacroMaterials,
+  getMicroMaterials,
 } from '../services/db';
 import { useToast } from '../components/Toast';
 import { formatNPK } from '../utils/formatters';
@@ -131,6 +133,12 @@ export function useCalculator({
 
   const [macros, setMacros] = useState<RawMaterial[]>([]);
   const [micros, setMicros] = useState<RawMaterial[]>([]);
+  const [catalogMacros, setCatalogMacros] = useState<Awaited<ReturnType<typeof getMacroMaterials>>>(
+    []
+  );
+  const [catalogMicros, setCatalogMicros] = useState<Awaited<ReturnType<typeof getMicroMaterials>>>(
+    []
+  );
   const [isMaterialsLoading, setIsMaterialsLoading] = useState<boolean>(true);
   const [materialsLoadError, setMaterialsLoadError] = useState<boolean>(false);
   const [incompatibilityRules, setIncompatibilityRules] = useState<IncompatibilityRule[]>([]);
@@ -245,21 +253,33 @@ export function useCalculator({
       setIsMaterialsLoading(true);
       setMaterialsLoadError(false);
       try {
-        const [savedBranches, savedLists, savedClients, savedAgents, savedRules, savedCategories] =
-          await Promise.all([
-            getBranches(),
-            getPriceLists(),
-            getClients(),
-            getAgents(),
-            getIncompatibilityRules(),
-            getCompatibilityCategories(),
-          ]);
+        const [
+          savedBranches,
+          savedLists,
+          savedClients,
+          savedAgents,
+          savedRules,
+          savedCategories,
+          savedCatalogMacros,
+          savedCatalogMicros,
+        ] = await Promise.all([
+          getBranches(),
+          getPriceLists(),
+          getClients(),
+          getAgents(),
+          getIncompatibilityRules(),
+          getCompatibilityCategories(),
+          getMacroMaterials(),
+          getMicroMaterials(),
+        ]);
         setBranches(savedBranches);
         setPriceLists(savedLists);
         setAvailableClients(savedClients);
         setAvailableAgents(savedAgents);
         setIncompatibilityRules(savedRules);
         setCompCategories(savedCategories);
+        setCatalogMacros(savedCatalogMacros);
+        setCatalogMicros(savedCatalogMicros);
       } catch (error) {
         console.error('[useCalculator] Falha ao carregar dados da calculadora:', error);
         showError(
@@ -272,6 +292,8 @@ export function useCalculator({
         setAvailableAgents([]);
         setIncompatibilityRules([]);
         setCompCategories([]);
+        setCatalogMacros([]);
+        setCatalogMicros([]);
       } finally {
         setIsMaterialsLoading(false);
       }
@@ -332,23 +354,72 @@ export function useCalculator({
     if (factors.priceListId) {
       const selectedList = priceLists.find((l) => l.id === factors.priceListId);
       if (selectedList) {
+        const canViewExtraProducts =
+          currentUser.role === 'master' ||
+          currentUser.role === 'admin' ||
+          currentUser.permissions?.calculator_extraProducts === true;
+        const listedMacroIds = new Set(selectedList.macros.map((material) => material.id));
+        const listedMicroIds = new Set(selectedList.micros.map((material) => material.id));
+        const extraMacros = canViewExtraProducts
+          ? catalogMacros.filter(
+              (material) =>
+                material.availableInCalculatorWithoutPriceList && !listedMacroIds.has(material.id)
+            )
+          : [];
+        const extraMicros = canViewExtraProducts
+          ? catalogMicros.filter(
+              (material) =>
+                material.availableInCalculatorWithoutPriceList && !listedMicroIds.has(material.id)
+            )
+          : [];
         // Macros da Linha Diferenciada chegam desmarcadas por padrão
-        const newMacros = selectedList.macros.map((m) => ({
-          ...m,
-          selected: m.isPremiumLine ? false : (m.selected ?? true),
-          minQty:
-            m.minQuantity !== undefined
-              ? m.minQuantity
-              : m.type === 'macro' && !m.name.toLowerCase().includes('enchimento')
-                ? 50
-                : m.minQty || 0,
-        }));
+        const newMacros = [
+          ...selectedList.macros.map((m) => ({
+            ...m,
+            isOutsidePriceList: false,
+            selected: m.isPremiumLine ? false : (m.selected ?? true),
+            minQty:
+              m.minQuantity !== undefined
+                ? m.minQuantity
+                : m.type === 'macro' && !m.name.toLowerCase().includes('enchimento')
+                  ? 50
+                  : m.minQty || 0,
+          })),
+          ...extraMacros.map((m) => ({
+            ...m,
+            type: 'macro' as const,
+            price: 0,
+            selected: false,
+            quantity: 0,
+            minQty: m.minQuantity || 0,
+            maxQty: 0,
+            isOutsidePriceList: true,
+          })),
+        ];
         // Micros chegam sempre desmarcados — usuário escolhe quais usar
-        const newMicros = selectedList.micros.map((m) => ({
-          ...m,
-          selected: false,
-          minQty: m.minQuantity !== undefined ? m.minQuantity : m.minQty || 0,
-        }));
+        const newMicros = [
+          ...selectedList.micros.map((m) => ({
+            ...m,
+            isOutsidePriceList: false,
+            selected: false,
+            minQty: m.minQuantity !== undefined ? m.minQuantity : m.minQty || 0,
+          })),
+          ...extraMicros.map((m) => ({
+            ...m,
+            type: 'micro' as const,
+            price: 0,
+            n: 0,
+            p: 0,
+            k: 0,
+            s: 0,
+            ca: 0,
+            selected: false,
+            quantity: 0,
+            minQty: m.minQuantity || 0,
+            maxQty: 0,
+            isOutsidePriceList: true,
+          })),
+        ];
 
         setMacros(newMacros);
         setMicros(newMicros);
@@ -363,7 +434,7 @@ export function useCalculator({
               if (savedP) {
                 return {
                   ...newP,
-                  selected: savedP.selected,
+                  selected: newP.isOutsidePriceList ? false : savedP.selected,
                   quantity: savedP.quantity,
                   minQty: savedP.minQty,
                   maxQty: savedP.maxQty,
@@ -377,7 +448,7 @@ export function useCalculator({
               if (savedP) {
                 return {
                   ...newP,
-                  selected: savedP.selected,
+                  selected: newP.isOutsidePriceList ? false : savedP.selected,
                   quantity: savedP.quantity,
                   minQty: savedP.minQty,
                   maxQty: savedP.maxQty,
@@ -395,7 +466,7 @@ export function useCalculator({
         );
       }
     }
-  }, [factors.priceListId, priceLists]);
+  }, [catalogMacros, catalogMicros, currentUser, factors.priceListId, priceLists]);
 
   // ─── Handlers ─────────────────────────────────────────────
 
