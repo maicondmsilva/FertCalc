@@ -434,7 +434,7 @@ export function useCalculator({
               if (savedP) {
                 return {
                   ...newP,
-                  selected: newP.isOutsidePriceList ? false : savedP.selected,
+                  selected: savedP.selected,
                   quantity: savedP.quantity,
                   minQty: savedP.minQty,
                   maxQty: savedP.maxQty,
@@ -448,7 +448,7 @@ export function useCalculator({
               if (savedP) {
                 return {
                   ...newP,
-                  selected: newP.isOutsidePriceList ? false : savedP.selected,
+                  selected: savedP.selected,
                   quantity: savedP.quantity,
                   minQty: savedP.minQty,
                   maxQty: savedP.maxQty,
