@@ -15,6 +15,21 @@ interface ProfitabilityModalProps {
   onSaved?: () => void;
 }
 
+const addDaysToDate = (date: string, days: number): string => {
+  if (!date) return '';
+  const parsed = new Date(`${date}T12:00:00`);
+  if (Number.isNaN(parsed.getTime())) return '';
+  parsed.setDate(parsed.getDate() + Math.max(0, days));
+  return parsed.toISOString().split('T')[0];
+};
+
+const parseMoneyInput = (value: string): number => {
+  const parsed = Number(value.replace(',', '.'));
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const formatMoneyInput = (value: number): string => value.toFixed(2).replace('.', ',');
+
 export default function ProfitabilityModal({
   isOpen,
   onClose,
@@ -32,13 +47,20 @@ export default function ProfitabilityModal({
   const [freight, setFreight] = useState(calc.factors.freight);
   const [interestRate, setInterestRate] = useState(calc.factors.monthlyInterestRate);
   const [dueDate, setDueDate] = useState<string>(calc.factors?.dueDate || '');
+  const [paymentCondition, setPaymentCondition] = useState<'vencimento' | 'ddf'>(
+    calc.factors?.paymentCondition || 'vencimento'
+  );
+  const [loadingDate, setLoadingDate] = useState<string>(calc.factors?.dataCarregamento || '');
+  const [ddfDays, setDdfDays] = useState<number>(calc.factors?.ddfDias || 30);
   const [exemptCurrentMonth, setExemptCurrentMonth] = useState<boolean>(
     calc.factors?.exemptCurrentMonth || false
   );
   const [interestStartDate, setInterestStartDate] = useState<string>(
     calc.factors?.interestStartDate || ''
   );
-  const [packagingValue, setPackagingValue] = useState<number>(calc.factors?.embalagem_valor || 0);
+  const [packagingValue, setPackagingValue] = useState<string>(
+    formatMoneyInput(calc.factors?.embalagem_valor || 0)
+  );
   const [unitaryPrice, setUnitaryPrice] = useState<number | ''>('');
 
   const [pricingSearch, setPricingSearch] = useState('');
@@ -62,9 +84,12 @@ export default function ProfitabilityModal({
       setFreight(calc.factors.freight);
       setInterestRate(calc.factors.monthlyInterestRate);
       setDueDate(calc.factors?.dueDate || '');
+      setPaymentCondition(calc.factors?.paymentCondition || 'vencimento');
+      setLoadingDate(calc.factors?.dataCarregamento || '');
+      setDdfDays(calc.factors?.ddfDias || 30);
       setExemptCurrentMonth(calc.factors?.exemptCurrentMonth || false);
       setInterestStartDate(calc.factors?.interestStartDate || '');
-      setPackagingValue(calc.factors?.embalagem_valor || 0);
+      setPackagingValue(formatMoneyInput(calc.factors?.embalagem_valor || 0));
       setUnitaryPrice('');
       setResult(null);
       setPricingSearch('');
@@ -128,9 +153,12 @@ export default function ProfitabilityModal({
       setInterestRate(f.monthlyInterestRate ?? interestRate);
       setTaxRate(f.taxRate ?? taxRate);
       setDueDate(f.dueDate || '');
+      setPaymentCondition(f.paymentCondition || 'vencimento');
+      setLoadingDate(f.dataCarregamento || '');
+      setDdfDays(f.ddfDias || 30);
       setExemptCurrentMonth(f.exemptCurrentMonth || false);
       setInterestStartDate(f.interestStartDate || '');
-      setPackagingValue(f.embalagem_valor ?? 0);
+      setPackagingValue(formatMoneyInput(f.embalagem_valor ?? 0));
     }
 
     if (prod.summary?.finalPrice) {
@@ -152,7 +180,10 @@ export default function ProfitabilityModal({
       dueDate,
       exemptCurrentMonth,
       interestStartDate,
-      packagingValue,
+      paymentCondition,
+      dataCarregamento: loadingDate,
+      ddfDias: ddfDays,
+      packagingValue: parseMoneyInput(packagingValue),
     });
     setResult(res);
   };
@@ -183,7 +214,10 @@ export default function ProfitabilityModal({
       dueDate,
       exemptCurrentMonth,
       interestStartDate,
-      packagingValue: packagingValue,
+      paymentCondition,
+      dataCarregamento: loadingDate,
+      ddfDias: ddfDays,
+      packagingValue: parseMoneyInput(packagingValue),
       analyzedByUserId: currentUser.id,
       analyzedByName: currentUser.name,
     });
@@ -307,15 +341,75 @@ export default function ProfitabilityModal({
               </div>
               <div>
                 <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">
-                  Data de Vencimento
+                  Condição de Pagamento
                 </label>
-                <input
-                  type="date"
-                  value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
+                <select
+                  value={paymentCondition}
+                  onChange={(e) => {
+                    const condition = e.target.value as 'vencimento' | 'ddf';
+                    setPaymentCondition(condition);
+                    if (condition === 'ddf') {
+                      const baseDate = loadingDate || new Date().toISOString().split('T')[0];
+                      setLoadingDate(baseDate);
+                      setDueDate(addDaysToDate(baseDate, ddfDays));
+                    }
+                  }}
                   className="w-full px-2 py-1.5 text-sm border border-stone-300 rounded-lg focus:ring-1 focus:ring-orange-500 focus:border-orange-500 outline-none"
-                />
+                >
+                  <option value="vencimento">Vencimento</option>
+                  <option value="ddf">DDF</option>
+                </select>
               </div>
+              {paymentCondition === 'vencimento' ? (
+                <div>
+                  <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">
+                    Data de Vencimento
+                  </label>
+                  <input
+                    type="date"
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                    className="w-full px-2 py-1.5 text-sm border border-stone-300 rounded-lg focus:ring-1 focus:ring-orange-500 focus:border-orange-500 outline-none"
+                  />
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">
+                      Data de Carregamento
+                    </label>
+                    <input
+                      type="date"
+                      value={loadingDate}
+                      onChange={(e) => {
+                        setLoadingDate(e.target.value);
+                        setDueDate(addDaysToDate(e.target.value, ddfDays));
+                      }}
+                      className="w-full px-2 py-1.5 text-sm border border-stone-300 rounded-lg focus:ring-1 focus:ring-orange-500 focus:border-orange-500 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">
+                      Dias DDF
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={ddfDays || ''}
+                      onChange={(e) => {
+                        const days = e.target.value === '' ? 0 : Number(e.target.value);
+                        setDdfDays(days);
+                        setDueDate(addDaysToDate(loadingDate, days));
+                      }}
+                      className="w-full px-2 py-1.5 text-sm border border-stone-300 rounded-lg focus:ring-1 focus:ring-orange-500 focus:border-orange-500 outline-none"
+                    />
+                    <p className="mt-1 text-[10px] font-semibold text-emerald-600">
+                      Vencimento: {dueDate ? new Date(`${dueDate}T12:00:00`).toLocaleDateString('pt-BR') : '—'}
+                    </p>
+                  </div>
+                </>
+              )}
               <div>
                 <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">
                   Cobrar Juros a Partir de
@@ -334,13 +428,21 @@ export default function ProfitabilityModal({
                   Embalagem (R$/ton)
                 </label>
                 <input
-                  type="number"
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
                   value={packagingValue}
-                  onChange={(e) => setPackagingValue(Number(e.target.value))}
-                  onFocus={handleNumericFocus}
+                  onChange={(e) => {
+                    if (/^-?\d*(?:[.,]\d{0,2})?$/.test(e.target.value)) {
+                      setPackagingValue(e.target.value);
+                    }
+                  }}
+                  onBlur={() => setPackagingValue(formatMoneyInput(parseMoneyInput(packagingValue)))}
+                  placeholder="Ex: 50,00 ou -50,00"
                   className="w-full px-2 py-1.5 text-sm border border-stone-300 rounded-lg focus:ring-1 focus:ring-orange-500 focus:border-orange-500 outline-none"
                 />
+                <p className="mt-1 text-[10px] text-stone-500">
+                  Positivo desconta da receita; negativo acrescenta crédito.
+                </p>
               </div>
               <div>
                 <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">
@@ -502,6 +604,13 @@ export default function ProfitabilityModal({
                     (-) Juros ({interestRate}% a.m. × {result.daysOfInterest} dias):
                   </span>
                   <span className="font-mono">- R$ {result.interestDeduction.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-xs text-stone-500">
+                  <span>Condição financeira:</span>
+                  <span className="font-medium">
+                    {paymentCondition === 'ddf' ? `${ddfDays} DDF` : 'Vencimento'} ·{' '}
+                    {dueDate ? new Date(`${dueDate}T12:00:00`).toLocaleDateString('pt-BR') : 'sem data'}
+                  </span>
                 </div>
                 {result.packagingDeduction !== 0 && (
                   <div

@@ -12,6 +12,9 @@ export interface ProfitabilityInput {
   dueDate?: string;
   exemptCurrentMonth?: boolean;
   interestStartDate?: string;
+  paymentCondition?: 'vencimento' | 'ddf';
+  dataCarregamento?: string;
+  ddfDias?: number;
   packagingValue?: number;
 }
 
@@ -45,8 +48,8 @@ export function calculateProfitability(
     options.today ?? new Date(),
     input.interestStartDate
   );
-  const interestBase = unitaryPrice - freightDeduction;
-  const monthlyRate = numeric(input.interestRate) / 100;
+  const interestBase = Math.max(0, unitaryPrice - freightDeduction);
+  const monthlyRate = Math.min(0.999999, Math.max(0, numeric(input.interestRate) / 100));
   const interestDeduction =
     daysOfInterest > 0 && monthlyRate > 0
       ? interestBase * (1 - Math.pow(1 - monthlyRate, daysOfInterest / 30))
@@ -104,6 +107,9 @@ export function createProfitabilityAnalysis(
     dueDate: input.dueDate,
     exemptCurrentMonth: input.exemptCurrentMonth,
     interestStartDate: input.interestStartDate,
+    paymentCondition: input.paymentCondition,
+    dataCarregamento: input.dataCarregamento,
+    ddfDias: input.ddfDias,
     packagingValue: input.packagingValue,
     analyzedByUserId: input.analyzedByUserId,
     analyzedByName: input.analyzedByName,

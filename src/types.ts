@@ -376,6 +376,9 @@ export interface ProfitabilityAnalysis {
   dueDate?: string;
   exemptCurrentMonth?: boolean;
   interestStartDate?: string;
+  paymentCondition?: 'vencimento' | 'ddf';
+  dataCarregamento?: string;
+  ddfDias?: number;
   daysOfInterest?: number;
   packagingValue?: number;
   packagingDeduction?: number;
