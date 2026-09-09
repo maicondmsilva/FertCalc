@@ -1297,7 +1297,7 @@ export default function Calculator({
                               />
                             </div>
                             {/* CIF / FOB toggle */}
-                            <div className="order-2 col-span-2 rounded-lg border border-stone-200 bg-stone-50/70 p-3 lg:col-span-5">
+                            <div className="order-1 col-span-2 rounded-lg border border-stone-200 bg-stone-50/70 p-3 lg:col-span-5">
                               <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">
                                 Tipo de Frete
                               </label>
@@ -1373,7 +1373,7 @@ export default function Calculator({
                             </div>
 
                             {/* Embalagem */}
-                            <div className="order-2 col-span-2 rounded-lg border border-stone-200 bg-stone-50/70 p-3 lg:col-span-5">
+                            <div className="order-2 col-span-2 rounded-lg border border-stone-200 bg-stone-50/70 p-3 lg:col-span-5 lg:col-start-6">
                               {(() => {
                                 const embSelecionada = embalagens.find(
                                   (em) => em.id === calc.factors.embalagem_id
@@ -1522,7 +1522,7 @@ export default function Calculator({
                               />
                             </div>
                             {/* Payment Condition & Due Date */}
-                            <div className="order-1 col-span-2 rounded-lg border border-stone-200 bg-white p-3 lg:col-span-10">
+                            <div className="order-1 col-span-2 row-span-2 rounded-lg border border-stone-200 bg-white p-3 lg:col-span-5">
                               <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">
                                 Condição de Pagamento
                               </label>
@@ -1578,7 +1578,7 @@ export default function Calculator({
                               </div>
 
                               {(calc.factors.paymentCondition || 'vencimento') === 'vencimento' ? (
-                                <div>
+                                <div className="max-w-xs">
                                   <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">
                                     Vencimento
                                   </label>
@@ -1592,7 +1592,7 @@ export default function Calculator({
                                   />
                                 </div>
                               ) : (
-                                <div className="grid grid-cols-2 gap-2">
+                                <div className="grid max-w-md grid-cols-2 gap-2">
                                   <div>
                                     <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">
                                       Data Carregamento
@@ -1655,6 +1655,28 @@ export default function Calculator({
                                 </div>
                               )}
 
+                              <div className="mt-3 flex items-center border-t border-stone-100 pt-3">
+                                <input
+                                  type="checkbox"
+                                  id={`exempt-${calc.id}`}
+                                  checked={calc.factors.exemptCurrentMonth}
+                                  onChange={(e) =>
+                                    updateCalculationFactors(
+                                      calc.id,
+                                      'exemptCurrentMonth',
+                                      e.target.checked
+                                    )
+                                  }
+                                  className="mr-2 rounded text-emerald-600 focus:ring-emerald-500"
+                                />
+                                <label
+                                  htmlFor={`exempt-${calc.id}`}
+                                  className="text-[10px] font-bold uppercase text-stone-500"
+                                >
+                                  Isentar juros mês atual
+                                </label>
+                              </div>
+
                               <div className="mt-3 border-t border-stone-100 pt-3">
                                 <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">
                                   Cobrar juros a partir de
@@ -1671,7 +1693,7 @@ export default function Calculator({
                                       e.target.value
                                     )
                                   }
-                                  className="w-full px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500 outline-none disabled:bg-stone-100 disabled:text-stone-400"
+                                  className="w-full max-w-xs px-2 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-emerald-500 outline-none disabled:bg-stone-100 disabled:text-stone-400"
                                 />
                                 <p className="mt-1 text-[10px] text-stone-500">
                                   {calc.factors.exemptCurrentMonth
@@ -1679,27 +1701,6 @@ export default function Calculator({
                                     : 'Opcional. Sem data, os juros começam na data atual.'}
                                 </p>
                               </div>
-                            </div>
-                            <div className="order-4 col-span-2 flex items-center pt-1 lg:col-span-10">
-                              <input
-                                type="checkbox"
-                                id={`exempt-${calc.id}`}
-                                checked={calc.factors.exemptCurrentMonth}
-                                onChange={(e) =>
-                                  updateCalculationFactors(
-                                    calc.id,
-                                    'exemptCurrentMonth',
-                                    e.target.checked
-                                  )
-                                }
-                                className="rounded text-emerald-600 focus:ring-emerald-500 mr-2"
-                              />
-                              <label
-                                htmlFor={`exempt-${calc.id}`}
-                                className="text-[10px] font-bold text-stone-500 uppercase"
-                              >
-                                Isentar juros mês atual
-                              </label>
                             </div>
                           </div>
                         </div>
