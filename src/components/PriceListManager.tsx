@@ -10,12 +10,15 @@ import {
   Check,
   MapPin,
   GripVertical,
+  Search,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { RawMaterial, PriceList, MacroMaterial, MicroMaterial } from '../types';
 import {
   getMacroMaterials,
   getMicroMaterials,
-  getPriceLists,
+  getPriceListsPage,
   createPriceList,
   updatePriceList,
   deletePriceList,
@@ -328,6 +331,13 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
   const [allMicros, setAllMicros] = useState<MicroMaterial[]>([]);
   const [priceLists, setPriceLists] = useState<PriceList[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalLists, setTotalLists] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [reloadToken, setReloadToken] = useState(0);
   const [saving, setSaving] = useState(false);
 
   // form state
@@ -396,20 +406,47 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
   };
 
   useEffect(() => {
-    const loadAll = async () => {
-      setLoading(true);
-      const [m, mi, pl] = await Promise.all([
-        getMacroMaterials(),
-        getMicroMaterials(),
-        getPriceLists(),
-      ]);
+    const loadMaterials = async () => {
+      const [m, mi] = await Promise.all([getMacroMaterials(), getMicroMaterials()]);
       setAllMacros(m);
       setAllMicros(mi);
-      setPriceLists(pl);
-      setLoading(false);
     };
-    loadAll();
+    loadMaterials();
   }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(searchTerm.trim());
+      setCurrentPage(1);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setLoadError('');
+    getPriceListsPage({ page: currentPage, pageSize: 9, search: debouncedSearch })
+      .then((result) => {
+        if (cancelled) return;
+        if (currentPage > result.totalPages) {
+          setCurrentPage(result.totalPages);
+          return;
+        }
+        setPriceLists(result.items);
+        setTotalLists(result.total);
+        setTotalPages(result.totalPages);
+      })
+      .catch(() => {
+        if (!cancelled) setLoadError('Não foi possível carregar o histórico de listas de preços.');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentPage, debouncedSearch, reloadToken]);
 
   useEffect(() => {
     getLocaisAtivos()
@@ -480,26 +517,11 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
           macros,
           micros,
         });
-        setPriceLists((prev) =>
-          prev.map((p) =>
-            p.id === editingListId
-              ? {
-                  ...p,
-                  name: listName.trim(),
-                  local_carregamento_id: selectedLocalId || undefined,
-                  currency,
-                  exchangeRate: currency === 'USD' ? exchangeRate : undefined,
-                  dollarRate: currency === 'BRL' ? dollarRate : undefined,
-                  macros,
-                  micros,
-                }
-              : p
-          )
-        );
+        setReloadToken((value) => value + 1);
         cancelForm();
         showSuccess('Lista de preços atualizada com sucesso!');
       } else {
-        const newList = await createPriceList({
+        await createPriceList({
           name: listName.trim(),
           local_carregamento_id: selectedLocalId || undefined,
           date: new Date().toISOString(),
@@ -509,7 +531,10 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
           macros,
           micros,
         });
-        setPriceLists((prev) => [newList, ...prev]);
+        setSearchTerm('');
+        setDebouncedSearch('');
+        setCurrentPage(1);
+        setReloadToken((value) => value + 1);
         cancelForm();
         showSuccess('Lista de preços salva com sucesso!');
       }
@@ -540,7 +565,8 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
     if (!ok) return;
     try {
       await deletePriceList(id);
-      setPriceLists((prev) => prev.filter((x) => x.id !== id));
+      if (priceLists.length === 1 && currentPage > 1) setCurrentPage((page) => page - 1);
+      else setReloadToken((value) => value + 1);
       showSuccess('Lista excluída com sucesso!');
     } catch {
       showError('Erro ao excluir lista.');
@@ -884,17 +910,42 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
 
       {/* Histórico de listas */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
-        <h3 className="text-lg font-bold text-stone-800 mb-4 flex items-center gap-2">
-          <Calendar className="w-5 h-5 text-stone-400" />
-          Histórico de Listas de Preços
-        </h3>
+        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h3 className="text-lg font-bold text-stone-800 flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-stone-400" />
+              Histórico de Listas de Preços
+            </h3>
+            <p className="mt-1 text-xs text-stone-500">
+              {totalLists} {totalLists === 1 ? 'lista encontrada' : 'listas encontradas'}
+            </p>
+          </div>
+          <label className="relative block w-full md:max-w-sm">
+            <span className="sr-only">Pesquisar listas de preços</span>
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+            <input
+              type="search"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Buscar por número ou nome da lista"
+              className="w-full rounded-lg border border-stone-300 py-2 pl-9 pr-3 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+            />
+          </label>
+        </div>
+        {loadError && (
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {loadError}
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {loading && (
             <div className="col-span-full py-8 text-center text-stone-400">Carregando...</div>
           )}
           {!loading && priceLists.length === 0 && (
             <div className="col-span-full py-8 text-center text-stone-400 italic">
-              Nenhuma lista de preços salva.
+              {debouncedSearch
+                ? 'Nenhuma lista encontrada para esta pesquisa.'
+                : 'Nenhuma lista de preços salva.'}
             </div>
           )}
           {!loading &&
@@ -973,6 +1024,60 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
               </div>
             ))}
         </div>
+        {!loading && !loadError && totalLists > 0 && (
+          <div className="mt-6 flex flex-col items-center justify-between gap-3 border-t border-stone-100 pt-4 sm:flex-row">
+            <span className="text-xs text-stone-500">
+              Página {currentPage} de {totalPages}
+            </span>
+            <div className="flex items-center gap-1" aria-label="Paginação das listas de preços">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                disabled={currentPage === 1}
+                className="rounded-lg border border-stone-200 p-2 text-stone-600 transition-colors hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Página anterior"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              {Array.from({ length: totalPages }, (_, index) => index + 1)
+                .filter(
+                  (page) =>
+                    totalPages <= 5 ||
+                    page === 1 ||
+                    page === totalPages ||
+                    Math.abs(page - currentPage) <= 1
+                )
+                .map((page, index, visiblePages) => (
+                  <React.Fragment key={page}>
+                    {index > 0 && page - visiblePages[index - 1] > 1 && (
+                      <span className="px-1 text-stone-400">…</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage(page)}
+                      aria-current={page === currentPage ? 'page' : undefined}
+                      className={`min-w-9 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                        page === currentPage
+                          ? 'border-emerald-600 bg-emerald-600 text-white'
+                          : 'border-stone-200 text-stone-600 hover:bg-stone-50'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  </React.Fragment>
+                ))}
+              <button
+                type="button"
+                onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                disabled={currentPage === totalPages}
+                className="rounded-lg border border-stone-200 p-2 text-stone-600 transition-colors hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Próxima página"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
