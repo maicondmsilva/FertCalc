@@ -61,7 +61,10 @@ import {
   hasFormulaTarget,
 } from '../domain/pricing-engine';
 import { validatePricingForSave } from '../utils/pricingValidation';
-import { getPriceListCurrencySnapshot } from '../utils/priceListCurrency';
+import {
+  getPriceListCurrencySnapshot,
+  hasValidPricingExchangeRate,
+} from '../utils/priceListCurrency';
 
 interface UseCalculatorProps {
   initialData?: PricingRecord | null;
@@ -442,7 +445,11 @@ export function useCalculator({
 
         setCalculations((prevCalculations) =>
           prevCalculations.map((calc) => {
-            if (!calc.selected) return calc;
+            if (!calc.selected) {
+              return shouldRefreshCurrencySnapshot
+                ? { ...calc, factors: { ...calc.factors, ...currencySnapshot }, summary: undefined }
+                : calc;
+            }
 
             const updatedCalcMacros = newMacros.map((newP) => {
               const savedP = calc.macros.find((s) => s.id === newP.id);
@@ -604,6 +611,14 @@ export function useCalculator({
 
     if (formulasToCalculate.length === 0 && !targetFormulaId) {
       showError('Selecione ao menos uma fórmula para calcular.');
+      return;
+    }
+
+    const formulaWithoutExchangeRate = formulasToCalculate.find(
+      (calculation) => !hasValidPricingExchangeRate(calculation.factors)
+    );
+    if (formulaWithoutExchangeRate) {
+      showError('Informe um câmbio maior que zero antes de calcular uma lista em dólar.');
       return;
     }
 

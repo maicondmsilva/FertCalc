@@ -1,4 +1,5 @@
 import type { Agent, TargetFormula } from '../types';
+import { hasValidPricingExchangeRate } from './priceListCurrency';
 
 export interface PricingSaveValidation {
   valid: boolean;
@@ -15,6 +16,16 @@ export function validatePricingForSave(
     return {
       valid: false,
       message: 'Selecione pelo menos uma fórmula para salvar a precificação.',
+    };
+  }
+
+  const formulaWithoutExchangeRate = selectedCalculations.find(
+    (calculation) => !hasValidPricingExchangeRate(calculation.factors)
+  );
+  if (formulaWithoutExchangeRate) {
+    return {
+      valid: false,
+      message: `Informe um câmbio válido para calcular e salvar a fórmula "${formulaWithoutExchangeRate.formula || 'sem nome'}".`,
     };
   }
 
