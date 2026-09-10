@@ -54,6 +54,8 @@ export interface RawMaterial {
   type: NutrientType;
   name: string;
   price: number;
+  listPrice?: number;
+  isManualPrice?: boolean;
   n: number;
   p: number;
   k: number;
