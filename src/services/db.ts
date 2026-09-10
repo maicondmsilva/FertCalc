@@ -803,29 +803,79 @@ export async function deleteIncompatibilityRule(id: string): Promise<void> {
 // ============================================================
 // PRICE LISTS
 // ============================================================
+const mapPriceList = (d: any): PriceList => ({
+  id: d.id,
+  idNumeric: d.id_numeric != null ? Number(d.id_numeric) : undefined,
+  organizationId: d.organization_id,
+  publicationId: d.publication_id ?? undefined,
+  name: d.name,
+  branchId: d.branch_id,
+  local_carregamento_id: d.local_carregamento_id ?? undefined,
+  date: d.date,
+  currency: d.currency,
+  exchangeRate:
+    d.currency === 'USD' ? (d.exchange_rate ? Number(d.exchange_rate) : undefined) : undefined,
+  dollarRate:
+    d.currency === 'BRL' ? (d.exchange_rate ? Number(d.exchange_rate) : undefined) : undefined,
+  macros: d.macros || [],
+  micros: d.micros || [],
+});
+
+export interface PriceListPage {
+  items: PriceList[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface PriceListPageOptions {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+}
+
 export async function getPriceLists(): Promise<PriceList[]> {
   const { data, error } = await supabase
     .from('price_lists')
     .select('*')
     .order('created_at', { ascending: false });
   if (error || !data) return [];
-  return data.map((d) => ({
-    id: d.id,
-    idNumeric: d.id_numeric != null ? Number(d.id_numeric) : undefined,
-    organizationId: d.organization_id,
-    publicationId: d.publication_id ?? undefined,
-    name: d.name,
-    branchId: d.branch_id,
-    local_carregamento_id: d.local_carregamento_id ?? undefined,
-    date: d.date,
-    currency: d.currency,
-    exchangeRate:
-      d.currency === 'USD' ? (d.exchange_rate ? Number(d.exchange_rate) : undefined) : undefined,
-    dollarRate:
-      d.currency === 'BRL' ? (d.exchange_rate ? Number(d.exchange_rate) : undefined) : undefined,
-    macros: d.macros || [],
-    micros: d.micros || [],
-  }));
+  return data.map(mapPriceList);
+}
+
+export async function getPriceListsPage({
+  page = 1,
+  pageSize = 9,
+  search = '',
+}: PriceListPageOptions = {}): Promise<PriceListPage> {
+  const safePage = Math.max(1, Math.trunc(page));
+  const safePageSize = Math.min(50, Math.max(1, Math.trunc(pageSize)));
+  const normalizedSearch = search.replace(/\s+/g, ' ').trim();
+  const from = (safePage - 1) * safePageSize;
+  const to = from + safePageSize - 1;
+
+  let query = supabase.from('price_lists').select('*', { count: 'exact' });
+  if (/^\d+$/.test(normalizedSearch)) {
+    const numericId = Number(normalizedSearch);
+    query = query.or(`id_numeric.eq.${numericId},name.ilike.%${normalizedSearch}%`);
+  } else if (normalizedSearch) {
+    query = query.ilike('name', `%${normalizedSearch}%`);
+  }
+
+  const { data, error, count } = await query
+    .order('id_numeric', { ascending: false })
+    .range(from, to);
+  if (error) throw error;
+
+  const total = count ?? 0;
+  return {
+    items: (data || []).map(mapPriceList),
+    total,
+    page: safePage,
+    pageSize: safePageSize,
+    totalPages: Math.max(1, Math.ceil(total / safePageSize)),
+  };
 }
 
 export async function createPriceList(pl: Omit<PriceList, 'id'>): Promise<PriceList> {
