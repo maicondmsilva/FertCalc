@@ -61,6 +61,7 @@ import {
   hasFormulaTarget,
 } from '../domain/pricing-engine';
 import { validatePricingForSave } from '../utils/pricingValidation';
+import { getPriceListCurrencySnapshot } from '../utils/priceListCurrency';
 
 interface UseCalculatorProps {
   initialData?: PricingRecord | null;
@@ -174,6 +175,9 @@ export function useCalculator({
     Record<string, { formula: string; macros: RawMaterial[]; micros: RawMaterial[] }>
   >({});
   const hasAppliedInitialDefaults = useRef(false);
+  const currencySnapshotPriceListId = useRef(
+    initialData?.factors.priceListCurrency ? initialData.factors.priceListId : ''
+  );
 
   const getProductFormulaLabel = (material?: RawMaterial | null) => {
     if (!material) return '';
@@ -355,6 +359,16 @@ export function useCalculator({
     if (factors.priceListId) {
       const selectedList = priceLists.find((l) => l.id === factors.priceListId);
       if (selectedList) {
+        const currencySnapshot = getPriceListCurrencySnapshot(selectedList);
+        const shouldRefreshCurrencySnapshot =
+          currencySnapshotPriceListId.current !== selectedList.id;
+        if (shouldRefreshCurrencySnapshot) {
+          currencySnapshotPriceListId.current = selectedList.id;
+          setFactors((previousFactors) => ({
+            ...previousFactors,
+            ...currencySnapshot,
+          }));
+        }
         const canViewExtraProducts =
           currentUser.role === 'master' ||
           currentUser.role === 'admin' ||
@@ -460,6 +474,9 @@ export function useCalculator({
 
             return {
               ...calc,
+              factors: shouldRefreshCurrencySnapshot
+                ? { ...calc.factors, ...currencySnapshot }
+                : calc.factors,
               macros: updatedCalcMacros,
               micros: updatedCalcMicros,
             };

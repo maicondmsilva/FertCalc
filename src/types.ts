@@ -296,7 +296,9 @@ export interface Agent {
 
 export interface PriceList {
   id: string;
+  idNumeric?: number;
   organizationId?: string;
+  publicationId?: string;
   name: string;
   branchId?: string;
   local_carregamento_id?: string;
@@ -306,6 +308,26 @@ export interface PriceList {
   dollarRate?: number; // Para efeito de conhecimento em listas BRL
   macros: RawMaterial[];
   micros: RawMaterial[];
+}
+
+export type PriceListCurrency = 'BRL' | 'USD';
+export type PriceListPublicationStatus = 'draft' | 'published' | 'archived';
+
+export interface PriceListPublication {
+  id: string;
+  idNumeric: number;
+  organizationId?: string;
+  name: string;
+  competence: string;
+  revision: number;
+  currency: PriceListCurrency;
+  exchangeRate?: number;
+  validFrom?: string;
+  validUntil?: string;
+  notes?: string;
+  status: PriceListPublicationStatus;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Branch {
@@ -451,6 +473,10 @@ export interface PricingFactors {
   agent: Agent;
   branchId: string;
   priceListId: string;
+  priceListCurrency?: PriceListCurrency;
+  priceListExchangeRate?: number;
+  appliedExchangeRate?: number;
+  exchangeRateSource?: 'list' | 'manual';
   local_carregamento_id?: string;
   totalTons: number;
   commercialObservation?: string;
