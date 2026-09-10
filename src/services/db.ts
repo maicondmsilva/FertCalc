@@ -811,7 +811,9 @@ export async function getPriceLists(): Promise<PriceList[]> {
   if (error || !data) return [];
   return data.map((d) => ({
     id: d.id,
+    idNumeric: d.id_numeric != null ? Number(d.id_numeric) : undefined,
     organizationId: d.organization_id,
+    publicationId: d.publication_id ?? undefined,
     name: d.name,
     branchId: d.branch_id,
     local_carregamento_id: d.local_carregamento_id ?? undefined,
@@ -831,6 +833,7 @@ export async function createPriceList(pl: Omit<PriceList, 'id'>): Promise<PriceL
     .from('price_lists')
     .insert({
       name: pl.name,
+      publication_id: pl.publicationId ?? null,
       branch_id: pl.branchId ?? null,
       local_carregamento_id: pl.local_carregamento_id ?? null,
       date: pl.date,
@@ -844,7 +847,9 @@ export async function createPriceList(pl: Omit<PriceList, 'id'>): Promise<PriceL
   if (error) throw error;
   return {
     id: data.id,
+    idNumeric: data.id_numeric != null ? Number(data.id_numeric) : undefined,
     organizationId: data.organization_id,
+    publicationId: data.publication_id ?? undefined,
     name: data.name,
     branchId: data.branch_id,
     local_carregamento_id: data.local_carregamento_id ?? undefined,
@@ -870,6 +875,7 @@ export async function createPriceList(pl: Omit<PriceList, 'id'>): Promise<PriceL
 export async function updatePriceList(id: string, pl: Partial<PriceList>): Promise<void> {
   const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (pl.name !== undefined) payload.name = pl.name;
+  if ('publicationId' in pl) payload.publication_id = pl.publicationId ?? null;
   if (pl.branchId !== undefined) payload.branch_id = pl.branchId;
   if (pl.date !== undefined) payload.date = pl.date;
   if (pl.currency !== undefined) payload.currency = pl.currency;

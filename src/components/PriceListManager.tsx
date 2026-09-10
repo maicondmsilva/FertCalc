@@ -26,6 +26,7 @@ import { useConfirm } from '../hooks/useConfirm';
 import { User } from '../types';
 import { getLocaisAtivos } from '../services/locaisCarregamentoService';
 import { LocalCarregamento } from '../types/carregamento';
+import { isValidExchangeRate } from '../utils/priceListCurrency';
 
 interface PriceListManagerProps {
   currentUser: User;
@@ -461,6 +462,10 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
     }
     if (!listName.trim()) {
       showError('Dê um nome para a lista antes de salvar.');
+      return;
+    }
+    if (currency === 'USD' && !isValidExchangeRate(exchangeRate)) {
+      showError('Informe uma taxa de câmbio maior que zero para salvar uma lista em dólar.');
       return;
     }
     setSaving(true);
@@ -928,7 +933,9 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
                     {list.macros.length} macro(s) · {list.micros.length} micro(s)
                   </div>
                 </div>
-                <div className="text-[10px] text-stone-400 font-mono mt-1 mb-2">ID: {list.id}</div>
+                <div className="text-[10px] text-stone-400 font-mono mt-1 mb-2">
+                  ID: {list.idNumeric ?? '—'}
+                </div>
                 <div className="mt-2 pt-3 flex flex-wrap items-center gap-3 border-t border-stone-100">
                   <button
                     onClick={() => {
