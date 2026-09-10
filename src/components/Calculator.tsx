@@ -34,6 +34,15 @@ import { CotacaoSolicitada } from '../types/carregamento';
 import { getEmbalagens } from '../services/embalagensService';
 import { getSavedFormulas } from '../services/db';
 import { getProdutosFormulados, ProdutoFormulado } from '../services/produtosFormuladosService';
+import { isValidExchangeRate } from '../utils/priceListCurrency';
+
+const formatPricingMoney = (value: number | undefined, currency: 'BRL' | 'USD' = 'BRL') =>
+  Number(value || 0).toLocaleString('pt-BR', {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 
 const addDaysToDate = (dateStr: string, days: number): string => {
   if (!dateStr || !days) return '';
@@ -166,6 +175,7 @@ export default function Calculator({
   const [savedFormulas, setSavedFormulas] = useState<SavedFormula[]>([]);
   const [activeSearchCalcId, setActiveSearchCalcId] = useState<string | null>(null);
   const [formulaSearchTerm, setFormulaSearchTerm] = useState<Record<string, string>>({});
+  const [exchangeRateInput, setExchangeRateInput] = useState('');
   const protectedMaterialIds = initialFormulaToLoad?.protectedMaterialIds || [];
   const isSavedFormulaRevision = initialFormulaToLoad?.isRevisionFromSavedFormula === true;
 
@@ -233,10 +243,48 @@ export default function Calculator({
       currentUser.role === 'manager' ||
       (currentUser.permissions as any)?.calculator_savePricing !== false);
 
+  const selectedPriceList = priceLists.find((list) => list.id === factors.priceListId);
+  const isUsdPriceList = factors.priceListCurrency === 'USD';
+  const hasValidExchangeRate = !isUsdPriceList || isValidExchangeRate(factors.appliedExchangeRate);
+  const pricingCurrencySymbol = isUsdPriceList ? 'US$' : 'R$';
+  const convertRegisteredBRLToPricingCurrency = (value: number) =>
+    isUsdPriceList && isValidExchangeRate(factors.appliedExchangeRate)
+      ? value / Number(factors.appliedExchangeRate)
+      : value;
+
+  const updateAppliedExchangeRate = (rawValue: string, source: 'list' | 'manual') => {
+    setExchangeRateInput(rawValue);
+    const parsedValue = Number(rawValue.replace(',', '.'));
+    const appliedExchangeRate = isValidExchangeRate(parsedValue) ? parsedValue : undefined;
+    setFactors((previous) => ({
+      ...previous,
+      appliedExchangeRate,
+      exchangeRateSource: appliedExchangeRate ? source : undefined,
+    }));
+    setCalculations((previous) =>
+      previous.map((calculation) => ({
+        ...calculation,
+        factors: {
+          ...calculation.factors,
+          appliedExchangeRate,
+          exchangeRateSource: appliedExchangeRate ? source : undefined,
+        },
+        summary: undefined,
+      }))
+    );
+  };
+
+  useEffect(() => {
+    setExchangeRateInput(
+      String(factors.appliedExchangeRate ?? factors.priceListExchangeRate ?? '').replace('.', ',')
+    );
+  }, [factors.priceListCurrency, factors.priceListExchangeRate, factors.priceListId]);
+
   const pendingIssues = [
     !isSimplified && !factors.client?.id ? 'Selecione o cliente' : '',
     !factors.branchId ? 'Informe a filial' : '',
     !factors.priceListId ? 'Selecione a lista de preço' : '',
+    !hasValidExchangeRate ? 'Informe um câmbio válido para a lista em dólar' : '',
     calculations.length === 0 ? 'Adicione ao menos uma fórmula' : '',
     calculations.some((calc) => calc.selected && Number(calc.factors?.totalTons) <= 0)
       ? 'Informe as toneladas das fórmulas selecionadas'
@@ -572,6 +620,73 @@ export default function Calculator({
                 </select>
               </div>
             </div>
+
+            {isUsdPriceList && (
+              <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <p className="text-sm font-black text-blue-900">Lista em dólar (USD)</p>
+                    <p className="mt-1 text-xs text-blue-700">
+                      Os preços permanecem em USD e o resumo apresenta também o equivalente em
+                      reais.
+                    </p>
+                  </div>
+                  <div className="w-full sm:w-56">
+                    <label
+                      htmlFor="calculator-exchange-rate"
+                      className="mb-1 block text-xs font-bold text-blue-900"
+                    >
+                      Câmbio utilizado (R$/US$)
+                    </label>
+                    <input
+                      id="calculator-exchange-rate"
+                      type="text"
+                      inputMode="decimal"
+                      disabled={Boolean(isLocked)}
+                      value={exchangeRateInput}
+                      onChange={(event) => updateAppliedExchangeRate(event.target.value, 'manual')}
+                      placeholder="Ex.: 5,18"
+                      className={`w-full rounded-lg border px-3 py-2 text-sm font-bold outline-none focus:ring-2 ${
+                        hasValidExchangeRate
+                          ? 'border-blue-300 bg-white text-blue-950 focus:ring-blue-400'
+                          : 'border-red-400 bg-red-50 text-red-900 focus:ring-red-400'
+                      }`}
+                    />
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <span className="text-blue-700">
+                    Câmbio da lista:{' '}
+                    <strong>
+                      {isValidExchangeRate(factors.priceListExchangeRate)
+                        ? Number(factors.priceListExchangeRate).toLocaleString('pt-BR', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 6,
+                          })
+                        : 'não informado'}
+                    </strong>
+                  </span>
+                  {factors.exchangeRateSource === 'manual' &&
+                    isValidExchangeRate(factors.priceListExchangeRate) && (
+                      <button
+                        type="button"
+                        disabled={Boolean(isLocked)}
+                        onClick={() =>
+                          updateAppliedExchangeRate(String(factors.priceListExchangeRate), 'list')
+                        }
+                        className="font-bold text-blue-800 underline hover:text-blue-950 disabled:opacity-50"
+                      >
+                        Restaurar câmbio da lista
+                      </button>
+                    )}
+                </div>
+                {selectedPriceList && (
+                  <p className="mt-2 text-[11px] text-blue-600">
+                    Lista {selectedPriceList.idNumeric ?? '—'} · {selectedPriceList.name}
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* F\u00f3rmulas Alvo \u2014 full-width below status */}
             <div id="formulas-calculo" className="scroll-mt-24 mt-6 pt-5 border-t border-stone-100">
@@ -1216,7 +1331,7 @@ export default function Calculator({
                             </div>
                             <div className="lg:col-span-2">
                               <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">
-                                Desconto (R$/t)
+                                Desconto ({pricingCurrencySymbol}/t)
                               </label>
                               <input
                                 type="number"
@@ -1329,7 +1444,7 @@ export default function Calculator({
                                   placeholder={
                                     calc.factors.cotacaoFreteNumero
                                       ? `🔗 ${calc.factors.cotacaoFreteNumero} — editável`
-                                      : 'R$/ton — digite ou vincule cotação'
+                                      : `${pricingCurrencySymbol}/ton — digite ou vincule cotação`
                                   }
                                   value={calc.factors.freight === 0 ? '' : calc.factors.freight}
                                   onChange={(e) => {
@@ -1354,7 +1469,7 @@ export default function Calculator({
                                 <div className="flex items-center gap-1 mt-1 text-[10px] text-emerald-700 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">
                                   <Truck className="w-3 h-3 shrink-0" />
                                   <span className="flex-1 truncate">
-                                    ✓ {calc.factors.cotacaoFreteNumero} · R${' '}
+                                    ✓ {calc.factors.cotacaoFreteNumero} · {pricingCurrencySymbol}{' '}
                                     {(calc.factors.freight || 0).toFixed(2)}/t
                                   </span>
                                   <button
@@ -1396,10 +1511,14 @@ export default function Calculator({
                                   ajuste: 'nenhum' | 'cobrar' | 'descontar'
                                 ) => {
                                   if (ajuste === 'cobrar' && emb.cobrar) {
-                                    return Number(emb.valor_cobrar ?? emb.valor ?? 0);
+                                    return convertRegisteredBRLToPricingCurrency(
+                                      Number(emb.valor_cobrar ?? emb.valor ?? 0)
+                                    );
                                   }
                                   if (ajuste === 'descontar' && (emb.descontar ?? emb.desconto)) {
-                                    return -Number(emb.valor_descontar ?? emb.valor ?? 0);
+                                    return -convertRegisteredBRLToPricingCurrency(
+                                      Number(emb.valor_descontar ?? emb.valor ?? 0)
+                                    );
                                   }
                                   return 0;
                                 };
@@ -1493,8 +1612,8 @@ export default function Calculator({
                                           {ajusteAtual === 'nenhum'
                                             ? 'Sem ajuste'
                                             : (calc.factors.embalagem_valor || 0) >= 0
-                                              ? `Cobrar +R$ ${(calc.factors.embalagem_valor || 0).toFixed(2)}/t`
-                                              : `Descontar -R$ ${Math.abs(calc.factors.embalagem_valor || 0).toFixed(2)}/t`}
+                                              ? `Cobrar +${pricingCurrencySymbol} ${(calc.factors.embalagem_valor || 0).toFixed(2)}/t`
+                                              : `Descontar -${pricingCurrencySymbol} ${Math.abs(calc.factors.embalagem_valor || 0).toFixed(2)}/t`}
                                         </span>
                                       </div>
                                     )}
@@ -1732,7 +1851,8 @@ export default function Calculator({
                                 </span>
                               )}
                               <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded text-xs font-bold">
-                                R$ {calc.summary.finalPrice.toFixed(2)}/t
+                                {formatPricingMoney(calc.summary.finalPrice, calc.summary.currency)}
+                                /t
                               </span>
                               {(() => {
                                 const fmatch = calc.formula.match(
@@ -1802,10 +1922,11 @@ export default function Calculator({
                                     </div>
                                     <div className="flex justify-between">
                                       <span className="text-[9px] text-stone-400">
-                                        R$ {m.price.toFixed(2)}/t
+                                        {pricingCurrencySymbol} {m.price.toFixed(2)}/t
                                       </span>
                                       <span className="text-[10px] text-stone-600 font-semibold shrink-0">
-                                        R$ {((m.quantity / 1000) * m.price).toFixed(2)}
+                                        {pricingCurrencySymbol}{' '}
+                                        {((m.quantity / 1000) * m.price).toFixed(2)}
                                       </span>
                                     </div>
                                   </div>
@@ -1849,7 +1970,7 @@ export default function Calculator({
                             Preço Final
                           </p>
                           <p className="text-xs font-bold text-emerald-600">
-                            R$ {calc.summary.finalPrice.toFixed(2)}
+                            {formatPricingMoney(calc.summary.finalPrice, calc.summary.currency)}
                           </p>
                         </div>
                         <div className="text-center border-x border-stone-100">
@@ -1882,7 +2003,7 @@ export default function Calculator({
                             Custo Base
                           </p>
                           <p className="text-xs font-bold text-stone-700">
-                            R$ {calc.summary.baseCost.toFixed(2)}
+                            {formatPricingMoney(calc.summary.baseCost, calc.summary.currency)}
                           </p>
                         </div>
                       </div>
@@ -1923,7 +2044,7 @@ export default function Calculator({
                 <button
                   type="button"
                   onClick={() => calculateFormula()}
-                  disabled={!calculations.some((calc) => calc.selected)}
+                  disabled={!calculations.some((calc) => calc.selected) || !hasValidExchangeRate}
                   className="inline-flex w-full min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-stone-300"
                 >
                   <CalculatorIcon className="h-4 w-4" /> Calcular selecionadas
@@ -2015,8 +2136,14 @@ export default function Calculator({
                         <div>
                           <p className="text-xs text-stone-500 uppercase font-bold">Preço Final</p>
                           <p className="text-2xl font-bold text-white">
-                            R$ {calc.summary?.finalPrice.toFixed(2)}
+                            {formatPricingMoney(calc.summary?.finalPrice, calc.summary?.currency)}
                           </p>
+                          {calc.summary?.currency === 'USD' &&
+                            calc.summary.finalPriceBRL !== undefined && (
+                              <p className="mt-1 text-xs font-bold text-blue-300">
+                                Equivalente: {formatPricingMoney(calc.summary.finalPriceBRL, 'BRL')}
+                              </p>
+                            )}
                         </div>
                         <div className="text-right">
                           <p className="text-xs text-stone-500 uppercase font-bold">N-P-K Real</p>
@@ -2059,18 +2186,27 @@ export default function Calculator({
                         <div className="flex justify-between text-xs">
                           <span className="text-stone-500">Custo Base:</span>
                           <span className="text-stone-300 font-medium">
-                            R$ {calc.summary?.baseCost.toFixed(2)}
+                            {formatPricingMoney(calc.summary?.baseCost, calc.summary?.currency)}
                           </span>
                         </div>
                         <div className="flex justify-between text-sm">
                           <span className="text-stone-500 font-bold">Venda Total:</span>
                           <span className="text-emerald-400 font-bold">
-                            R${' '}
-                            {calc.summary?.totalSaleValue.toLocaleString('pt-BR', {
-                              minimumFractionDigits: 2,
-                            })}
+                            {formatPricingMoney(
+                              calc.summary?.totalSaleValue,
+                              calc.summary?.currency
+                            )}
                           </span>
                         </div>
+                        {calc.summary?.currency === 'USD' &&
+                          calc.summary.totalSaleValueBRL !== undefined && (
+                            <div className="flex justify-between text-xs">
+                              <span className="text-stone-500">Venda total em reais:</span>
+                              <span className="font-bold text-blue-300">
+                                {formatPricingMoney(calc.summary.totalSaleValueBRL, 'BRL')}
+                              </span>
+                            </div>
+                          )}
                       </div>
 
                       {/* Materials List in Summary */}
@@ -2121,7 +2257,7 @@ export default function Calculator({
                 <button
                   type="button"
                   onClick={savePricing}
-                  disabled={isLocked}
+                  disabled={Boolean(isLocked) || !hasValidExchangeRate}
                   className="mt-3 inline-flex w-full min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-emerald-950/30 hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-stone-600"
                 >
                   <Save className="h-4 w-4" /> {initialData ? 'Atualizar' : 'Salvar precificação'}
@@ -2260,7 +2396,9 @@ export default function Calculator({
                                 updateCalculationFactors(
                                   cotacaoModalCalcId,
                                   'freight',
-                                  cot.valor_frete_unitario || 0
+                                  convertRegisteredBRLToPricingCurrency(
+                                    cot.valor_frete_unitario || 0
+                                  )
                                 );
                                 updateCalculationFactors(
                                   cotacaoModalCalcId,

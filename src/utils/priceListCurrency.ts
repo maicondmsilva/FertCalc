@@ -74,3 +74,12 @@ export function convertPriceToBRL(
   if (!context.exchangeRateValid || context.exchangeRate === undefined) return undefined;
   return context.currency === 'USD' ? value * context.exchangeRate : value;
 }
+
+export function hasValidPricingExchangeRate(
+  factors: Pick<
+    PricingFactors,
+    'priceListCurrency' | 'priceListExchangeRate' | 'appliedExchangeRate'
+  >
+): boolean {
+  return getPricingCurrencyContext(factors).exchangeRateValid;
+}
