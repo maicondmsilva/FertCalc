@@ -1,10 +1,17 @@
-import type { PriceList, PriceListCurrency } from '../types';
+import type { PriceList, PriceListCurrency, PricingFactors } from '../types';
 
 export interface PriceListCurrencySnapshot {
   priceListCurrency: PriceListCurrency;
   priceListExchangeRate?: number;
   appliedExchangeRate?: number;
   exchangeRateSource?: 'list';
+}
+
+export interface PricingCurrencyContext {
+  currency: PriceListCurrency;
+  exchangeRate?: number;
+  exchangeRateSource?: 'list' | 'manual';
+  exchangeRateValid: boolean;
 }
 
 export function isValidExchangeRate(value: unknown): boolean {
@@ -27,4 +34,43 @@ export function getPriceListCurrencySnapshot(list: PriceList): PriceListCurrency
 
 export function priceListRequiresExchangeRate(list: PriceList): boolean {
   return (list.currency ?? 'BRL') === 'USD' && !isValidExchangeRate(list.exchangeRate);
+}
+
+export function getPricingCurrencyContext(
+  factors: Pick<
+    PricingFactors,
+    'priceListCurrency' | 'priceListExchangeRate' | 'appliedExchangeRate' | 'exchangeRateSource'
+  >
+): PricingCurrencyContext {
+  const currency = factors.priceListCurrency ?? 'BRL';
+  if (currency === 'BRL') {
+    return { currency, exchangeRate: 1, exchangeRateValid: true };
+  }
+
+  const appliedRate = isValidExchangeRate(factors.appliedExchangeRate)
+    ? Number(factors.appliedExchangeRate)
+    : undefined;
+  const listRate = isValidExchangeRate(factors.priceListExchangeRate)
+    ? Number(factors.priceListExchangeRate)
+    : undefined;
+  const exchangeRate = appliedRate ?? listRate;
+
+  return {
+    currency,
+    exchangeRate,
+    exchangeRateSource: exchangeRate
+      ? appliedRate
+        ? (factors.exchangeRateSource ?? 'list')
+        : 'list'
+      : undefined,
+    exchangeRateValid: exchangeRate !== undefined,
+  };
+}
+
+export function convertPriceToBRL(
+  value: number,
+  context: PricingCurrencyContext
+): number | undefined {
+  if (!context.exchangeRateValid || context.exchangeRate === undefined) return undefined;
+  return context.currency === 'USD' ? value * context.exchangeRate : value;
 }
