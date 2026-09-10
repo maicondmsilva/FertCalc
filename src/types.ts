@@ -502,6 +502,10 @@ export interface Embalagem {
 }
 
 export interface PricingSummary {
+  currency?: PriceListCurrency;
+  exchangeRate?: number;
+  exchangeRateSource?: 'list' | 'manual';
+  exchangeRateValid?: boolean;
   totalWeight: number;
   baseCost: number;
   basePrice: number;
@@ -511,6 +515,14 @@ export interface PricingSummary {
   freightValue: number;
   finalPrice: number;
   totalSaleValue: number;
+  baseCostBRL?: number;
+  basePriceBRL?: number;
+  interestValueBRL?: number;
+  taxValueBRL?: number;
+  commissionValueBRL?: number;
+  freightValueBRL?: number;
+  finalPriceBRL?: number;
+  totalSaleValueBRL?: number;
   resultingN: number;
   resultingP: number;
   resultingK: number;

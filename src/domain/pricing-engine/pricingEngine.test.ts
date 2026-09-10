@@ -127,6 +127,64 @@ describe('pricing engine compatibility', () => {
     expect(result.finalPrice).toBe(result.basePrice);
   });
 
+  it('mantém o preço em USD e calcula todos os equivalentes em BRL', () => {
+    const result = calculatePricingSummary(
+      [material],
+      [],
+      factors({
+        priceListCurrency: 'USD',
+        priceListExchangeRate: 5,
+        appliedExchangeRate: 5,
+        exchangeRateSource: 'list',
+        freight: 10,
+        tipoFrete: 'CIF',
+        totalTons: 2,
+      })
+    );
+
+    expect(result.currency).toBe('USD');
+    expect(result.baseCost).toBe(100);
+    expect(result.finalPrice).toBe(110);
+    expect(result.baseCostBRL).toBe(500);
+    expect(result.freightValueBRL).toBe(50);
+    expect(result.finalPriceBRL).toBe(550);
+    expect(result.totalSaleValueBRL).toBe(1100);
+    expect(result.exchangeRateSource).toBe('list');
+  });
+
+  it('prioriza o câmbio manual e registra sua origem', () => {
+    const result = calculatePricingSummary(
+      [material],
+      [],
+      factors({
+        priceListCurrency: 'USD',
+        priceListExchangeRate: 5,
+        appliedExchangeRate: 5.25,
+        exchangeRateSource: 'manual',
+      })
+    );
+
+    expect(result.exchangeRate).toBe(5.25);
+    expect(result.exchangeRateSource).toBe('manual');
+    expect(result.baseCostBRL).toBe(525);
+  });
+
+  it('sinaliza lista USD sem câmbio e não inventa conversão', () => {
+    const result = calculatePricingSummary(
+      [material],
+      [],
+      factors({
+        priceListCurrency: 'USD',
+        priceListExchangeRate: undefined,
+        appliedExchangeRate: undefined,
+      })
+    );
+
+    expect(result.exchangeRateValid).toBe(false);
+    expect(result.exchangeRate).toBeUndefined();
+    expect(result.finalPriceBRL).toBeUndefined();
+  });
+
   it('trata vencimento passado ou inválido como zero dias de juros', () => {
     const today = new Date('2026-02-01T12:00:00');
 
@@ -137,17 +195,17 @@ describe('pricing engine compatibility', () => {
   it('cobra juros somente a partir da data inicial informada', () => {
     const today = new Date('2026-01-15T12:00:00');
 
-    expect(
-      calculateInterestDays('2026-06-15T12:00:00', false, today, '2026-03-15T12:00:00')
-    ).toBe(92);
+    expect(calculateInterestDays('2026-06-15T12:00:00', false, today, '2026-03-15T12:00:00')).toBe(
+      92
+    );
   });
 
   it('ignora a data inicial quando o mês atual está isento', () => {
     const today = new Date('2026-01-15T12:00:00');
 
-    expect(
-      calculateInterestDays('2026-03-01T12:00:00', true, today, '2026-01-01T12:00:00')
-    ).toBe(30);
+    expect(calculateInterestDays('2026-03-01T12:00:00', true, today, '2026-01-01T12:00:00')).toBe(
+      30
+    );
   });
 
   it('produz composição finita e zerada quando não há materiais', () => {
