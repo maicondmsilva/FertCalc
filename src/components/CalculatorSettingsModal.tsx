@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { X, Search, GripVertical, ChevronUp, ChevronDown } from 'lucide-react';
+import { X, Search, GripVertical, ChevronUp, ChevronDown, RotateCcw } from 'lucide-react';
 import { TargetFormula, RawMaterial } from '../types';
 import { microGuaranteePercentToKg } from '../utils/microGuarantee';
 import { closeModalOnBackdrop } from '../utils/modalUtils';
+import {
+  applyTemporaryMaterialPrice,
+  restoreOfficialMaterialPrice,
+} from '../utils/temporaryMaterialPrice';
 
 interface CalculatorSettingsModalProps {
   isOpen: boolean;
@@ -13,6 +17,7 @@ interface CalculatorSettingsModalProps {
   isMaterialsLoading?: boolean;
   hasNoMaterialsInDatabase?: boolean;
   protectedMaterialIds?: string[];
+  currency?: 'BRL' | 'USD';
   onConfirm: (updatedFormula: TargetFormula) => void;
 }
 
@@ -25,6 +30,7 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
   isMaterialsLoading = false,
   hasNoMaterialsInDatabase = false,
   protectedMaterialIds = [],
+  currency = 'BRL',
   onConfirm,
 }) => {
   const [activeTab, setActiveTab] = useState<'macros' | 'micros'>('macros');
@@ -36,6 +42,7 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
   });
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [microPercentInputs, setMicroPercentInputs] = useState<Record<string, string>>({});
+  const [priceInputs, setPriceInputs] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (isOpen && formula) {
@@ -50,6 +57,14 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
               product.id,
               String(product.desiredGuaranteePercent).replace('.', ','),
             ])
+        )
+      );
+      setPriceInputs(
+        Object.fromEntries(
+          [...(formula.macros || []), ...(formula.micros || [])].map((product) => [
+            product.id,
+            String(product.price ?? 0).replace('.', ','),
+          ])
         )
       );
       const resolveOrder = (globalProducts: RawMaterial[], savedProducts: RawMaterial[]) => {
@@ -160,6 +175,7 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
       [arrKey]: localFormula[arrKey].map((material) =>
         material.id === productId ? { ...material, ...patch } : material
       ),
+      ...('price' in patch ? { summary: undefined } : {}),
     });
   };
 
@@ -322,6 +338,66 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
                 {/* Extended Input Fields */}
                 {p.selected && (
                   <div className="mt-3 border-t border-blue-200/50 pt-3 text-xs">
+                    <div
+                      className={`mb-3 rounded-lg border p-3 ${
+                        p.isManualPrice
+                          ? 'border-amber-300 bg-amber-50'
+                          : 'border-stone-200 bg-white/70'
+                      }`}
+                    >
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                        <label className="flex min-w-0 flex-1 flex-col gap-1 font-semibold text-stone-600">
+                          Preço temporário ({currency === 'USD' ? 'US$' : 'R$'}/t)
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={priceInputs[p.id] ?? String(p.price ?? 0).replace('.', ',')}
+                            onChange={(event) => {
+                              const inputValue = event.target.value;
+                              if (!/^\d*(?:[.,]\d*)?$/.test(inputValue)) return;
+                              setPriceInputs((current) => ({ ...current, [p.id]: inputValue }));
+                              if (inputValue === '' || inputValue === ',' || inputValue === '.')
+                                return;
+                              const price = Number(inputValue.replace(',', '.'));
+                              if (!Number.isFinite(price)) return;
+                              updateLocalProduct(type, p.id, applyTemporaryMaterialPrice(p, price));
+                            }}
+                            className={`rounded border bg-white px-2 py-1.5 text-stone-800 outline-none focus:ring-2 ${
+                              p.isManualPrice
+                                ? 'border-amber-400 focus:ring-amber-300'
+                                : 'border-stone-300 focus:ring-blue-300'
+                            }`}
+                          />
+                        </label>
+                        <div className="flex items-center justify-between gap-3 sm:justify-end">
+                          <span className="text-[10px] text-stone-500">
+                            Lista: {currency === 'USD' ? 'US$' : 'R$'}{' '}
+                            {Number(p.listPrice ?? p.price ?? 0).toFixed(2)}
+                          </span>
+                          {p.isManualPrice && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const restored = restoreOfficialMaterialPrice(p);
+                                setPriceInputs((current) => ({
+                                  ...current,
+                                  [p.id]: String(restored.price).replace('.', ','),
+                                }));
+                                updateLocalProduct(type, p.id, restored);
+                              }}
+                              className="inline-flex items-center gap-1 font-bold text-amber-800 hover:text-amber-950"
+                            >
+                              <RotateCcw className="h-3.5 w-3.5" /> Restaurar
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      {p.isManualPrice && (
+                        <p className="mt-2 text-[10px] font-bold text-amber-800">
+                          Preço fora da lista — válido somente nesta precificação.
+                        </p>
+                      )}
+                    </div>
                     {type === 'micro' && p.microGuarantees?.length > 0 && (
                       <div className="mb-3 grid gap-2 rounded-lg bg-white/70 p-3 sm:grid-cols-3">
                         <label className="flex flex-col gap-1 font-semibold text-stone-500">

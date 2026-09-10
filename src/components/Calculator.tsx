@@ -2101,6 +2101,9 @@ export default function Calculator({
                   const unpricedCompositionProducts = [...calc.macros, ...calc.micros].filter(
                     (material) => material.quantity > 0 && material.isOutsidePriceList
                   );
+                  const manualPriceProducts = [...calc.macros, ...calc.micros].filter(
+                    (material) => material.quantity > 0 && material.isManualPrice
+                  );
 
                   return (
                     <div
@@ -2128,6 +2131,24 @@ export default function Calculator({
                                 .join(', ')}
                             </strong>
                             . Revise antes de utilizar esta precificação.
+                          </p>
+                        </div>
+                      )}
+
+                      {manualPriceProducts.length > 0 && (
+                        <div
+                          role="alert"
+                          className="rounded-lg border border-blue-500/60 bg-blue-950/50 p-3 text-xs text-blue-100"
+                        >
+                          <div className="mb-1 flex items-center gap-2 font-black uppercase text-blue-300">
+                            <AlertTriangle className="h-4 w-4" /> Preço manual temporário
+                          </div>
+                          <p>
+                            Esta precificação usa valor diferente da lista para:{' '}
+                            <strong>
+                              {manualPriceProducts.map((material) => material.name).join(', ')}
+                            </strong>
+                            . O preço oficial da lista não foi alterado.
                           </p>
                         </div>
                       )}
@@ -2223,6 +2244,11 @@ export default function Calculator({
                                 <span className="text-emerald-500 font-mono font-medium">
                                   {m.quantity.toFixed(2)}
                                 </span>
+                                {m.isManualPrice && (
+                                  <span className="ml-1 rounded bg-blue-950 px-1 text-[9px] font-bold text-blue-300">
+                                    preço manual
+                                  </span>
+                                )}
                               </div>
                             ))}
                         </div>
@@ -2300,6 +2326,7 @@ export default function Calculator({
         isMaterialsLoading={isMaterialsLoading}
         hasNoMaterialsInDatabase={hasNoMaterialsInDatabase}
         protectedMaterialIds={protectedMaterialIds}
+        currency={factors.priceListCurrency ?? 'BRL'}
         onConfirm={(updatedFormula) => {
           setCalculations(
             calculations.map((c) => (c.id === updatedFormula.id ? updatedFormula : c))
