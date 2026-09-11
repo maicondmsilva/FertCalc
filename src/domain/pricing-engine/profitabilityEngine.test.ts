@@ -99,4 +99,26 @@ describe('profitability engine', () => {
     expect(analysis.dataCarregamento).toBe('2026-01-16');
     expect(analysis.ddfDias).toBe(30);
   });
+
+  it('preserva a moeda de origem e grava o espelho financeiro em reais', () => {
+    const analysis = createProfitabilityAnalysis(
+      {
+        ...input,
+        currency: 'USD',
+        exchangeRate: 5.2,
+        pricingRecordId: 'pricing-usd',
+        calculationIndex: 0,
+        formulaName: '20-05-20',
+        analyzedByUserId: 'user-1',
+        analyzedByName: 'Analista',
+      },
+      { today: new Date('2026-01-16T12:00:00') }
+    );
+
+    expect(analysis.currency).toBe('USD');
+    expect(analysis.exchangeRate).toBe(5.2);
+    expect(analysis.unitaryPriceBRL).toBeCloseTo(analysis.unitaryPrice * 5.2);
+    expect(analysis.netRevenueBRL).toBeCloseTo(analysis.netRevenue * 5.2);
+    expect(analysis.profitabilityBRL).toBeCloseTo(analysis.profitability * 5.2);
+  });
 });

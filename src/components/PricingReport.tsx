@@ -14,13 +14,16 @@ import {
   LayoutGrid,
   Table2,
 } from 'lucide-react';
-import {
-  getPricingTotalTons,
-  getPricingTotalSaleValue,
-  getPricingAverageCommissionRate,
-} from '../utils/pricingMetrics';
+import { getPricingTotalTons, getPricingAverageCommissionRate } from '../utils/pricingMetrics';
 import { formatPricingCode } from './CommissionReport';
 import { filterPricingRecords, getPricingReportPeriodLabel } from '../utils/pricingReportFilters';
+import {
+  formatPricingMoney,
+  formatPricingRecordAveragePerTon,
+  formatPricingRecordTotal,
+  getPricingRecordCurrencies,
+  getPricingTotalSaleValueBRL,
+} from '../utils/pricingCurrency';
 
 const PricingDetailModal = React.lazy(() => import('./PricingDetailModal'));
 
@@ -49,6 +52,7 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
   const [monthFilter, setMonthFilter] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [currencyFilter, setCurrencyFilter] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [selectedPricing, setSelectedPricing] = useState<PricingRecord | null>(null);
   const [exporting, setExporting] = useState<'pdf' | 'excel' | null>(null);
@@ -95,7 +99,11 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
     startDate,
     endDate,
   };
-  const filteredPricings = filterPricingRecords(pricings, reportFilters);
+  const filteredPricings = filterPricingRecords(pricings, reportFilters).filter(
+    (pricing) =>
+      !currencyFilter ||
+      getPricingRecordCurrencies(pricing).includes(currencyFilter as 'BRL' | 'USD')
+  );
 
   // Estatísticas
   const stats = {
@@ -110,7 +118,7 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
     ticketMedioFechadas: 0,
     totalFaturamentoFechado: filteredPricings
       .filter((p) => p.status === 'Fechada')
-      .reduce((s, p) => s + getPricingTotalSaleValue(p), 0),
+      .reduce((s, p) => s + getPricingTotalSaleValueBRL(p), 0),
     totalTonsFechadas: filteredPricings
       .filter((p) => p.status === 'Fechada')
       .reduce((s, p) => s + getPricingTotalTons(p), 0),
@@ -184,6 +192,7 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
         `Vendedor: ${sellerName}`,
         `Status: ${statusFilter || 'Todos'}`,
         `Aprovação: ${approvalFilter || 'Todas'}`,
+        `Moeda: ${currencyFilter || 'Todas'}`,
         search ? `Busca: ${search}` : '',
       ]
         .filter(Boolean)
@@ -205,7 +214,7 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
           `Aprovadas: ${stats.aprovadas}`,
           `Reprovadas: ${stats.reprovadas}`,
           `Taxa de Conversão: ${stats.taxaConversao}%`,
-          `Faturamento Fechado: R$ ${stats.totalFaturamentoFechado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+          `Faturamento Fechado (BRL): ${formatPricingMoney(stats.totalFaturamentoFechado, 'BRL')}`,
         ].join('   |   '),
         10,
         statsY,
@@ -241,8 +250,8 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
           getPricingAverageCommissionRate(p).toFixed(1) + '%',
           (p.calculations?.length || 0) + ' f.',
           getPricingTotalTons(p).toFixed(1) + ' t',
-          `R$ ${(getPricingTotalTons(p) > 0 ? getPricingTotalSaleValue(p) / getPricingTotalTons(p) : 0).toFixed(2)}`,
-          `R$ ${getPricingTotalSaleValue(p).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+          formatPricingRecordAveragePerTon(p, getPricingTotalTons(p)),
+          formatPricingRecordTotal(p),
           p.status,
           p.approvalStatus || 'Pendente',
         ]),
@@ -291,6 +300,8 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
           statusFilter || 'Todos',
           'Aprovação',
           approvalFilter || 'Todas',
+          'Moeda',
+          currencyFilter || 'Todas',
         ],
         [],
         [
@@ -318,8 +329,8 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
           branches.find((b) => b.id === p.factors?.branchId)?.name || '---',
           p.calculations?.length || 0,
           getPricingTotalTons(p),
-          getPricingTotalTons(p) > 0 ? getPricingTotalSaleValue(p) / getPricingTotalTons(p) : 0,
-          getPricingTotalSaleValue(p),
+          formatPricingRecordAveragePerTon(p, getPricingTotalTons(p)),
+          formatPricingRecordTotal(p),
           p.status,
           p.approvalStatus || 'Pendente',
         ]),
@@ -342,6 +353,7 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
     setMonthFilter('');
     setStartDate('');
     setEndDate('');
+    setCurrencyFilter('');
   };
 
   if (loading) {
@@ -429,7 +441,7 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
             Faturamento Fechado
           </p>
           <p className="text-2xl font-black">
-            R$ {stats.totalFaturamentoFechado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            {formatPricingMoney(stats.totalFaturamentoFechado, 'BRL')}
           </p>
         </div>
         <div className="bg-white rounded-xl p-5 shadow-sm border border-stone-200">
@@ -445,7 +457,7 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
             Ticket Médio/Ton (Fechadas)
           </p>
           <p className="text-2xl font-black text-stone-800">
-            R$ {stats.ticketMedioFechadas.toFixed(2)}
+            {formatPricingMoney(stats.ticketMedioFechadas, 'BRL')}
           </p>
         </div>
         <div className="bg-white rounded-xl p-5 shadow-sm border border-stone-200">
@@ -502,6 +514,15 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
             <option value="Pendente">Pendente</option>
             <option value="Aprovada">Aprovada</option>
             <option value="Reprovada">Reprovada</option>
+          </select>
+          <select
+            value={currencyFilter}
+            onChange={(e) => setCurrencyFilter(e.target.value)}
+            className="px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+          >
+            <option value="">Todas as moedas</option>
+            <option value="BRL">Real (BRL)</option>
+            <option value="USD">Dólar (USD)</option>
           </select>
           <select
             value={branchFilter}
@@ -627,10 +648,7 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
               </thead>
               <tbody className="divide-y divide-stone-100 bg-white">
                 {filteredPricings.map((p) => {
-                  const avgPrice =
-                    getPricingTotalTons(p) > 0
-                      ? getPricingTotalSaleValue(p) / getPricingTotalTons(p)
-                      : 0;
+                  const tons = getPricingTotalTons(p);
                   return (
                     <tr key={p.id} className="hover:bg-stone-50 transition-colors">
                       <td className="px-4 py-3 text-center">
@@ -665,13 +683,10 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
                         })}
                       </td>
                       <td className="px-4 py-3 text-stone-600 font-bold text-sm text-right whitespace-nowrap">
-                        R$ {avgPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        {formatPricingRecordAveragePerTon(p, tons)}
                       </td>
                       <td className="px-4 py-3 text-emerald-600 font-black text-sm text-right whitespace-nowrap">
-                        R${' '}
-                        {getPricingTotalSaleValue(p).toLocaleString('pt-BR', {
-                          minimumFractionDigits: 2,
-                        })}
+                        {formatPricingRecordTotal(p)}
                       </td>
                       <td className="px-4 py-3">
                         <span
@@ -704,7 +719,6 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
           <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2 xl:grid-cols-3">
             {filteredPricings.map((p) => {
               const tons = getPricingTotalTons(p);
-              const total = getPricingTotalSaleValue(p);
               return (
                 <button
                   key={p.id}
@@ -745,9 +759,7 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
                     </div>
                     <div>
                       <span className="block text-stone-400">Valor total</span>
-                      <strong className="text-emerald-700">
-                        R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </strong>
+                      <strong className="text-emerald-700">{formatPricingRecordTotal(p)}</strong>
                     </div>
                   </div>
                   <p className="mt-3 border-t border-stone-100 pt-3 text-xs text-stone-500">

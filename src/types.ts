@@ -397,6 +397,12 @@ export interface ProfitabilityAnalysis {
   netRevenue: number;
   profitability: number;
   profitabilityPercent: number;
+  currency?: PriceListCurrency;
+  exchangeRate?: number;
+  unitaryPriceBRL?: number;
+  baseCostBRL?: number;
+  netRevenueBRL?: number;
+  profitabilityBRL?: number;
   dueDate?: string;
   exemptCurrentMonth?: boolean;
   interestStartDate?: string;
