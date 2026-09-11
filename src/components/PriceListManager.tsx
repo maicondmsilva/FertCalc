@@ -13,6 +13,7 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  FileText,
 } from 'lucide-react';
 import { RawMaterial, PriceList, MacroMaterial, MicroMaterial } from '../types';
 import {
@@ -22,6 +23,7 @@ import {
   createPriceList,
   updatePriceList,
   deletePriceList,
+  getPriceListsForPdfSelection,
 } from '../services/db';
 import { useToast } from './Toast';
 import { ConfirmDialog } from './ui/ConfirmDialog';
@@ -30,6 +32,15 @@ import { User } from '../types';
 import { getLocaisAtivos } from '../services/locaisCarregamentoService';
 import { LocalCarregamento } from '../types/carregamento';
 import { isValidExchangeRate } from '../utils/priceListCurrency';
+import { getPriceListPublications } from '../services/priceListPublicationService';
+import {
+  buildPriceListPdfGroups,
+  type PriceListPdfGroup,
+} from '../utils/priceListPdfSelection';
+import {
+  PriceListPdfSelectionDialog,
+  type PriceListPdfSelection,
+} from './PriceListPdfSelectionDialog';
 
 interface PriceListManagerProps {
   currentUser: User;
@@ -338,6 +349,11 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
   const [totalLists, setTotalLists] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [reloadToken, setReloadToken] = useState(0);
+  const [showPdfSelection, setShowPdfSelection] = useState(false);
+  const [pdfGroups, setPdfGroups] = useState<PriceListPdfGroup[]>([]);
+  const [pdfOptionsLoading, setPdfOptionsLoading] = useState(false);
+  const [pdfOptionsError, setPdfOptionsError] = useState('');
+  const [pdfSelection, setPdfSelection] = useState<PriceListPdfSelection | null>(null);
   const [saving, setSaving] = useState(false);
 
   // form state
@@ -573,6 +589,26 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
     }
   };
 
+  const openPdfSelection = async () => {
+    setShowPdfSelection(true);
+    setPdfOptionsLoading(true);
+    setPdfOptionsError('');
+    try {
+      const [lists, publications] = await Promise.all([
+        getPriceListsForPdfSelection(),
+        getPriceListPublications(),
+      ]);
+      const locationNames = new Map(
+        locaisCarregamento.map((local) => [local.id, local.nome] as const)
+      );
+      setPdfGroups(buildPriceListPdfGroups(lists, publications, locationNames));
+    } catch {
+      setPdfOptionsError('Não foi possível carregar as listas e os locais disponíveis.');
+    } finally {
+      setPdfOptionsLoading(false);
+    }
+  };
+
   const normalMacros = macros.filter((m) => !m.isPremiumLine);
   const premiumMacros = macros.filter((m) => m.isPremiumLine);
   const macroIndexMap = new Map(macros.map((m, i) => [m.id, i]));
@@ -580,6 +616,19 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
   return (
     <div className="space-y-6">
       <ConfirmDialog {...confirmState} onConfirm={handleConfirm} onCancel={handleCancel} />
+      {showPdfSelection && (
+        <PriceListPdfSelectionDialog
+          groups={pdfGroups}
+          loading={pdfOptionsLoading}
+          error={pdfOptionsError}
+          onClose={() => setShowPdfSelection(false)}
+          onConfirm={(selection) => {
+            setPdfSelection(selection);
+            setShowPdfSelection(false);
+            showSuccess('Publicação e locais preparados para a geração do PDF.');
+          }}
+        />
+      )}
       {/* Modals */}
       {showMacroModal && (
         <SelectModal
@@ -920,18 +969,39 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
               {totalLists} {totalLists === 1 ? 'lista encontrada' : 'listas encontradas'}
             </p>
           </div>
-          <label className="relative block w-full md:max-w-sm">
-            <span className="sr-only">Pesquisar listas de preços</span>
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
-            <input
-              type="search"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Buscar por número ou nome da lista"
-              className="w-full rounded-lg border border-stone-300 py-2 pl-9 pr-3 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-            />
-          </label>
+          <div className="flex w-full flex-col gap-2 sm:flex-row md:max-w-xl">
+            <label className="relative block min-w-0 flex-1">
+              <span className="sr-only">Pesquisar listas de preços</span>
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+              <input
+                type="search"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Buscar por número ou nome da lista"
+                className="w-full rounded-lg border border-stone-300 py-2 pl-9 pr-3 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => void openPdfSelection()}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-stone-800 px-4 py-2 text-sm font-bold text-white hover:bg-stone-900"
+            >
+              <FileText className="h-4 w-4" />
+              Preparar PDF
+            </button>
+          </div>
         </div>
+        {pdfSelection && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+            <span>
+              <strong>{pdfSelection.group.label}</strong> · {pdfSelection.listIds.length}{' '}
+              {pdfSelection.listIds.length === 1 ? 'local selecionado' : 'locais selecionados'}
+            </span>
+            <button type="button" onClick={() => void openPdfSelection()} className="font-bold hover:underline">
+              Alterar seleção
+            </button>
+          </div>
+        )}
         {loadError && (
           <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {loadError}
