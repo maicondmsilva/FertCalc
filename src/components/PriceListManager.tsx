@@ -24,6 +24,8 @@ import {
   updatePriceList,
   deletePriceList,
   getPriceListsForPdfSelection,
+  getPriceListsByIds,
+  getAppSettings,
 } from '../services/db';
 import { useToast } from './Toast';
 import { ConfirmDialog } from './ui/ConfirmDialog';
@@ -41,6 +43,7 @@ import {
   PriceListPdfSelectionDialog,
   type PriceListPdfSelection,
 } from './PriceListPdfSelectionDialog';
+import { downloadPriceListPdf } from '../utils/priceListPdfGenerator';
 
 interface PriceListManagerProps {
   currentUser: User;
@@ -622,10 +625,33 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
           loading={pdfOptionsLoading}
           error={pdfOptionsError}
           onClose={() => setShowPdfSelection(false)}
-          onConfirm={(selection) => {
-            setPdfSelection(selection);
-            setShowPdfSelection(false);
-            showSuccess('Publicação e locais preparados para a geração do PDF.');
+          onConfirm={async (selection) => {
+            try {
+              const [selectedLists, settings] = await Promise.all([
+                getPriceListsByIds(selection.listIds),
+                getAppSettings(),
+              ]);
+              if (selectedLists.length !== selection.listIds.length) {
+                throw new Error('Uma ou mais listas selecionadas não estão mais disponíveis.');
+              }
+              downloadPriceListPdf({
+                group: selection.group,
+                lists: selectedLists,
+                locationNames: new Map(
+                  locaisCarregamento.map((local) => [local.id, local.nome] as const)
+                ),
+                settings,
+              });
+              setPdfSelection(selection);
+              setShowPdfSelection(false);
+              showSuccess('PDF da lista de preços gerado com sucesso!');
+            } catch (error) {
+              showError(
+                error instanceof Error
+                  ? error.message
+                  : 'Não foi possível gerar o PDF da lista de preços.'
+              );
+            }
           }}
         />
       )}

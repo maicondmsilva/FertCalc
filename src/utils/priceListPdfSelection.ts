@@ -22,6 +22,12 @@ export interface PriceListPdfGroup {
   label: string;
   currency: PriceListCurrency;
   publicationId?: string;
+  competence?: string;
+  revision?: number;
+  exchangeRate?: number;
+  notes?: string;
+  validFrom?: string;
+  validUntil?: string;
   locations: PriceListPdfLocationOption[];
   sortOrder: number;
 }
@@ -76,6 +82,12 @@ export function buildPriceListPdfGroups(
           : `${newestFirst[0].name} (${newestFirst[0].currency})`,
         currency: publication?.currency ?? newestFirst[0].currency,
         publicationId: publication?.id,
+        competence: publication?.competence ?? newestFirst[0].date,
+        revision: publication?.revision,
+        exchangeRate: publication?.exchangeRate,
+        notes: publication?.notes,
+        validFrom: publication?.validFrom,
+        validUntil: publication?.validUntil,
         locations,
         sortOrder: publication?.idNumeric ?? newestFirst[0].idNumeric ?? 0,
       };

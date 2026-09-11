@@ -12,7 +12,7 @@ interface PriceListPdfSelectionDialogProps {
   loading: boolean;
   error?: string;
   onClose: () => void;
-  onConfirm: (selection: PriceListPdfSelection) => void;
+  onConfirm: (selection: PriceListPdfSelection) => Promise<void> | void;
 }
 
 export function PriceListPdfSelectionDialog({
@@ -24,6 +24,7 @@ export function PriceListPdfSelectionDialog({
 }: PriceListPdfSelectionDialogProps) {
   const [groupId, setGroupId] = useState('');
   const [selectedListIds, setSelectedListIds] = useState<string[]>([]);
+  const [generating, setGenerating] = useState(false);
   const selectedGroup = groups.find((group) => group.id === groupId);
 
   useEffect(() => {
@@ -48,6 +49,16 @@ export function PriceListPdfSelectionDialog({
         ? current.filter((id) => id !== listId)
         : [...current, listId]
     );
+  };
+
+  const handleConfirm = async () => {
+    if (!selectedGroup || selectedListIds.length === 0 || generating) return;
+    setGenerating(true);
+    try {
+      await onConfirm({ group: selectedGroup, listIds: selectedListIds });
+    } finally {
+      setGenerating(false);
+    }
   };
 
   return (
@@ -164,11 +175,11 @@ export function PriceListPdfSelectionDialog({
           </button>
           <button
             type="button"
-            disabled={!selectedGroup || selectedListIds.length === 0 || loading}
-            onClick={() => selectedGroup && onConfirm({ group: selectedGroup, listIds: selectedListIds })}
+            disabled={!selectedGroup || selectedListIds.length === 0 || loading || generating}
+            onClick={() => void handleConfirm()}
             className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Confirmar seleção
+            {generating ? 'Gerando PDF...' : 'Gerar PDF'}
           </button>
         </div>
       </div>
