@@ -896,6 +896,16 @@ export async function getPriceListsForPdfSelection(): Promise<PriceListPdfSource
   }));
 }
 
+export async function getPriceListsByIds(ids: string[]): Promise<PriceList[]> {
+  if (ids.length === 0) return [];
+  const { data, error } = await supabase
+    .from('price_lists')
+    .select('*')
+    .in('id', ids);
+  if (error) throw error;
+  return (data ?? []).map(mapPriceList);
+}
+
 export async function createPriceList(pl: Omit<PriceList, 'id'>): Promise<PriceList> {
   const { data, error } = await supabase
     .from('price_lists')
