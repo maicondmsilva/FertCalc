@@ -34,6 +34,7 @@ import {
   DiasUteisMes,
   ProfitabilityAnalysis,
 } from '../types';
+import type { PriceListPdfSource } from '../utils/priceListPdfSelection';
 
 // ============================================================
 // APP SETTINGS
@@ -876,6 +877,23 @@ export async function getPriceListsPage({
     pageSize: safePageSize,
     totalPages: Math.max(1, Math.ceil(total / safePageSize)),
   };
+}
+
+export async function getPriceListsForPdfSelection(): Promise<PriceListPdfSource[]> {
+  const { data, error } = await supabase
+    .from('price_lists')
+    .select('id,id_numeric,publication_id,name,local_carregamento_id,date,currency')
+    .order('id_numeric', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((item) => ({
+    id: item.id,
+    idNumeric: item.id_numeric != null ? Number(item.id_numeric) : undefined,
+    publicationId: item.publication_id ?? undefined,
+    name: item.name,
+    localId: item.local_carregamento_id ?? undefined,
+    date: item.date,
+    currency: item.currency,
+  }));
 }
 
 export async function createPriceList(pl: Omit<PriceList, 'id'>): Promise<PriceList> {
