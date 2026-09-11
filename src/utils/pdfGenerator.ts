@@ -1,8 +1,13 @@
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { PricingRecord, AppSettings } from '../types';
+import {
+  convertPricingMoneyToBRL,
+  formatPricingMoney,
+  getPricingCurrency,
+  getPricingExchangeRate,
+} from './pricingCurrency';
 
-const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtN = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -43,7 +48,7 @@ export const generatePricingPDF = (
 
   // Build product rows: ONE ROW PER FORMULA (calculation)
   let productRows = '';
-  let grandTotal = 0;
+  let grandTotalBRL = 0;
 
   if (validCalcs.length > 0) {
     validCalcs.forEach((calc, idx) => {
@@ -55,15 +60,17 @@ export const generatePricingPDF = (
       const rowDueDate = rowDueDateStr ? new Date(rowDueDateStr).toLocaleDateString('pt-BR') : '—';
 
       const rowFreightPerTon = fCr?.freight ?? fGl?.freight ?? 0;
+      const rowCurrency = getPricingCurrency(calc.summary, fCr || fGl);
+      const rowExchangeRate = getPricingExchangeRate(calc.summary, fCr || fGl);
+      const fmt = (value: number) => formatPricingMoney(value, rowCurrency);
       const rowFreightType =
         fCr?.tipoFrete ?? fGl?.tipoFrete ?? (rowFreightPerTon > 0 ? 'CIF' : 'FOB');
-      const rowFreightText =
-        rowFreightType === 'CIF' ? `CIF (R$ ${rowFreightPerTon.toFixed(2)}/t)` : 'FOB';
+      const rowFreightText = rowFreightType === 'CIF' ? `CIF (${fmt(rowFreightPerTon)}/t)` : 'FOB';
 
       const qty = fCr?.totalTons || fGl?.totalTons || 0;
       const finalPrice = calc.summary?.finalPrice || 0;
       const totalRow = qty * finalPrice;
-      grandTotal += totalRow;
+      grandTotalBRL += convertPricingMoneyToBRL(totalRow, rowCurrency, rowExchangeRate);
 
       const priceWithoutFreight = finalPrice - rowFreightPerTon;
       const totalFreightLine = qty * rowFreightPerTon;
@@ -160,7 +167,7 @@ export const generatePricingPDF = (
           ${productRows}
           <tr style="background:#f8fafc;border-top:2px solid #1a1a2e;">
             <td style="padding:10px 8px;font-weight:900;font-size:13px;color:#1a1a2e;" colspan="5">VALOR TOTAL DA COMPRA</td>
-            <td style="padding:10px 8px;text-align:right;font-weight:900;font-size:14px;color:#fff;background:#1a1a2e;">${fmt(grandTotal)}</td>
+            <td style="padding:10px 8px;text-align:right;font-weight:900;font-size:14px;color:#fff;background:#1a1a2e;">${formatPricingMoney(grandTotalBRL, 'BRL')}</td>
           </tr>
         </tbody>
       </table>

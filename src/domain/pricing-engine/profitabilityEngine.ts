@@ -1,4 +1,4 @@
-import type { ProfitabilityAnalysis } from '../../types';
+import type { PriceListCurrency, ProfitabilityAnalysis } from '../../types';
 import { calculateInterestDays } from './pricingEngine';
 
 export interface ProfitabilityInput {
@@ -85,6 +85,8 @@ export interface CreateProfitabilityAnalysisInput extends ProfitabilityInput {
   formulaName: string;
   analyzedByUserId: string;
   analyzedByName: string;
+  currency?: PriceListCurrency;
+  exchangeRate?: number;
 }
 
 export function createProfitabilityAnalysis(
@@ -92,6 +94,9 @@ export function createProfitabilityAnalysis(
   options: ProfitabilityEngineOptions & { analyzedAt?: Date } = {}
 ): ProfitabilityAnalysis {
   const result = calculateProfitability(input, options);
+  const currency = input.currency || 'BRL';
+  const exchangeRate =
+    currency === 'USD' && Number(input.exchangeRate) > 0 ? Number(input.exchangeRate) : 1;
   return {
     pricingRecordId: input.pricingRecordId,
     calculationIndex: input.calculationIndex,
@@ -100,6 +105,12 @@ export function createProfitabilityAnalysis(
     factor: input.factor,
     baseCost: input.baseCost,
     ...result,
+    currency,
+    exchangeRate: currency === 'USD' ? exchangeRate : undefined,
+    unitaryPriceBRL: input.unitaryPrice * exchangeRate,
+    baseCostBRL: input.baseCost * exchangeRate,
+    netRevenueBRL: result.netRevenue * exchangeRate,
+    profitabilityBRL: result.profitability * exchangeRate,
     freightDeduction: input.freightDeduction,
     commissionRate: input.commissionRate,
     interestRate: input.interestRate,

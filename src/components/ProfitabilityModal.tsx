@@ -5,6 +5,12 @@ import { calculateProfitability, createProfitabilityAnalysis } from '../domain/p
 import { saveProfitabilityToCalc, getPricingRecords } from '../services/db';
 import { useToast } from './Toast';
 import { closeModalOnBackdrop } from '../utils/modalUtils';
+import {
+  convertPricingMoneyToBRL,
+  formatPricingMoney,
+  getPricingCurrency,
+  getPricingExchangeRate,
+} from '../utils/pricingCurrency';
 
 interface ProfitabilityModalProps {
   isOpen: boolean;
@@ -63,6 +69,13 @@ export default function ProfitabilityModal({
     formatMoneyInput(calc.factors?.embalagem_valor || 0)
   );
   const [unitaryPrice, setUnitaryPrice] = useState<number | ''>('');
+  const [analysisCurrency, setAnalysisCurrency] = useState(
+    getPricingCurrency(calc.summary, calc.factors)
+  );
+  const [analysisExchangeRate, setAnalysisExchangeRate] = useState<number | undefined>(
+    getPricingExchangeRate(calc.summary, calc.factors)
+  );
+  const [analysisBaseCost, setAnalysisBaseCost] = useState(calc.summary?.baseCost ?? 0);
 
   const [pricingSearch, setPricingSearch] = useState('');
   const [pricingResults, setPricingResults] = useState<PricingRecord[]>([]);
@@ -92,6 +105,9 @@ export default function ProfitabilityModal({
       setInterestStartDate(calc.factors?.interestStartDate || '');
       setPackagingValue(formatMoneyInput(calc.factors?.embalagem_valor || 0));
       setUnitaryPrice('');
+      setAnalysisCurrency(getPricingCurrency(calc.summary, calc.factors));
+      setAnalysisExchangeRate(getPricingExchangeRate(calc.summary, calc.factors));
+      setAnalysisBaseCost(calc.summary?.baseCost ?? 0);
       setResult(null);
       setPricingSearch('');
       setPricingResults([]);
@@ -165,11 +181,14 @@ export default function ProfitabilityModal({
     if (prod.summary?.finalPrice) {
       setUnitaryPrice(prod.summary.finalPrice);
     }
+    setAnalysisCurrency(getPricingCurrency(prod.summary, f));
+    setAnalysisExchangeRate(getPricingExchangeRate(prod.summary, f));
+    setAnalysisBaseCost(prod.summary?.baseCost ?? 0);
   };
 
   const handleCalculate = () => {
     const price = typeof unitaryPrice === 'number' ? unitaryPrice : 0;
-    const baseCost = calc.summary?.baseCost ?? 0;
+    const baseCost = analysisBaseCost;
     const res = calculateProfitability({
       unitaryPrice: price,
       factor,
@@ -199,7 +218,7 @@ export default function ProfitabilityModal({
     }
 
     const price = typeof unitaryPrice === 'number' ? unitaryPrice : 0;
-    const baseCost = calc.summary?.baseCost ?? 0;
+    const baseCost = analysisBaseCost;
 
     const analysis = createProfitabilityAnalysis({
       pricingRecordId: linkedPricingRecordId,
@@ -219,6 +238,8 @@ export default function ProfitabilityModal({
       dataCarregamento: loadingDate,
       ddfDias: ddfDays,
       packagingValue: parseMoneyInput(packagingValue),
+      currency: analysisCurrency,
+      exchangeRate: analysisExchangeRate,
       analyzedByUserId: currentUser.id,
       analyzedByName: currentUser.name,
     });
@@ -242,6 +263,14 @@ export default function ProfitabilityModal({
   if (!isOpen) return null;
 
   const isPositive = result ? result.profitability >= 0 : false;
+  const money = (value: number) => formatPricingMoney(value, analysisCurrency);
+  const brlEquivalent = (value: number) =>
+    analysisCurrency === 'USD' && analysisExchangeRate
+      ? formatPricingMoney(
+          convertPricingMoneyToBRL(value, analysisCurrency, analysisExchangeRate),
+          'BRL'
+        )
+      : null;
 
   return (
     <div
@@ -270,7 +299,8 @@ export default function ProfitabilityModal({
             <p className="text-sm font-bold text-stone-700">{calc.formula}</p>
             {calc.summary && (
               <p className="text-[10px] text-stone-400 mt-0.5">
-                Custo Base: R$ {calc.summary.baseCost.toFixed(2)}/t
+                Custo Base: {money(analysisBaseCost)}/t
+                {brlEquivalent(analysisBaseCost) ? ` (${brlEquivalent(analysisBaseCost)}/t)` : ''}
               </p>
             )}
           </div>
@@ -320,7 +350,7 @@ export default function ProfitabilityModal({
               </div>
               <div>
                 <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">
-                  Frete (R$/ton)
+                  Frete ({analysisCurrency}/ton)
                 </label>
                 <input
                   type="number"
@@ -409,7 +439,8 @@ export default function ProfitabilityModal({
                       className="w-full px-2 py-1.5 text-sm border border-stone-300 rounded-lg focus:ring-1 focus:ring-orange-500 focus:border-orange-500 outline-none"
                     />
                     <p className="mt-1 text-[10px] font-semibold text-emerald-600">
-                      Vencimento: {dueDate ? new Date(`${dueDate}T12:00:00`).toLocaleDateString('pt-BR') : '—'}
+                      Vencimento:{' '}
+                      {dueDate ? new Date(`${dueDate}T12:00:00`).toLocaleDateString('pt-BR') : '—'}
                     </p>
                   </div>
                 </>
@@ -429,7 +460,7 @@ export default function ProfitabilityModal({
               </div>
               <div>
                 <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">
-                  Embalagem (R$/ton)
+                  Embalagem ({analysisCurrency}/ton)
                 </label>
                 <input
                   type="text"
@@ -440,7 +471,9 @@ export default function ProfitabilityModal({
                       setPackagingValue(e.target.value);
                     }
                   }}
-                  onBlur={() => setPackagingValue(formatMoneyInput(parseMoneyInput(packagingValue)))}
+                  onBlur={() =>
+                    setPackagingValue(formatMoneyInput(parseMoneyInput(packagingValue)))
+                  }
                   placeholder="Ex: 50,00 ou -50,00"
                   className="w-full px-2 py-1.5 text-sm border border-stone-300 rounded-lg focus:ring-1 focus:ring-orange-500 focus:border-orange-500 outline-none"
                 />
@@ -450,7 +483,7 @@ export default function ProfitabilityModal({
               </div>
               <div>
                 <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">
-                  Valor Unitário (R$/ton)
+                  Valor Unitário ({analysisCurrency}/ton)
                 </label>
                 <input
                   type="number"
@@ -544,7 +577,12 @@ export default function ProfitabilityModal({
                           {c.formula}
                           {c.summary && (
                             <span className="ml-2 text-stone-400">
-                              — R$ {c.summary.finalPrice.toFixed(2)}/t
+                              —{' '}
+                              {formatPricingMoney(
+                                c.summary.finalPrice,
+                                getPricingCurrency(c.summary, c.factors)
+                              )}
+                              /t
                             </span>
                           )}
                         </button>
@@ -588,32 +626,34 @@ export default function ProfitabilityModal({
                 <div className="flex justify-between">
                   <span className="text-stone-500">Valor Unitário (Venda):</span>
                   <span className="font-mono">
-                    R$ {(typeof unitaryPrice === 'number' ? unitaryPrice : 0).toFixed(2)}
+                    {money(typeof unitaryPrice === 'number' ? unitaryPrice : 0)}
                   </span>
                 </div>
                 <div className="flex justify-between text-red-600">
                   <span>(-) Alíquota ({taxRate}%):</span>
-                  <span className="font-mono">- R$ {result.taxDeduction.toFixed(2)}</span>
+                  <span className="font-mono">- {money(result.taxDeduction)}</span>
                 </div>
                 <div className="flex justify-between text-red-600">
                   <span>(-) Frete:</span>
-                  <span className="font-mono">- R$ {freight.toFixed(2)}</span>
+                  <span className="font-mono">- {money(freight)}</span>
                 </div>
                 <div className="flex justify-between text-red-600">
                   <span>(-) Comissão ({commission}%):</span>
-                  <span className="font-mono">- R$ {result.commissionDeduction.toFixed(2)}</span>
+                  <span className="font-mono">- {money(result.commissionDeduction)}</span>
                 </div>
                 <div className="flex justify-between text-red-600">
                   <span>
                     (-) Juros ({interestRate}% a.m. × {result.daysOfInterest} dias):
                   </span>
-                  <span className="font-mono">- R$ {result.interestDeduction.toFixed(2)}</span>
+                  <span className="font-mono">- {money(result.interestDeduction)}</span>
                 </div>
                 <div className="flex justify-between text-xs text-stone-500">
                   <span>Condição financeira:</span>
                   <span className="font-medium">
                     {paymentCondition === 'ddf' ? `${ddfDays} DDF` : 'Vencimento'} ·{' '}
-                    {dueDate ? new Date(`${dueDate}T12:00:00`).toLocaleDateString('pt-BR') : 'sem data'}
+                    {dueDate
+                      ? new Date(`${dueDate}T12:00:00`).toLocaleDateString('pt-BR')
+                      : 'sem data'}
                   </span>
                 </div>
                 {result.packagingDeduction !== 0 && (
@@ -626,27 +666,34 @@ export default function ProfitabilityModal({
                         : '(+) Embalagem (Desconto):'}
                     </span>
                     <span className="font-mono">
-                      {result.packagingDeduction > 0 ? '-' : '+'} R${' '}
-                      {Math.abs(result.packagingDeduction).toFixed(2)}
+                      {result.packagingDeduction > 0 ? '-' : '+'}{' '}
+                      {money(Math.abs(result.packagingDeduction))}
                     </span>
                   </div>
                 )}
                 <div className="flex justify-between font-bold border-t border-stone-200 pt-2">
                   <span>= Receita Líquida:</span>
-                  <span className="font-mono">R$ {result.netRevenue.toFixed(2)}</span>
+                  <span className="font-mono">{money(result.netRevenue)}</span>
                 </div>
                 <div className="flex justify-between text-red-600 border-t border-stone-200 pt-2">
                   <span>(-) Custo × Fator ({factor}):</span>
-                  <span className="font-mono">- R$ {result.baseCostAfterFactor.toFixed(2)}</span>
+                  <span className="font-mono">- {money(result.baseCostAfterFactor)}</span>
                 </div>
                 <div
                   className={`flex justify-between text-lg font-black pt-1 ${isPositive ? 'text-emerald-700' : 'text-red-700'}`}
                 >
                   <span>RENTABILIDADE ({result.profitabilityPercent.toFixed(2)}%):</span>
                   <span className="font-mono">
-                    {isPositive ? '+' : ''}R$ {result.profitability.toFixed(2)}
+                    {isPositive ? '+' : ''}
+                    {money(result.profitability)}
                   </span>
                 </div>
+                {brlEquivalent(result.profitability) && (
+                  <div className="flex justify-between border-t border-stone-200 pt-2 text-xs font-semibold text-stone-600">
+                    <span>Equivalente da rentabilidade em BRL:</span>
+                    <span>{brlEquivalent(result.profitability)}</span>
+                  </div>
+                )}
               </div>
 
               <div className="px-4 pb-4">

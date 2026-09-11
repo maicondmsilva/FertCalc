@@ -1,17 +1,29 @@
 import { PricingRecord } from '../types';
+import {
+  convertPricingMoneyToBRL,
+  getPricingCurrency,
+  getPricingExchangeRate,
+  getPricingSummaryMoneyBRL,
+} from './pricingCurrency';
 
 export function getPricingTotalTons(pricing: PricingRecord): number {
   if (pricing.calculations && pricing.calculations.length > 0) {
-    return pricing.calculations.reduce((sum, calc) => sum + (Number(calc.factors?.totalTons) || 0), 0);
+    return pricing.calculations.reduce(
+      (sum, calc) => sum + (Number(calc.factors?.totalTons) || 0),
+      0
+    );
   }
   return Number(pricing.factors?.totalTons) || 0;
 }
 
 export function getPricingTotalSaleValue(pricing: PricingRecord): number {
   if (pricing.calculations && pricing.calculations.length > 0) {
-    return pricing.calculations.reduce((sum, calc) => sum + (Number(calc.summary?.totalSaleValue) || 0), 0);
+    return pricing.calculations.reduce(
+      (sum, calc) => sum + getPricingSummaryMoneyBRL(calc.summary, calc.factors, 'totalSaleValue'),
+      0
+    );
   }
-  return Number(pricing.summary?.totalSaleValue) || 0;
+  return getPricingSummaryMoneyBRL(pricing.summary, pricing.factors, 'totalSaleValue');
 }
 
 export function getPricingTotalCommission(pricing: PricingRecord): number {
@@ -19,13 +31,17 @@ export function getPricingTotalCommission(pricing: PricingRecord): number {
     // Calculadora logic (Option B): The commission value per ton is stored in summary.commissionValue.
     // We just need to multiply this per-ton commission by the actual tons of the formula.
     return pricing.calculations.reduce((sum, calc) => {
-      const commPerTon = Number(calc.summary?.commissionValue) || 0;
+      const commPerTon = getPricingSummaryMoneyBRL(calc.summary, calc.factors, 'commissionValue');
       const tons = Number(calc.factors?.totalTons) || 0;
-      return sum + (commPerTon * tons);
+      return sum + commPerTon * tons;
     }, 0);
   }
   // Fallback for old records
-  const oldCommPerTon = Number(pricing.summary?.commissionValue) || 0;
+  const oldCommPerTon = getPricingSummaryMoneyBRL(
+    pricing.summary,
+    pricing.factors,
+    'commissionValue'
+  );
   const oldTons = Number(pricing.factors?.totalTons) || 0;
   return oldCommPerTon * oldTons;
 }
@@ -46,7 +62,11 @@ export function getPricingWeightedMargin(pricing: PricingRecord): {
     const totals = pricing.calculations.reduce(
       (acc, calc) => {
         const tons = Number(calc.factors?.totalTons) || 0;
-        const marginPerTon = Number(calc.factors?.margin) || 0;
+        const marginPerTon = convertPricingMoneyToBRL(
+          Number(calc.factors?.margin) || 0,
+          getPricingCurrency(calc.summary, calc.factors),
+          getPricingExchangeRate(calc.summary, calc.factors)
+        );
         return {
           marginValue: acc.marginValue + marginPerTon * tons,
           tons: acc.tons + tons,

@@ -48,6 +48,12 @@ import {
 } from '../services/pedidosVendaService';
 import { getEmbalagens } from '../services/embalagensService';
 import { getLocaisCarregamento } from '../services/locaisCarregamentoService';
+import {
+  formatPricingMoney,
+  formatPricingSummaryMoney,
+  getPricingCurrency,
+  getPricingExchangeRate,
+} from '../utils/pricingCurrency';
 import { useToast } from './Toast';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { useConfirm } from '../hooks/useConfirm';
@@ -447,6 +453,7 @@ export default function PricingDetailModal({
         (pricing.cod ? String(pricing.cod).padStart(4, '0') : pricing.id.slice(-8));
       const freightType = getPricingFreightType(pricing);
       const freightValue = getPricingFreightValue(pricing);
+      const recordCurrency = getPricingCurrency(pricing.summary, pricing.factors);
       const dueDate = formatDatePtBr(getPricingDueDate(pricing));
 
       // Título compacto
@@ -466,7 +473,7 @@ export default function PricingDetailModal({
             `COD: ${cod}  |  Data: ${new Date(pricing.date).toLocaleString('pt-BR')}  |  Cliente: ${pricing.factors?.client?.name || 'N/A'}  |  Agente: ${pricing.factors?.agent?.name || 'N/A'}`,
           ],
           [
-            `Status: ${pricing.status}  |  Aprovação: ${pricing.approvalStatus || 'Pendente'}  |  Transporte: ${freightType === 'CIF' ? `CIF — R$ ${freightValue.toFixed(2)}/ton` : 'FOB'}  |  Vencimento: ${dueDate}`,
+            `Status: ${pricing.status}  |  Aprovação: ${pricing.approvalStatus || 'Pendente'}  |  Transporte: ${freightType === 'CIF' ? `CIF — ${formatPricingMoney(freightValue, recordCurrency)}/ton` : 'FOB'}  |  Vencimento: ${dueDate}`,
           ],
         ],
         styles: { fontSize: 8, cellPadding: 2 },
@@ -482,6 +489,9 @@ export default function PricingDetailModal({
       calcs.forEach((calc, idx) => {
         const calcSummary = getCalculationSummary(calc);
         const calcMaterials = getCalculationMaterials(calc);
+        const calcFactors = calc.factors || pricing.factors;
+        const calcCurrency = getPricingCurrency(calcSummary, calcFactors);
+        const money = (value: number) => formatPricingMoney(value, calcCurrency);
         if (idx > 0 && currentY > 230) {
           doc.addPage();
           currentY = 15;
@@ -499,9 +509,9 @@ export default function PricingDetailModal({
             p.name,
             freightType,
             (p.quantity / 1000).toFixed(2),
-            `R$ ${Number(p.price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-            freightType === 'CIF' ? `R$ ${freightValue.toFixed(0)}` : 'R$ 0',
-            `R$ ${((p.quantity / 1000) * Number(p.price) + (p.quantity / 1000) * freightValue).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+            money(Number(p.price)),
+            freightType === 'CIF' ? money(freightValue) : money(0),
+            money((p.quantity / 1000) * Number(p.price) + (p.quantity / 1000) * freightValue),
           ]);
 
         autoTable(doc, {
@@ -527,8 +537,12 @@ export default function PricingDetailModal({
           startY: currentY,
           head: [['Resumo', 'Valor']],
           body: [
-            ['Custo Base', `R$ ${Number(calcSummary.baseCost).toFixed(2)}`],
-            ['Preço Final/ton', `R$ ${Number(calcSummary.finalPrice).toFixed(2)}`],
+            [
+              'Moeda / câmbio',
+              `${calcCurrency}${calcCurrency === 'USD' ? ` | ${formatPricingMoney(getPricingExchangeRate(calcSummary, calcFactors) || 0, 'BRL')}` : ''}`,
+            ],
+            ['Custo Base', formatPricingSummaryMoney(calcSummary, calcFactors, 'baseCost')],
+            ['Preço Final/ton', formatPricingSummaryMoney(calcSummary, calcFactors, 'finalPrice')],
             [
               'N-P-K Real',
               formatNPK(
@@ -549,6 +563,9 @@ export default function PricingDetailModal({
         const pa = (calc as any).profitabilityAnalysis;
         if (pa) {
           const isPosRent = pa.profitability >= 0;
+          const profitabilityCurrency = pa.currency || calcCurrency;
+          const profitabilityMoney = (value: number) =>
+            formatPricingMoney(value, profitabilityCurrency);
           if (currentY > 220) {
             doc.addPage();
             currentY = 15;
@@ -558,22 +575,26 @@ export default function PricingDetailModal({
             startY: currentY,
             head: [['ANÁLISE DE RENTABILIDADE']],
             body: [
-              ['Valor Unitário (Venda)', `R$ ${Number(pa.unitaryPrice).toFixed(2)}`],
-              [`(-) Alíquota (${pa.taxRate}%)`, `R$ ${Number(pa.taxDeduction).toFixed(2)}`],
-              ['(-) Frete', `R$ ${Number(pa.freightDeduction).toFixed(2)}`],
+              [
+                'Moeda / câmbio',
+                `${profitabilityCurrency}${profitabilityCurrency === 'USD' ? ` | ${formatPricingMoney(Number(pa.exchangeRate) || 0, 'BRL')}` : ''}`,
+              ],
+              ['Valor Unitário (Venda)', profitabilityMoney(Number(pa.unitaryPrice))],
+              [`(-) Alíquota (${pa.taxRate}%)`, profitabilityMoney(Number(pa.taxDeduction))],
+              ['(-) Frete', profitabilityMoney(Number(pa.freightDeduction))],
               [
                 `(-) Comissão (${pa.commissionRate}%)`,
-                `R$ ${Number(pa.commissionDeduction).toFixed(2)}`,
+                profitabilityMoney(Number(pa.commissionDeduction)),
               ],
-              [`(-) Juros (${pa.interestRate}%)`, `R$ ${Number(pa.interestDeduction).toFixed(2)}`],
-              ['= Receita Líquida', `R$ ${Number(pa.netRevenue).toFixed(2)}`],
+              [`(-) Juros (${pa.interestRate}%)`, profitabilityMoney(Number(pa.interestDeduction))],
+              ['= Receita Líquida', profitabilityMoney(Number(pa.netRevenue))],
               [
                 `(-) Custo × Fator (${pa.factor})`,
-                `R$ ${Number(pa.baseCostAfterFactor).toFixed(2)}`,
+                profitabilityMoney(Number(pa.baseCostAfterFactor)),
               ],
               [
                 `RENTABILIDADE (${Number(pa.profitabilityPercent).toFixed(2)}%)`,
-                `${isPosRent ? '+' : ''}R$ ${Number(pa.profitability).toFixed(2)}`,
+                `${isPosRent ? '+' : ''}${profitabilityMoney(Number(pa.profitability))}`,
               ],
               [
                 'Analisado por',
@@ -689,9 +710,7 @@ export default function PricingDetailModal({
   return (
     <div
       className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-      onMouseDown={(event) =>
-        closeModalOnBackdrop(event, onClose, loadingTransfer || savingPedido)
-      }
+      onMouseDown={(event) => closeModalOnBackdrop(event, onClose, loadingTransfer || savingPedido)}
     >
       <ConfirmDialog {...confirmState} onConfirm={handleConfirm} onCancel={handleCancel} />
 
@@ -700,10 +719,14 @@ export default function PricingDetailModal({
         <div
           className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4"
           onMouseDown={(event) =>
-            closeModalOnBackdrop(event, () => {
-              setShowPdfImportModal(false);
-              setExtractedData(null);
-            }, savingPedido)
+            closeModalOnBackdrop(
+              event,
+              () => {
+                setShowPdfImportModal(false);
+                setExtractedData(null);
+              },
+              savingPedido
+            )
           }
         >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
@@ -1232,6 +1255,8 @@ export default function PricingDetailModal({
               const calcMaterials = getCalculationMaterials(calc);
               const calcFormula = getCalculationFormulaLabel(calc);
               const calcFactors = calc.factors || selectedPricing.factors;
+              const calcCurrency = getPricingCurrency(calcSummary, calcFactors);
+              const money = (value: number) => formatPricingMoney(value, calcCurrency);
               const tons = Number(calcFactors?.totalTons) || 0;
               const branch = branches.find((item) => item.id === calcFactors?.branchId);
               const priceList = priceLists.find((item) => item.id === calcFactors?.priceListId);
@@ -1264,7 +1289,7 @@ export default function PricingDetailModal({
                     <div className="text-right">
                       <p className="text-[10px] font-bold text-stone-400 uppercase">Preço Final</p>
                       <p className="text-lg font-bold text-emerald-600 font-mono">
-                        R$ {Number(calcSummary.finalPrice).toFixed(2)} / ton
+                        {formatPricingSummaryMoney(calcSummary, calcFactors, 'finalPrice')} / ton
                       </p>
                     </div>
                   </div>
@@ -1300,7 +1325,7 @@ export default function PricingDetailModal({
                       />
                       <DetailItem
                         label="Comissão"
-                        value={`${Number(calcFactors?.commission || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}% · R$ ${Number(calcSummary.commissionValue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/t`}
+                        value={`${Number(calcFactors?.commission || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}% · ${money(Number(calcSummary.commissionValue || 0))}/t`}
                       />
                       <DetailItem
                         label="Embalagem"
@@ -1318,7 +1343,7 @@ export default function PricingDetailModal({
                         value={
                           packagingAdjustment === 'nenhum'
                             ? 'Sem cobrança ou desconto'
-                            : `${packagingAdjustment === 'cobrar' ? 'Cobrado' : 'Concedido desconto'}: R$ ${Math.abs(packagingPerTon).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/t · Total R$ ${Math.abs(packagingTotal).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                            : `${packagingAdjustment === 'cobrar' ? 'Cobrado' : 'Concedido desconto'}: ${money(Math.abs(packagingPerTon))}/t · Total ${money(Math.abs(packagingTotal))}`
                         }
                       />
                       <DetailItem
@@ -1329,20 +1354,20 @@ export default function PricingDetailModal({
                       />
                       <DetailItem
                         label="Margem"
-                        value={`R$ ${Number(calcFactors?.margin || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/t`}
+                        value={`${money(Number(calcFactors?.margin || 0))}/t`}
                       />
                       <DetailItem
                         label="Desconto comercial"
                         tone={Number(calcFactors?.discount || 0) > 0 ? 'negative' : 'default'}
-                        value={`R$ ${Number(calcFactors?.discount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/t`}
+                        value={`${money(Number(calcFactors?.discount || 0))}/t`}
                       />
                       <DetailItem
                         label="Alíquota"
-                        value={`${Number(calcFactors?.taxRate || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}% · R$ ${Number(calcSummary.taxValue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/t`}
+                        value={`${Number(calcFactors?.taxRate || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}% · ${money(Number(calcSummary.taxValue || 0))}/t`}
                       />
                       <DetailItem
                         label="Juros utilizados"
-                        value={`${Number(calcFactors?.monthlyInterestRate || 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 })}% a.m. · R$ ${Number(calcSummary.interestValue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/t`}
+                        value={`${Number(calcFactors?.monthlyInterestRate || 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 })}% a.m. · ${money(Number(calcSummary.interestValue || 0))}/t`}
                       />
                       <DetailItem label="Condição financeira" value={paymentLabel} />
                       <DetailItem
@@ -1373,7 +1398,7 @@ export default function PricingDetailModal({
                       />
                       <DetailItem
                         label="Frete"
-                        value={`${calcFactors?.tipoFrete || 'CIF'} · R$ ${Number(calcFactors?.freight || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/t`}
+                        value={`${calcFactors?.tipoFrete || 'CIF'} · ${money(Number(calcFactors?.freight || 0))}/t`}
                       />
                       <DetailItem
                         label="Cotação de frete"
@@ -1385,10 +1410,11 @@ export default function PricingDetailModal({
                       />
                       <DetailItem
                         label="Valor total da fórmula"
-                        value={Number(calcSummary.totalSaleValue || 0).toLocaleString('pt-BR', {
-                          style: 'currency',
-                          currency: 'BRL',
-                        })}
+                        value={formatPricingSummaryMoney(
+                          calcSummary,
+                          calcFactors,
+                          'totalSaleValue'
+                        )}
                         tone="positive"
                       />
                     </div>
@@ -1405,8 +1431,8 @@ export default function PricingDetailModal({
                           <tr>
                             <th className="px-4 py-3">Produto</th>
                             <th className="px-4 py-3 text-right">Qtd (kg)</th>
-                            <th className="px-4 py-3 text-right">Preço (R$/ton)</th>
-                            <th className="px-4 py-3 text-right">Subtotal (R$)</th>
+                            <th className="px-4 py-3 text-right">Preço ({calcCurrency}/ton)</th>
+                            <th className="px-4 py-3 text-right">Subtotal ({calcCurrency})</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-stone-100">
@@ -1419,10 +1445,10 @@ export default function PricingDetailModal({
                                   {Number(p.quantity).toFixed(2)}
                                 </td>
                                 <td className="px-4 py-3 text-right font-mono">
-                                  R$ {Number(p.price).toFixed(2)}
+                                  {money(Number(p.price))}
                                 </td>
                                 <td className="px-4 py-3 text-right font-mono">
-                                  R$ {((Number(p.quantity) / 1000) * Number(p.price)).toFixed(2)}
+                                  {money((Number(p.quantity) / 1000) * Number(p.price))}
                                 </td>
                               </tr>
                             ))}
@@ -1435,7 +1461,7 @@ export default function PricingDetailModal({
                             </td>
                             <td></td>
                             <td className="px-4 py-3 text-right font-mono text-emerald-600">
-                              R$ {Number(calcSummary.baseCost).toFixed(2)}
+                              {formatPricingSummaryMoney(calcSummary, calcFactors, 'baseCost')}
                             </td>
                           </tr>
                         </tfoot>
@@ -1453,7 +1479,7 @@ export default function PricingDetailModal({
                         <div className="flex justify-between text-sm">
                           <span className="text-stone-500">Valor Matéria Prima (Base)</span>
                           <span className="font-mono font-medium">
-                            R$ {Number(calcSummary.baseCost).toFixed(2)}
+                            {formatPricingSummaryMoney(calcSummary, calcFactors, 'baseCost')}
                           </span>
                         </div>
                         <div className="flex justify-between text-sm">
@@ -1461,28 +1487,27 @@ export default function PricingDetailModal({
                             Ajuste Fator ({calc.factors?.factor})
                           </span>
                           <span className="font-mono font-medium">
-                            R${' '}
-                            {(Number(calcSummary.baseCost) * (calc.factors?.factor || 1)).toFixed(
-                              2
-                            )}
+                            {money(Number(calcSummary.baseCost) * (calc.factors?.factor || 1))}
                           </span>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span className="text-stone-500">Margem Rentabilidade (R$/ton)</span>
+                          <span className="text-stone-500">
+                            Margem Rentabilidade ({calcCurrency}/ton)
+                          </span>
                           <span className="font-mono font-medium">
-                            + R$ {Number(calc.factors?.margin || 0).toFixed(2)}
+                            + {money(Number(calc.factors?.margin || 0))}
                           </span>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span className="text-stone-500">Desconto (R$/ton)</span>
+                          <span className="text-stone-500">Desconto ({calcCurrency}/ton)</span>
                           <span className="font-mono font-medium text-red-500">
-                            - R$ {Number(calc.factors?.discount || 0).toFixed(2)}
+                            - {money(Number(calc.factors?.discount || 0))}
                           </span>
                         </div>
                         <div className="pt-2 border-t border-stone-100 flex justify-between font-bold text-stone-800">
                           <span>Preço Base de Venda</span>
                           <span className="font-mono">
-                            R$ {Number(calcSummary.basePrice).toFixed(2)}
+                            {formatPricingSummaryMoney(calcSummary, calcFactors, 'basePrice')}
                           </span>
                         </div>
                       </div>
@@ -1494,15 +1519,15 @@ export default function PricingDetailModal({
                       </h4>
                       <div className="space-y-3">
                         <div className="flex justify-between text-sm">
-                          <span className="text-stone-500">Frete (R$/ton)</span>
+                          <span className="text-stone-500">Frete ({calcCurrency}/ton)</span>
                           <span className="font-mono font-medium">
-                            + R$ {Number(calcSummary.freightValue).toFixed(2)}
+                            + {money(Number(calcSummary.freightValue))}
                           </span>
                         </div>
                         <div className="flex justify-between text-sm">
                           <span className="text-stone-500">Juros de Vencimento</span>
                           <span className="font-mono font-medium">
-                            + R$ {Number(calcSummary.interestValue).toFixed(2)}
+                            + {money(Number(calcSummary.interestValue))}
                           </span>
                         </div>
                         <div className="flex justify-between text-sm">
@@ -1510,7 +1535,7 @@ export default function PricingDetailModal({
                             Alíquota de Impostos ({calc.factors?.taxRate}%)
                           </span>
                           <span className="font-mono font-medium">
-                            + R$ {Number(calcSummary.taxValue).toFixed(2)}
+                            + {money(Number(calcSummary.taxValue))}
                           </span>
                         </div>
                         <div className="flex justify-between text-sm">
@@ -1518,13 +1543,13 @@ export default function PricingDetailModal({
                             Comissão do Agente ({calc.factors?.commission}%)
                           </span>
                           <span className="font-mono font-medium">
-                            + R$ {Number(calcSummary.commissionValue).toFixed(2)}
+                            + {money(Number(calcSummary.commissionValue))}
                           </span>
                         </div>
                         <div className="pt-2 border-t border-stone-100 flex justify-between text-xl font-black text-emerald-600">
                           <span>PREÇO FINAL</span>
                           <span className="font-mono">
-                            R$ {Number(calcSummary.finalPrice).toFixed(2)}
+                            {formatPricingSummaryMoney(calcSummary, calcFactors, 'finalPrice')}
                           </span>
                         </div>
                       </div>
@@ -1591,6 +1616,8 @@ export default function PricingDetailModal({
                     (() => {
                       const pa = (calc as any).profitabilityAnalysis;
                       const isPaPositive = pa.profitability >= 0;
+                      const paCurrency = pa.currency || calcCurrency;
+                      const paMoney = (value: number) => formatPricingMoney(value, paCurrency);
                       return (
                         <div
                           className={`p-4 rounded-xl border ${isPaPositive ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}
@@ -1604,45 +1631,41 @@ export default function PricingDetailModal({
                           <div className="space-y-2 text-sm">
                             <div className="flex justify-between">
                               <span className="text-stone-500">Valor Unitário (Venda)</span>
-                              <span className="font-mono">
-                                R$ {Number(pa.unitaryPrice).toFixed(2)}
-                              </span>
+                              <span className="font-mono">{paMoney(Number(pa.unitaryPrice))}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-stone-500">Custo × Fator ({pa.factor})</span>
                               <span className="font-mono">
-                                R$ {Number(pa.baseCostAfterFactor).toFixed(2)}
+                                {paMoney(Number(pa.baseCostAfterFactor))}
                               </span>
                             </div>
                             <div className="flex justify-between text-red-600">
                               <span>(-) Frete</span>
                               <span className="font-mono">
-                                - R$ {Number(pa.freightDeduction).toFixed(2)}
+                                - {paMoney(Number(pa.freightDeduction))}
                               </span>
                             </div>
                             <div className="flex justify-between text-red-600">
                               <span>(-) Comissão ({pa.commissionRate}%)</span>
                               <span className="font-mono">
-                                - R$ {Number(pa.commissionDeduction).toFixed(2)}
+                                - {paMoney(Number(pa.commissionDeduction))}
                               </span>
                             </div>
                             <div className="flex justify-between text-red-600">
                               <span>(-) Juros ({pa.interestRate}%)</span>
                               <span className="font-mono">
-                                - R$ {Number(pa.interestDeduction).toFixed(2)}
+                                - {paMoney(Number(pa.interestDeduction))}
                               </span>
                             </div>
                             <div className="flex justify-between text-red-600">
                               <span>(-) Alíquota ({pa.taxRate}%)</span>
                               <span className="font-mono">
-                                - R$ {Number(pa.taxDeduction).toFixed(2)}
+                                - {paMoney(Number(pa.taxDeduction))}
                               </span>
                             </div>
                             <div className="flex justify-between font-bold border-t border-stone-200 pt-2">
                               <span>= Receita Líquida</span>
-                              <span className="font-mono">
-                                R$ {Number(pa.netRevenue).toFixed(2)}
-                              </span>
+                              <span className="font-mono">{paMoney(Number(pa.netRevenue))}</span>
                             </div>
                             <div
                               className={`flex justify-between text-lg font-black pt-1 ${isPaPositive ? 'text-emerald-700' : 'text-red-700'}`}
@@ -1651,7 +1674,8 @@ export default function PricingDetailModal({
                                 RENTABILIDADE ({Number(pa.profitabilityPercent).toFixed(2)}%)
                               </span>
                               <span className="font-mono">
-                                {isPaPositive ? '+' : ''}R$ {Number(pa.profitability).toFixed(2)}
+                                {isPaPositive ? '+' : ''}
+                                {paMoney(Number(pa.profitability))}
                               </span>
                             </div>
                             <p className="text-[10px] text-stone-400 mt-2">
