@@ -46,4 +46,19 @@ describe('pricing save validation', () => {
       )
     ).toEqual({ valid: true });
   });
+
+  it('blocks a USD price list without a valid exchange rate', () => {
+    const result = validatePricingForSave([
+      calculation({
+        factors: {
+          totalTons: 10,
+          commission: 0,
+          priceListCurrency: 'USD',
+        } as TargetFormula['factors'],
+      }),
+    ]);
+
+    expect(result.valid).toBe(false);
+    expect(result.message).toContain('câmbio válido');
+  });
 });

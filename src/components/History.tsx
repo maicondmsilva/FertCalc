@@ -46,6 +46,13 @@ import { getLocaisAtivos } from '../services/locaisCarregamentoService';
 import { LocalCarregamento } from '../types/carregamento';
 import { addPricingHistory } from '../services/pricingHistoryService';
 import { getTotalPages, paginateItems } from '../utils/pagination';
+import {
+  formatPricingMoney,
+  formatPricingRecordAveragePerTon,
+  formatPricingRecordTotal,
+  formatPricingSummaryMoney,
+  getPricingCurrency,
+} from '../utils/pricingCurrency';
 
 const HISTORY_PAGE_SIZE = 12;
 const PricingDetailModal = React.lazy(() => import('./PricingDetailModal'));
@@ -203,7 +210,7 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
       p.factors?.client?.name || 'N/A',
       p.status,
       p.factors?.targetFormula || '---',
-      `R$ ${p.summary?.finalPrice?.toFixed(2) || '0.00'}`,
+      formatPricingRecordAveragePerTon(p, getPricingTotalTons(p)),
     ]);
 
     autoTable(doc, {
@@ -214,15 +221,15 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
       headStyles: { fillColor: [41, 37, 36] },
     });
 
-    const totalValue = filteredPricings
+    const totalValueBRL = filteredPricings
       .filter((p) => p.status === 'Fechada')
-      .reduce((sum, p) => sum + (p.summary?.finalPrice || 0), 0);
+      .reduce((sum, p) => sum + getPricingTotalSaleValue(p), 0);
     const finalY = (doc as any).lastAutoTable.finalY + 10;
 
     doc.setFontSize(12);
     doc.setFont(undefined, 'bold');
     doc.text(
-      `Total em Vendas Fechadas: R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} `,
+      `Total em Vendas Fechadas (BRL): ${formatPricingMoney(totalValueBRL, 'BRL')}`,
       10,
       finalY
     );
@@ -512,7 +519,7 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
             Valor Em Aberto
           </p>
           <p className="text-xl font-black text-blue-600">
-            R$ {stats.totalValueInProgress.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            {formatPricingMoney(stats.totalValueInProgress, 'BRL')}
           </p>
         </div>
         <div className="bg-white p-4 rounded-xl shadow-sm border border-stone-200 col-span-2 md:col-span-1">
@@ -520,7 +527,7 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
             Faturamento (Fechada)
           </p>
           <p className="text-xl font-black text-emerald-700">
-            R$ {stats.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            {formatPricingMoney(stats.totalValue, 'BRL')}
           </p>
         </div>
       </div>
@@ -702,13 +709,14 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                       );
                     }
                     const freightVal = getPricingFreightValue(p);
+                    const pricingCurrency = getPricingCurrency(p.summary, p.factors);
                     return (
                       <span className="flex items-center gap-1 flex-wrap">
                         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-700">
                           CIF
                         </span>
                         <span className="text-sm font-medium text-stone-700">
-                          R$ {freightVal.toFixed(2)}/t
+                          {formatPricingMoney(freightVal, pricingCurrency)}/t
                         </span>
                         {p.factors?.cotacaoFreteNumero && (
                           <span className="text-xs text-stone-400">
@@ -730,8 +738,8 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                           className={`ml-1 text-xs font-bold ${(p.factors.embalagem_valor || 0) > 0 ? 'text-orange-600' : 'text-blue-600'}`}
                         >
                           {(p.factors.embalagem_valor || 0) > 0
-                            ? `+R$ ${(p.factors.embalagem_valor || 0).toFixed(2)}/t`
-                            : `-R$ ${Math.abs(p.factors.embalagem_valor || 0).toFixed(2)}/t`}
+                            ? `+${formatPricingMoney(p.factors.embalagem_valor || 0, getPricingCurrency(p.summary, p.factors))}/t`
+                            : `-${formatPricingMoney(Math.abs(p.factors.embalagem_valor || 0), getPricingCurrency(p.summary, p.factors))}/t`}
                         </span>
                       )}
                     </span>
@@ -771,6 +779,8 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                 <div className="mt-2 space-y-1">
                   {p.calculations?.map((calc, idx) => {
                     const calcFactors = calc.factors || p.factors;
+                    const calcCurrency = getPricingCurrency(calc.summary, calcFactors);
+                    const money = (value: number) => formatPricingMoney(value, calcCurrency);
                     const tons = Number(calcFactors?.totalTons) || 0;
                     const packagingValue = Number(calcFactors?.embalagem_valor) || 0;
                     const packagingAdjustment =
@@ -794,7 +804,7 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                         <div className="flex justify-between items-center gap-2">
                           <span className="font-black text-stone-700 truncate">{calc.formula}</span>
                           <span className="text-emerald-600 font-mono font-bold whitespace-nowrap">
-                            R$ {Number(calc.summary?.finalPrice || 0).toFixed(2)}/t
+                            {formatPricingSummaryMoney(calc.summary, calcFactors, 'finalPrice')}/t
                           </span>
                         </div>
                         <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-stone-500">
@@ -830,19 +840,19 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                             <strong className="text-stone-600">Ajuste embalagem:</strong>{' '}
                             {packagingAdjustment === 'nenhum'
                               ? 'Nenhum'
-                              : `${packagingAdjustment === 'cobrar' ? 'Cobrar' : 'Descontar'} R$ ${Math.abs(packagingValue).toFixed(2)}/t`}
+                              : `${packagingAdjustment === 'cobrar' ? 'Cobrar' : 'Descontar'} ${money(Math.abs(packagingValue))}/t`}
                           </span>
                           <span>
                             <strong className="text-stone-600">Fator:</strong>{' '}
                             {Number(calcFactors?.factor || 0).toFixed(4)}
                           </span>
                           <span>
-                            <strong className="text-stone-600">Margem:</strong> R${' '}
-                            {Number(calcFactors?.margin || 0).toFixed(2)}/t
+                            <strong className="text-stone-600">Margem:</strong>{' '}
+                            {money(Number(calcFactors?.margin || 0))}/t
                           </span>
                           <span>
-                            <strong className="text-stone-600">Desconto:</strong> R${' '}
-                            {Number(calcFactors?.discount || 0).toFixed(2)}/t
+                            <strong className="text-stone-600">Desconto:</strong>{' '}
+                            {money(Number(calcFactors?.discount || 0))}/t
                           </span>
                           <span>
                             <strong className="text-stone-600">Alíquota:</strong>{' '}
@@ -868,8 +878,8 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                           </span>
                           <span>
                             <strong className="text-stone-600">Frete:</strong>{' '}
-                            {calcFactors?.tipoFrete || 'CIF'} · R${' '}
-                            {Number(calcFactors?.freight || 0).toFixed(2)}/t
+                            {calcFactors?.tipoFrete || 'CIF'} ·{' '}
+                            {money(Number(calcFactors?.freight || 0))}/t
                           </span>
                           <span>
                             <strong className="text-stone-600">Vencimento:</strong>{' '}
@@ -904,18 +914,10 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                 <p className="text-xs text-stone-500 font-medium uppercase tracking-wider mb-1">
                   Venda Total ({getPricingTotalTons(p).toFixed(1)} tons)
                 </p>
-                <p className="text-xl font-bold text-emerald-600">
-                  R${' '}
-                  {getPricingTotalSaleValue(p).toLocaleString('pt-BR', {
-                    minimumFractionDigits: 2,
-                  })}
-                </p>
+                <p className="text-xl font-bold text-emerald-600">{formatPricingRecordTotal(p)}</p>
                 <p className="text-[10px] text-stone-400">
-                  Tonnage: {getPricingTotalTons(p).toFixed(1)} t | R${' '}
-                  {getPricingTotalTons(p) > 0
-                    ? (getPricingTotalSaleValue(p) / getPricingTotalTons(p)).toFixed(2)
-                    : '0.00'}{' '}
-                  / ton
+                  Tonelagem: {getPricingTotalTons(p).toFixed(1)} t |{' '}
+                  {formatPricingRecordAveragePerTon(p, getPricingTotalTons(p))}/ton
                 </p>
               </div>
               <div className="flex items-center gap-2">

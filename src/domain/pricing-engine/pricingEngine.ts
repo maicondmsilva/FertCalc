@@ -1,4 +1,5 @@
 import type { PricingFactors, PricingSummary, RawMaterial } from '../../types';
+import { convertPriceToBRL, getPricingCurrencyContext } from '../../utils/priceListCurrency';
 
 const numberOrZero = (value: unknown): number => Number(value) || 0;
 
@@ -56,9 +57,8 @@ export function calculateInterestDays(
   if (!dueDate) return 0;
   const due = new Date(dueDate);
   if (Number.isNaN(due.getTime())) return 0;
-  const configuredStart = !exemptCurrentMonth && interestStartDate
-    ? new Date(interestStartDate)
-    : null;
+  const configuredStart =
+    !exemptCurrentMonth && interestStartDate ? new Date(interestStartDate) : null;
   if (configuredStart && Number.isNaN(configuredStart.getTime())) return 0;
   const start =
     configuredStart ??
@@ -93,15 +93,29 @@ export function calculatePricingSummary(
     commissionValue +
     freightValue +
     numberOrZero(factors.embalagem_valor);
+  const totalSaleValue = finalPrice * numberOrZero(factors.totalTons);
+  const currencyContext = getPricingCurrencyContext(factors);
 
   return {
     ...composition,
+    currency: currencyContext.currency,
+    exchangeRate: currencyContext.exchangeRate,
+    exchangeRateSource: currencyContext.exchangeRateSource,
+    exchangeRateValid: currencyContext.exchangeRateValid,
     basePrice,
     interestValue,
     taxValue,
     commissionValue,
     freightValue,
     finalPrice,
-    totalSaleValue: finalPrice * numberOrZero(factors.totalTons),
+    totalSaleValue,
+    baseCostBRL: convertPriceToBRL(composition.baseCost, currencyContext),
+    basePriceBRL: convertPriceToBRL(basePrice, currencyContext),
+    interestValueBRL: convertPriceToBRL(interestValue, currencyContext),
+    taxValueBRL: convertPriceToBRL(taxValue, currencyContext),
+    commissionValueBRL: convertPriceToBRL(commissionValue, currencyContext),
+    freightValueBRL: convertPriceToBRL(freightValue, currencyContext),
+    finalPriceBRL: convertPriceToBRL(finalPrice, currencyContext),
+    totalSaleValueBRL: convertPriceToBRL(totalSaleValue, currencyContext),
   };
 }

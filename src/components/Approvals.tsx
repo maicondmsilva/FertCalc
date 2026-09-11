@@ -29,6 +29,7 @@ import { useConfirm } from '../hooks/useConfirm';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { closeModalOnBackdrop } from '../utils/modalUtils';
 import { formatDatePtBr, getPricingDueDate } from '../utils/pricingDisplay';
+import { formatPricingMoney, getPricingCurrency } from '../utils/pricingCurrency';
 
 interface ApprovalsProps {
   currentUser: AppUser;
@@ -410,7 +411,8 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
                         const tipoFrete =
                           p.factors?.tipoFrete ?? ((p.factors?.freight || 0) > 0 ? 'CIF' : 'FOB');
                         if (tipoFrete === 'FOB') return 'FOB';
-                        const freightStr = `CIF · R$ ${(p.factors?.freight || 0).toFixed(2)}/t`;
+                        const pricingCurrency = getPricingCurrency(p.summary, p.factors);
+                        const freightStr = `CIF · ${formatPricingMoney(p.factors?.freight || 0, pricingCurrency)}/t`;
                         if (p.factors?.cotacaoFreteNumero)
                           return `${freightStr} · ${p.factors.cotacaoFreteNumero}`;
                         return freightStr;
@@ -425,8 +427,8 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
                           >
                             {' '}
                             {(p.factors.embalagem_valor || 0) > 0
-                              ? `+R$ ${(p.factors.embalagem_valor || 0).toFixed(2)}/t`
-                              : `-R$ ${Math.abs(p.factors.embalagem_valor || 0).toFixed(2)}/t`}
+                              ? `+${formatPricingMoney(p.factors.embalagem_valor || 0, getPricingCurrency(p.summary, p.factors))}/t`
+                              : `-${formatPricingMoney(Math.abs(p.factors.embalagem_valor || 0), getPricingCurrency(p.summary, p.factors))}/t`}
                           </span>
                         )}
                       </p>

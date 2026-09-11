@@ -4,6 +4,8 @@ import {
   getPriceListCurrencySnapshot,
   isValidExchangeRate,
   priceListRequiresExchangeRate,
+  convertPriceToBRL,
+  getPricingCurrencyContext,
 } from './priceListCurrency';
 
 const makeList = (overrides: Partial<PriceList> = {}): PriceList => ({
@@ -14,6 +16,36 @@ const makeList = (overrides: Partial<PriceList> = {}): PriceList => ({
   macros: [],
   micros: [],
   ...overrides,
+});
+
+describe('pricing currency conversion', () => {
+  it('usa câmbio manual antes do câmbio da lista', () => {
+    const context = getPricingCurrencyContext({
+      priceListCurrency: 'USD',
+      priceListExchangeRate: 5,
+      appliedExchangeRate: 5.25,
+      exchangeRateSource: 'manual',
+    });
+
+    expect(context).toEqual({
+      currency: 'USD',
+      exchangeRate: 5.25,
+      exchangeRateSource: 'manual',
+      exchangeRateValid: true,
+    });
+    expect(convertPriceToBRL(100, context)).toBe(525);
+  });
+
+  it('mantém valores BRL sem alteração', () => {
+    const context = getPricingCurrencyContext({ priceListCurrency: 'BRL' });
+    expect(convertPriceToBRL(123.45, context)).toBe(123.45);
+  });
+
+  it('não converte USD quando não existe câmbio válido', () => {
+    const context = getPricingCurrencyContext({ priceListCurrency: 'USD' });
+    expect(context.exchangeRateValid).toBe(false);
+    expect(convertPriceToBRL(100, context)).toBeUndefined();
+  });
 });
 
 describe('price list currency metadata', () => {

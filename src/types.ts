@@ -54,6 +54,8 @@ export interface RawMaterial {
   type: NutrientType;
   name: string;
   price: number;
+  listPrice?: number;
+  isManualPrice?: boolean;
   n: number;
   p: number;
   k: number;
@@ -395,6 +397,12 @@ export interface ProfitabilityAnalysis {
   netRevenue: number;
   profitability: number;
   profitabilityPercent: number;
+  currency?: PriceListCurrency;
+  exchangeRate?: number;
+  unitaryPriceBRL?: number;
+  baseCostBRL?: number;
+  netRevenueBRL?: number;
+  profitabilityBRL?: number;
   dueDate?: string;
   exemptCurrentMonth?: boolean;
   interestStartDate?: string;
@@ -502,6 +510,10 @@ export interface Embalagem {
 }
 
 export interface PricingSummary {
+  currency?: PriceListCurrency;
+  exchangeRate?: number;
+  exchangeRateSource?: 'list' | 'manual';
+  exchangeRateValid?: boolean;
   totalWeight: number;
   baseCost: number;
   basePrice: number;
@@ -511,6 +523,14 @@ export interface PricingSummary {
   freightValue: number;
   finalPrice: number;
   totalSaleValue: number;
+  baseCostBRL?: number;
+  basePriceBRL?: number;
+  interestValueBRL?: number;
+  taxValueBRL?: number;
+  commissionValueBRL?: number;
+  freightValueBRL?: number;
+  finalPriceBRL?: number;
+  totalSaleValueBRL?: number;
   resultingN: number;
   resultingP: number;
   resultingK: number;

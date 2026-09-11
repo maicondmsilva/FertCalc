@@ -61,7 +61,14 @@ import {
   hasFormulaTarget,
 } from '../domain/pricing-engine';
 import { validatePricingForSave } from '../utils/pricingValidation';
-import { getPriceListCurrencySnapshot } from '../utils/priceListCurrency';
+import {
+  getPriceListCurrencySnapshot,
+  hasValidPricingExchangeRate,
+} from '../utils/priceListCurrency';
+import {
+  stripTemporaryMaterialPrices,
+  withOfficialListPrice,
+} from '../utils/temporaryMaterialPrice';
 
 interface UseCalculatorProps {
   initialData?: PricingRecord | null;
@@ -389,16 +396,16 @@ export function useCalculator({
           : [];
         // Macros da Linha Diferenciada chegam desmarcadas por padrão
         const newMacros = [
-          ...selectedList.macros.map((m) => ({
-            ...m,
+          ...selectedList.macros.map((material) => ({
+            ...withOfficialListPrice(material),
             isOutsidePriceList: false,
-            selected: m.isPremiumLine ? false : (m.selected ?? true),
+            selected: material.isPremiumLine ? false : (material.selected ?? true),
             minQty:
-              m.minQuantity !== undefined
-                ? m.minQuantity
-                : m.type === 'macro' && !m.name.toLowerCase().includes('enchimento')
+              material.minQuantity !== undefined
+                ? material.minQuantity
+                : material.type === 'macro' && !material.name.toLowerCase().includes('enchimento')
                   ? 50
-                  : m.minQty || 0,
+                  : material.minQty || 0,
           })),
           ...extraMacros.map((m) => ({
             ...m,
@@ -413,11 +420,12 @@ export function useCalculator({
         ];
         // Micros chegam sempre desmarcados — usuário escolhe quais usar
         const newMicros = [
-          ...selectedList.micros.map((m) => ({
-            ...m,
+          ...selectedList.micros.map((material) => ({
+            ...withOfficialListPrice(material),
             isOutsidePriceList: false,
             selected: false,
-            minQty: m.minQuantity !== undefined ? m.minQuantity : m.minQty || 0,
+            minQty:
+              material.minQuantity !== undefined ? material.minQuantity : material.minQty || 0,
           })),
           ...extraMicros.map((m) => ({
             ...m,
@@ -442,7 +450,11 @@ export function useCalculator({
 
         setCalculations((prevCalculations) =>
           prevCalculations.map((calc) => {
-            if (!calc.selected) return calc;
+            if (!calc.selected) {
+              return shouldRefreshCurrencySnapshot
+                ? { ...calc, factors: { ...calc.factors, ...currencySnapshot }, summary: undefined }
+                : calc;
+            }
 
             const updatedCalcMacros = newMacros.map((newP) => {
               const savedP = calc.macros.find((s) => s.id === newP.id);
@@ -604,6 +616,14 @@ export function useCalculator({
 
     if (formulasToCalculate.length === 0 && !targetFormulaId) {
       showError('Selecione ao menos uma fórmula para calcular.');
+      return;
+    }
+
+    const formulaWithoutExchangeRate = formulasToCalculate.find(
+      (calculation) => !hasValidPricingExchangeRate(calculation.factors)
+    );
+    if (formulaWithoutExchangeRate) {
+      showError('Informe um câmbio maior que zero antes de calcular uma lista em dólar.');
       return;
     }
 
@@ -1338,8 +1358,8 @@ export function useCalculator({
               category: selectedCalc.category ?? 'all',
               targetCa: selectedCalc.targetCa,
               targetS: selectedCalc.targetS,
-              macros: selectedCalc.macros || macros,
-              micros: selectedCalc.micros || micros,
+              macros: stripTemporaryMaterialPrices(selectedCalc.macros || macros),
+              micros: stripTemporaryMaterialPrices(selectedCalc.micros || micros),
             });
             await syncProdutoFormuladoWithSavedFormula({
               saved_formula_id: initialFormulaToLoad.id,
@@ -1403,8 +1423,8 @@ export function useCalculator({
                 category: selectedCalc.category ?? 'all',
                 targetCa: selectedCalc.targetCa,
                 targetS: selectedCalc.targetS,
-                macros: selectedCalc.macros || macros,
-                micros: selectedCalc.micros || micros,
+                macros: stripTemporaryMaterialPrices(selectedCalc.macros || macros),
+                micros: stripTemporaryMaterialPrices(selectedCalc.micros || micros),
               });
               await syncProdutoFormuladoWithSavedFormula({
                 saved_formula_id: duplicate.id,
@@ -1438,8 +1458,8 @@ export function useCalculator({
             category: selectedCalc.category ?? 'all',
             targetCa: selectedCalc.targetCa,
             targetS: selectedCalc.targetS,
-            macros: selectedCalc.macros || macros,
-            micros: selectedCalc.micros || micros,
+            macros: stripTemporaryMaterialPrices(selectedCalc.macros || macros),
+            micros: stripTemporaryMaterialPrices(selectedCalc.micros || micros),
           });
           // Also save to produtos_formulados
           try {
