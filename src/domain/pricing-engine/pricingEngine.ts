@@ -8,6 +8,26 @@ export interface PricingEngineOptions {
   today?: Date;
 }
 
+const DAY_IN_MILLISECONDS = 86_400_000;
+
+const dateStringToUtcDay = (value: string): number | null => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const timestamp = Date.UTC(year, month - 1, day);
+  const parsed = new Date(timestamp);
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return timestamp;
+};
+
 export function calculateMaterialComposition(macros: RawMaterial[], micros: RawMaterial[]) {
   const selected = [...macros.filter((m) => m.selected), ...micros.filter((m) => m.selected)];
   let totalWeight = 0;
@@ -56,15 +76,21 @@ export function calculateInterestDays(
   interestStartDate?: string
 ): number {
   if (!dueDate) return 0;
-  const due = new Date(dueDate);
-  if (Number.isNaN(due.getTime())) return 0;
-  const configuredStart =
-    !exemptCurrentMonth && interestStartDate ? new Date(interestStartDate) : null;
-  if (configuredStart && Number.isNaN(configuredStart.getTime())) return 0;
-  const start =
-    configuredStart ??
-    (exemptCurrentMonth ? new Date(today.getFullYear(), today.getMonth() + 1, 0) : today);
-  return Math.max(0, Math.ceil((due.getTime() - start.getTime()) / 86_400_000));
+  const due = dateStringToUtcDay(dueDate);
+  if (due === null) return 0;
+
+  let start: number;
+  if (exemptCurrentMonth) {
+    start = Date.UTC(today.getFullYear(), today.getMonth() + 1, 1);
+  } else if (interestStartDate) {
+    const configuredStart = dateStringToUtcDay(interestStartDate);
+    if (configuredStart === null) return 0;
+    start = configuredStart;
+  } else {
+    start = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+  }
+
+  return Math.max(0, Math.round((due - start) / DAY_IN_MILLISECONDS));
 }
 
 export function calculatePricingSummary(
