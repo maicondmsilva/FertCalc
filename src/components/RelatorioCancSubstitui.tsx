@@ -1,7 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { CancelamentoPedido, PedidoVenda } from '../types';
-import { getCancelamentos, getPedidosVenda } from '../services/pedidosVendaService';
-import { FileText, Search, RefreshCw, FileSpreadsheet, ChevronLeft, ChevronRight, X, Filter } from 'lucide-react';
+import {
+  CancelamentoRelatorioRow,
+  getCancelamentosRelatorio,
+} from '../services/pedidosVendaService';
+import {
+  FileText,
+  Search,
+  RefreshCw,
+  FileSpreadsheet,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  Filter,
+} from 'lucide-react';
 import { useToast } from './Toast';
 
 interface RelatorioCancSubstituiProps {
@@ -28,27 +39,15 @@ function fmtQtd(n: number) {
   return n.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + ' ton';
 }
 
-interface EnrichedCancelamento extends CancelamentoPedido {
-  pedidoOrigemNome?: string;
-  pedidoOrigemCliente?: string;
-  pedidoOrigemProduto?: string;
-  pedidoOrigemQtd?: number;
-  pedidoOrigemDisponivel?: boolean;
-  pedidoDestinoNome?: string;
-  pedidoDestinoCliente?: string;
-  pedidoDestinoDisponivel?: boolean;
-  pedidoSaldoRestante?: number;
-}
-
-export default function RelatorioCancSubstitui({
-  currentUser,
-  onOpenPedido,
-}: RelatorioCancSubstituiProps) {
+export default function RelatorioCancSubstitui({ onOpenPedido }: RelatorioCancSubstituiProps) {
   const { showError } = useToast();
-  const [cancelamentos, setCancelamentos] = useState<EnrichedCancelamento[]>([]);
+  const [cancelamentos, setCancelamentos] = useState<CancelamentoRelatorioRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState<'pdf' | 'excel' | null>(null);
   const [page, setPage] = useState(1);
+  const [totalOperacoes, setTotalOperacoes] = useState(0);
+  const [totalQtdDesmembrada, setTotalQtdDesmembrada] = useState(0);
+  const [totalDefinitivos, setTotalDefinitivos] = useState(0);
 
   // Pending filter state (not yet applied)
   const [dataInicio, setDataInicio] = useState('');
@@ -73,54 +72,28 @@ export default function RelatorioCancSubstitui({
   });
 
   const load = useCallback(
-    async (filters: typeof appliedFilters) => {
+    async (filters: typeof appliedFilters, requestedPage = 1) => {
       setLoading(true);
       try {
-        const [logs, pedidos] = await Promise.all([
-          getCancelamentos({
+        const result = await getCancelamentosRelatorio(
+          {
             tipo: filters.tipoFiltro || undefined,
             dataInicio: filters.dataInicio || undefined,
             dataFim: filters.dataFim || undefined,
+            numeroPedido: filters.numeroPedido || undefined,
+            clienteNome: filters.clienteNome || undefined,
             usuarioNome: filters.usuarioFiltro || undefined,
-          }),
-          getPedidosVenda(),
-        ]);
-
-        const pedidosMap = new Map<string, PedidoVenda>(pedidos.map((p) => [p.id, p]));
-
-        const enriched: EnrichedCancelamento[] = logs.map((log) => {
-          const origem = pedidosMap.get(log.pedido_origem_id);
-          const destino = log.pedido_destino_id ? pedidosMap.get(log.pedido_destino_id) : undefined;
-
-          const origemNome =
-            origem?.barra_pedido ||
-            (origem?.numero_pedido
-              ? `${origem.numero_pedido}/${origem.emitente ?? 1}`
-              : log.pedido_origem_id.slice(0, 8));
-
-          const destinoNome = destino
-            ? destino.barra_pedido ||
-              (destino.numero_pedido
-                ? `${destino.numero_pedido}/${destino.emitente ?? 1}`
-                : destino.id.slice(0, 8))
-            : '—';
-
-          return {
-            ...log,
-            pedidoOrigemNome: origemNome,
-            pedidoOrigemCliente: origem?.cliente_nome,
-            pedidoOrigemProduto: origem?.produto_nome,
-            pedidoOrigemQtd: origem?.quantidade_original ?? origem?.quantidade_real,
-            pedidoOrigemDisponivel: Boolean(origem),
-            pedidoDestinoNome: destinoNome,
-            pedidoDestinoCliente: destino?.cliente_nome,
-            pedidoDestinoDisponivel: Boolean(destino),
-            pedidoSaldoRestante: origem?.saldo_disponivel,
-          };
-        });
-
-        setCancelamentos(enriched);
-        setPage(1);
+            emitenteOrigem: filters.emitenteOrigem ? Number(filters.emitenteOrigem) : undefined,
+            emitenteDestino: filters.emitenteDestino ? Number(filters.emitenteDestino) : undefined,
+          },
+          requestedPage,
+          PAGE_SIZE
+        );
+        setCancelamentos(result.data);
+        setTotalOperacoes(result.total);
+        setTotalQtdDesmembrada(result.totalQuantidade);
+        setTotalDefinitivos(result.totalDefinitivos);
+        setPage(requestedPage);
       } catch {
         showError('Erro ao carregar relatório de Canc/Substitui.');
       } finally {
@@ -147,7 +120,7 @@ export default function RelatorioCancSubstitui({
       emitenteDestino,
     };
     setAppliedFilters(newFilters);
-    load(newFilters);
+    load(newFilters, 1);
   };
 
   const handleLimparFiltros = () => {
@@ -170,37 +143,33 @@ export default function RelatorioCancSubstitui({
       emitenteDestino: '',
     };
     setAppliedFilters(cleared);
-    load(cleared);
+    load(cleared, 1);
   };
 
-  // Client-side filters for numero pedido, cliente, emitente origem/destino
-  const filtered = cancelamentos.filter((c) => {
-    const f = appliedFilters;
-    const matchNumero =
-      !f.numeroPedido ||
-      (c.pedidoOrigemNome ?? '').toLowerCase().includes(f.numeroPedido.toLowerCase()) ||
-      (c.pedidoDestinoNome ?? '').toLowerCase().includes(f.numeroPedido.toLowerCase());
-    const matchCliente =
-      !f.clienteNome ||
-      (c.pedidoOrigemCliente ?? '').toLowerCase().includes(f.clienteNome.toLowerCase()) ||
-      (c.pedidoDestinoCliente ?? '').toLowerCase().includes(f.clienteNome.toLowerCase());
-    const matchEmitenteOrigem =
-      !f.emitenteOrigem ||
-      (c.pedidoOrigemNome ?? '').includes(`/${f.emitenteOrigem}`);
-    const matchEmitenteDestino =
-      !f.emitenteDestino ||
-      (c.pedidoDestinoNome ?? '').includes(`/${f.emitenteDestino}`);
-    return matchNumero && matchCliente && matchEmitenteOrigem && matchEmitenteDestino;
-  });
+  const totalPages = Math.max(1, Math.ceil(totalOperacoes / PAGE_SIZE));
+  const paginated = cancelamentos;
 
-  // Totalizadores
-  const totalOperacoes = filtered.length;
-  const totalQtdDesmembrada = filtered.reduce((sum, c) => sum + c.quantidade, 0);
-  const totalDefinitivos = filtered.filter((c) => c.tipo === 'definitivo').length;
-
-  // Pagination
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const loadExportRows = async () =>
+    (
+      await getCancelamentosRelatorio(
+        {
+          tipo: appliedFilters.tipoFiltro || undefined,
+          dataInicio: appliedFilters.dataInicio || undefined,
+          dataFim: appliedFilters.dataFim || undefined,
+          numeroPedido: appliedFilters.numeroPedido || undefined,
+          clienteNome: appliedFilters.clienteNome || undefined,
+          usuarioNome: appliedFilters.usuarioFiltro || undefined,
+          emitenteOrigem: appliedFilters.emitenteOrigem
+            ? Number(appliedFilters.emitenteOrigem)
+            : undefined,
+          emitenteDestino: appliedFilters.emitenteDestino
+            ? Number(appliedFilters.emitenteDestino)
+            : undefined,
+        },
+        1,
+        5000
+      )
+    ).data;
 
   const buildPdfFiltersText = () => {
     const parts: string[] = [];
@@ -209,83 +178,92 @@ export default function RelatorioCancSubstitui({
     if (appliedFilters.numeroPedido) parts.push(`Nº Pedido: ${appliedFilters.numeroPedido}`);
     if (appliedFilters.clienteNome) parts.push(`Cliente: ${appliedFilters.clienteNome}`);
     if (appliedFilters.tipoFiltro)
-      parts.push(`Tipo: ${appliedFilters.tipoFiltro === 'canc_substitui' ? 'Canc/Substitui' : 'Definitivo'}`);
+      parts.push(
+        `Tipo: ${appliedFilters.tipoFiltro === 'canc_substitui' ? 'Canc/Substitui' : 'Definitivo'}`
+      );
     if (appliedFilters.usuarioFiltro) parts.push(`Usuário: ${appliedFilters.usuarioFiltro}`);
     if (appliedFilters.emitenteOrigem) parts.push(`Emit. Origem: ${appliedFilters.emitenteOrigem}`);
-    if (appliedFilters.emitenteDestino) parts.push(`Emit. Destino: ${appliedFilters.emitenteDestino}`);
+    if (appliedFilters.emitenteDestino)
+      parts.push(`Emit. Destino: ${appliedFilters.emitenteDestino}`);
     return parts.length > 0 ? parts.join(' | ') : 'Nenhum filtro aplicado';
   };
 
   const handleExportPDF = async () => {
     setExporting('pdf');
     try {
+      const rowsToExport = await loadExportRows();
       const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
         import('jspdf'),
         import('jspdf-autotable'),
       ]);
       const doc = new jsPDF({ orientation: 'landscape' });
 
-    // Header
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.text('FertCalc — Relatório de Canc/Substitui', 14, 14);
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 14, 21);
-    doc.text(`Filtros: ${buildPdfFiltersText()}`, 14, 27);
+      // Header
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text('FertCalc — Relatório de Canc/Substitui', 14, 14);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 14, 21);
+      doc.text(`Filtros: ${buildPdfFiltersText()}`, 14, 27);
 
-    autoTable(doc, {
-      startY: 33,
-      head: [
-        [
-          'Nº Pedido / Emit. Orig.',
-          'Pedido Destino / Emit.',
-          'Cliente Origem',
-          'Cliente Destino',
-          'Produto',
-          'Qtd Original',
-          'Qtd Desm.',
-          'Saldo Restante',
-          'Tipo',
-          'Data',
-          'Usuário',
-          'Motivo',
+      autoTable(doc, {
+        startY: 33,
+        head: [
+          [
+            'Nº Pedido / Emit. Orig.',
+            'Pedido Destino / Emit.',
+            'Cliente Origem',
+            'Cliente Destino',
+            'Produto',
+            'Qtd Original',
+            'Qtd Desm.',
+            'Saldo Restante',
+            'Tipo',
+            'Data',
+            'Usuário',
+            'Motivo',
+          ],
         ],
-      ],
-      body: filtered.map((c) => [
-        c.pedidoOrigemNome ?? '—',
-        c.pedidoDestinoNome ?? '—',
-        c.pedidoOrigemCliente ?? '—',
-        c.pedidoDestinoCliente ?? '—',
-        c.pedidoOrigemProduto ?? '—',
-        c.pedidoOrigemQtd != null ? fmtQtd(c.pedidoOrigemQtd) : '—',
-        fmtQtd(c.quantidade),
-        c.pedidoSaldoRestante != null ? fmtQtd(c.pedidoSaldoRestante) : '—',
-        c.tipo === 'canc_substitui' ? 'Canc/Substitui' : 'Definitivo',
-        fmtDate(c.criado_em),
-        c.usuario_nome ?? '—',
-        c.motivo ?? '—',
-      ]),
-      styles: { fontSize: 7, cellPadding: 2 },
-      headStyles: { fillColor: [5, 150, 105], fontStyle: 'bold' },
-      foot: [
-        [
-          `Total: ${totalOperacoes} operações`,
-          '',
-          '',
-          '',
-          '',
-          '',
-          fmtQtd(totalQtdDesmembrada),
-          '',
-          `${totalDefinitivos} definitivos`,
-          '',
-          '',
-          '',
+        body: rowsToExport.map((c) => [
+          c.pedidoOrigemNome ?? '—',
+          c.pedidoDestinoNome ?? '—',
+          `${c.pedidoOrigemCliente ?? '—'}${c.pedidoOrigemIe ? `\nI.E. ${c.pedidoOrigemIe}` : ''}`,
+          `${c.pedidoDestinoCliente ?? '—'}${c.pedidoDestinoIe ? `\nI.E. ${c.pedidoDestinoIe}` : ''}`,
+          c.pedidoOrigemProduto ?? '—',
+          c.pedidoOrigemQtd != null ? fmtQtd(c.pedidoOrigemQtd) : '—',
+          fmtQtd(c.quantidade),
+          c.pedidoSaldoRestante != null ? fmtQtd(c.pedidoSaldoRestante) : '—',
+          c.tipo === 'canc_substitui' ? 'Canc/Substitui' : 'Definitivo',
+          fmtDate(c.criado_em),
+          c.usuario_nome ?? '—',
+          c.motivo ?? '—',
+        ]),
+        styles: { fontSize: 7, cellPadding: 2 },
+        headStyles: { fillColor: [5, 150, 105], fontStyle: 'bold' },
+        foot: [
+          [
+            `Total: ${totalOperacoes} operações`,
+            '',
+            '',
+            '',
+            '',
+            '',
+            fmtQtd(totalQtdDesmembrada),
+            '',
+            `${totalDefinitivos} definitivos`,
+            '',
+            '',
+            '',
+          ],
         ],
-      ],
-      footStyles: { fillColor: [245, 245, 244], textColor: [68, 64, 60], fontStyle: 'bold', fontSize: 7 },
-    });
+        footStyles: {
+          fillColor: [245, 245, 244],
+          textColor: [68, 64, 60],
+          fontStyle: 'bold',
+          fontSize: 7,
+        },
+      });
 
       doc.save('relatorio-canc-substitui.pdf');
     } catch {
@@ -298,50 +276,55 @@ export default function RelatorioCancSubstitui({
   const handleExportXLSX = async () => {
     setExporting('excel');
     try {
+      const rowsToExport = await loadExportRows();
       const XLSX = await import('xlsx');
-      const rows = filtered.map((c) => ({
-      'Nº Pedido / Emit. Orig.': c.pedidoOrigemNome ?? '—',
-      'Pedido Destino / Emit.': c.pedidoDestinoNome ?? '—',
-      'Cliente Origem': c.pedidoOrigemCliente ?? '—',
-      'Cliente Destino': c.pedidoDestinoCliente ?? '—',
-      Produto: c.pedidoOrigemProduto ?? '—',
-      'Qtd Original (ton)': c.pedidoOrigemQtd != null ? c.pedidoOrigemQtd : '',
-      'Qtd Desmembrada (ton)': c.quantidade,
-      'Saldo Restante (ton)': c.pedidoSaldoRestante != null ? c.pedidoSaldoRestante : '',
-      Tipo: c.tipo === 'canc_substitui' ? 'Canc/Substitui' : 'Definitivo',
-      Data: fmtDate(c.criado_em),
-      Usuário: c.usuario_nome ?? '—',
-      Motivo: c.motivo ?? '—',
-    }));
+      const rows = rowsToExport.map((c) => ({
+        'Nº Pedido / Emit. Orig.': c.pedidoOrigemNome ?? '—',
+        'Pedido Destino / Emit.': c.pedidoDestinoNome ?? '—',
+        'Cliente Origem': c.pedidoOrigemCliente ?? '—',
+        'I.E. Origem': c.pedidoOrigemIe ?? '—',
+        'Cliente Destino': c.pedidoDestinoCliente ?? '—',
+        'I.E. Destino': c.pedidoDestinoIe ?? '—',
+        Produto: c.pedidoOrigemProduto ?? '—',
+        'Qtd Original (ton)': c.pedidoOrigemQtd != null ? c.pedidoOrigemQtd : '',
+        'Qtd Desmembrada (ton)': c.quantidade,
+        'Saldo Restante (ton)': c.pedidoSaldoRestante != null ? c.pedidoSaldoRestante : '',
+        Tipo: c.tipo === 'canc_substitui' ? 'Canc/Substitui' : 'Definitivo',
+        Data: fmtDate(c.criado_em),
+        Usuário: c.usuario_nome ?? '—',
+        Motivo: c.motivo ?? '—',
+      }));
 
-    const ws = XLSX.utils.json_to_sheet(rows);
+      const ws = XLSX.utils.json_to_sheet(rows);
 
-    // Column widths
-    ws['!cols'] = [
-      { wch: 22 },
-      { wch: 14 },
-      { wch: 24 },
-      { wch: 24 },
-      { wch: 28 },
-      { wch: 18 },
-      { wch: 20 },
-      { wch: 20 },
-      { wch: 16 },
-      { wch: 18 },
-      { wch: 20 },
-      { wch: 40 },
-    ];
+      // Column widths
+      ws['!cols'] = [
+        { wch: 22 },
+        { wch: 14 },
+        { wch: 24 },
+        { wch: 16 },
+        { wch: 24 },
+        { wch: 16 },
+        { wch: 28 },
+        { wch: 18 },
+        { wch: 20 },
+        { wch: 20 },
+        { wch: 16 },
+        { wch: 18 },
+        { wch: 20 },
+        { wch: 40 },
+      ];
 
-    // Bold header row
-    const range = XLSX.utils.decode_range(ws['!ref'] ?? 'A1');
-    for (let C = range.s.c; C <= range.e.c; C++) {
-      const cellAddress = XLSX.utils.encode_cell({ r: 0, c: C });
-      if (!ws[cellAddress]) continue;
-      ws[cellAddress].s = { font: { bold: true } };
-    }
+      // Bold header row
+      const range = XLSX.utils.decode_range(ws['!ref'] ?? 'A1');
+      for (let C = range.s.c; C <= range.e.c; C++) {
+        const cellAddress = XLSX.utils.encode_cell({ r: 0, c: C });
+        if (!ws[cellAddress]) continue;
+        ws[cellAddress].s = { font: { bold: true } };
+      }
 
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Canc-Substitui');
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Canc-Substitui');
       XLSX.writeFile(wb, 'relatorio-canc-substitui.xlsx');
     } catch {
       showError('Não foi possível gerar o relatório em Excel.');
@@ -361,7 +344,7 @@ export default function RelatorioCancSubstitui({
         <div className="flex items-center gap-2">
           <button
             onClick={() => void handleExportPDF()}
-            disabled={loading || exporting !== null || filtered.length === 0}
+            disabled={loading || exporting !== null || cancelamentos.length === 0}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <FileText className="w-3.5 h-3.5" />
@@ -369,7 +352,7 @@ export default function RelatorioCancSubstitui({
           </button>
           <button
             onClick={() => void handleExportXLSX()}
-            disabled={loading || exporting !== null || filtered.length === 0}
+            disabled={loading || exporting !== null || cancelamentos.length === 0}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <FileSpreadsheet className="w-3.5 h-3.5" />
@@ -519,7 +502,7 @@ export default function RelatorioCancSubstitui({
         <div className="flex justify-center py-10">
           <RefreshCw className="w-6 h-6 animate-spin text-stone-300" />
         </div>
-      ) : filtered.length === 0 ? (
+      ) : cancelamentos.length === 0 ? (
         <div className="text-center py-10 text-stone-400">
           <FileText className="w-10 h-10 mx-auto mb-2 opacity-30" />
           <p className="text-sm">Nenhum registro encontrado</p>
@@ -556,7 +539,7 @@ export default function RelatorioCancSubstitui({
                         {c.pedidoOrigemNome ?? '—'}
                       </button>
                     ) : (
-                      c.pedidoOrigemNome ?? '—'
+                      (c.pedidoOrigemNome ?? '—')
                     )}
                   </td>
                   <td className="px-4 py-3 font-mono text-xs whitespace-nowrap">
@@ -573,10 +556,20 @@ export default function RelatorioCancSubstitui({
                     )}
                   </td>
                   <td className="px-4 py-3 text-stone-700 max-w-[150px] truncate">
-                    {c.pedidoOrigemCliente ?? '—'}
+                    <span className="block truncate">{c.pedidoOrigemCliente ?? '—'}</span>
+                    {c.pedidoOrigemIe && (
+                      <span className="block text-[10px] text-stone-400">
+                        I.E. {c.pedidoOrigemIe}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-stone-700 max-w-[150px] truncate">
-                    {c.pedidoDestinoCliente ?? '—'}
+                    <span className="block truncate">{c.pedidoDestinoCliente ?? '—'}</span>
+                    {c.pedidoDestinoIe && (
+                      <span className="block text-[10px] text-stone-400">
+                        I.E. {c.pedidoDestinoIe}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-stone-700 max-w-[150px] truncate">
                     {c.pedidoOrigemProduto ?? '—'}
@@ -634,8 +627,7 @@ export default function RelatorioCancSubstitui({
                 <span className="font-bold text-stone-700">{fmtQtd(totalQtdDesmembrada)}</span>
               </span>
               <span>
-                Definitivos:{' '}
-                <span className="font-bold text-red-700">{totalDefinitivos}</span>
+                Definitivos: <span className="font-bold text-red-700">{totalDefinitivos}</span>
               </span>
             </div>
 
@@ -643,7 +635,7 @@ export default function RelatorioCancSubstitui({
             {totalPages > 1 && (
               <div className="flex items-center gap-2 text-xs text-stone-500">
                 <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  onClick={() => void load(appliedFilters, Math.max(1, page - 1))}
                   disabled={page === 1}
                   className="p-1 rounded hover:bg-stone-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
@@ -654,7 +646,7 @@ export default function RelatorioCancSubstitui({
                   <span className="font-bold text-stone-700">{totalPages}</span>
                 </span>
                 <button
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  onClick={() => void load(appliedFilters, Math.min(totalPages, page + 1))}
                   disabled={page === totalPages}
                   className="p-1 rounded hover:bg-stone-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
@@ -668,4 +660,3 @@ export default function RelatorioCancSubstitui({
     </div>
   );
 }
-
