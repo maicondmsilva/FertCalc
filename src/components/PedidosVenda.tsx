@@ -15,7 +15,8 @@ import {
   X,
 } from 'lucide-react';
 import {
-  getPedidosVenda,
+  getPedidosVendaPage,
+  getPedidoVendaById,
   getPedidoVendaItens,
   getSaldosCancelados,
   getPedidoSaldoAlertaPreferencia,
@@ -85,10 +86,13 @@ interface PedidosVendaProps {
 }
 
 type ActiveTab = 'pedidos' | 'relatorio' | 'saldos_cancelados';
+const PEDIDOS_PAGE_SIZE = 25;
 
 export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
   const { showSuccess, showError } = useToast();
   const [pedidos, setPedidos] = useState<PedidoVenda[]>([]);
+  const [pedidosPage, setPedidosPage] = useState(1);
+  const [pedidosTotal, setPedidosTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadWarnings, setLoadWarnings] = useState<string[]>([]);
@@ -128,66 +132,68 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
   const [cancDataInicio, setCancDataInicio] = useState('');
   const [cancDataFim, setCancDataFim] = useState('');
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setLoadError(null);
-    setLoadWarnings([]);
-    try {
-      const pedidosData = await getPedidosVenda();
-      setPedidos(pedidosData);
+  const load = useCallback(
+    async (requestedPage = 1, edge: 'first' | 'last' = 'first') => {
+      setLoading(true);
+      setLoadError(null);
+      setLoadWarnings([]);
+      try {
+        const result = await getPedidosVendaPage(
+          {
+            busca: searchTerm || undefined,
+            status: statusFilter || undefined,
+            filialId: filialFilter || undefined,
+          },
+          requestedPage,
+          PEDIDOS_PAGE_SIZE
+        );
+        const pedidosData = result.data;
+        setPedidos(pedidosData);
+        setPedidosPage(requestedPage);
+        setPedidosTotal(result.total);
+        const warnings: string[] = [];
 
-      const [branchesResult, clientsResult, pricingResult] = await Promise.allSettled([
-        getBranches(),
-        getClients(),
-        getPricingRecords(),
-      ]);
-      const warnings: string[] = [];
-      if (branchesResult.status === 'fulfilled') setBranches(branchesResult.value);
-      else warnings.push('filiais');
-      if (clientsResult.status === 'fulfilled') setClients(clientsResult.value);
-      else warnings.push('clientes');
-      if (pricingResult.status === 'fulfilled') setPricingRecords(pricingResult.value);
-      else warnings.push('precificacoes');
-
-      const firstPedido =
-        pedidosData.find((pedido) => pedido.id === selectedPedidoIdRef.current) ??
-        pedidosData[pedidosData.length - 1];
-      if (firstPedido) {
-        setSelectedPedidoId(firstPedido.id);
-        setExpandedIds(new Set([firstPedido.id]));
-        const [itensResult, preferenciaResult, podeReceberResult] = await Promise.allSettled([
-          getPedidoVendaItens(firstPedido.id),
-          getPedidoSaldoAlertaPreferencia(firstPedido.id, currentUser.id),
-          canReceiveSaldoPedidoAlert(currentUser.id, currentUser.role),
-        ]);
-        if (itensResult.status === 'fulfilled') {
-          setItensPorPedido({ [firstPedido.id]: itensResult.value });
+        const firstPedido =
+          pedidosData.find((pedido) => pedido.id === selectedPedidoIdRef.current) ??
+          (edge === 'last' ? pedidosData[pedidosData.length - 1] : pedidosData[0]);
+        if (firstPedido) {
+          setSelectedPedidoId(firstPedido.id);
+          setExpandedIds(new Set([firstPedido.id]));
+          const [itensResult, preferenciaResult, podeReceberResult] = await Promise.allSettled([
+            getPedidoVendaItens(firstPedido.id),
+            getPedidoSaldoAlertaPreferencia(firstPedido.id, currentUser.id),
+            canReceiveSaldoPedidoAlert(currentUser.id, currentUser.role),
+          ]);
+          if (itensResult.status === 'fulfilled') {
+            setItensPorPedido({ [firstPedido.id]: itensResult.value });
+          } else {
+            warnings.push('itens do pedido');
+          }
+          if (preferenciaResult.status === 'fulfilled') {
+            setAlertaSaldo(preferenciaResult.value);
+          } else {
+            warnings.push('preferencia do alerta');
+          }
+          if (podeReceberResult.status === 'fulfilled') {
+            setPodeReceberAlertaSaldo(podeReceberResult.value);
+          } else {
+            warnings.push('permissao do alerta');
+          }
         } else {
-          warnings.push('itens do pedido');
+          setSelectedPedidoId(null);
+          setExpandedIds(new Set());
+          setItensPorPedido({});
         }
-        if (preferenciaResult.status === 'fulfilled') {
-          setAlertaSaldo(preferenciaResult.value);
-        } else {
-          warnings.push('preferencia do alerta');
-        }
-        if (podeReceberResult.status === 'fulfilled') {
-          setPodeReceberAlertaSaldo(podeReceberResult.value);
-        } else {
-          warnings.push('permissao do alerta');
-        }
-      } else {
-        setSelectedPedidoId(null);
-        setExpandedIds(new Set());
-        setItensPorPedido({});
+        setLoadWarnings(warnings);
+      } catch (error) {
+        console.error('Erro ao carregar pedidos de venda:', error);
+        setLoadError('Nao foi possivel carregar os pedidos de venda. Tente novamente.');
+      } finally {
+        setLoading(false);
       }
-      setLoadWarnings(warnings);
-    } catch (error) {
-      console.error('Erro ao carregar pedidos de venda:', error);
-      setLoadError('Nao foi possivel carregar os pedidos de venda. Tente novamente.');
-    } finally {
-      setLoading(false);
-    }
-  }, [currentUser.id, currentUser.role]);
+    },
+    [currentUser.id, currentUser.role, filialFilter, searchTerm, statusFilter]
+  );
 
   const loadCancelamentos = useCallback(async () => {
     setLoadingCancelamentos(true);
@@ -231,8 +237,24 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
   }, []);
 
   useEffect(() => {
-    load();
+    const timer = setTimeout(() => void load(1), 300);
+    return () => clearTimeout(timer);
   }, [load]);
+
+  useEffect(() => {
+    Promise.allSettled([getBranches(), getClients(), getPricingRecords()]).then(
+      ([branchesResult, clientsResult, pricingResult]) => {
+        const warnings: string[] = [];
+        if (branchesResult.status === 'fulfilled') setBranches(branchesResult.value);
+        else warnings.push('filiais');
+        if (clientsResult.status === 'fulfilled') setClients(clientsResult.value);
+        else warnings.push('clientes');
+        if (pricingResult.status === 'fulfilled') setPricingRecords(pricingResult.value);
+        else warnings.push('precificações');
+        if (warnings.length) setLoadWarnings((current) => [...new Set([...current, ...warnings])]);
+      }
+    );
+  }, []);
 
   useEffect(() => {
     selectedPedidoIdRef.current = selectedPedidoId;
@@ -242,13 +264,13 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const unsubscribe = subscribeToOrderLoadingChanges(() => {
       clearTimeout(timer);
-      timer = setTimeout(() => void load(), 350);
+      timer = setTimeout(() => void load(pedidosPage), 350);
     });
     return () => {
       clearTimeout(timer);
       unsubscribe();
     };
-  }, [load]);
+  }, [load, pedidosPage]);
 
   const toggleExpand = (id: string) => {
     setExpandedIds((prev) => {
@@ -300,7 +322,7 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
       showSuccess('Carregamento criado com sucesso!');
       setModalCarregamentoAberto(false);
       setPedidoParaCarregamento(null);
-      await load();
+      await load(pedidosPage);
     } catch (err: unknown) {
       const msg =
         err && typeof err === 'object' && 'message' in err
@@ -311,22 +333,10 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
     }
   };
 
-  const filtered = pedidos.filter((p) => {
-    const client = clients.find((c) => c.id === p.cliente_id);
-    const normalizedSearch = searchTerm.trim().toLowerCase();
-    const matchSearch =
-      !normalizedSearch ||
-      p.numero_pedido?.toLowerCase().includes(normalizedSearch) ||
-      p.barra_pedido?.toLowerCase().includes(normalizedSearch) ||
-      p.cliente_nome?.toLowerCase().includes(normalizedSearch) ||
-      client?.name.toLowerCase().includes(normalizedSearch) ||
-      client?.stateRegistration?.toLowerCase().includes(normalizedSearch);
-    const matchStatus = !statusFilter || p.status === statusFilter;
-    const matchFilial = !filialFilter || p.filial_id === filialFilter;
-    return matchSearch && matchStatus && matchFilial;
-  });
+  const filtered = pedidos;
   const selectedPedido = pedidos.find((pedido) => pedido.id === selectedPedidoId) ?? null;
-  const pedidosCronologicos = [...pedidos].reverse();
+  const pedidosCronologicos = pedidos;
+  const pedidosTotalPages = Math.max(1, Math.ceil(pedidosTotal / PEDIDOS_PAGE_SIZE));
   const selectedPedidoPosition = pedidosCronologicos.findIndex(
     (pedido) => pedido.id === selectedPedidoId
   );
@@ -359,11 +369,14 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
   };
 
   const openPedidoById = async (pedidoId: string) => {
-    const pedido = pedidos.find((item) => item.id === pedidoId);
+    let pedido = pedidos.find((item) => item.id === pedidoId) ?? null;
+    if (!pedido) pedido = await getPedidoVendaById(pedidoId);
     if (!pedido) {
       showError('Este pedido não está disponível para o seu nível de acesso.');
       return;
     }
+    if (!pedidos.some((item) => item.id === pedido.id))
+      setPedidos((current) => [pedido!, ...current]);
     setActiveTab('pedidos');
     await selectPedido(pedido);
   };
@@ -371,7 +384,12 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
   const navigatePedido = async (direction: -1 | 1) => {
     const nextPosition = selectedPedidoPosition + direction;
     const pedido = pedidosCronologicos[nextPosition];
-    if (pedido) await selectPedido(pedido);
+    if (pedido) return selectPedido(pedido);
+    if (direction === 1 && pedidosPage < pedidosTotalPages) {
+      await load(pedidosPage + 1, 'first');
+    } else if (direction === -1 && pedidosPage > 1) {
+      await load(pedidosPage - 1, 'last');
+    }
   };
 
   const saveAlertaSaldo = async (preferencia: PedidoSaldoAlertaPreferencia) => {
@@ -404,7 +422,7 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
             <ClipboardList className="w-4 h-4" />+ Novo Pedido
           </button>
           <button
-            onClick={load}
+            onClick={() => void load(pedidosPage)}
             className="p-2 text-stone-400 hover:text-stone-600 hover:bg-stone-100 rounded-lg transition-colors"
             title="Atualizar"
           >
@@ -418,7 +436,7 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
           <span>{loadError}</span>
           <button
             type="button"
-            onClick={load}
+            onClick={() => void load(pedidosPage)}
             className="rounded-lg bg-red-700 px-3 py-2 font-bold text-white hover:bg-red-800"
           >
             Tentar novamente
@@ -717,7 +735,7 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                         </span>
                       </span>
                       <span className="text-xs text-stone-400">
-                        I.E. {client?.stateRegistration || 'não informada'}
+                        I.E. {client?.stateRegistration || pedido.cliente_ie || 'não informada'}
                       </span>
                     </button>
                   );
@@ -728,6 +746,33 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                   </p>
                 )}
               </div>
+              {pedidosTotalPages > 1 && (
+                <div className="mt-3 flex items-center justify-between text-xs text-stone-500">
+                  <span>
+                    Página {pedidosPage} de {pedidosTotalPages} · {pedidosTotal} pedido(s)
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void load(Math.max(1, pedidosPage - 1), 'first')}
+                      disabled={pedidosPage === 1}
+                      className="rounded border border-stone-200 px-3 py-1.5 font-bold disabled:opacity-40"
+                    >
+                      Anterior
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void load(Math.min(pedidosTotalPages, pedidosPage + 1), 'first')
+                      }
+                      disabled={pedidosPage === pedidosTotalPages}
+                      className="rounded border border-stone-200 px-3 py-1.5 font-bold disabled:opacity-40"
+                    >
+                      Próxima
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -739,20 +784,22 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
               <button
                 type="button"
                 onClick={() => void navigatePedido(-1)}
-                disabled={selectedPedidoPosition <= 0}
+                disabled={pedidosPage === 1 && selectedPedidoPosition <= 0}
                 className="inline-flex items-center gap-1 rounded-lg border border-stone-200 px-3 py-2 text-sm font-bold text-stone-600 hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <ChevronLeft className="h-4 w-4" /> Anterior
               </button>
               <span className="text-xs text-stone-500">
-                Pedido {selectedPedidoPosition + 1} de {pedidosCronologicos.length}
+                Pedido {(pedidosPage - 1) * PEDIDOS_PAGE_SIZE + selectedPedidoPosition + 1} de{' '}
+                {pedidosTotal}
               </span>
               <button
                 type="button"
                 onClick={() => void navigatePedido(1)}
                 disabled={
                   selectedPedidoPosition < 0 ||
-                  selectedPedidoPosition >= pedidosCronologicos.length - 1
+                  (pedidosPage === pedidosTotalPages &&
+                    selectedPedidoPosition >= pedidosCronologicos.length - 1)
                 }
                 className="inline-flex items-center gap-1 rounded-lg border border-stone-200 px-3 py-2 text-sm font-bold text-stone-600 hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-40"
               >
@@ -839,7 +886,7 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
 
                 const clientObj = clients.find((c) => c.id === p.cliente_id);
                 const clientName = clientObj?.name || p.cliente_nome || '—';
-                const farmName = clientObj?.fazenda || '—';
+                const farmName = clientObj?.fazenda || p.cliente_fazenda || '—';
 
                 return (
                   <div
@@ -1239,7 +1286,7 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
             pricing={null}
             currentUser={currentUser}
             onClose={() => setShowNovoPedido(false)}
-            onSuccess={load}
+            onSuccess={() => load(pedidosPage)}
           />
         )}
 
@@ -1252,7 +1299,7 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
             branches={branches}
             currentUser={currentUser}
             onClose={() => setPedidoEdicao(null)}
-            onSuccess={load}
+            onSuccess={() => load(pedidosPage)}
           />
         )}
 
@@ -1261,7 +1308,7 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
             pedido={pedidoCancSubstitui}
             currentUser={currentUser}
             onClose={() => setPedidoCancSubstitui(null)}
-            onSuccess={load}
+            onSuccess={() => load(pedidosPage)}
           />
         )}
 
@@ -1270,7 +1317,7 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
             pedido={pedidoCancelamentoDefinitivo}
             currentUser={currentUser}
             onClose={() => setPedidoCancelamentoDefinitivo(null)}
-            onSuccess={load}
+            onSuccess={() => load(pedidosPage)}
           />
         )}
 

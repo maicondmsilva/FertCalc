@@ -86,6 +86,8 @@ function mapPedido(d: Record<string, unknown>): PedidoVenda {
     // Extended fields
     cliente_id: d.cliente_id as string | undefined,
     cliente_nome: d.cliente_nome as string | undefined,
+    cliente_ie: d.cliente_ie as string | undefined,
+    cliente_fazenda: d.cliente_fazenda as string | undefined,
     produto_nome: d.produto_nome as string | undefined,
     quantidade_carregada:
       d.quantidade_carregada != null ? Number(d.quantidade_carregada) : undefined,
@@ -164,6 +166,48 @@ export async function getPedidosVenda(filtros?: {
   if (error) throw error;
   if (!data) throw new Error('A consulta de pedidos nao retornou dados.');
   return data.map(mapPedido);
+}
+
+export interface PedidosVendaPageFilters {
+  busca?: string;
+  status?: string;
+  filialId?: string;
+}
+
+export interface PedidosVendaPage {
+  data: PedidoVenda[];
+  total: number;
+}
+
+export async function getPedidosVendaPage(
+  filtros: PedidosVendaPageFilters = {},
+  page = 1,
+  pageSize = 25
+): Promise<PedidosVendaPage> {
+  const { data, error } = await supabase.rpc('buscar_pedidos_venda_paginados', {
+    p_busca: filtros.busca?.trim() || null,
+    p_status: filtros.status || null,
+    p_filial_id: filtros.filialId || null,
+    p_offset: Math.max(0, page - 1) * pageSize,
+    p_limit: pageSize,
+  });
+  if (error) throw error;
+
+  const rows = (data ?? []) as Array<{ pedido: Record<string, unknown>; total_registros: number }>;
+  return {
+    total: rows[0] ? Number(rows[0].total_registros) : 0,
+    data: rows.map((row) => mapPedido(row.pedido)),
+  };
+}
+
+export async function getPedidoVendaById(id: string): Promise<PedidoVenda | null> {
+  const { data, error } = await supabase
+    .from('pedidos_venda')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapPedido(data) : null;
 }
 
 export async function getPedidoVendaByPrecificacao(

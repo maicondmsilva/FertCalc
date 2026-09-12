@@ -685,6 +685,8 @@ export interface PedidoVenda {
   // Extended fields
   cliente_id?: string;
   cliente_nome?: string;
+  cliente_ie?: string;
+  cliente_fazenda?: string;
   produto_nome?: string;
   quantidade_carregada?: number;
   quantidade_reservada?: number;
@@ -742,3 +744,4 @@ export interface ComparisonHistory {
   };
   created_at?: string;
 }
+
