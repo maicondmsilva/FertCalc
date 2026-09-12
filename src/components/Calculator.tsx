@@ -138,6 +138,8 @@ export default function Calculator({
     updateProdutoLivreQuantity,
     removeProdutoLivreFromCalculation,
     updateCalculationFactors,
+    isSavingPricing,
+    isSavingFormula,
     savePricing,
     saveToFormulasList,
   } = useCalculator({
@@ -2271,22 +2273,29 @@ export default function Calculator({
                 (currentUser.permissions as any)?.calculator_saveFormula !== false) && (
                 <button
                   onClick={saveToFormulasList}
-                  disabled={isLocked}
+                  disabled={Boolean(isLocked) || isSavingFormula || promptState.isOpen}
                   className={`w-full py-3 rounded-xl flex items-center justify-center font-bold text-sm transition-colors
-                  ${isLocked ? 'hidden' : 'bg-stone-800 hover:bg-stone-700 border border-stone-600 text-stone-200 shadow-lg shadow-black/20'}`}
+                  ${isLocked ? 'hidden' : 'bg-stone-800 hover:bg-stone-700 border border-stone-600 text-stone-200 shadow-lg shadow-black/20 disabled:cursor-not-allowed disabled:opacity-60'}`}
                 >
                   <Beaker className="w-4 h-4 mr-2" />
-                  Salvar Fórmula/Batida
+                  {isSavingFormula ? 'Salvando batida…' : 'Salvar Fórmula/Batida'}
                 </button>
               )}
               {canSavePricing && (
                 <button
                   type="button"
                   onClick={savePricing}
-                  disabled={Boolean(isLocked) || !hasValidExchangeRate}
+                  disabled={Boolean(isLocked) || !hasValidExchangeRate || isSavingPricing}
                   className="mt-3 inline-flex w-full min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-emerald-950/30 hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-stone-600"
                 >
-                  <Save className="h-4 w-4" /> {initialData ? 'Atualizar' : 'Salvar precificação'}
+                  <Save className="h-4 w-4" />{' '}
+                  {isSavingPricing
+                    ? initialData
+                      ? 'Atualizando…'
+                      : 'Salvando precificação…'
+                    : initialData
+                      ? 'Atualizar'
+                      : 'Salvar precificação'}
                 </button>
               )}
             </div>

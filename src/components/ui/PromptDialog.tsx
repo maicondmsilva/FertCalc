@@ -10,7 +10,7 @@ interface PromptDialogProps {
   placeholder?: string;
   confirmLabel?: string;
   cancelLabel?: string;
-  onConfirm: (value: string) => void;
+  onConfirm: (value: string) => void | Promise<void>;
   onCancel: () => void;
 }
 
@@ -26,12 +26,16 @@ export function PromptDialog({
   onCancel,
 }: PromptDialogProps) {
   const [value, setValue] = useState(defaultValue);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const submittingRef = useRef(false);
 
   // Reset e foco quando abre
   useEffect(() => {
     if (isOpen) {
       setValue(defaultValue);
+      setIsSubmitting(false);
+      submittingRef.current = false;
       setTimeout(() => {
         inputRef.current?.focus();
         inputRef.current?.select();
@@ -48,9 +52,18 @@ export function PromptDialog({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onCancel]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (value.trim()) onConfirm(value.trim());
+    if (!value.trim() || submittingRef.current) return;
+
+    submittingRef.current = true;
+    setIsSubmitting(true);
+    try {
+      await onConfirm(value.trim());
+    } finally {
+      submittingRef.current = false;
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -107,16 +120,17 @@ export function PromptDialog({
                 <button
                   type="button"
                   onClick={onCancel}
+                  disabled={isSubmitting}
                   className="px-4 py-2 text-sm font-medium text-stone-600 bg-stone-100 hover:bg-stone-200 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-stone-400"
                 >
                   {cancelLabel}
                 </button>
                 <button
                   type="submit"
-                  disabled={!value.trim()}
+                  disabled={!value.trim() || isSubmitting}
                   className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 >
-                  {confirmLabel}
+                  {isSubmitting ? 'Salvando…' : confirmLabel}
                 </button>
               </div>
             </form>

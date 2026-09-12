@@ -126,6 +126,10 @@ export function useCalculator({
   const [savedPricingId, setSavedPricingId] = useState<string | undefined>(
     initialData?.id || undefined
   );
+  const [isSavingPricing, setIsSavingPricing] = useState(false);
+  const [isSavingFormula, setIsSavingFormula] = useState(false);
+  const pricingSaveInFlightRef = useRef(false);
+  const formulaSaveInFlightRef = useRef(false);
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [priceLists, setPriceLists] = useState<PriceList[]>([]);
@@ -995,7 +999,7 @@ export function useCalculator({
 
   // ─── Save functions ───────────────────────────────────────
 
-  const savePricing = async () => {
+  const performSavePricing = async () => {
     if (isLocked) {
       showError('Esta precificação está finalizada e não pode ser alterada.');
       return;
@@ -1313,6 +1317,19 @@ export function useCalculator({
     if (onSaveSuccess) onSaveSuccess(savedRecord);
   };
 
+  const savePricing = async () => {
+    if (pricingSaveInFlightRef.current) return;
+
+    pricingSaveInFlightRef.current = true;
+    setIsSavingPricing(true);
+    try {
+      await performSavePricing();
+    } finally {
+      pricingSaveInFlightRef.current = false;
+      setIsSavingPricing(false);
+    }
+  };
+
   const saveToFormulasList = async () => {
     const selectedCalc = calculations.find((c) => c.selected);
     if (!selectedCalc) {
@@ -1346,6 +1363,10 @@ export function useCalculator({
       isOpen: true,
       defaultValue: defaultName,
       onConfirm: async (name: string) => {
+        if (formulaSaveInFlightRef.current) return;
+
+        formulaSaveInFlightRef.current = true;
+        setIsSavingFormula(true);
         setPromptState((prev) => ({ ...prev, isOpen: false }));
         try {
           const existing = await getSavedFormulas();
@@ -1479,6 +1500,9 @@ export function useCalculator({
           const e = error as { message?: string; error_description?: string };
           const msg = e?.message || e?.error_description || 'Tente novamente.';
           showError(`Erro ao salvar batida: ${msg}`);
+        } finally {
+          formulaSaveInFlightRef.current = false;
+          setIsSavingFormula(false);
         }
       },
     });
@@ -1596,6 +1620,8 @@ export function useCalculator({
     getDetailedFormulaName,
 
     // Save functions
+    isSavingPricing,
+    isSavingFormula,
     savePricing,
     saveToFormulasList,
   };
