@@ -548,7 +548,7 @@ export interface CancSubstituiPayload {
 }
 
 export async function executarCancSubstitui(payload: CancSubstituiPayload): Promise<PedidoVenda> {
-  const { pedidoPai, filho, motivo, usuarioId, usuarioNome } = payload;
+  const { pedidoPai, filho, motivo } = payload;
   const qtdFilho = filho.quantidade_real ?? 0;
 
   // Validate saldo
@@ -562,39 +562,25 @@ export async function executarCancSubstitui(payload: CancSubstituiPayload): Prom
     throw new Error('Quantidade desmembrada maior que o saldo disponível.');
   }
 
-  // 1. Create child pedido
-  const pedidoFilho = await createPedidoVenda({
-    ...filho,
-    pedido_pai_id: pedidoPai.id,
-    status: 'pendente',
-    status_pedido: 'ativo',
-    quantidade_original: qtdFilho,
-    quantidade_desmembrada: 0,
-    quantidade_cancelada_definitiva: 0,
+  // O banco valida o saldo novamente sob bloqueio e executa pedido filho,
+  // item, baixa do pedido origem e historico na mesma transacao.
+  const { data: pedidoFilhoId, error } = await supabase.rpc('executar_pedido_canc_substitui', {
+    p_pedido_origem_id: pedidoPai.id,
+    p_quantidade: qtdFilho,
+    p_produto_nome: filho.produto_nome,
+    p_motivo: motivo,
+    p_filho: filho,
   });
+  if (error) throw error;
+  if (!pedidoFilhoId) throw new Error('O pedido destino nao foi criado.');
 
-  // 2. Update parent's quantidade_desmembrada
-  const novaDesmembrada = (pedidoPai.quantidade_desmembrada ?? 0) + qtdFilho;
-  await updatePedidoVenda(pedidoPai.id, {
-    quantidade_desmembrada: novaDesmembrada,
-  });
-
-  // 3. Log cancelamento
-  await createCancelamento({
-    pedido_origem_id: pedidoPai.id,
-    pedido_destino_id: pedidoFilho.id,
-    tipo: 'canc_substitui',
-    quantidade: qtdFilho,
-    motivo,
-    usuario_id: usuarioId,
-    usuario_nome: usuarioNome,
-  });
-
-  // Sync statuses of both parent and child
-  await syncPedidoVendaStatus(pedidoPai.id);
-  await syncPedidoVendaStatus(pedidoFilho.id);
-
-  return pedidoFilho;
+  const { data: pedidoFilho, error: pedidoError } = await supabase
+    .from('pedidos_venda')
+    .select('*')
+    .eq('id', pedidoFilhoId)
+    .single();
+  if (pedidoError) throw pedidoError;
+  return mapPedido(pedidoFilho);
 }
 
 /**
@@ -611,7 +597,7 @@ export interface CancelamentoDefinitivoPayload {
 export async function executarCancelamentoDefinitivo(
   payload: CancelamentoDefinitivoPayload
 ): Promise<void> {
-  const { pedido, motivo, usuarioId, usuarioNome } = payload;
+  const { pedido, motivo } = payload;
   const saldo =
     pedido.saldo_disponivel ??
     (pedido.quantidade_original ?? pedido.quantidade_real ?? 0) -
@@ -628,36 +614,12 @@ export async function executarCancelamentoDefinitivo(
     throw new Error('Quantidade a cancelar maior que o saldo disponível.');
   }
 
-  const novaCancelada = (pedido.quantidade_cancelada_definitiva ?? 0) + qtdCancelar;
-
-  const updates: Partial<PedidoVenda> = {
-    quantidade_cancelada_definitiva: novaCancelada,
-  };
-
-  // If total cancellation (or all remaining saldo), mark as cancelled or concluido (if already loaded)
-  if (isTotal || qtdCancelar >= saldo) {
-    if ((pedido.quantidade_carregada || 0) > 0) {
-      updates.status = 'concluido';
-      updates.status_pedido = 'concluido';
-    } else {
-      updates.status = 'cancelado';
-      updates.status_pedido = 'cancelado';
-    }
-  }
-
-  await updatePedidoVenda(pedido.id, updates);
-
-  await createCancelamento({
-    pedido_origem_id: pedido.id,
-    tipo: 'definitivo',
-    quantidade: qtdCancelar,
-    motivo,
-    usuario_id: usuarioId,
-    usuario_nome: usuarioNome,
+  const { error } = await supabase.rpc('executar_pedido_cancelamento_definitivo', {
+    p_pedido_id: pedido.id,
+    p_quantidade: isTotal ? null : qtdCancelar,
+    p_motivo: motivo,
   });
-
-  // Sync status after cancellation
-  await syncPedidoVendaStatus(pedido.id);
+  if (error) throw error;
 }
 
 /**
