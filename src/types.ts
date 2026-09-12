@@ -30,6 +30,7 @@ export interface UnifiedProduct {
   formulaSuffix?: string;
   isPremiumLine?: boolean;
   availableInCalculatorWithoutPriceList?: boolean;
+  extraLoadingLocationIds?: string[];
   description?: string;
   price?: number;
 }
@@ -76,6 +77,7 @@ export interface RawMaterial {
   desiredGuaranteePercent?: number;
   materialOrder?: number;
   availableInCalculatorWithoutPriceList?: boolean;
+  extraLoadingLocationIds?: string[];
   isOutsidePriceList?: boolean;
 }
 
@@ -364,6 +366,7 @@ export interface MacroMaterial {
   isPremiumLine?: boolean;
   minQuantity?: number;
   availableInCalculatorWithoutPriceList?: boolean;
+  extraLoadingLocationIds?: string[];
 }
 
 export interface MicroMaterial {
@@ -377,6 +380,7 @@ export interface MicroMaterial {
   minQuantity?: number;
   isPremiumLine?: boolean;
   availableInCalculatorWithoutPriceList?: boolean;
+  extraLoadingLocationIds?: string[];
 }
 
 export interface ProfitabilityAnalysis {
