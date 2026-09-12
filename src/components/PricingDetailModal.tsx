@@ -1504,6 +1504,17 @@ export default function PricingDetailModal({
                             - {money(Number(calc.factors?.discount || 0))}
                           </span>
                         </div>
+                        {Number(calc.factors?.embalagem_valor || 0) !== 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-stone-500">Ajuste de embalagem</span>
+                            <span
+                              className={`font-mono font-medium ${Number(calc.factors?.embalagem_valor) > 0 ? 'text-orange-600' : 'text-blue-600'}`}
+                            >
+                              {Number(calc.factors?.embalagem_valor) > 0 ? '+' : '-'}{' '}
+                              {money(Math.abs(Number(calc.factors?.embalagem_valor)))}
+                            </span>
+                          </div>
+                        )}
                         <div className="pt-2 border-t border-stone-100 flex justify-between font-bold text-stone-800">
                           <span>Preço Base de Venda</span>
                           <span className="font-mono">
@@ -1519,15 +1530,17 @@ export default function PricingDetailModal({
                       </h4>
                       <div className="space-y-3">
                         <div className="flex justify-between text-sm">
-                          <span className="text-stone-500">Frete ({calcCurrency}/ton)</span>
+                          <span className="text-stone-500">Juros compostos de vencimento</span>
                           <span className="font-mono font-medium">
-                            + {money(Number(calcSummary.freightValue))}
+                            + {money(Number(calcSummary.interestValue))}
                           </span>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span className="text-stone-500">Juros de Vencimento</span>
+                          <span className="text-stone-500">
+                            Comissão do Agente ({calc.factors?.commission}%)
+                          </span>
                           <span className="font-mono font-medium">
-                            + {money(Number(calcSummary.interestValue))}
+                            + {money(Number(calcSummary.commissionValue))}
                           </span>
                         </div>
                         <div className="flex justify-between text-sm">
@@ -1539,11 +1552,9 @@ export default function PricingDetailModal({
                           </span>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span className="text-stone-500">
-                            Comissão do Agente ({calc.factors?.commission}%)
-                          </span>
+                          <span className="text-stone-500">Frete ({calcCurrency}/ton)</span>
                           <span className="font-mono font-medium">
-                            + {money(Number(calcSummary.commissionValue))}
+                            + {money(Number(calcSummary.freightValue))}
                           </span>
                         </div>
                         <div className="pt-2 border-t border-stone-100 flex justify-between text-xl font-black text-emerald-600">

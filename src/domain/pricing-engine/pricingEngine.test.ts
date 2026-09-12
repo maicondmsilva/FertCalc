@@ -107,13 +107,41 @@ describe('pricing engine compatibility', () => {
       { today: new Date('2026-01-01T12:00:00') }
     );
 
-    expect(result.basePrice).toBe(190);
-    expect(result.interestValue).toBeCloseTo(5.7);
-    expect(result.taxValue).toBeCloseTo(19);
-    expect(result.commissionValue).toBeCloseTo(9.5);
+    expect(result.basePrice).toBe(195);
+    expect(result.interestValue).toBe(5.85);
+    expect(result.commissionValue).toBe(10.04);
+    expect(result.taxValue).toBe(21.09);
     expect(result.freightValue).toBe(40);
-    expect(result.finalPrice).toBeCloseTo(269.2);
-    expect(result.totalSaleValue).toBeCloseTo(673);
+    expect(result.finalPrice).toBe(271.98);
+    expect(result.totalSaleValue).toBe(679.95);
+  });
+
+  it('reproduz a ordem comercial validada com dois financeiros a 1,8% ao mês', () => {
+    const result = calculatePricingSummary(
+      [{ ...material, price: 4326.96, quantity: 1000 }],
+      [],
+      factors({
+        factor: 0.8,
+        discount: 150,
+        embalagem_valor: 0,
+        monthlyInterestRate: 1.8,
+        interestStartDate: '2026-10-01',
+        dueDate: '2026-11-30',
+        commission: 1,
+        taxRate: 1,
+        freight: 150,
+        tipoFrete: 'CIF',
+      }),
+      { today: new Date('2026-09-10T12:00:00') }
+    );
+
+    expect(result.baseCost).toBe(4326.96);
+    expect(result.basePrice).toBe(3311.57);
+    expect(result.interestValue).toBe(120.29);
+    expect(result.commissionValue).toBe(34.32);
+    expect(result.taxValue).toBe(34.66);
+    expect(result.freightValue).toBe(150);
+    expect(result.finalPrice).toBe(3650.84);
   });
 
   it('não inclui frete informado quando a modalidade é FOB', () => {

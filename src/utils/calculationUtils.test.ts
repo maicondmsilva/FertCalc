@@ -108,11 +108,11 @@ describe('calculateSummary', () => {
       freight: 50, // R$ fixo
     });
     const result = calculateSummary([macro], [], factors);
-    // basePrice = 1000, taxValue = 50, commissionValue = 30, freightValue = 50
-    expect(result.taxValue).toBeCloseTo(50);
+    // Comissão incide primeiro; o imposto incide sobre o subtotal com comissão.
+    expect(result.taxValue).toBeCloseTo(51.5);
     expect(result.commissionValue).toBeCloseTo(30);
     expect(result.freightValue).toBe(50);
-    expect(result.finalPrice).toBeCloseTo(1130); // 1000 + 50 + 30 + 50
+    expect(result.finalPrice).toBeCloseTo(1131.5);
   });
 
   it('calcula valor total de venda com totalTons', () => {

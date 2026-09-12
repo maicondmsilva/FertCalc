@@ -1,5 +1,6 @@
 import type { PriceListCurrency, ProfitabilityAnalysis } from '../../types';
 import { calculateInterestDays } from './pricingEngine';
+import { roundMoney } from './commercialWaterfall';
 
 export interface ProfitabilityInput {
   unitaryPrice: number;
@@ -41,30 +42,27 @@ export function calculateProfitability(
 ): ProfitabilityResult {
   const unitaryPrice = numeric(input.unitaryPrice);
   const freightDeduction = numeric(input.freightDeduction);
-  const baseCostAfterFactor = numeric(input.baseCost) * numeric(input.factor);
+  const baseCostAfterFactor = roundMoney(numeric(input.baseCost) * numeric(input.factor));
   const daysOfInterest = calculateInterestDays(
     input.dueDate,
     Boolean(input.exemptCurrentMonth),
     options.today ?? new Date(),
     input.interestStartDate
   );
-  const interestBase = Math.max(0, unitaryPrice - freightDeduction);
-  const monthlyRate = Math.min(0.999999, Math.max(0, numeric(input.interestRate) / 100));
-  const interestDeduction =
-    daysOfInterest > 0 && monthlyRate > 0
-      ? interestBase * (1 - Math.pow(1 - monthlyRate, daysOfInterest / 30))
-      : 0;
-  const taxDeduction = unitaryPrice * (numeric(input.taxRate) / 100);
-  const commissionDeduction = unitaryPrice * (numeric(input.commissionRate) / 100);
+  const priceAfterTax = roundMoney(Math.max(0, unitaryPrice - freightDeduction));
+  const taxRate = Math.max(0, numeric(input.taxRate)) / 100;
+  const priceAfterCommission = roundMoney(priceAfterTax / (1 + taxRate));
+  const taxDeduction = roundMoney(priceAfterTax - priceAfterCommission);
+  const commissionRate = Math.max(0, numeric(input.commissionRate)) / 100;
+  const priceAfterInterest = roundMoney(priceAfterCommission / (1 + commissionRate));
+  const commissionDeduction = roundMoney(priceAfterCommission - priceAfterInterest);
+  const monthlyRate = Math.max(0, numeric(input.interestRate)) / 100;
+  const interestFactor = Math.pow(1 + monthlyRate, Math.max(0, daysOfInterest / 30));
+  const priceBeforeInterest = roundMoney(priceAfterInterest / interestFactor);
+  const interestDeduction = roundMoney(priceAfterInterest - priceBeforeInterest);
   const packagingDeduction = numeric(input.packagingValue);
-  const netRevenue =
-    unitaryPrice -
-    taxDeduction -
-    freightDeduction -
-    commissionDeduction -
-    interestDeduction -
-    packagingDeduction;
-  const profitability = netRevenue - baseCostAfterFactor;
+  const netRevenue = roundMoney(priceBeforeInterest - packagingDeduction);
+  const profitability = roundMoney(netRevenue - baseCostAfterFactor);
 
   return {
     baseCostAfterFactor,
