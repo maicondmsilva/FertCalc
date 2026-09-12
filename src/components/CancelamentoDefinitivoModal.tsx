@@ -26,8 +26,10 @@ export default function CancelamentoDefinitivoModal({
   const { showSuccess, showError } = useToast();
   const [saving, setSaving] = useState(false);
   const hasCarregado = (pedido.quantidade_carregada || 0) > 0;
+  const hasReserva = (pedido.quantidade_reservada || 0) > 0;
+  const hasMovimentacao = hasCarregado || hasReserva;
   const [tipoCancelamento, setTipoCancelamento] = useState<'total' | 'parcial'>(
-    hasCarregado ? 'parcial' : 'total'
+    hasMovimentacao ? 'parcial' : 'total'
   );
   const [quantidade, setQuantidade] = useState<string>('');
   const [motivo, setMotivo] = useState('');
@@ -154,13 +156,15 @@ export default function CancelamentoDefinitivoModal({
               Tipo de Cancelamento
             </label>
             <div className="flex gap-3">
-              <label className={`flex items-center gap-2 ${hasCarregado ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+              <label
+                className={`flex items-center gap-2 ${hasMovimentacao ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+              >
                 <input
                   type="radio"
                   name="tipo_cancelamento"
                   value="total"
                   checked={tipoCancelamento === 'total'}
-                  disabled={hasCarregado}
+                  disabled={hasMovimentacao}
                   onChange={() => setTipoCancelamento('total')}
                   className="accent-red-600"
                 />
@@ -182,7 +186,16 @@ export default function CancelamentoDefinitivoModal({
 
           {hasCarregado && tipoCancelamento === 'parcial' && (
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
-              ⚠️ Este pedido possui quantidade carregada ({fmtQtd(pedido.quantidade_carregada)}). Apenas o cancelamento parcial do saldo restante está permitido.
+              ⚠️ Este pedido possui quantidade carregada ({fmtQtd(pedido.quantidade_carregada)}).
+              Apenas o cancelamento parcial do saldo restante está permitido.
+            </div>
+          )}
+
+          {!hasCarregado && hasReserva && tipoCancelamento === 'parcial' && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
+              Este pedido possui quantidade reservada ({fmtQtd(pedido.quantidade_reservada)}). O
+              cancelamento fica limitado ao saldo que ainda não está comprometido com uma
+              solicitação de carregamento.
             </div>
           )}
 
