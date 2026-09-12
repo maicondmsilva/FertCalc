@@ -89,11 +89,14 @@ function mapPedido(d: Record<string, unknown>): PedidoVenda {
     produto_nome: d.produto_nome as string | undefined,
     quantidade_carregada:
       d.quantidade_carregada != null ? Number(d.quantidade_carregada) : undefined,
+    quantidade_reservada:
+      d.quantidade_reservada != null ? Number(d.quantidade_reservada) : undefined,
     quantidade_original: d.quantidade_original != null ? Number(d.quantidade_original) : undefined,
     quantidade_desmembrada: d.quantidade_desmembrada != null ? Number(d.quantidade_desmembrada) : 0,
     quantidade_cancelada_definitiva:
       d.quantidade_cancelada_definitiva != null ? Number(d.quantidade_cancelada_definitiva) : 0,
     saldo_disponivel: computeSaldoDisponivel(d),
+    saldo_a_carregar: d.saldo_a_carregar != null ? Number(d.saldo_a_carregar) : undefined,
     preco_unitario: d.preco_unitario != null ? Number(d.preco_unitario) : undefined,
     condicao_pagamento: d.condicao_pagamento as string | undefined,
     observacoes: d.observacoes as string | undefined,
@@ -404,14 +407,20 @@ export async function getPedidoVendaItens(pedidoVendaId: string): Promise<Pedido
     .select('*')
     .eq('pedido_venda_id', pedidoVendaId)
     .order('criado_em', { ascending: true });
-  if (error || !data) return [];
+  if (error) throw error;
+  if (!data) throw new Error('A consulta de itens do pedido nao retornou dados.');
   return (data as Record<string, unknown>[]).map((d) => ({
     id: d.id as string,
     pedido_venda_id: d.pedido_venda_id as string,
     produto_nome: d.produto_nome as string,
     formulacao: d.formulacao as string | undefined,
     quantidade_ton: Number(d.quantidade_ton),
+    quantidade_reservada:
+      d.quantidade_reservada != null ? Number(d.quantidade_reservada) : undefined,
+    quantidade_carregada:
+      d.quantidade_carregada != null ? Number(d.quantidade_carregada) : undefined,
     saldo_disponivel: d.saldo_disponivel != null ? Number(d.saldo_disponivel) : undefined,
+    saldo_a_carregar: d.saldo_a_carregar != null ? Number(d.saldo_a_carregar) : undefined,
     preco_unitario: d.preco_unitario != null ? Number(d.preco_unitario) : undefined,
     embalagem: d.embalagem as string | undefined,
     precificacao_id: d.precificacao_id as string | undefined,
@@ -502,7 +511,8 @@ export async function getCancelamentos(
   }
 
   const { data, error } = await query;
-  if (error || !data) return [];
+  if (error) throw error;
+  if (!data) throw new Error('A consulta de cancelamentos nao retornou dados.');
   return (data as Record<string, unknown>[]).map(mapCancelamento);
 }
 
@@ -654,65 +664,8 @@ export async function executarCancelamentoDefinitivo(
  * Sincroniza síncronamente o status e quantidade carregada do pedido com base nos carregamentos associados.
  */
 export async function syncPedidoVendaStatus(pedidoVendaId: string): Promise<void> {
-  // 1. Buscar detalhes do pedido
-  const { data: pedido, error: errPed } = await supabase
-    .from('pedidos_venda')
-    .select('*')
-    .eq('id', pedidoVendaId)
-    .maybeSingle();
-
-  if (errPed || !pedido) return;
-
-  // 2. Buscar todos os carregamentos atrelados a este pedido
-  const { data: carregamentos, error: errCarr } = await supabase
-    .from('carregamentos')
-    .select('*')
-    .eq('pedido_venda_id', pedidoVendaId);
-
-  if (errCarr || !carregamentos) return;
-
-  // 3. Somar quantidade concluída/carregada
-  const totalCarregado = carregamentos
-    .filter((c) => c.status === 'carregado')
-    .reduce((sum, c) => sum + Number(c.quantidade_carregada || 0), 0);
-
-  // 4. Determinar novo status do pedido
-  let newStatus: PedidoVenda['status'] = 'pendente';
-
-  if (pedido.status === 'cancelado') {
-    newStatus = 'cancelado';
-  } else {
-    if (totalCarregado > 0) {
-      const originalQty = Number(pedido.quantidade_original || pedido.quantidade_real || 0);
-      const canceladaDef = Number(pedido.quantidade_cancelada_definitiva || 0);
-      const desmembrada = Number(pedido.quantidade_desmembrada || 0);
-      const saldo = originalQty - desmembrada - canceladaDef - totalCarregado;
-
-      if (saldo <= 0) {
-        newStatus = 'concluido';
-      } else {
-        newStatus = 'em_carregamento';
-      }
-    } else {
-      // Verificar se há carregamentos agendados, liberados ou em andamento
-      const hasActive = carregamentos.some(
-        (c) => c.status === 'agendado' || c.status === 'em_carregamento' || c.status === 'liberado'
-      );
-      if (hasActive) {
-        newStatus = 'em_carregamento';
-      } else {
-        newStatus = 'pendente';
-      }
-    }
-  }
-
-  // 5. Gravar no banco
-  await supabase
-    .from('pedidos_venda')
-    .update({
-      status: newStatus,
-      quantidade_carregada: totalCarregado,
-      atualizado_em: new Date().toISOString(),
-    })
-    .eq('id', pedidoVendaId);
+  const { error } = await supabase.rpc('recalcular_pedido_venda', {
+    p_pedido_id: pedidoVendaId,
+  });
+  if (error) throw error;
 }
