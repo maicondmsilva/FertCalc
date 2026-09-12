@@ -41,11 +41,7 @@ import {
   getBranches,
   getPriceLists,
 } from '../services/db';
-import {
-  getPedidoVendaByPrecificacao,
-  createPedidoVenda,
-  updatePedidoVenda,
-} from '../services/pedidosVendaService';
+import { createPedidoVenda, getPedidoVendaByPrecificacao } from '../services/pedidosVendaService';
 import { getEmbalagens } from '../services/embalagensService';
 import { getLocaisCarregamento } from '../services/locaisCarregamentoService';
 import {
@@ -197,38 +193,36 @@ export default function PricingDetailModal({
   }, []);
 
   const handleOpenManualPedido = () => {
+    if (pedidoVenda) {
+      showError(
+        'Este pedido já está vinculado. Faça qualquer correção no módulo Pedidos de Venda.'
+      );
+      return;
+    }
     const freight = getPricingFreightValue(selectedPricing);
     const tipoFrete = getPricingFreightType(selectedPricing);
-
     setExtractedData({
-      numero_pedido: pedidoVenda?.numero_pedido ?? '',
-      barra_pedido: pedidoVenda?.barra_pedido ?? '',
-      data_pedido: pedidoVenda?.data_pedido ?? new Date().toISOString().slice(0, 10),
-      quantidade_real:
-        pedidoVenda?.quantidade_real != null ? String(pedidoVenda.quantidade_real) : '',
-      embalagem: pedidoVenda?.embalagem ?? '',
-      valor_unitario_negociado:
-        pedidoVenda?.valor_unitario_negociado != null
-          ? String(pedidoVenda.valor_unitario_negociado)
-          : '',
-      valor_total_negociado:
-        pedidoVenda?.valor_total_negociado != null ? String(pedidoVenda.valor_total_negociado) : '',
-      tipo_frete: pedidoVenda?.tipo_frete ?? tipoFrete,
-      valor_frete:
-        pedidoVenda?.valor_frete != null
-          ? String(pedidoVenda.valor_frete)
-          : freight > 0
-            ? String(freight)
-            : '',
+      numero_pedido: '',
+      barra_pedido: '',
+      data_pedido: new Date().toISOString().slice(0, 10),
+      quantidade_real: '',
+      embalagem: '',
+      valor_unitario_negociado: '',
+      valor_total_negociado: '',
+      tipo_frete: tipoFrete,
+      valor_frete: freight > 0 ? String(freight) : '',
     });
     setShowPdfImportModal(true);
   };
 
   const handleSavePedido = async () => {
-    if (!extractedData) return;
+    if (!extractedData || pedidoVenda) {
+      showError('Pedidos já vinculados só podem ser corrigidos no módulo Pedidos de Venda.');
+      return;
+    }
     setSavingPedido(true);
     try {
-      const pedidoData = {
+      const novo = await createPedidoVenda({
         precificacao_id: selectedPricing.id,
         numero_pedido: extractedData.numero_pedido || undefined,
         barra_pedido: extractedData.barra_pedido || undefined,
@@ -245,25 +239,16 @@ export default function PricingDetailModal({
           : undefined,
         tipo_frete: extractedData.tipo_frete || undefined,
         valor_frete: extractedData.valor_frete ? parseFloat(extractedData.valor_frete) : undefined,
-        status: 'pendente' as const,
+        status: 'pendente',
         importado_por: currentUser.id,
-        dados_extraidos: extractedData as any,
-      };
-
-      if (pedidoVenda) {
-        await updatePedidoVenda(pedidoVenda.id, pedidoData);
-      } else {
-        const novo = await createPedidoVenda(pedidoData);
-        setPedidoVenda(novo);
-      }
+        dados_extraidos: extractedData,
+      });
+      setPedidoVenda(novo);
       showSuccess('Pedido de Venda vinculado com sucesso!');
       setShowPdfImportModal(false);
       setExtractedData(null);
-      // Reload pedido
-      const updated = await getPedidoVendaByPrecificacao(selectedPricing.id);
-      setPedidoVenda(updated);
-    } catch (err) {
-      showError('Erro ao salvar pedido de venda.');
+    } catch {
+      showError('Erro ao salvar pedido de venda. Verifique número e emitente.');
     } finally {
       setSavingPedido(false);
     }
@@ -1802,6 +1787,11 @@ export default function PricingDetailModal({
                     </p>
                   </div>
                 )}
+              </div>
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+                Para corrigir número, emitente, cliente, precificação, produtos ou quantidades, abra
+                este pedido no módulo <strong>Pedidos de Venda</strong>. As alterações serão
+                validadas conforme os carregamentos existentes e registradas no histórico.
               </div>
             </div>
           )}

@@ -311,41 +311,6 @@ export async function createPedidoVenda(
   return mapPedido(data);
 }
 
-export async function updatePedidoVenda(id: string, updates: Partial<PedidoVenda>): Promise<void> {
-  const allowedFields: Array<keyof PedidoVenda> = [
-    'numero_pedido',
-    'barra_pedido',
-    'data_pedido',
-    'data_vencimento',
-    'quantidade_real',
-    'quantidade_original',
-    'quantidade_desmembrada',
-    'quantidade_cancelada_definitiva',
-    'embalagem',
-    'valor_unitario_negociado',
-    'valor_total_negociado',
-    'tipo_frete',
-    'valor_frete',
-    'status',
-    'status_pedido',
-    'pdf_url',
-    'dados_extraidos',
-    'cliente_id',
-    'preco_unitario',
-    'condicao_pagamento',
-    'observacoes',
-    'filial_id',
-    'formulacao_alterada',
-    'emitente',
-  ];
-  const payload: Record<string, unknown> = { atualizado_em: new Date().toISOString() };
-  allowedFields.forEach((field) => {
-    if (updates[field] !== undefined) payload[field] = updates[field];
-  });
-  const { error } = await supabase.from('pedidos_venda').update(payload).eq('id', id);
-  if (error) throw error;
-}
-
 export async function updatePedidoVendaProtegido(
   payload: UpdatePedidoVendaProtegidoPayload
 ): Promise<void> {
@@ -385,15 +350,6 @@ export async function getPedidoVendaEditContext(
   });
   if (error) throw error;
   return data as unknown as PedidoVendaEditContext;
-}
-
-export async function cancelarPedidoVenda(id: string): Promise<void> {
-  return updatePedidoVenda(id, { status: 'cancelado' });
-}
-
-export async function deletePedidoVenda(id: string): Promise<void> {
-  const { error } = await supabase.from('pedidos_venda').delete().eq('id', id);
-  if (error) throw error;
 }
 
 // Search pedidos for linking to carregamento
