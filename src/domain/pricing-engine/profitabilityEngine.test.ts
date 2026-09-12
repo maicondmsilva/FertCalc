@@ -18,13 +18,13 @@ describe('profitability engine', () => {
   it('calcula deduções e rentabilidade com data determinística', () => {
     const result = calculateProfitability(input, { today: new Date('2026-01-16T12:00:00') });
     expect(result.daysOfInterest).toBe(30);
-    expect(result.taxDeduction).toBe(150);
-    expect(result.commissionDeduction).toBe(75);
-    expect(result.interestDeduction).toBeCloseTo(28);
+    expect(result.taxDeduction).toBe(127.27);
+    expect(result.commissionDeduction).toBe(60.61);
+    expect(result.interestDeduction).toBe(23.77);
     expect(result.packagingDeduction).toBe(25);
-    expect(result.netRevenue).toBeCloseTo(1122);
-    expect(result.profitability).toBeCloseTo(122);
-    expect(result.profitabilityPercent).toBeCloseTo(12.2);
+    expect(result.netRevenue).toBe(1163.35);
+    expect(result.profitability).toBe(163.35);
+    expect(result.profitabilityPercent).toBeCloseTo(16.335);
   });
 
   it('aplica juros compostos proporcionalmente a uma fração de mês', () => {
@@ -33,7 +33,7 @@ describe('profitability engine', () => {
       { today: new Date('2026-01-31T12:00:00') }
     );
     expect(result.daysOfInterest).toBe(15);
-    expect(result.interestDeduction).toBeCloseTo(1500 * (1 - Math.sqrt(0.98)));
+    expect(result.interestDeduction).toBeCloseTo(1500 - 1500 / Math.sqrt(1.02), 2);
   });
 
   it('usa a data inicial específica também na rentabilidade', () => {
@@ -94,10 +94,37 @@ describe('profitability engine', () => {
     expect(analysis.calculationIndex).toBe(2);
     expect(analysis.analyzedByUserId).toBe('user-1');
     expect(analysis.analyzedAt).toBe(analyzedAt.toISOString());
-    expect(analysis.profitability).toBeCloseTo(122);
+    expect(analysis.profitability).toBeCloseTo(163.35);
     expect(analysis.paymentCondition).toBe('ddf');
     expect(analysis.dataCarregamento).toBe('2026-01-16');
     expect(analysis.ddfDias).toBe(30);
+  });
+
+  it('reverte exatamente a cascata comercial do cenário validado', () => {
+    const result = calculateProfitability(
+      {
+        unitaryPrice: 3650.84,
+        factor: 0.8,
+        baseCost: 4326.96,
+        freightDeduction: 150,
+        commissionRate: 1,
+        interestRate: 1.8,
+        taxRate: 1,
+        dueDate: '2026-11-30',
+        interestStartDate: '2026-10-01',
+        packagingValue: 0,
+      },
+      { today: new Date('2026-09-10T12:00:00') }
+    );
+
+    expect(result.daysOfInterest).toBe(60);
+    expect(result.baseCostAfterFactor).toBe(3461.57);
+    expect(result.interestDeduction).toBe(120.29);
+    expect(result.commissionDeduction).toBe(34.32);
+    expect(result.taxDeduction).toBe(34.66);
+    expect(result.netRevenue).toBe(3311.57);
+    expect(result.profitability).toBe(-150);
+    expect(result.profitabilityPercent).toBeCloseTo(-4.3333, 3);
   });
 
   it('preserva a moeda de origem e grava o espelho financeiro em reais', () => {

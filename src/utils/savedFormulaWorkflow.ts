@@ -1,5 +1,5 @@
 import type { PriceList, PricingFactors, SavedFormula } from '../types';
-import { calculateInterestDays } from '../domain/pricing-engine';
+import { applyCommercialWaterfall, calculateInterestDays } from '../domain/pricing-engine';
 
 export type ReportCommercialFactors = Pick<
   PricingFactors,
@@ -49,18 +49,23 @@ export function calculateReportPrice(
   factors: ReportCommercialFactors,
   today = new Date()
 ): number {
-  const basePrice = baseCost * (Number(factors.factor) || 1) - Number(factors.discount || 0);
   const days = calculateInterestDays(
     factors.dueDate,
     factors.exemptCurrentMonth,
     today,
     factors.interestStartDate
   );
-  const interest = basePrice * (Number(factors.monthlyInterestRate || 0) / 30 / 100) * days;
-  const tax = basePrice * (Number(factors.taxRate || 0) / 100);
-  const commission = basePrice * (Number(factors.commission || 0) / 100);
   const freight = factors.tipoFrete === 'CIF' ? Number(factors.freight || 0) : 0;
-  return basePrice + interest + tax + commission + freight + Number(factors.embalagem_valor || 0);
+  return applyCommercialWaterfall({
+    adjustedCost: baseCost * (Number(factors.factor) || 1),
+    discount: factors.discount,
+    packagingAdjustment: factors.embalagem_valor,
+    monthlyInterestRate: factors.monthlyInterestRate,
+    interestDays: days,
+    commissionRate: factors.commission,
+    taxRate: factors.taxRate,
+    freight,
+  }).finalPrice;
 }
 
 export function getPriceListsForLoadingLocation(

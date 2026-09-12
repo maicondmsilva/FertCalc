@@ -55,8 +55,8 @@ describe('cenários de regressão do motor de precificação', () => {
 
     expect(result.daysOfInterest).toBe(30);
     expect(result.baseCostAfterFactor).toBeCloseTo(1911, 6);
-    expect(result.netRevenue).toBeCloseTo(1849.391525, 6);
-    expect(result.profitability).toBeCloseTo(-61.608475, 6);
-    expect(result.profitabilityPercent).toBeCloseTo(-3.2238867085, 6);
+    expect(result.netRevenue).toBe(1891);
+    expect(result.profitability).toBe(-20);
+    expect(result.profitabilityPercent).toBeCloseTo(-1.046572, 6);
   });
 });

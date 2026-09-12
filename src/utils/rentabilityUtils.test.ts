@@ -28,16 +28,16 @@ describe('calcRentability', () => {
 
   it('aplica taxa de imposto corretamente', () => {
     const result = calcRentability({ ...baseInput, taxRate: 10 });
-    // taxDeduction = 1500 * 0.10 = 150
-    expect(result.taxDeduction).toBeCloseTo(150);
-    expect(result.netRevenue).toBeCloseTo(1350);
+    // O preço informado já contém o imposto: 1500 / 1,10 = 1363,64.
+    expect(result.taxDeduction).toBe(136.36);
+    expect(result.netRevenue).toBe(1363.64);
   });
 
   it('aplica comissão corretamente', () => {
     const result = calcRentability({ ...baseInput, commissionRate: 5 });
-    // commissionDeduction = 1500 * 0.05 = 75
-    expect(result.commissionDeduction).toBeCloseTo(75);
-    expect(result.netRevenue).toBeCloseTo(1425);
+    // O preço informado já contém a comissão: 1500 / 1,05 = 1428,57.
+    expect(result.commissionDeduction).toBe(71.43);
+    expect(result.netRevenue).toBe(1428.57);
   });
 
   it('aplica frete como dedução do preço', () => {

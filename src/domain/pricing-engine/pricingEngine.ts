@@ -1,5 +1,6 @@
 import type { PricingFactors, PricingSummary, RawMaterial } from '../../types';
 import { convertPriceToBRL, getPricingCurrencyContext } from '../../utils/priceListCurrency';
+import { applyCommercialWaterfall, roundMoney } from './commercialWaterfall';
 
 const numberOrZero = (value: unknown): number => Number(value) || 0;
 
@@ -73,27 +74,27 @@ export function calculatePricingSummary(
   options: PricingEngineOptions = {}
 ): PricingSummary {
   const composition = calculateMaterialComposition(macros, micros);
-  const basePrice =
-    composition.baseCost * (numberOrZero(factors.factor) || 1) - numberOrZero(factors.discount);
+  const adjustedCost = roundMoney(composition.baseCost * (numberOrZero(factors.factor) || 1));
   const days = calculateInterestDays(
     factors.dueDate,
     Boolean(factors.exemptCurrentMonth),
     options.today ?? new Date(),
     factors.interestStartDate
   );
-  const interestValue = basePrice * (numberOrZero(factors.monthlyInterestRate) / 30 / 100) * days;
-  const taxValue = basePrice * (numberOrZero(factors.taxRate) / 100);
-  const commissionValue = basePrice * (numberOrZero(factors.commission) / 100);
   const freightType = factors.tipoFrete ?? (numberOrZero(factors.freight) > 0 ? 'CIF' : 'FOB');
-  const freightValue = freightType === 'CIF' ? numberOrZero(factors.freight) : 0;
-  const finalPrice =
-    basePrice +
-    interestValue +
-    taxValue +
-    commissionValue +
-    freightValue +
-    numberOrZero(factors.embalagem_valor);
-  const totalSaleValue = finalPrice * numberOrZero(factors.totalTons);
+  const commercial = applyCommercialWaterfall({
+    adjustedCost,
+    discount: factors.discount,
+    packagingAdjustment: factors.embalagem_valor,
+    monthlyInterestRate: factors.monthlyInterestRate,
+    interestDays: days,
+    commissionRate: factors.commission,
+    taxRate: factors.taxRate,
+    freight: freightType === 'CIF' ? factors.freight : 0,
+  });
+  const { basePrice, interestValue, taxValue, commissionValue, freightValue, finalPrice } =
+    commercial;
+  const totalSaleValue = roundMoney(finalPrice * numberOrZero(factors.totalTons));
   const currencyContext = getPricingCurrencyContext(factors);
 
   return {

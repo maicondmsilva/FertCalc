@@ -630,12 +630,12 @@ export default function ProfitabilityModal({
                   </span>
                 </div>
                 <div className="flex justify-between text-red-600">
-                  <span>(-) Alíquota ({taxRate}%):</span>
-                  <span className="font-mono">- {money(result.taxDeduction)}</span>
-                </div>
-                <div className="flex justify-between text-red-600">
                   <span>(-) Frete:</span>
                   <span className="font-mono">- {money(freight)}</span>
+                </div>
+                <div className="flex justify-between text-red-600">
+                  <span>(-) Alíquota ({taxRate}%):</span>
+                  <span className="font-mono">- {money(result.taxDeduction)}</span>
                 </div>
                 <div className="flex justify-between text-red-600">
                   <span>(-) Comissão ({commission}%):</span>
@@ -643,7 +643,11 @@ export default function ProfitabilityModal({
                 </div>
                 <div className="flex justify-between text-red-600">
                   <span>
-                    (-) Juros ({interestRate}% a.m. × {result.daysOfInterest} dias):
+                    (-) Juros compostos ({interestRate}% a.m. ×{' '}
+                    {(result.daysOfInterest / 30).toLocaleString('pt-BR', {
+                      maximumFractionDigits: 2,
+                    })}{' '}
+                    financeiro(s)):
                   </span>
                   <span className="font-mono">- {money(result.interestDeduction)}</span>
                 </div>

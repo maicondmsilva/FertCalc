@@ -24,7 +24,7 @@ describe('calculateReportPrice', () => {
       new Date('2026-09-01T12:00:00')
     );
 
-    expect(result).toBe(1105);
+    expect(result).toBe(1112.6);
   });
 
   it('does not add freight when the sale is FOB', () => {
