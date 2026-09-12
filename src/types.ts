@@ -640,7 +640,10 @@ export interface PedidoVendaItem {
   produto_nome: string;
   formulacao?: string;
   quantidade_ton: number;
+  quantidade_reservada?: number;
+  quantidade_carregada?: number;
   saldo_disponivel?: number;
+  saldo_a_carregar?: number;
   preco_unitario?: number;
   embalagem?: string;
   precificacao_id?: string;
@@ -684,10 +687,12 @@ export interface PedidoVenda {
   cliente_nome?: string;
   produto_nome?: string;
   quantidade_carregada?: number;
+  quantidade_reservada?: number;
   quantidade_original?: number;
   quantidade_desmembrada?: number;
   quantidade_cancelada_definitiva?: number;
   saldo_disponivel?: number;
+  saldo_a_carregar?: number;
   preco_unitario?: number;
   condicao_pagamento?: string;
   observacoes?: string;

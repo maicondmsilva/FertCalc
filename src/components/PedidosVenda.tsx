@@ -34,7 +34,6 @@ import {
   createCarregamento,
   gerarNumeroCarregamento,
   getFiliais,
-  getQuantidadeCarregadaPorItem,
 } from '../services/carregamentoService';
 import { getBranches, getClients, getPricingRecords } from '../services/db';
 import { useToast } from './Toast';
@@ -114,7 +113,6 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
   const [pedidoParaCarregamento, setPedidoParaCarregamento] = useState<PedidoVenda | null>(null);
   const [modalCarregamentoAberto, setModalCarregamentoAberto] = useState(false);
   const [itensPorPedido, setItensPorPedido] = useState<Record<string, PedidoVendaItem[]>>({});
-  const [carregadoPorItem, setCarregadoPorItem] = useState<Record<string, number>>({});
   const [alertaSaldo, setAlertaSaldo] = useState<PedidoSaldoAlertaPreferencia>({
     dias_limite: 30,
     desativado: false,
@@ -160,22 +158,15 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
       if (firstPedido) {
         setSelectedPedidoId(firstPedido.id);
         setExpandedIds(new Set([firstPedido.id]));
-        const [itensResult, progressoResult, preferenciaResult, podeReceberResult] =
-          await Promise.allSettled([
-            getPedidoVendaItens(firstPedido.id),
-            getQuantidadeCarregadaPorItem(firstPedido.id),
-            getPedidoSaldoAlertaPreferencia(firstPedido.id, currentUser.id),
-            canReceiveSaldoPedidoAlert(currentUser.id, currentUser.role),
-          ]);
+        const [itensResult, preferenciaResult, podeReceberResult] = await Promise.allSettled([
+          getPedidoVendaItens(firstPedido.id),
+          getPedidoSaldoAlertaPreferencia(firstPedido.id, currentUser.id),
+          canReceiveSaldoPedidoAlert(currentUser.id, currentUser.role),
+        ]);
         if (itensResult.status === 'fulfilled') {
           setItensPorPedido({ [firstPedido.id]: itensResult.value });
         } else {
           warnings.push('itens do pedido');
-        }
-        if (progressoResult.status === 'fulfilled') {
-          setCarregadoPorItem(progressoResult.value);
-        } else {
-          warnings.push('progresso de carregamento');
         }
         if (preferenciaResult.status === 'fulfilled') {
           setAlertaSaldo(preferenciaResult.value);
@@ -191,7 +182,6 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
         setSelectedPedidoId(null);
         setExpandedIds(new Set());
         setItensPorPedido({});
-        setCarregadoPorItem({});
       }
       setLoadWarnings(warnings);
     } catch (error) {
@@ -332,18 +322,14 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
     setExpandedIds(new Set([pedido.id]));
     setSearchOpen(false);
     if (!itensPorPedido[pedido.id]) {
-      const [itensResult, progressoResult, preferenciaResult] = await Promise.allSettled([
+      const [itensResult, preferenciaResult] = await Promise.allSettled([
         getPedidoVendaItens(pedido.id),
-        getQuantidadeCarregadaPorItem(pedido.id),
         getPedidoSaldoAlertaPreferencia(pedido.id, currentUser.id),
       ]);
       const warnings: string[] = [];
       if (itensResult.status === 'fulfilled') {
         setItensPorPedido((current) => ({ ...current, [pedido.id]: itensResult.value }));
       } else warnings.push('itens do pedido');
-      if (progressoResult.status === 'fulfilled') {
-        setCarregadoPorItem((current) => ({ ...current, ...progressoResult.value }));
-      } else warnings.push('progresso de carregamento');
       if (preferenciaResult.status === 'fulfilled') {
         setAlertaSaldo(preferenciaResult.value);
       } else warnings.push('preferencia do alerta');
@@ -762,17 +748,7 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                       (Date.now() - new Date(selectedPedido.criado_em).getTime()) / 86400000
                     )
                   : 0;
-                const itens = itensPorPedido[selectedPedido.id] ?? [];
-                const saldoReal = itens.reduce(
-                  (total, item) =>
-                    total +
-                    Math.max(
-                      0,
-                      Number(item.quantidade_ton || 0) -
-                        (item.id ? (carregadoPorItem[item.id] ?? 0) : 0)
-                    ),
-                  0
-                );
+                const saldoReal = Math.max(0, Number(selectedPedido.saldo_a_carregar ?? 0));
                 if (
                   !podeReceberAlertaSaldo ||
                   alertaSaldo.desativado ||
@@ -819,6 +795,7 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
               {[selectedPedido].map((p) => {
                 const isExpanded = expandedIds.has(p.id);
                 const saldo = p.saldo_disponivel ?? null;
+                const saldoACarregar = p.saldo_a_carregar ?? null;
                 const itensPedido = itensPorPedido[p.id] ?? [];
                 const hasSaldoNosItens =
                   itensPedido.length === 0 ||
@@ -839,6 +816,15 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                     <div
                       className="flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-stone-50 transition-colors"
                       onClick={() => toggleExpand(p.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          toggleExpand(p.id);
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      aria-expanded={isExpanded}
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <span className="text-lg">📋</span>
@@ -911,8 +897,10 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                               <tr>
                                 <th className="pb-2 pr-4">Produto</th>
                                 <th className="pb-2 pr-4">Qtd. Pedida</th>
-                                <th className="pb-2 pr-4">Qtd. Carregada</th>
-                                <th className="pb-2 pr-4">Saldo</th>
+                                <th className="pb-2 pr-4">Reservada</th>
+                                <th className="pb-2 pr-4">Carregada</th>
+                                <th className="pb-2 pr-4">Disponível</th>
+                                <th className="pb-2 pr-4">Falta carregar</th>
                                 <th className="pb-2">Ação</th>
                               </tr>
                             </thead>
@@ -924,6 +912,11 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                                 <td className="py-2 pr-4 text-stone-700 font-mono">
                                   {p.quantidade_real != null
                                     ? `${p.quantidade_real.toLocaleString('pt-BR')} ton`
+                                    : '—'}
+                                </td>
+                                <td className="py-2 pr-4 text-stone-700 font-mono">
+                                  {p.quantidade_reservada != null
+                                    ? `${p.quantidade_reservada.toLocaleString('pt-BR')} ton`
                                     : '—'}
                                 </td>
                                 <td className="py-2 pr-4 text-stone-700 font-mono">
@@ -941,6 +934,11 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                                   ) : (
                                     '—'
                                   )}
+                                </td>
+                                <td className="py-2 pr-4 text-stone-700 font-mono">
+                                  {saldoACarregar != null
+                                    ? `${saldoACarregar.toLocaleString('pt-BR')} ton`
+                                    : '—'}
                                 </td>
                                 <td className="py-2">
                                   {saldo != null && saldo > 0 && p.status !== 'cancelado' && (
@@ -972,9 +970,12 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
                                 const total = Number(item.quantidade_ton || 0);
                                 const carregado = Math.min(
                                   total,
-                                  Math.max(0, item.id ? (carregadoPorItem[item.id] ?? 0) : 0)
+                                  Math.max(0, item.quantidade_carregada ?? 0)
                                 );
-                                const saldoItem = Math.max(0, total - carregado);
+                                const saldoItem = Math.max(
+                                  0,
+                                  Number(item.saldo_a_carregar ?? total - carregado)
+                                );
                                 const progresso =
                                   total > 0 ? Math.min(100, (carregado / total) * 100) : 0;
                                 return (
