@@ -17,6 +17,7 @@ import {
   ToggleLeft,
   ToggleRight,
   Star,
+  MapPin,
 } from 'lucide-react';
 import {
   UnifiedProduct,
@@ -43,6 +44,8 @@ import { useToast } from './Toast';
 import { useConfirm } from '../hooks/useConfirm';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import CompatibilityCategoryManager from './CompatibilityCategoryManager';
+import { getLocaisAtivos } from '../services/locaisCarregamentoService';
+import { LocalCarregamento } from '../types/carregamento';
 
 type Tab = NutrientType | 'embalagem';
 
@@ -68,6 +71,7 @@ const emptyProduct = (type: NutrientType): Partial<UnifiedProduct> => ({
   description: '',
   price: undefined,
   availableInCalculatorWithoutPriceList: false,
+  extraLoadingLocationIds: [],
 });
 
 export default function ProductManager() {
@@ -77,6 +81,7 @@ export default function ProductManager() {
   const [products, setProducts] = useState<UnifiedProduct[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [categories, setCategories] = useState<CompatibilityCategory[]>([]);
+  const [loadingLocations, setLoadingLocations] = useState<LocalCarregamento[]>([]);
 
   const [tableLoading, setTableLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -109,16 +114,18 @@ export default function ProductManager() {
 
   const loadAll = async () => {
     setTableLoading(true);
-    const [p, b, c, embs] = await Promise.all([
+    const [p, b, c, embs, locations] = await Promise.all([
       getUnifiedProducts(),
       getBrands(),
       getCompatibilityCategories(),
       getEmbalagens(),
+      getLocaisAtivos(),
     ]);
     setProducts(p);
     setBrands(b);
     setCategories(c);
     setEmbalagens(embs);
+    setLoadingLocations(locations);
     setTableLoading(false);
   };
 
@@ -240,6 +247,14 @@ export default function ProductManager() {
     try {
       if (!form.name?.trim()) {
         showError('Nome é obrigatório.');
+        setSaving(false);
+        return;
+      }
+      if (
+        form.availableInCalculatorWithoutPriceList &&
+        (form.extraLoadingLocationIds || []).length === 0
+      ) {
+        showError('Selecione ao menos um local para disponibilizar o produto extra.');
         setSaving(false);
         return;
       }
@@ -405,7 +420,7 @@ export default function ProductManager() {
                         )}
                         {item.availableInCalculatorWithoutPriceList && (
                           <span className="rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">
-                            Extra na calculadora
+                            Extra em {item.extraLoadingLocationIds?.length || 0} local(is)
                           </span>
                         )}
                       </div>
@@ -688,6 +703,9 @@ export default function ProductManager() {
                           setForm((p) => ({
                             ...p,
                             availableInCalculatorWithoutPriceList: e.target.checked,
+                            extraLoadingLocationIds: e.target.checked
+                              ? p.extraLoadingLocationIds || []
+                              : [],
                           }))
                         }
                         className="mt-0.5 h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500"
@@ -700,6 +718,83 @@ export default function ProductManager() {
                         </span>
                       </span>
                     </label>
+                    {form.availableInCalculatorWithoutPriceList && (
+                      <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-3">
+                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <p className="flex items-center gap-1.5 text-sm font-bold text-blue-900">
+                              <MapPin className="h-4 w-4" /> Locais de carregamento
+                            </p>
+                            <p className="text-xs text-blue-700">
+                              Selecione onde este produto ficará disponível como extra.
+                            </p>
+                          </div>
+                          {!viewMode && loadingLocations.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setForm((previous) => ({
+                                  ...previous,
+                                  extraLoadingLocationIds:
+                                    previous.extraLoadingLocationIds?.length ===
+                                    loadingLocations.length
+                                      ? []
+                                      : loadingLocations.map((location) => location.id),
+                                }))
+                              }
+                              className="rounded-lg border border-blue-200 bg-white px-2.5 py-1 text-xs font-bold text-blue-700 hover:bg-blue-100"
+                            >
+                              {form.extraLoadingLocationIds?.length === loadingLocations.length
+                                ? 'Limpar seleção'
+                                : 'Selecionar todos'}
+                            </button>
+                          )}
+                        </div>
+                        <div className="grid max-h-44 grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">
+                          {loadingLocations.map((location) => (
+                            <label
+                              key={location.id}
+                              className="flex cursor-pointer items-start gap-2 rounded-lg border border-blue-100 bg-white p-2 text-sm text-stone-700 hover:border-blue-300"
+                            >
+                              <input
+                                type="checkbox"
+                                disabled={viewMode}
+                                checked={(form.extraLoadingLocationIds || []).includes(location.id)}
+                                onChange={(event) =>
+                                  setForm((previous) => ({
+                                    ...previous,
+                                    extraLoadingLocationIds: event.target.checked
+                                      ? [...(previous.extraLoadingLocationIds || []), location.id]
+                                      : (previous.extraLoadingLocationIds || []).filter(
+                                          (id) => id !== location.id
+                                        ),
+                                  }))
+                                }
+                                className="mt-0.5 h-4 w-4 rounded text-blue-600 focus:ring-blue-500"
+                              />
+                              <span>
+                                <span className="block font-semibold">{location.nome}</span>
+                                {(location.cidade || location.estado) && (
+                                  <span className="block text-xs text-stone-500">
+                                    {[location.cidade, location.estado].filter(Boolean).join(' — ')}
+                                  </span>
+                                )}
+                              </span>
+                            </label>
+                          ))}
+                          {loadingLocations.length === 0 && (
+                            <p className="text-xs text-red-600">
+                              Nenhum local de carregamento ativo foi encontrado.
+                            </p>
+                          )}
+                        </div>
+                        {(form.extraLoadingLocationIds || []).length === 0 && (
+                          <p className="mt-2 text-xs font-semibold text-red-600">
+                            Selecione ao menos um local para salvar.
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

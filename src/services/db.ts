@@ -402,9 +402,17 @@ export async function deleteBrand(id: string): Promise<void> {
 // MACRO MATERIALS
 // ============================================================
 export async function getMacroMaterials(): Promise<MacroMaterial[]> {
-  const { data, error } = await supabase.from('macro_materials').select('*').order('name');
+  const [{ data, error }, assignments] = await Promise.all([
+    supabase.from('macro_materials').select('*').order('name'),
+    getExtraProductLocationAssignments(),
+  ]);
   if (error || !data) return [];
-  return data.map(mapMacro);
+  return data.map((item) => ({
+    ...mapMacro(item),
+    ...(assignments && {
+      extraLoadingLocationIds: assignments.macro.get(item.id) || [],
+    }),
+  }));
 }
 
 export async function createMacroMaterial(
@@ -484,9 +492,65 @@ function mapMacro(data: Record<string, unknown>): MacroMaterial {
 // MICRO MATERIALS
 // ============================================================
 export async function getMicroMaterials(): Promise<MicroMaterial[]> {
-  const { data, error } = await supabase.from('micro_materials').select('*').order('name');
+  const [{ data, error }, assignments] = await Promise.all([
+    supabase.from('micro_materials').select('*').order('name'),
+    getExtraProductLocationAssignments(),
+  ]);
   if (error || !data) return [];
-  return data.map(mapMicro);
+  return data.map((item) => ({
+    ...mapMicro(item),
+    ...(assignments && {
+      extraLoadingLocationIds: assignments.micro.get(item.id) || [],
+    }),
+  }));
+}
+
+interface ExtraProductLocationAssignments {
+  macro: Map<string, string[]>;
+  micro: Map<string, string[]>;
+}
+
+async function getExtraProductLocationAssignments(): Promise<ExtraProductLocationAssignments | null> {
+  const { data, error } = await supabase
+    .from('calculator_extra_product_locations')
+    .select('macro_material_id, micro_material_id, local_carregamento_id');
+
+  if (error) {
+    // Mantém compatibilidade durante a janela entre a publicação do app e da migration.
+    if (error.code !== '42P01' && error.code !== 'PGRST205') {
+      console.error('[getExtraProductLocationAssignments] Failed to load assignments:', error);
+    }
+    return null;
+  }
+
+  const assignments: ExtraProductLocationAssignments = {
+    macro: new Map(),
+    micro: new Map(),
+  };
+  (data || []).forEach((row) => {
+    const productType = row.macro_material_id ? 'macro' : 'micro';
+    const productId = row.macro_material_id || row.micro_material_id;
+    if (!productId) return;
+    const current = assignments[productType].get(productId) || [];
+    assignments[productType].set(productId, [...current, row.local_carregamento_id]);
+  });
+  return assignments;
+}
+
+async function setExtraProductLocations(
+  productType: 'macro' | 'micro',
+  productId: string,
+  enabled: boolean,
+  locationIds: string[]
+): Promise<void> {
+  const uniqueLocationIds = [...new Set(locationIds.filter(Boolean))];
+  const { error } = await supabase.rpc('set_calculator_extra_product_locations', {
+    p_product_type: productType,
+    p_product_id: productId,
+    p_enabled: enabled,
+    p_location_ids: enabled ? uniqueLocationIds : [],
+  });
+  if (error) throw error;
 }
 
 export async function createMicroMaterial(
@@ -676,6 +740,7 @@ export async function getUnifiedProducts(): Promise<UnifiedProduct[]> {
       formulaSuffix: m.formulaSuffix,
       isPremiumLine: m.isPremiumLine,
       availableInCalculatorWithoutPriceList: m.availableInCalculatorWithoutPriceList,
+      extraLoadingLocationIds: m.extraLoadingLocationIds,
     })),
     ...micros.map((m) => ({
       id: m.id,
@@ -688,6 +753,7 @@ export async function getUnifiedProducts(): Promise<UnifiedProduct[]> {
       formulaSuffix: m.formulaSuffix,
       isPremiumLine: m.isPremiumLine,
       availableInCalculatorWithoutPriceList: m.availableInCalculatorWithoutPriceList,
+      extraLoadingLocationIds: m.extraLoadingLocationIds,
     })),
     ...finished.map((f) => ({
       id: f.id,
@@ -703,7 +769,7 @@ export async function getUnifiedProducts(): Promise<UnifiedProduct[]> {
   return unified;
 }
 
-export async function saveUnifiedProduct(p: Partial<UnifiedProduct>, id?: string): Promise<void> {
+export async function saveUnifiedProduct(p: Partial<UnifiedProduct>, id?: string): Promise<string> {
   if (p.type === 'macro') {
     const macroData = {
       name: p.name!,
@@ -719,10 +785,16 @@ export async function saveUnifiedProduct(p: Partial<UnifiedProduct>, id?: string
       brandId: p.brandId,
       formulaSuffix: p.formulaSuffix,
       isPremiumLine: p.isPremiumLine,
-      availableInCalculatorWithoutPriceList: p.availableInCalculatorWithoutPriceList,
     };
+    const productId = id || (await createMacroMaterial(macroData as any)).id;
     if (id) await updateMacroMaterial(id, macroData);
-    else await createMacroMaterial(macroData as any);
+    await setExtraProductLocations(
+      'macro',
+      productId,
+      Boolean(p.availableInCalculatorWithoutPriceList),
+      p.extraLoadingLocationIds || []
+    );
+    return productId;
   } else if (p.type === 'micro') {
     const microData = {
       name: p.name!,
@@ -732,10 +804,16 @@ export async function saveUnifiedProduct(p: Partial<UnifiedProduct>, id?: string
       microGuarantees: p.microGuarantees || [],
       formulaSuffix: p.formulaSuffix,
       isPremiumLine: p.isPremiumLine,
-      availableInCalculatorWithoutPriceList: p.availableInCalculatorWithoutPriceList,
     };
+    const productId = id || (await createMicroMaterial(microData as any)).id;
     if (id) await updateMicroMaterial(id, microData);
-    else await createMicroMaterial(microData as any);
+    await setExtraProductLocations(
+      'micro',
+      productId,
+      Boolean(p.availableInCalculatorWithoutPriceList),
+      p.extraLoadingLocationIds || []
+    );
+    return productId;
   } else if (p.type === 'finished') {
     const finishedData = {
       name: p.name!,
@@ -744,9 +822,13 @@ export async function saveUnifiedProduct(p: Partial<UnifiedProduct>, id?: string
       description: p.description,
       price: p.price,
     };
-    if (id) await updateFinishedProduct(id, finishedData);
-    else await createFinishedProduct(finishedData as any);
+    if (id) {
+      await updateFinishedProduct(id, finishedData);
+      return id;
+    }
+    return (await createFinishedProduct(finishedData as any)).id;
   }
+  throw new Error('Tipo de produto inválido.');
 }
 
 export async function deleteUnifiedProduct(id: string, type: NutrientType): Promise<void> {
@@ -898,10 +980,7 @@ export async function getPriceListsForPdfSelection(): Promise<PriceListPdfSource
 
 export async function getPriceListsByIds(ids: string[]): Promise<PriceList[]> {
   if (ids.length === 0) return [];
-  const { data, error } = await supabase
-    .from('price_lists')
-    .select('*')
-    .in('id', ids);
+  const { data, error } = await supabase.from('price_lists').select('*').in('id', ids);
   if (error) throw error;
   return (data ?? []).map(mapPriceList);
 }

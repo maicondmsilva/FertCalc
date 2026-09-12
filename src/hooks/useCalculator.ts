@@ -69,6 +69,7 @@ import {
   stripTemporaryMaterialPrices,
   withOfficialListPrice,
 } from '../utils/temporaryMaterialPrice';
+import { isExtraProductAvailableAtLocation } from '../utils/extraProductAvailability';
 
 interface UseCalculatorProps {
   initialData?: PricingRecord | null;
@@ -389,13 +390,15 @@ export function useCalculator({
         const extraMacros = canViewExtraProducts
           ? catalogMacros.filter(
               (material) =>
-                material.availableInCalculatorWithoutPriceList && !listedMacroIds.has(material.id)
+                isExtraProductAvailableAtLocation(material, factors.local_carregamento_id) &&
+                !listedMacroIds.has(material.id)
             )
           : [];
         const extraMicros = canViewExtraProducts
           ? catalogMicros.filter(
               (material) =>
-                material.availableInCalculatorWithoutPriceList && !listedMicroIds.has(material.id)
+                isExtraProductAvailableAtLocation(material, factors.local_carregamento_id) &&
+                !listedMicroIds.has(material.id)
             )
           : [];
         // Macros da Linha Diferenciada chegam desmarcadas por padrão
@@ -500,7 +503,14 @@ export function useCalculator({
         );
       }
     }
-  }, [catalogMacros, catalogMicros, currentUser, factors.priceListId, priceLists]);
+  }, [
+    catalogMacros,
+    catalogMicros,
+    currentUser,
+    factors.local_carregamento_id,
+    factors.priceListId,
+    priceLists,
+  ]);
 
   // ─── Handlers ─────────────────────────────────────────────
 
