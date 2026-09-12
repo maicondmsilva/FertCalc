@@ -1641,7 +1641,7 @@ export default function Calculator({
                               />
                             </div>
                             {/* Payment Condition & Due Date */}
-                            <div className="order-1 col-span-2 row-span-2 rounded-lg border border-stone-200 bg-white p-3 lg:col-span-5 lg:col-start-1">
+                            <div className="order-1 col-span-2 row-span-2 rounded-lg border border-stone-200 bg-white p-3 lg:col-span-5 lg:col-start-1 lg:-mt-2">
                               <label className="block text-[10px] font-bold text-stone-400 uppercase mb-1">
                                 Condição de Pagamento
                               </label>
