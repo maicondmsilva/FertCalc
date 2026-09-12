@@ -58,7 +58,39 @@ describe('pricing engine compatibility', () => {
 
   it('ignora o restante do mês corrente quando solicitado', () => {
     const today = new Date(2026, 0, 10, 12);
-    expect(calculateInterestDays('2026-02-10T12:00:00', true, today)).toBe(11);
+    expect(calculateInterestDays('2026-02-10T12:00:00', true, today)).toBe(9);
+  });
+
+  it('começa em primeiro do próximo mês sem acrescentar dia por fuso horário', () => {
+    const today = new Date(2026, 8, 12, 12);
+
+    expect(calculateInterestDays('2026-11-30', true, today)).toBe(60);
+    expect(calculateInterestDays('2026-11-30', false, today)).toBe(79);
+  });
+
+  it('reduz os juros ao marcar a isenção do mês atual', () => {
+    const today = new Date(2026, 8, 12, 12);
+    const commonFactors = {
+      monthlyInterestRate: 1.8,
+      dueDate: '2026-11-30',
+      interestStartDate: '',
+    };
+    const withCurrentMonth = calculatePricingSummary(
+      [{ ...material, price: 1000, quantity: 1000 }],
+      [],
+      factors({ ...commonFactors, exemptCurrentMonth: false }),
+      { today }
+    );
+    const withoutCurrentMonth = calculatePricingSummary(
+      [{ ...material, price: 1000, quantity: 1000 }],
+      [],
+      factors({ ...commonFactors, exemptCurrentMonth: true }),
+      { today }
+    );
+
+    expect(withCurrentMonth.interestValue).toBe(48.1);
+    expect(withoutCurrentMonth.interestValue).toBe(36.32);
+    expect(withoutCurrentMonth.finalPrice).toBeLessThan(withCurrentMonth.finalPrice);
   });
 
   it('soma somente materiais selecionados e calcula todas as garantias', () => {
@@ -232,7 +264,7 @@ describe('pricing engine compatibility', () => {
     const today = new Date('2026-01-15T12:00:00');
 
     expect(calculateInterestDays('2026-03-01T12:00:00', true, today, '2026-01-01T12:00:00')).toBe(
-      30
+      28
     );
   });
 
