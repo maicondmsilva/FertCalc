@@ -490,6 +490,7 @@ export interface CancelamentoRelatorioRow extends CancelamentoPedido {
   pedidoOrigemNome?: string;
   pedidoOrigemCliente?: string;
   pedidoOrigemIe?: string;
+  pedidoOrigemFazenda?: string;
   pedidoOrigemProduto?: string;
   pedidoOrigemQtd?: number;
   pedidoOrigemDisponivel: boolean;
@@ -498,6 +499,49 @@ export interface CancelamentoRelatorioRow extends CancelamentoPedido {
   pedidoDestinoIe?: string;
   pedidoDestinoDisponivel: boolean;
   pedidoSaldoRestante?: number;
+}
+
+export interface SaldosCanceladosFilters {
+  busca?: string;
+  dataInicio?: string;
+  dataFim?: string;
+}
+
+export async function getSaldosCancelados(
+  filters: SaldosCanceladosFilters,
+  page = 1,
+  pageSize = 20
+): Promise<CancelamentoRelatorioResult> {
+  const { data, error } = await supabase.rpc('buscar_saldos_cancelados', {
+    p_busca: filters.busca?.trim() || null,
+    p_data_inicio: filters.dataInicio || null,
+    p_data_fim: filters.dataFim || null,
+    p_offset: Math.max(0, page - 1) * pageSize,
+    p_limit: pageSize,
+  });
+  if (error) throw error;
+
+  const rows = (data ?? []) as Array<Record<string, unknown>>;
+  const first = rows[0];
+  return {
+    total: first ? Number(first.total_registros) : 0,
+    totalQuantidade: first ? Number(first.total_quantidade) : 0,
+    totalDefinitivos: first ? Number(first.total_registros) : 0,
+    data: rows.map((row) => ({
+      ...mapCancelamento(row),
+      pedidoOrigemNome: row.pedido_origem_nome as string | undefined,
+      pedidoOrigemCliente: row.pedido_origem_cliente as string | undefined,
+      pedidoOrigemIe: row.pedido_origem_ie as string | undefined,
+      pedidoOrigemFazenda: row.pedido_origem_fazenda as string | undefined,
+      pedidoOrigemProduto: row.pedido_origem_produto as string | undefined,
+      pedidoOrigemQtd:
+        row.pedido_origem_quantidade != null ? Number(row.pedido_origem_quantidade) : undefined,
+      pedidoOrigemDisponivel: Boolean(row.pedido_origem_disponivel),
+      pedidoDestinoDisponivel: false,
+      pedidoSaldoRestante:
+        row.pedido_origem_saldo != null ? Number(row.pedido_origem_saldo) : undefined,
+    })),
+  };
 }
 
 export interface CancelamentoRelatorioFilters extends GetCancelamentosFilters {
@@ -701,3 +745,4 @@ export async function syncPedidoVendaStatus(pedidoVendaId: string): Promise<void
   });
   if (error) throw error;
 }
+
