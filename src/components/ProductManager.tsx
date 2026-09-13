@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { closeModalOnBackdrop } from '../utils/modalUtils';
 import {
   Plus,
@@ -55,6 +55,18 @@ function nextCode(items: { code: string }[]): string {
   return String(nums.length > 0 ? Math.max(...nums) + 1 : 1);
 }
 
+function getSaveErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === 'object' && error !== null) {
+    const databaseError = error as { message?: unknown; details?: unknown; hint?: unknown };
+    const parts = [databaseError.message, databaseError.details, databaseError.hint].filter(
+      (value): value is string => typeof value === 'string' && value.trim().length > 0
+    );
+    if (parts.length > 0) return [...new Set(parts)].join(' ');
+  }
+  return 'Não foi possível salvar o produto. Verifique os dados e tente novamente.';
+}
+
 const emptyProduct = (type: NutrientType): Partial<UnifiedProduct> => ({
   type,
   name: '',
@@ -85,6 +97,7 @@ export default function ProductManager() {
 
   const [tableLoading, setTableLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const [search, setSearch] = useState('');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -243,11 +256,12 @@ export default function ProductManager() {
   };
 
   const handleSave = async () => {
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
     try {
       if (!form.name?.trim()) {
         showError('Nome é obrigatório.');
-        setSaving(false);
         return;
       }
       if (
@@ -255,7 +269,6 @@ export default function ProductManager() {
         (form.extraLoadingLocationIds || []).length === 0
       ) {
         showError('Selecione ao menos um local para disponibilizar o produto extra.');
-        setSaving(false);
         return;
       }
 
@@ -273,8 +286,9 @@ export default function ProductManager() {
       setIsModalOpen(false);
     } catch (err: unknown) {
       console.error(err);
-      showError(`Erro ao salvar: ${err instanceof Error ? err.message : 'Tente novamente.'}`);
+      showError(`Erro ao salvar: ${getSaveErrorMessage(err)}`);
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };

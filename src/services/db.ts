@@ -537,20 +537,23 @@ async function getExtraProductLocationAssignments(): Promise<ExtraProductLocatio
   return assignments;
 }
 
-async function setExtraProductLocations(
+async function saveCatalogMaterialAtomically(
   productType: 'macro' | 'micro',
-  productId: string,
+  productId: string | undefined,
+  payload: Record<string, unknown>,
   enabled: boolean,
   locationIds: string[]
-): Promise<void> {
-  const uniqueLocationIds = [...new Set(locationIds.filter(Boolean))];
-  const { error } = await supabase.rpc('set_calculator_extra_product_locations', {
+): Promise<string> {
+  const { data, error } = await supabase.rpc('save_catalog_material', {
     p_product_type: productType,
-    p_product_id: productId,
+    p_product_id: productId || null,
+    p_payload: payload,
     p_enabled: enabled,
-    p_location_ids: enabled ? uniqueLocationIds : [],
+    p_location_ids: [...new Set(locationIds.filter(Boolean))],
   });
   if (error) throw error;
+  if (!data) throw new Error('O banco não retornou o produto salvo.');
+  return String(data);
 }
 
 export async function createMicroMaterial(
@@ -786,14 +789,28 @@ export async function saveUnifiedProduct(p: Partial<UnifiedProduct>, id?: string
       formulaSuffix: p.formulaSuffix,
       isPremiumLine: p.isPremiumLine,
     };
-    const productId = id || (await createMacroMaterial(macroData as any)).id;
-    if (id) await updateMacroMaterial(id, macroData);
-    await setExtraProductLocations(
+    const productId = await saveCatalogMaterialAtomically(
       'macro',
-      productId,
+      id,
+      {
+        code: macroData.code,
+        name: macroData.name,
+        min_quantity: macroData.minQuantity,
+        categories: macroData.categories,
+        n: macroData.n,
+        p: macroData.p,
+        k: macroData.k,
+        s: macroData.s,
+        ca: macroData.ca,
+        micro_guarantees: macroData.microGuarantees,
+        brand_id: macroData.brandId || null,
+        formula_suffix: macroData.formulaSuffix || null,
+        is_premium_line: Boolean(macroData.isPremiumLine),
+      },
       Boolean(p.availableInCalculatorWithoutPriceList),
       p.extraLoadingLocationIds || []
     );
+    if (id) await syncProductToPriceLists(id, macroData, 'macro');
     return productId;
   } else if (p.type === 'micro') {
     const microData = {
@@ -805,14 +822,22 @@ export async function saveUnifiedProduct(p: Partial<UnifiedProduct>, id?: string
       formulaSuffix: p.formulaSuffix,
       isPremiumLine: p.isPremiumLine,
     };
-    const productId = id || (await createMicroMaterial(microData as any)).id;
-    if (id) await updateMicroMaterial(id, microData);
-    await setExtraProductLocations(
+    const productId = await saveCatalogMaterialAtomically(
       'micro',
-      productId,
+      id,
+      {
+        code: microData.code,
+        name: microData.name,
+        min_quantity: microData.minQuantity,
+        categories: microData.categories,
+        micro_guarantees: microData.microGuarantees,
+        formula_suffix: microData.formulaSuffix || null,
+        is_premium_line: Boolean(microData.isPremiumLine),
+      },
       Boolean(p.availableInCalculatorWithoutPriceList),
       p.extraLoadingLocationIds || []
     );
+    if (id) await syncProductToPriceLists(id, microData, 'micro');
     return productId;
   } else if (p.type === 'finished') {
     const finishedData = {
