@@ -1,5 +1,13 @@
 const REMEMBER_SESSION_KEY = 'fertcalc:remember-session';
 
+interface BrowserStorage {
+  readonly length: number;
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+  key(index: number): string | null;
+}
+
 function isBrowser(): boolean {
   return typeof window !== 'undefined';
 }
@@ -8,12 +16,12 @@ function shouldRememberSession(): boolean {
   return isBrowser() && window.localStorage.getItem(REMEMBER_SESSION_KEY) === 'true';
 }
 
-function activeStorage(): Storage | undefined {
+function activeStorage(): BrowserStorage | undefined {
   if (!isBrowser()) return undefined;
   return shouldRememberSession() ? window.localStorage : window.sessionStorage;
 }
 
-function clearSupabaseSession(storage: Storage): void {
+function clearSupabaseSession(storage: BrowserStorage): void {
   const keys = Array.from({ length: storage.length }, (_, index) => storage.key(index)).filter(
     (key): key is string => Boolean(key?.startsWith('sb-') && key.includes('-auth-token'))
   );

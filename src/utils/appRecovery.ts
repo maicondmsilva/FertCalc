@@ -7,9 +7,9 @@ export async function recoverLatestApplicationVersion(): Promise<void> {
   }
 
   if ('caches' in window) {
-    const names = await caches.keys();
+    const names = await window.caches.keys();
     await Promise.all(
-      names.filter((name) => name.startsWith('fertcalc-')).map((name) => caches.delete(name))
+      names.filter((name) => name.startsWith('fertcalc-')).map((name) => window.caches.delete(name))
     );
   }
 
@@ -17,11 +17,11 @@ export async function recoverLatestApplicationVersion(): Promise<void> {
 }
 
 export function recoverOnceFromStaleDeployment(): void {
-  if (sessionStorage.getItem(RECOVERY_ATTEMPT_KEY) === 'true') return;
-  sessionStorage.setItem(RECOVERY_ATTEMPT_KEY, 'true');
+  if (window.sessionStorage.getItem(RECOVERY_ATTEMPT_KEY) === 'true') return;
+  window.sessionStorage.setItem(RECOVERY_ATTEMPT_KEY, 'true');
   void recoverLatestApplicationVersion();
 }
 
 export function clearVersionRecoveryMarker(): void {
-  sessionStorage.removeItem(RECOVERY_ATTEMPT_KEY);
+  window.sessionStorage.removeItem(RECOVERY_ATTEMPT_KEY);
 }
