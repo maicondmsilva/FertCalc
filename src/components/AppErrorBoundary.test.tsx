@@ -35,7 +35,7 @@ describe('AppErrorBoundary', () => {
     );
     expect(screen.getByRole('alert')).toHaveTextContent('Não foi possível exibir esta tela');
     expect(screen.getByText('Incidente: FERT-TEST-1234')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Recarregar' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Atualizar versão' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Voltar ao início' })).toHaveAttribute('href', '/');
     expect(reportRuntimeError).toHaveBeenCalledWith(
       expect.any(Error),

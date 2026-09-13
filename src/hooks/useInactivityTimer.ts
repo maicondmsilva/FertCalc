@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { logger } from '../utils/logger';
 
-const INACTIVITY_MS = 10 * 60 * 1000; // 10 minutos
+const INACTIVITY_MS = 30 * 60 * 1000;
 
 const WATCHED_EVENTS = [
   'mousedown',
@@ -13,16 +13,8 @@ const WATCHED_EVENTS = [
 ] as const;
 
 /**
- * @deprecated Este hook não é mais utilizado.
- *
- * A partir de 19/05/2026, o sistema usa sessão de navegador (sessionStorage)
- * que expira automaticamente ao fechar o navegador, sem timeout por inatividade.
- *
- * Mantido apenas para referência histórica.
- *
- * ---
- *
- * Encerrava a sessão do usuário após `INACTIVITY_MS` de inatividade.
+ * Encerra a sessão após 30 minutos sem interação, inclusive quando o usuário
+ * escolheu manter o acesso salvo no dispositivo.
  *
  * @param isActive  `true` quando há usuário logado — hook fica inativo caso contrário.
  * @param onTimeout Callback chamado quando o timeout dispara (deve chamar logout).
@@ -48,7 +40,5 @@ export function useInactivityTimer(isActive: boolean, onTimeout: () => void) {
       WATCHED_EVENTS.forEach((ev) => window.removeEventListener(ev, resetTimer));
       clearTimeout(timeoutId);
     };
-    // onTimeout é estável (useCallback em App.tsx) — não precisa re-executar por ela
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isActive]);
+  }, [isActive, onTimeout]);
 }

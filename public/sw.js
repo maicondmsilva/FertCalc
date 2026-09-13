@@ -1,42 +1,44 @@
-const CACHE_NAME = 'fertcalc-v1';
-const urlsToCache = [
-  '/',
-  '/index.html',
-  '/manifest.json'
+const CACHE_NAME = 'fertcalc-static-v2';
+const STATIC_ASSETS = [
+  '/manifest.json',
+  '/icons/fertcalc.svg',
+  '/icons/fertcalc-192.png',
+  '/icons/fertcalc-512.png',
+  '/icons/apple-touch-icon.png',
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        return cache.addAll(urlsToCache);
-      })
+    Promise.all([caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS)), self.skipWaiting()])
   );
 });
 
 self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET' || new URL(event.request.url).origin !== self.location.origin) {
+    return;
+  }
+
+  if (event.request.mode === 'navigate') {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
   event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        if (response) {
-          return response;
-        }
-        return fetch(event.request);
-      })
+    caches.match(event.request).then((cached) => cached || fetch(event.request))
   );
 });
 
 self.addEventListener('activate', (event) => {
-  const cacheWhitelist = [CACHE_NAME];
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheWhitelist.indexOf(cacheName) === -1) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
+    Promise.all([
+      caches.keys().then((cacheNames) =>
+        Promise.all(
+          cacheNames
+            .filter((cacheName) => cacheName.startsWith('fertcalc-') && cacheName !== CACHE_NAME)
+            .map((cacheName) => caches.delete(cacheName))
+        )
+      ),
+      self.clients.claim(),
+    ])
   );
 });
