@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { lazy, Suspense, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { User } from '../types';
 import type { ActiveModule } from '../navigation/appNavigation';
@@ -10,6 +10,8 @@ import { useNotifications } from '../hooks/useNotifications';
 import { usePricingWorkspace } from '../hooks/usePricingWorkspace';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 
+const PortalTransportadora = lazy(() => import('../components/PortalTransportadora'));
+
 interface AuthenticatedAppProps {
   activeModule: ActiveModule;
   activeTab: string;
@@ -18,7 +20,7 @@ interface AuthenticatedAppProps {
   onLogout: () => void;
 }
 
-export default function AuthenticatedApp({
+function InternalAuthenticatedApp({
   activeModule,
   activeTab,
   currentUser,
@@ -91,4 +93,24 @@ export default function AuthenticatedApp({
       />
     </AppShell>
   );
+}
+
+export default function AuthenticatedApp(props: AuthenticatedAppProps) {
+  if (props.currentUser.role === 'transportadora') {
+    return (
+      <Suspense
+        fallback={
+          <div
+            role="status"
+            className="flex min-h-screen items-center justify-center text-stone-500"
+          >
+            Carregando portal da transportadora...
+          </div>
+        }
+      >
+        <PortalTransportadora currentUser={props.currentUser} onLogout={props.onLogout} />
+      </Suspense>
+    );
+  }
+  return <InternalAuthenticatedApp {...props} />;
 }

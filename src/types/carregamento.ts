@@ -17,7 +17,8 @@ export type StatusCarregamento =
 
 export type TipoLiberacao = 'total' | 'parcial';
 
-export type StatusCotacao = 'pendente' | 'aprovada' | 'reprovada' | 'expirada';
+export type StatusCotacao =
+  'pendente' | 'respondida' | 'recusada' | 'aprovada' | 'reprovada' | 'expirada';
 
 // ── Filial ────────────────────────────────────────────────────
 export interface Filial {
