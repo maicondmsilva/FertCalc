@@ -4,6 +4,7 @@ import { User } from '../types';
 import { signIn, resetPassword } from '../services/authService';
 import { updateUser } from '../services/db';
 import { supabase } from '../services/supabase';
+import { isSessionPersistenceEnabled, setSessionPersistence } from '../services/authStorage';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -11,12 +12,17 @@ interface LoginProps {
   onPasswordChanged?: (user: User) => void;
 }
 
-export default function Login({ onLogin, forceChangePasswordUserId, onPasswordChanged }: LoginProps) {
+export default function Login({
+  onLogin,
+  forceChangePasswordUserId,
+  onPasswordChanged,
+}: LoginProps) {
   const [view, setView] = useState<'login' | 'forgot'>('login');
   const [resetMessage, setResetMessage] = useState('');
   const [emailOrNickname, setEmailOrNickname] = useState('');
   const [resetEmail, setResetEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberSession, setRememberSession] = useState(isSessionPersistenceEnabled);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -29,6 +35,7 @@ export default function Login({ onLogin, forceChangePasswordUserId, onPasswordCh
     setLoading(true);
     setError('');
 
+    setSessionPersistence(rememberSession);
     const { user, error: authError } = await signIn(emailOrNickname, password);
 
     if (authError) {
@@ -118,13 +125,17 @@ export default function Login({ onLogin, forceChangePasswordUserId, onPasswordCh
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-stone-100 px-4">
-      <div className={`max-w-md w-full bg-white rounded-2xl shadow-xl p-8 border ${
-        isForceChange ? 'border-amber-300 shadow-amber-100/50' : 'border-stone-200'
-      } transition-all duration-300`}>
+      <div
+        className={`max-w-md w-full bg-white rounded-2xl shadow-xl p-8 border ${
+          isForceChange ? 'border-amber-300 shadow-amber-100/50' : 'border-stone-200'
+        } transition-all duration-300`}
+      >
         <div className="text-center mb-8">
-          <div className={`inline-flex items-center justify-center w-16 h-16 rounded-full mb-4 ${
-            isForceChange ? 'bg-amber-100' : 'bg-emerald-100'
-          }`}>
+          <div
+            className={`inline-flex items-center justify-center w-16 h-16 rounded-full mb-4 ${
+              isForceChange ? 'bg-amber-100' : 'bg-emerald-100'
+            }`}
+          >
             {isForceChange ? (
               <ShieldCheck className="w-8 h-8 text-amber-600 animate-pulse" aria-hidden="true" />
             ) : (
@@ -132,15 +143,15 @@ export default function Login({ onLogin, forceChangePasswordUserId, onPasswordCh
             )}
           </div>
           <h1 className="text-3xl font-black text-stone-800 tracking-tight">
-            FertCalc <span className={isForceChange ? 'text-amber-500' : 'text-emerald-600'}>Pro</span>
+            FertCalc{' '}
+            <span className={isForceChange ? 'text-amber-500' : 'text-emerald-600'}>Pro</span>
           </h1>
           <p className="text-stone-500 text-sm mt-2 font-medium">
-            {isForceChange 
-              ? 'Primeiro Acesso - Defina sua Nova Senha' 
-              : view === 'login' 
-                ? 'Entre com suas credenciais' 
-                : 'Recupere sua senha'
-            }
+            {isForceChange
+              ? 'Primeiro Acesso - Defina sua Nova Senha'
+              : view === 'login'
+                ? 'Entre com suas credenciais'
+                : 'Recupere sua senha'}
           </p>
         </div>
 
@@ -158,7 +169,8 @@ export default function Login({ onLogin, forceChangePasswordUserId, onPasswordCh
               <div className="flex items-start gap-2">
                 <KeyRound className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
                 <span>
-                  <strong>Atenção:</strong> Por motivos de segurança, você deve definir uma nova senha personalizada no seu primeiro acesso antes de prosseguir para o painel.
+                  <strong>Atenção:</strong> Por motivos de segurança, você deve definir uma nova
+                  senha personalizada no seu primeiro acesso antes de prosseguir para o painel.
                 </span>
               </div>
             </div>
@@ -277,7 +289,16 @@ export default function Login({ onLogin, forceChangePasswordUserId, onPasswordCh
                   required
                 />
               </div>
-              <div className="flex justify-end mt-2">
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-stone-600">
+                  <input
+                    type="checkbox"
+                    checked={rememberSession}
+                    onChange={(event) => setRememberSession(event.target.checked)}
+                    className="h-4 w-4 rounded border-stone-300 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  Manter conectado neste dispositivo
+                </label>
                 <button
                   type="button"
                   onClick={() => {
@@ -290,6 +311,10 @@ export default function Login({ onLogin, forceChangePasswordUserId, onPasswordCh
                   Esqueceu a senha?
                 </button>
               </div>
+              <p className="mt-2 text-[10px] leading-4 text-stone-400">
+                Se esta opção ficar desmarcada, será necessário entrar novamente após fechar o
+                navegador.
+              </p>
             </div>
             <button
               type="submit"

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { authStorage } from './authStorage';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -15,21 +16,13 @@ if (!supabaseAnonKey) {
 }
 
 /**
- * Supabase client configurado para usar sessão de navegador:
- * - persistSession: true (mantém sessão ativa durante o uso)
- * - storage: localStorage (necessário para links de redefinição de senha via e-mail
- *   funcionarem corretamente, pois o link abre em nova aba onde sessionStorage não
- *   seria acessível)
- *
- * Isso garante que:
- * - Usuário não precisa fazer login a cada reload/navegação
- * - Links de recuperação de senha enviados por e-mail funcionam corretamente
- * - Sessão persiste entre abas do mesmo navegador
+ * A sessão é mantida pelo Supabase, mas o armazenamento respeita a escolha do login:
+ * sessionStorage por padrão e localStorage somente quando "Manter conectado" estiver ativo.
  */
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
-    storage: window.localStorage,
+    storage: authStorage,
     autoRefreshToken: true,
     detectSessionInUrl: true,
   },

@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { useAuthSession } from './hooks/useAuthSession';
 import { useAppRoute } from './hooks/useAppRoute';
+import { useInactivityTimer } from './hooks/useInactivityTimer';
 
 const AuthenticatedApp = React.lazy(() => import('./app/AuthenticatedApp'));
 
@@ -17,6 +18,7 @@ export default function App() {
   const { activeModule, activeTab, isPasswordReset, isStandalone } = useAppRoute();
   const navigateHome = React.useCallback(() => navigate('/'), [navigate]);
   const { currentUser, login, logout, updateCurrentUser } = useAuthSession(navigateHome);
+  useInactivityTimer(Boolean(currentUser), logout);
 
   return (
     <AppAccessGate

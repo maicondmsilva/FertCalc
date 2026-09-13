@@ -1,6 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { AlertTriangle, Home, RefreshCw } from 'lucide-react';
 import { createIncidentId, reportRuntimeError } from '../utils/errorReporter';
+import { recoverLatestApplicationVersion } from '../utils/appRecovery';
 
 interface AppErrorBoundaryProps {
   children: ReactNode;
@@ -51,11 +52,11 @@ export default class AppErrorBoundary extends Component<
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
             <button
               type="button"
-              onClick={() => window.location.reload()}
+              onClick={() => void recoverLatestApplicationVersion()}
               className="flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-700"
             >
               <RefreshCw className="h-4 w-4" />
-              Recarregar
+              Atualizar versão
             </button>
             <a
               href="/"

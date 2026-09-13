@@ -6,7 +6,52 @@
     <meta name="theme-color" content="#059669" />
     <meta name="description" content="Calculadora de Fertilizantes Profissional" />
     <link rel="manifest" href="/manifest.json" />
-    <link rel="apple-touch-icon" href="https://picsum.photos/192" />
+    <link rel="icon" href="/icons/fertcalc.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
+    <script>
+      window.__fertcalcAssetRecovery = function () {
+        var key = 'fertcalc:asset-recovery-attempted';
+        if (sessionStorage.getItem(key)) return;
+        sessionStorage.setItem(key, 'true');
+        if ('caches' in window) {
+          caches
+            .keys()
+            .then(function (names) {
+              return Promise.all(
+                names
+                  .filter(function (name) {
+                    return name.indexOf('fertcalc-') === 0;
+                  })
+                  .map(function (name) {
+                    return caches.delete(name);
+                  })
+              );
+            })
+            .finally(function () {
+              window.location.reload();
+            });
+        } else {
+          window.location.reload();
+        }
+      };
+      window.addEventListener(
+        'error',
+        function (event) {
+          var target = event.target;
+          if (target && (target.tagName === 'SCRIPT' || target.tagName === 'LINK')) {
+            window.__fertcalcAssetRecovery();
+          }
+        },
+        true
+      );
+      window.addEventListener(
+        'load',
+        function () {
+          sessionStorage.removeItem('fertcalc:asset-recovery-attempted');
+        },
+        { once: true }
+      );
+    </script>
     <title>FertCalc Pro</title>
   </head>
   <body>
@@ -15,11 +60,12 @@
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
-            .then(registration => {
+          navigator.serviceWorker
+            .register('/sw.js')
+            .then((registration) => {
               console.log('SW registered: ', registration);
             })
-            .catch(registrationError => {
+            .catch((registrationError) => {
               console.log('SW registration failed: ', registrationError);
             });
         });
@@ -27,4 +73,3 @@
     </script>
   </body>
 </html>
-
