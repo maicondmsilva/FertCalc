@@ -53,6 +53,7 @@ import {
   createCotacao,
   updateCotacao,
   aprovarCotacaoFrete,
+  liberarCarregamento,
   getKPICarregamento,
   getCarregamentosRelatorio,
   getCarregamentosCalendario,
@@ -1524,9 +1525,13 @@ function ModalLiberacao({ carregamento, onSave, onClose }: ModalLiberacaoProps) 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving) return;
     setSaving(true);
-    await onSave(carregamento.id, tipo, tipo === 'parcial' ? parseFloat(quantidade) : undefined);
-    setSaving(false);
+    try {
+      await onSave(carregamento.id, tipo, tipo === 'parcial' ? parseFloat(quantidade) : undefined);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -1539,7 +1544,11 @@ function ModalLiberacao({ carregamento, onSave, onClose }: ModalLiberacaoProps) 
           <h3 className="text-lg font-bold text-stone-800 flex items-center gap-2">
             <CheckCircle className="w-5 h-5 text-emerald-600" /> Liberar Carregamento
           </h3>
-          <button onClick={onClose} className="p-1 hover:bg-stone-100 rounded-lg transition-colors">
+          <button
+            onClick={onClose}
+            disabled={saving}
+            className="p-1 hover:bg-stone-100 disabled:opacity-50 rounded-lg transition-colors"
+          >
             <X className="w-5 h-5 text-stone-400" />
           </button>
         </div>
@@ -1802,7 +1811,7 @@ function TabelaCarregamentos({
                       )}
                     {showActions.includes('liberar') &&
                       canLiberar &&
-                      ['cotacao_recebida', 'aguardando_liberacao'].includes(c.status) && (
+                      ['aguardando_liberacao', 'liberado_parcial'].includes(c.status) && (
                         <button
                           onClick={() => onAction?.(c, 'liberar')}
                           className="px-2.5 py-1 text-xs font-bold bg-emerald-50 text-emerald-700 rounded-lg border border-emerald-200 hover:bg-emerald-100 transition-colors"
@@ -2570,11 +2579,9 @@ function LiberacaoCarregamento({
   pedidos?: PedidoVenda[];
 }) {
   const prontos = carregamentos.filter((c) =>
-    ['cotacao_recebida', 'aguardando_liberacao'].includes(c.status)
+    ['aguardando_liberacao', 'liberado_parcial'].includes(c.status)
   );
-  const liberados = carregamentos.filter((c) =>
-    ['liberado_parcial', 'liberado_total'].includes(c.status)
-  );
+  const liberados = carregamentos.filter((c) => c.status === 'liberado_total');
 
   return (
     <div className="space-y-6">
@@ -4408,19 +4415,23 @@ export default function CarregamentoModule({
     tipo: 'total' | 'parcial',
     quantidade?: number
   ) => {
-    const c = carregamentos.find((x) => x.id === carregamentoId);
-    if (!c) return;
-    const qtdLiberada =
-      tipo === 'total' ? c.quantidade_total : c.quantidade_liberada + (quantidade ?? 0);
-    const novoStatus: StatusCarregamento = tipo === 'total' ? 'liberado_total' : 'liberado_parcial';
-    await updateStatusCarregamento(carregamentoId, novoStatus, {
-      tipo_liberacao: tipo,
-      quantidade_liberada: qtdLiberada,
-      data_liberacao: new Date().toISOString(),
-      liberado_por: currentUser.id,
-    });
-    setModalLiberacao(null);
-    await load();
+    try {
+      await liberarCarregamento(carregamentoId, tipo, quantidade);
+      showSuccess(
+        tipo === 'total'
+          ? 'Carregamento liberado integralmente.'
+          : 'Liberação parcial registrada com sucesso.'
+      );
+      setModalLiberacao(null);
+      await load();
+    } catch (error) {
+      const message =
+        error && typeof error === 'object' && 'message' in error
+          ? String((error as { message: unknown }).message)
+          : 'Não foi possível liberar o carregamento.';
+      showError(message);
+      throw error;
+    }
   };
 
   // ── Informar transportador ────────────────────────────────────────────────
