@@ -1,20 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { fromMock } = vi.hoisted(() => ({
+const { fromMock, rpcMock } = vi.hoisted(() => ({
   fromMock: vi.fn(),
+  rpcMock: vi.fn(),
 }));
 
 vi.mock('../supabase', () => ({
   supabase: {
     from: fromMock,
+    rpc: rpcMock,
   },
 }));
 
-import { getQuantidadeCarregadaPorItem } from '../carregamentoService';
+import { aprovarCotacaoFrete, getQuantidadeCarregadaPorItem } from '../carregamentoService';
 
 describe('carregamentoService', () => {
   beforeEach(() => {
     fromMock.mockReset();
+    rpcMock.mockReset();
   });
 
   it('carrega o progresso consolidado diretamente dos itens do pedido', async () => {
@@ -33,4 +36,21 @@ describe('carregamentoService', () => {
     expect(select).toHaveBeenCalledWith('id, quantidade_carregada');
     expect(eq).toHaveBeenCalledWith('pedido_venda_id', 'pedido-1');
   });
+
+  it('aprova a proposta por meio da operação atômica do banco', async () => {
+    rpcMock.mockResolvedValue({ data: null, error: null });
+
+    await aprovarCotacaoFrete('cotacao-1');
+
+    expect(rpcMock).toHaveBeenCalledWith('aprovar_cotacao_frete', {
+      p_cotacao_id: 'cotacao-1',
+    });
+  });
+
+  it('propaga a falha ao aprovar uma proposta inválida', async () => {
+    rpcMock.mockResolvedValue({ data: null, error: new Error('proposta expirada') });
+
+    await expect(aprovarCotacaoFrete('cotacao-1')).rejects.toThrow('proposta expirada');
+  });
 });
+
