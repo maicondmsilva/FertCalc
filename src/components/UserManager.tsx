@@ -225,6 +225,8 @@ function getRoleBadgeClass(role: string): string {
       return 'bg-red-100 text-red-700';
     case 'manager':
       return 'bg-blue-100 text-blue-700';
+    case 'transportadora':
+      return 'bg-amber-100 text-amber-700';
     default:
       return 'bg-green-100 text-green-700';
   }
@@ -238,6 +240,8 @@ function getRoleLabel(role: string): string {
       return 'Administrador';
     case 'manager':
       return 'Gerente';
+    case 'transportadora':
+      return 'Transportadora';
     default:
       return 'Vendedor';
   }
@@ -260,6 +264,8 @@ function getAvatarBg(role: string): string {
       return 'bg-red-500';
     case 'manager':
       return 'bg-blue-500';
+    case 'transportadora':
+      return 'bg-amber-500';
     default:
       return 'bg-green-500';
   }
@@ -1430,3 +1436,4 @@ export default function UserManager({ currentUser }: UserManagerProps) {
     </div>
   );
 }
+

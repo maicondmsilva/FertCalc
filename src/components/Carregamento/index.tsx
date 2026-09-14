@@ -76,6 +76,7 @@ import PainelExecucoes from './PainelExecucoes';
 import { getStatusInicial } from '../../utils/getStatusInicial';
 import { subscribeToOrderLoadingChanges } from '../../services/orderLoadingSubscription';
 import { closeModalOnBackdrop } from '../../utils/modalUtils';
+import TransportadoraAccessManager from './TransportadoraAccessManager';
 
 // ─── Permission helper ────────────────────────────────────────────────────────
 function canEditDeleteCarregamento(
@@ -1052,6 +1053,24 @@ function ModalCotacao({ carregamento, transportadoras, onSave, onClose }: ModalC
     observacoes: '',
   });
   const [saving, setSaving] = useState(false);
+  const [cotacoesExistentes, setCotacoesExistentes] = useState<CotacaoFrete[]>([]);
+  const [loadingCotacoes, setLoadingCotacoes] = useState(true);
+
+  useEffect(() => {
+    let ativo = true;
+    setLoadingCotacoes(true);
+    getCotacoesCarregamento(carregamento.id)
+      .then((cotacoes) => {
+        if (ativo) setCotacoesExistentes(cotacoes);
+      })
+      .catch((error) => console.error('Erro ao carregar propostas de frete:', error))
+      .finally(() => {
+        if (ativo) setLoadingCotacoes(false);
+      });
+    return () => {
+      ativo = false;
+    };
+  }, [carregamento.id]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1079,6 +1098,56 @@ function ModalCotacao({ carregamento, transportadoras, onSave, onClose }: ModalC
             {fmtCarregamentoNum(carregamento)}
           </span>{' '}
           &mdash; {carregamento.tipo_frete} &mdash; {carregamento.quantidade_total} ton
+        </div>
+        <div className="px-6 pt-5">
+          <p className="text-xs font-bold uppercase text-stone-500 mb-2">Propostas enviadas</p>
+          {loadingCotacoes ? (
+            <RefreshCw className="w-4 h-4 animate-spin text-stone-300" />
+          ) : cotacoesExistentes.length === 0 ? (
+            <p className="text-xs text-stone-400">Ainda não há transportadoras consultadas.</p>
+          ) : (
+            <div className="space-y-2 max-h-40 overflow-y-auto">
+              {cotacoesExistentes.map((cotacao) => (
+                <div
+                  key={cotacao.id}
+                  className={`rounded-lg border p-3 text-xs ${
+                    cotacao.status === 'respondida'
+                      ? 'border-indigo-300 bg-indigo-50'
+                      : cotacao.status === 'recusada'
+                        ? 'border-red-200 bg-red-50'
+                        : 'border-stone-200 bg-white'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-bold text-stone-800">
+                      {cotacao.transportadora?.nome ?? 'Transportadora'}
+                    </span>
+                    <span className="font-bold uppercase text-[10px] text-stone-600">
+                      {cotacao.status === 'respondida'
+                        ? 'Proposta recebida'
+                        : cotacao.status === 'recusada'
+                          ? 'Recusada'
+                          : cotacao.status}
+                    </span>
+                  </div>
+                  {cotacao.valor_cotado != null && (
+                    <p className="mt-1 text-base font-black text-indigo-700">
+                      {fmtBRL(cotacao.valor_cotado)}
+                    </p>
+                  )}
+                  <div className="mt-1 flex gap-3 text-stone-500">
+                    {cotacao.prazo_dias != null && <span>Prazo: {cotacao.prazo_dias} dia(s)</span>}
+                    {cotacao.validade_cotacao && (
+                      <span>Validade: {fmtDate(cotacao.validade_cotacao)}</span>
+                    )}
+                  </div>
+                  {cotacao.observacoes && (
+                    <p className="mt-1 text-stone-600">{cotacao.observacoes}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
@@ -1677,14 +1746,20 @@ function TabelaCarregamentos({
                   <div className="flex justify-end gap-1">
                     {showActions.includes('cotacao') &&
                       c.tipo_frete === 'CIF' &&
-                      ['aguardando_liberacao', 'liberado_total', 'liberado_parcial'].includes(
-                        c.status
-                      ) && (
+                      [
+                        'aguardando_liberacao',
+                        'liberado_total',
+                        'liberado_parcial',
+                        'cotacao_solicitada',
+                        'cotacao_recebida',
+                      ].includes(c.status) && (
                         <button
                           onClick={() => onAction?.(c, 'cotacao')}
                           className="px-2.5 py-1 text-xs font-bold bg-blue-50 text-blue-700 rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors"
                         >
-                          Solicitar Cotação
+                          {c.status === 'cotacao_recebida' || c.status === 'cotacao_solicitada'
+                            ? 'Ver Propostas'
+                            : 'Solicitar Cotação'}
                         </button>
                       )}
                     {showActions.includes('liberar') &&
@@ -3548,7 +3623,7 @@ function ModalCancelarCarregamento({
   );
 }
 
-function TransportadoraManager() {
+function TransportadoraManager({ currentUser }: { currentUser: User }) {
   const { showSuccess, showError } = useToast();
   const [lista, setLista] = useState<Transportadora[]>([]);
   const [loading, setLoading] = useState(false);
@@ -3721,6 +3796,10 @@ function TransportadoraManager() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {['master', 'admin'].includes(currentUser.role) && (
+        <TransportadoraAccessManager currentUser={currentUser} transportadoras={lista} />
       )}
 
       {/* Formulário de criação/edição */}
@@ -4405,7 +4484,7 @@ export default function CarregamentoModule({
       )}
       {view === 'transportadoras' && (
         <div className="bg-white rounded-xl border border-stone-200 shadow-sm p-5">
-          <TransportadoraManager />
+          <TransportadoraManager currentUser={currentUser} />
         </div>
       )}
 
@@ -4571,3 +4650,4 @@ export default function CarregamentoModule({
     </div>
   );
 }
+
