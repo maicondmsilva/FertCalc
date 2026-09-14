@@ -460,6 +460,19 @@ export async function aprovarCotacaoFrete(cotacaoId: string): Promise<void> {
   if (error) throw error;
 }
 
+export async function liberarCarregamento(
+  carregamentoId: string,
+  tipo: 'total' | 'parcial',
+  quantidade?: number
+): Promise<void> {
+  const { error } = await supabase.rpc('liberar_carregamento', {
+    p_carregamento_id: carregamentoId,
+    p_tipo: tipo,
+    p_quantidade: tipo === 'parcial' ? quantidade : null,
+  });
+  if (error) throw error;
+}
+
 // ─────────────────────────────────────────────────────────────
 //  Alertas
 // ─────────────────────────────────────────────────────────────

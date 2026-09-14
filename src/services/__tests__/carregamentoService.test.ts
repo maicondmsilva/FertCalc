@@ -12,7 +12,11 @@ vi.mock('../supabase', () => ({
   },
 }));
 
-import { aprovarCotacaoFrete, getQuantidadeCarregadaPorItem } from '../carregamentoService';
+import {
+  aprovarCotacaoFrete,
+  getQuantidadeCarregadaPorItem,
+  liberarCarregamento,
+} from '../carregamentoService';
 
 describe('carregamentoService', () => {
   beforeEach(() => {
@@ -51,6 +55,38 @@ describe('carregamentoService', () => {
     rpcMock.mockResolvedValue({ data: null, error: new Error('proposta expirada') });
 
     await expect(aprovarCotacaoFrete('cotacao-1')).rejects.toThrow('proposta expirada');
+  });
+
+  it('libera parcialmente o carregamento por meio da operação atômica', async () => {
+    rpcMock.mockResolvedValue({ data: null, error: null });
+
+    await liberarCarregamento('carregamento-1', 'parcial', 12.345);
+
+    expect(rpcMock).toHaveBeenCalledWith('liberar_carregamento', {
+      p_carregamento_id: 'carregamento-1',
+      p_tipo: 'parcial',
+      p_quantidade: 12.345,
+    });
+  });
+
+  it('não envia quantidade manual na liberação total', async () => {
+    rpcMock.mockResolvedValue({ data: null, error: null });
+
+    await liberarCarregamento('carregamento-1', 'total');
+
+    expect(rpcMock).toHaveBeenCalledWith('liberar_carregamento', {
+      p_carregamento_id: 'carregamento-1',
+      p_tipo: 'total',
+      p_quantidade: null,
+    });
+  });
+
+  it('propaga a falha de uma liberação inválida', async () => {
+    rpcMock.mockResolvedValue({ data: null, error: new Error('saldo insuficiente') });
+
+    await expect(liberarCarregamento('carregamento-1', 'parcial', 99)).rejects.toThrow(
+      'saldo insuficiente'
+    );
   });
 });
 
