@@ -52,6 +52,7 @@ import {
   arquivarCotacao,
   createCotacao,
   updateCotacao,
+  aprovarCotacaoFrete,
   getKPICarregamento,
   getCarregamentosRelatorio,
   getCarregamentosCalendario,
@@ -1042,9 +1043,18 @@ interface ModalCotacaoProps {
   transportadoras: Transportadora[];
   onSave: (carregamentoId: string, data: CotacaoFormData) => Promise<void>;
   onClose: () => void;
+  canAprovar?: boolean;
+  onAprovar: (cotacaoId: string) => Promise<void>;
 }
 
-function ModalCotacao({ carregamento, transportadoras, onSave, onClose }: ModalCotacaoProps) {
+function ModalCotacao({
+  carregamento,
+  transportadoras,
+  onSave,
+  onClose,
+  canAprovar,
+  onAprovar,
+}: ModalCotacaoProps) {
   const [form, setForm] = useState({
     transportadora_id: '',
     valor_cotado: '',
@@ -1055,6 +1065,10 @@ function ModalCotacao({ carregamento, transportadoras, onSave, onClose }: ModalC
   const [saving, setSaving] = useState(false);
   const [cotacoesExistentes, setCotacoesExistentes] = useState<CotacaoFrete[]>([]);
   const [loadingCotacoes, setLoadingCotacoes] = useState(true);
+  const [aprovandoId, setAprovandoId] = useState<string | null>(null);
+  const possuiPropostaAprovada = cotacoesExistentes.some(
+    (cotacao) => cotacao.status === 'aprovada'
+  );
 
   useEffect(() => {
     let ativo = true;
@@ -1082,7 +1096,7 @@ function ModalCotacao({ carregamento, transportadoras, onSave, onClose }: ModalC
   return (
     <div
       className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-      onMouseDown={(event) => closeModalOnBackdrop(event, onClose, saving)}
+      onMouseDown={(event) => closeModalOnBackdrop(event, onClose, saving || aprovandoId !== null)}
     >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
         <div className="flex items-center justify-between p-6 border-b border-stone-100">
@@ -1113,9 +1127,11 @@ function ModalCotacao({ carregamento, transportadoras, onSave, onClose }: ModalC
                   className={`rounded-lg border p-3 text-xs ${
                     cotacao.status === 'respondida'
                       ? 'border-indigo-300 bg-indigo-50'
-                      : cotacao.status === 'recusada'
-                        ? 'border-red-200 bg-red-50'
-                        : 'border-stone-200 bg-white'
+                      : cotacao.status === 'aprovada'
+                        ? 'border-emerald-300 bg-emerald-50'
+                        : cotacao.status === 'recusada'
+                          ? 'border-red-200 bg-red-50'
+                          : 'border-stone-200 bg-white'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-3">
@@ -1144,96 +1160,116 @@ function ModalCotacao({ carregamento, transportadoras, onSave, onClose }: ModalC
                   {cotacao.observacoes && (
                     <p className="mt-1 text-stone-600">{cotacao.observacoes}</p>
                   )}
+                  {canAprovar && cotacao.status === 'respondida' && (
+                    <button
+                      type="button"
+                      disabled={aprovandoId !== null}
+                      onClick={async () => {
+                        setAprovandoId(cotacao.id);
+                        try {
+                          await onAprovar(cotacao.id);
+                        } finally {
+                          setAprovandoId(null);
+                        }
+                      }}
+                      className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+                    >
+                      <CheckCircle className="h-3.5 w-3.5" />
+                      {aprovandoId === cotacao.id ? 'Aprovando...' : 'Aprovar proposta'}
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
           )}
         </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div>
-            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
-              Transportadora *
-            </label>
-            <select
-              value={form.transportadora_id}
-              onChange={(e) => setForm({ ...form, transportadora_id: e.target.value })}
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-              required
-            >
-              <option value="">— Selecione —</option>
-              {transportadoras.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.nome}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
+        {!possuiPropostaAprovada && (
+          <form onSubmit={handleSubmit} className="p-6 space-y-4">
             <div>
               <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
-                Valor Cotado (R$)
+                Transportadora *
+              </label>
+              <select
+                value={form.transportadora_id}
+                onChange={(e) => setForm({ ...form, transportadora_id: e.target.value })}
+                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                required
+              >
+                <option value="">— Selecione —</option>
+                {transportadoras.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.nome}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                  Valor Cotado (R$)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.valor_cotado}
+                  onChange={(e) => setForm({ ...form, valor_cotado: e.target.value })}
+                  className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                  Prazo (dias)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={form.prazo_dias}
+                  onChange={(e) => setForm({ ...form, prazo_dias: e.target.value })}
+                  className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                Validade da Cotação
               </label>
               <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={form.valor_cotado}
-                onChange={(e) => setForm({ ...form, valor_cotado: e.target.value })}
+                type="date"
+                value={form.validade_cotacao}
+                onChange={(e) => setForm({ ...form, validade_cotacao: e.target.value })}
                 className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
               />
             </div>
             <div>
               <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
-                Prazo (dias)
+                Observações
               </label>
-              <input
-                type="number"
-                min="0"
-                value={form.prazo_dias}
-                onChange={(e) => setForm({ ...form, prazo_dias: e.target.value })}
-                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+              <textarea
+                value={form.observacoes}
+                onChange={(e) => setForm({ ...form, observacoes: e.target.value })}
+                rows={2}
+                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm resize-none"
               />
             </div>
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
-              Validade da Cotação
-            </label>
-            <input
-              type="date"
-              value={form.validade_cotacao}
-              onChange={(e) => setForm({ ...form, validade_cotacao: e.target.value })}
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
-              Observações
-            </label>
-            <textarea
-              value={form.observacoes}
-              onChange={(e) => setForm({ ...form, observacoes: e.target.value })}
-              rows={2}
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm resize-none"
-            />
-          </div>
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-5 py-2 border border-stone-300 rounded-lg text-sm font-bold text-stone-600 hover:bg-stone-50 transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg text-sm font-bold transition-colors"
-            >
-              {saving ? 'Salvando...' : 'Solicitar Cotação'}
-            </button>
-          </div>
-        </form>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-5 py-2 border border-stone-300 rounded-lg text-sm font-bold text-stone-600 hover:bg-stone-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg text-sm font-bold transition-colors"
+              >
+                {saving ? 'Salvando...' : 'Solicitar Cotação'}
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );
@@ -1757,7 +1793,9 @@ function TabelaCarregamentos({
                           onClick={() => onAction?.(c, 'cotacao')}
                           className="px-2.5 py-1 text-xs font-bold bg-blue-50 text-blue-700 rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors"
                         >
-                          {c.status === 'cotacao_recebida' || c.status === 'cotacao_solicitada'
+                          {c.status === 'cotacao_recebida' ||
+                          c.status === 'cotacao_solicitada' ||
+                          c.transportadora_id
                             ? 'Ver Propostas'
                             : 'Solicitar Cotação'}
                         </button>
@@ -4172,6 +4210,19 @@ export default function CarregamentoModule({
     }
   };
 
+  const handleAprovarCotacao = async (cotacaoId: string) => {
+    try {
+      await aprovarCotacaoFrete(cotacaoId);
+      showSuccess('Proposta aprovada e frete aplicado ao carregamento.');
+      setModalCotacao(null);
+      await load();
+    } catch (error) {
+      console.error(error);
+      showError('Não foi possível aprovar a proposta. Verifique a validade e tente novamente.');
+      throw error;
+    }
+  };
+
   // ── Edit carregamento ─────────────────────────────────────────────────────
   const handleEditarCarregamento = async (form: CarregamentoFormData) => {
     if (!editandoCarregamento) return;
@@ -4596,6 +4647,8 @@ export default function CarregamentoModule({
           carregamento={modalCotacao}
           transportadoras={transportadoras}
           onSave={handleSolicitarCotacao}
+          canAprovar={canAceitarCotacao}
+          onAprovar={handleAprovarCotacao}
           onClose={() => setModalCotacao(null)}
         />
       )}
