@@ -46,6 +46,7 @@ describe('order and loading realtime subscription', () => {
       'carregamento_execucoes',
       'cotacoes_frete',
       'cotacoes_solicitadas',
+      'alertas_carregamento',
     ]);
     expect(subscribe).toHaveBeenCalledOnce();
 

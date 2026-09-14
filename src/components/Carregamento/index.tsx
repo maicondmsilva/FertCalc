@@ -34,6 +34,7 @@ import {
   StatusCarregamento,
   FiltrosRelatorioCarregamento,
   LocalCarregamento,
+  AlertaCarregamento,
 } from '../../types/carregamento';
 import {
   getCarregamentos,
@@ -58,6 +59,7 @@ import {
   getCarregamentosRelatorio,
   getCarregamentosCalendario,
   getAlertasCarregamento,
+  marcarAlertaLido,
   getCarregamentosLogistica,
   getHistoricoCarregamento,
 } from '../../services/carregamentoService';
@@ -79,6 +81,7 @@ import { getStatusInicial } from '../../utils/getStatusInicial';
 import { subscribeToOrderLoadingChanges } from '../../services/orderLoadingSubscription';
 import { closeModalOnBackdrop } from '../../utils/modalUtils';
 import TransportadoraAccessManager from './TransportadoraAccessManager';
+import AcompanhamentoOperacional from './AcompanhamentoOperacional';
 
 // ─── Permission helper ────────────────────────────────────────────────────────
 function canEditDeleteCarregamento(
@@ -1941,6 +1944,8 @@ function VisaoGeral({
   canAceitar,
   clients = [],
   pedidos = [],
+  alertas = [],
+  onMarcarAlertaLido,
 }: {
   carregamentos: Carregamento[];
   kpi: KPICarregamento;
@@ -1955,6 +1960,8 @@ function VisaoGeral({
   canAceitar?: boolean;
   clients?: Client[];
   pedidos?: PedidoVenda[];
+  alertas?: AlertaCarregamento[];
+  onMarcarAlertaLido?: (alerta: AlertaCarregamento) => void;
 }) {
   const pendentes = carregamentos.filter((c) =>
     [
@@ -1967,6 +1974,13 @@ function VisaoGeral({
 
   return (
     <div className="space-y-6">
+      <AcompanhamentoOperacional
+        carregamentos={carregamentos}
+        alertas={alertas}
+        onAbrirExecucoes={(carregamento) => onAction(carregamento, 'execucoes')}
+        onMarcarAlertaLido={(alerta) => onMarcarAlertaLido?.(alerta)}
+      />
+
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
@@ -3981,6 +3995,7 @@ export default function CarregamentoModule({
   });
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [alertas, setAlertas] = useState<AlertaCarregamento[]>([]);
 
   // Modals
   const [showModalNovo, setShowModalNovo] = useState(false);
@@ -4051,6 +4066,7 @@ export default function CarregamentoModule({
         getKPICarregamento(),
         getClients(),
         getPedidosVenda(),
+        getAlertasCarregamento(currentUser.id),
       ]);
       const labels = [
         'visao geral',
@@ -4060,6 +4076,7 @@ export default function CarregamentoModule({
         'indicadores',
         'clientes',
         'pedidos',
+        'alertas',
       ];
       const failures = results
         .map((result, index) => (result.status === 'rejected' ? labels[index] : null))
@@ -4072,6 +4089,7 @@ export default function CarregamentoModule({
       if (results[4].status === 'fulfilled') setKpi(results[4].value);
       if (results[5].status === 'fulfilled') setClients(results[5].value);
       if (results[6].status === 'fulfilled') setPedidos(results[6].value);
+      if (results[7].status === 'fulfilled') setAlertas(results[7].value);
 
       if (failures.length > 0) {
         setLoadError(
@@ -4084,7 +4102,7 @@ export default function CarregamentoModule({
     } finally {
       setLoading(false);
     }
-  }, [currentUser.filiais_permitidas, currentUser.permissions, currentUser.role]);
+  }, [currentUser.filiais_permitidas, currentUser.id, currentUser.permissions, currentUser.role]);
 
   useEffect(() => {
     load();
@@ -4183,6 +4201,15 @@ export default function CarregamentoModule({
       // Rethrow so the modal's handleSubmit can keep saving=false without closing
       throw err;
     }
+  };
+
+  const handleMarcarAlertaLido = async (alerta: AlertaCarregamento) => {
+    const marcado = await marcarAlertaLido(alerta.id);
+    if (!marcado) {
+      showError('Não foi possível atualizar o alerta.');
+      return;
+    }
+    setAlertas((atuais) => atuais.filter((item) => item.id !== alerta.id));
   };
 
   // ── Solicitar cotação (único — usado pelo ModalCotacao na visão geral) ───────
@@ -4503,6 +4530,8 @@ export default function CarregamentoModule({
           canAceitar={canAceitarCarregamento}
           clients={clients}
           pedidos={pedidos}
+          alertas={alertas}
+          onMarcarAlertaLido={handleMarcarAlertaLido}
         />
       )}
       {view === 'solicitacao' && <SolicitacaoCotacaoIndependente currentUser={currentUser} />}

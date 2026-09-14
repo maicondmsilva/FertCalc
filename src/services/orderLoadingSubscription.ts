@@ -22,6 +22,7 @@ export function subscribeToOrderLoadingChanges(onChange: () => void) {
       { event: '*', schema: 'public', table: 'cotacoes_solicitadas' },
       onChange
     )
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'alertas_carregamento' }, onChange)
     .subscribe();
 
   return () => {
