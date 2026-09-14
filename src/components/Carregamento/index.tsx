@@ -1831,18 +1831,6 @@ function TabelaCarregamentos({
                           Inf. Transportador
                         </button>
                       )}
-                    {showActions.includes('confirmar') &&
-                      canAceitar &&
-                      ['liberado_total', 'liberado_parcial', 'em_carregamento'].includes(
-                        c.status
-                      ) && (
-                        <button
-                          onClick={() => onAction?.(c, 'confirmar')}
-                          className="px-2.5 py-1 text-xs font-bold bg-green-50 text-green-700 rounded-lg border border-green-200 hover:bg-green-100 transition-colors"
-                        >
-                          Confirmar Carg.
-                        </button>
-                      )}
                     {showActions.includes('execucoes') &&
                       ['liberado_total', 'liberado_parcial', 'em_carregamento'].includes(
                         c.status
@@ -2825,14 +2813,17 @@ function PainelLogistica({
                       >
                         {c.transportadora ? 'Atualizar' : 'Informar'}
                       </button>
-                      {canAceitar !== false && (
-                        <button
-                          onClick={() => onAction(c, 'confirmar')}
-                          className="px-3 py-1.5 text-xs font-bold bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                        >
-                          Confirmar
-                        </button>
-                      )}
+                      {canAceitar !== false &&
+                        ['liberado_total', 'liberado_parcial', 'em_carregamento'].includes(
+                          c.status
+                        ) && (
+                          <button
+                            onClick={() => onAction(c, 'execucoes')}
+                            className="px-3 py-1.5 text-xs font-bold bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors"
+                          >
+                            Execuções
+                          </button>
+                        )}
                     </div>
                   </div>
                 ))}
@@ -2934,14 +2925,17 @@ function PainelLogistica({
                     </div>
                     <div className="flex items-center gap-2">
                       <StatusBadge status={c.status} />
-                      {canAceitar !== false && (
-                        <button
-                          onClick={() => onAction(c, 'confirmar')}
-                          className="px-3 py-1.5 text-xs font-bold bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
-                        >
-                          Confirmar Carg.
-                        </button>
-                      )}
+                      {canAceitar !== false &&
+                        ['liberado_total', 'liberado_parcial', 'em_carregamento'].includes(
+                          c.status
+                        ) && (
+                          <button
+                            onClick={() => onAction(c, 'execucoes')}
+                            className="px-3 py-1.5 text-xs font-bold bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors"
+                          >
+                            Execuções
+                          </button>
+                        )}
                     </div>
                   </div>
                 ))}
@@ -4119,11 +4113,6 @@ export default function CarregamentoModule({
         setModalTransportador(c);
       } else if (action === 'execucoes') {
         setModalExecucoes(c);
-      } else if (action === 'confirmar') {
-        await updateStatusCarregamento(c.id, 'carregado', {
-          data_real_carregamento: new Date().toISOString().slice(0, 10),
-        });
-        await load();
       }
     },
     [load]
@@ -4534,9 +4523,10 @@ export default function CarregamentoModule({
           onAction={handleAction}
           canAceitar={canAceitarCarregamento}
           currentUser={currentUser}
-          onUpdateStatus={async (carregamentoId, newStatus) => {
-            await updateStatusCarregamento(carregamentoId, newStatus, {});
-            await load();
+          onUpdateStatus={async (_carregamentoId, newStatus) => {
+            showError(
+              `A alteração manual para "${STATUS_LABEL[newStatus]}" foi bloqueada. Use as ações de Execuções para manter volumes e histórico corretos.`
+            );
           }}
         />
       )}
@@ -4714,4 +4704,3 @@ export default function CarregamentoModule({
     </div>
   );
 }
-
