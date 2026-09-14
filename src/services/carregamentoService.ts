@@ -453,6 +453,13 @@ export async function updateCotacao(
   return !error;
 }
 
+export async function aprovarCotacaoFrete(cotacaoId: string): Promise<void> {
+  const { error } = await supabase.rpc('aprovar_cotacao_frete', {
+    p_cotacao_id: cotacaoId,
+  });
+  if (error) throw error;
+}
+
 // ─────────────────────────────────────────────────────────────
 //  Alertas
 // ─────────────────────────────────────────────────────────────
@@ -851,3 +858,4 @@ export async function getQuantidadeCarregadaPorItem(
 
   return carregadoPorItem;
 }
+
