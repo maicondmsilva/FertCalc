@@ -66,22 +66,16 @@ export async function createExecucao(
     | 'atualizado_em'
   >
 ): Promise<ExecucaoCarregamento> {
-  const { data, error } = await supabase
-    .from('carregamento_execucoes')
-    .insert({
-      carregamento_id: payload.carregamento_id,
-      motorista_nome: payload.motorista_nome,
-      motorista_cpf: payload.motorista_cpf ?? null,
-      placa_veiculo: payload.placa_veiculo,
-      placa_carreta: payload.placa_carreta ?? null,
-      quantidade_agendada: payload.quantidade_agendada,
-      data_agendamento: payload.data_agendamento ?? null,
-      observacoes: payload.observacoes ?? null,
-      criado_por: payload.criado_por ?? null,
-      status: 'agendado',
-    })
-    .select('*')
-    .single();
+  const { data, error } = await supabase.rpc('agendar_execucao_carregamento', {
+    p_carregamento_id: payload.carregamento_id,
+    p_motorista_nome: payload.motorista_nome,
+    p_motorista_cpf: payload.motorista_cpf ?? null,
+    p_placa_veiculo: payload.placa_veiculo,
+    p_placa_carreta: payload.placa_carreta ?? null,
+    p_quantidade: payload.quantidade_agendada,
+    p_data_agendamento: payload.data_agendamento ?? null,
+    p_observacoes: payload.observacoes ?? null,
+  });
   if (error || !data) throw error ?? new Error('Falha ao criar execução');
   triggerSyncForExecucao(payload.carregamento_id);
   return mapExecucao(data);
@@ -92,16 +86,23 @@ export async function updateExecucaoStatus(
   status: StatusExecucaoCarregamento,
   extra?: Partial<ExecucaoCarregamento>
 ): Promise<boolean> {
-  const payload: Record<string, unknown> = { status, atualizado_em: new Date().toISOString() };
-  if (status === 'em_carregamento') payload.data_inicio_carregamento = new Date().toISOString();
-  if (status === 'concluido') payload.data_conclusao_carregamento = new Date().toISOString();
-  if (extra?.observacoes !== undefined) payload.observacoes = extra.observacoes;
-  if (extra?.quantidade_carregada !== undefined)
-    payload.quantidade_carregada = extra.quantidade_carregada;
-  if (extra?.motivo_cancelamento !== undefined)
-    payload.motivo_cancelamento = extra.motivo_cancelamento;
+  const acao =
+    status === 'em_carregamento'
+      ? 'iniciar'
+      : status === 'concluido'
+        ? 'concluir'
+        : status === 'cancelado'
+          ? 'cancelar'
+          : null;
+  if (!acao) throw new Error('Transição de execução não permitida.');
 
-  const { error } = await supabase.from('carregamento_execucoes').update(payload).eq('id', id);
+  const { error } = await supabase.rpc('transicionar_execucao_carregamento', {
+    p_execucao_id: id,
+    p_acao: acao,
+    p_quantidade_carregada: extra?.quantidade_carregada ?? null,
+    p_motivo: extra?.motivo_cancelamento ?? null,
+  });
+  if (error) throw error;
   if (!error) {
     // Sync order status in the background
     supabase
@@ -115,7 +116,7 @@ export async function updateExecucaoStatus(
         }
       });
   }
-  return !error;
+  return true;
 }
 
 export async function cancelExecucao(id: string, motivo: string): Promise<boolean> {
