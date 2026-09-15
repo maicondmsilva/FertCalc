@@ -23,8 +23,8 @@ function carregamento(overrides: Partial<Carregamento> = {}): Carregamento {
 }
 
 describe('acompanhamento operacional de carregamentos', () => {
-  it('calcula saldo liberado descontando carregado e cancelado', () => {
-    expect(calcularSaldoOperacional(carregamento({ quantidade_cancelada: 5 }))).toBe(50);
+  it('cancelamento consome primeiro o saldo ainda não liberado', () => {
+    expect(calcularSaldoOperacional(carregamento({ quantidade_cancelada: 5 }))).toBe(55);
   });
 
   it('nunca apresenta saldo negativo', () => {
@@ -43,7 +43,11 @@ describe('acompanhamento operacional de carregamentos', () => {
         carregamento({ id: 'recente', data_liberacao: '2026-09-12T12:00:00Z' }),
         carregamento({ id: 'antigo', data_liberacao: '2026-09-01T12:00:00Z' }),
         carregamento({ id: 'medio', data_liberacao: '2026-09-05T12:00:00Z' }),
-        carregamento({ id: 'finalizado', status: 'carregado', data_liberacao: '2026-08-01T12:00:00Z' }),
+        carregamento({
+          id: 'finalizado',
+          status: 'carregado',
+          data_liberacao: '2026-08-01T12:00:00Z',
+        }),
       ],
       7,
       new Date('2026-09-14T12:00:00Z')

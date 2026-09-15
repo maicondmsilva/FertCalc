@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { Carregamento } from '../../types/carregamento';
-import { updateCarregamento } from '../../services/carregamentoService';
+import { cancelarSaldoCarregamento } from '../../services/execucaoCarregamentoService';
 import { closeModalOnBackdrop } from '../../utils/modalUtils';
 
 interface ModalCancelarSaldoSolicitacaoProps {
@@ -19,19 +19,25 @@ export default function ModalCancelarSaldoSolicitacao({
 }: ModalCancelarSaldoSolicitacaoProps) {
   const [motivo, setMotivo] = useState('');
   const [saving, setSaving] = useState(false);
+  const busy = useRef(false);
+  const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!motivo.trim()) return;
+    if (!motivo.trim() || saldoAtual <= 0 || busy.current) return;
+    busy.current = true;
+    setError('');
     setSaving(true);
     try {
-      await updateCarregamento(carregamento.id, {
-        quantidade_cancelada: Number((carregamento.quantidade_cancelada ?? 0) + saldoAtual),
-        motivo_cancelamento_saldo: motivo.trim(),
-      });
+      await cancelarSaldoCarregamento(carregamento.id, saldoAtual, motivo);
       onUpdated();
       onClose();
+    } catch {
+      setError(
+        'Não foi possível cancelar. O saldo pode ter mudado ou estar reservado. Atualize a solicitação e tente novamente.'
+      );
     } finally {
+      busy.current = false;
       setSaving(false);
     }
   };
@@ -49,9 +55,18 @@ export default function ModalCancelarSaldoSolicitacao({
           </button>
         </div>
         <div className="p-4 space-y-3 text-sm text-stone-600">
+          {error && (
+            <p role="alert" className="text-red-700">
+              {error}
+            </p>
+          )}
           <p>
             Cancelar <strong>{saldoAtual.toFixed(3)} ton</strong> restantes? Esse saldo voltará para
             o pedido.
+          </p>
+          <p>
+            Inclui o volume ainda não liberado. Quantidades reservadas em veículos ou já carregadas
+            são preservadas.
           </p>
           <textarea
             value={motivo}
@@ -72,7 +87,7 @@ export default function ModalCancelarSaldoSolicitacao({
           </button>
           <button
             type="submit"
-            disabled={saving || !motivo.trim()}
+            disabled={saving || !motivo.trim() || saldoAtual <= 0}
             className="px-4 py-2 text-sm font-bold bg-red-600 text-white rounded-lg disabled:bg-red-300"
           >
             {saving ? 'Salvando...' : 'Confirmar Cancelamento'}

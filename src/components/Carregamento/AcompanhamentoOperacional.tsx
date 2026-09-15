@@ -2,16 +2,12 @@ import { AlertTriangle, CheckCircle, Clock, Package, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { AlertaCarregamento, Carregamento } from '../../types/carregamento';
 import { formatCarregamentoId } from '../../utils/formatId';
+import { loadingBalance } from '../../utils/loadingBalance';
 
 const STATUS_FINAL = new Set(['carregado', 'cancelado']);
 
 export function calcularSaldoOperacional(carregamento: Carregamento): number {
-  return Math.max(
-    0,
-    Number(carregamento.quantidade_liberada || 0) -
-      Number(carregamento.quantidade_carregada || 0) -
-      Number(carregamento.quantidade_cancelada || 0)
-  );
+  return loadingBalance(carregamento).releasedRemaining;
 }
 
 export function diasEmAberto(carregamento: Carregamento, hoje = new Date()): number {
@@ -78,7 +74,11 @@ export default function AcompanhamentoOperacional({
 
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-xl border border-violet-200 bg-violet-50 p-4">
-          <TruckMetric icon={<Clock className="h-5 w-5" />} value={emExecucao} label="Em execução" />
+          <TruckMetric
+            icon={<Clock className="h-5 w-5" />}
+            value={emExecucao}
+            label="Em execução"
+          />
         </div>
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
           <TruckMetric
@@ -144,7 +144,9 @@ export default function AcompanhamentoOperacional({
                     <div>
                       <p className="text-sm font-bold text-stone-800">
                         {numeroCarregamento(carregamento)} ·{' '}
-                        {carregamento.pedido_cliente_nome || carregamento.cliente_nome || 'Cliente não informado'}
+                        {carregamento.pedido_cliente_nome ||
+                          carregamento.cliente_nome ||
+                          'Cliente não informado'}
                       </p>
                       <p className="text-xs text-stone-500">
                         {calcularSaldoOperacional(carregamento).toFixed(3)} ton restantes ·{' '}
@@ -163,8 +165,14 @@ export default function AcompanhamentoOperacional({
                       </button>
                     )}
                   </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-stone-100" aria-label={`Progresso ${progresso.toFixed(0)}%`}>
-                    <div className="h-full rounded-full bg-emerald-500" style={{ width: `${progresso}%` }} />
+                  <div
+                    className="h-2 overflow-hidden rounded-full bg-stone-100"
+                    aria-label={`Progresso ${progresso.toFixed(0)}%`}
+                  >
+                    <div
+                      className="h-full rounded-full bg-emerald-500"
+                      style={{ width: `${progresso}%` }}
+                    />
                   </div>
                   <div className="mt-1 flex justify-between text-[10px] text-stone-400">
                     <span>{carregado.toFixed(3)} ton carregadas</span>
