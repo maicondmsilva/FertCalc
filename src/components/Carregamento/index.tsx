@@ -77,6 +77,7 @@ import HistoricoModificacoes from '../HistoricoModificacoes';
 import { formatCarregamentoId } from '../../utils/formatId';
 import KanbanLogistico from './KanbanLogistico';
 import PainelExecucoes from './PainelExecucoes';
+import { cancelarSaldoCarregamento } from '../../services/execucaoCarregamentoService';
 import { getStatusInicial } from '../../utils/getStatusInicial';
 import { subscribeToOrderLoadingChanges } from '../../services/orderLoadingSubscription';
 import { closeModalOnBackdrop } from '../../utils/modalUtils';
@@ -1580,7 +1581,13 @@ function ModalLiberacao({ carregamento, onSave, onClose }: ModalLiberacaoProps) 
               <div>
                 <p className="text-sm font-bold text-stone-800">Liberação Total</p>
                 <p className="text-xs text-stone-500">
-                  Libera {carregamento.quantidade_total} ton completas
+                  Libera o restante:{' '}
+                  {(
+                    carregamento.quantidade_total -
+                    (carregamento.quantidade_cancelada || 0) -
+                    carregamento.quantidade_liberada
+                  ).toFixed(3)}{' '}
+                  ton
                 </p>
               </div>
             </label>
@@ -1607,7 +1614,11 @@ function ModalLiberacao({ carregamento, onSave, onClose }: ModalLiberacaoProps) 
               <input
                 type="number"
                 min="0.001"
-                max={carregamento.quantidade_total - carregamento.quantidade_liberada}
+                max={
+                  carregamento.quantidade_total -
+                  (carregamento.quantidade_cancelada || 0) -
+                  carregamento.quantidade_liberada
+                }
                 step="0.001"
                 value={quantidade}
                 onChange={(e) => setQuantidade(e.target.value)}
@@ -1616,7 +1627,12 @@ function ModalLiberacao({ carregamento, onSave, onClose }: ModalLiberacaoProps) 
               />
               <p className="text-xs text-stone-400 mt-1">
                 Máximo disponível:{' '}
-                {(carregamento.quantidade_total - carregamento.quantidade_liberada).toFixed(3)} ton
+                {(
+                  carregamento.quantidade_total -
+                  (carregamento.quantidade_cancelada || 0) -
+                  carregamento.quantidade_liberada
+                ).toFixed(3)}{' '}
+                ton
               </p>
             </div>
           )}
@@ -1814,7 +1830,11 @@ function TabelaCarregamentos({
                       )}
                     {showActions.includes('liberar') &&
                       canLiberar &&
-                      ['aguardando_liberacao', 'liberado_parcial'].includes(c.status) && (
+                      ['aguardando_liberacao', 'liberado_parcial', 'em_carregamento'].includes(
+                        c.status
+                      ) &&
+                      c.quantidade_liberada <
+                        c.quantidade_total - (c.quantidade_cancelada || 0) && (
                         <button
                           onClick={() => onAction?.(c, 'liberar')}
                           className="px-2.5 py-1 text-xs font-bold bg-emerald-50 text-emerald-700 rounded-lg border border-emerald-200 hover:bg-emerald-100 transition-colors"
@@ -2580,8 +2600,10 @@ function LiberacaoCarregamento({
   clients?: Client[];
   pedidos?: PedidoVenda[];
 }) {
-  const prontos = carregamentos.filter((c) =>
-    ['aguardando_liberacao', 'liberado_parcial'].includes(c.status)
+  const prontos = carregamentos.filter(
+    (c) =>
+      ['aguardando_liberacao', 'liberado_parcial', 'em_carregamento'].includes(c.status) &&
+      c.quantidade_liberada < c.quantidade_total - (c.quantidade_cancelada || 0)
   );
   const liberados = carregamentos.filter((c) => c.status === 'liberado_total');
 
@@ -3539,11 +3561,14 @@ function ModalCancelarCarregamento({
   const [motivo, setMotivo] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const qtdTotal = carregamento.quantidade_total ?? 0;
+  const qtdTotal = Math.max(
+    0,
+    carregamento.quantidade_total - (carregamento.quantidade_cancelada || 0)
+  );
   const qtdCancelada = parseFloat(quantidadeCancelada) || 0;
 
   const handleConfirm = async () => {
-    if (!motivo.trim()) return;
+    if (saving || !motivo.trim()) return;
     if (tipo === 'parcial' && (qtdCancelada <= 0 || qtdCancelada >= qtdTotal)) return;
     setSaving(true);
     await onConfirm({ tipo, quantidadeCancelada: qtdCancelada, motivo: motivo.trim() });
@@ -4341,54 +4366,23 @@ export default function CarregamentoModule({
     carregamento: Carregamento,
     dados: DadosCancelamento
   ) => {
-    const anterior = { ...carregamento };
-    const qtdOriginal = carregamento.quantidade_total ?? 0;
-
     try {
-      if (dados.tipo === 'total' || dados.quantidadeCancelada >= qtdOriginal) {
-        await updateCarregamento(carregamento.id, {
-          status: 'cancelado',
-          cancelado_por_id: currentUser.id,
-          cancelado_por_nome: currentUser.name,
-          cancelado_em: new Date().toISOString(),
-        } as Parameters<typeof updateCarregamento>[1]);
-      } else {
-        const novaQtd = qtdOriginal - dados.quantidadeCancelada;
-        await updateCarregamento(carregamento.id, {
-          quantidade_total: novaQtd,
-          obs_cancelamento_parcial: `Cancelamento parcial em ${new Date().toLocaleDateString('pt-BR')}: ${dados.quantidadeCancelada.toFixed(3)} ton removidas — ${dados.motivo}`,
-          cancelado_por_id: currentUser.id,
-          cancelado_por_nome: currentUser.name,
-          cancelado_em: new Date().toISOString(),
-        } as Parameters<typeof updateCarregamento>[1]);
-      }
-
-      await registrarAuditLog({
-        tabela: 'carregamentos',
-        registro_id: carregamento.id,
-        acao: dados.tipo === 'total' ? 'DELETE' : 'UPDATE',
-        dados_anteriores: anterior as unknown as Record<string, unknown>,
-        dados_novos: {
-          status: dados.tipo === 'total' ? 'cancelado' : anterior.status,
-          quantidade_total:
-            dados.tipo === 'total' ? qtdOriginal : qtdOriginal - dados.quantidadeCancelada,
-          tipo_cancelamento: dados.tipo,
-          quantidade_cancelada: dados.tipo === 'total' ? qtdOriginal : dados.quantidadeCancelada,
-        } as Record<string, unknown>,
-        motivo: `Cancelamento ${dados.tipo}: ${dados.motivo}`,
-        usuario_id: currentUser.id,
-        usuario_nome: currentUser.name ?? currentUser.id,
-      });
-
-      showSuccess(
-        dados.tipo === 'total'
-          ? 'Carregamento cancelado. Saldo devolvido ao pedido.'
-          : `Cancelamento parcial: ${dados.quantidadeCancelada.toFixed(3)} ton devolvidas ao pedido.`
+      const restante = Math.max(
+        0,
+        carregamento.quantidade_total - (carregamento.quantidade_cancelada || 0)
       );
+      await cancelarSaldoCarregamento(
+        carregamento.id,
+        dados.tipo === 'total' ? restante : dados.quantidadeCancelada,
+        dados.motivo
+      );
+      showSuccess('Cancelamento registrado. O saldo livre foi devolvido ao pedido.');
       setCarregamentoParaCancelar(null);
       await load();
     } catch (err) {
-      showError('Erro ao cancelar carregamento.');
+      showError(
+        'Não foi possível cancelar. Verifique o saldo, os veículos reservados e sua permissão.'
+      );
       console.error(err);
     }
   };
@@ -4453,11 +4447,14 @@ export default function CarregamentoModule({
   // ── Informar transportador ────────────────────────────────────────────────
   const handleInformarTransportador = async (transportadoraId: string, valorFrete?: number) => {
     if (!modalTransportador) return;
-    await updateCarregamento(modalTransportador.id, {
+    const saved = await updateCarregamento(modalTransportador.id, {
       transportadora_id: transportadoraId,
       valor_frete: valorFrete,
-      status: 'em_carregamento',
     });
+    if (!saved) {
+      showError('Não foi possível salvar a transportadora.');
+      return;
+    }
     setModalTransportador(null);
     await load();
   };

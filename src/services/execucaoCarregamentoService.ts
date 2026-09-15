@@ -49,8 +49,8 @@ export async function getExecucoesByCarregamento(
     .select('*')
     .eq('carregamento_id', carregamentoId)
     .order('data_agendamento', { ascending: false });
-  if (error || !data) return [];
-  return data.map((row) => mapExecucao(row));
+  if (error) throw error;
+  return (data || []).map((row) => mapExecucao(row));
 }
 
 export async function createExecucao(
@@ -125,4 +125,17 @@ export async function cancelExecucao(id: string, motivo: string): Promise<boolea
 
 export async function concluirExecucao(id: string, quantidade_carregada: number): Promise<boolean> {
   return updateExecucaoStatus(id, 'concluido', { quantidade_carregada });
+}
+
+export async function cancelarSaldoCarregamento(
+  id: string,
+  quantidade: number,
+  motivo: string
+): Promise<void> {
+  const { error } = await supabase.rpc('cancelar_saldo_carregamento', {
+    p_carregamento_id: id,
+    p_quantidade: quantidade,
+    p_motivo: motivo.trim(),
+  });
+  if (error) throw error;
 }

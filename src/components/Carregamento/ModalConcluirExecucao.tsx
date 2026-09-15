@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { ExecucaoCarregamento } from '../../types/carregamento';
 import { concluirExecucao } from '../../services/execucaoCarregamentoService';
@@ -19,17 +19,27 @@ export default function ModalConcluirExecucao({
     String(execucao.quantidade_agendada)
   );
   const [saving, setSaving] = useState(false);
+  const busy = useRef(false);
+  const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const quantidade = Number(quantidadeCarregada || 0);
     if (quantidade <= 0 || quantidade > execucao.quantidade_agendada) return;
+    if (busy.current) return;
+    busy.current = true;
+    setError('');
     setSaving(true);
     try {
       await concluirExecucao(execucao.id, quantidade);
       onUpdated();
       onClose();
+    } catch {
+      setError(
+        'Não foi possível confirmar. Atualize a solicitação e confira o saldo e o status do veículo.'
+      );
     } finally {
+      busy.current = false;
       setSaving(false);
     }
   };
@@ -40,9 +50,14 @@ export default function ModalConcluirExecucao({
       onMouseDown={(event) => closeModalOnBackdrop(event, onClose, saving)}
     >
       <form onSubmit={handleSubmit} className="w-full max-w-md bg-white rounded-xl shadow-xl">
+        {error && (
+          <p role="alert" className="p-4 text-sm text-red-700">
+            {error}
+          </p>
+        )}
         <div className="p-4 border-b border-stone-200 flex justify-between items-center">
           <h3 className="font-bold text-stone-800">Concluir Execução</h3>
-          <button type="button" onClick={onClose}>
+          <button type="button" onClick={onClose} disabled={saving}>
             <X className="w-5 h-5 text-stone-500" />
           </button>
         </div>

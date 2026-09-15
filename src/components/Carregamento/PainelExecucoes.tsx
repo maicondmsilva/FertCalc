@@ -5,6 +5,7 @@ import ModalAgendarVeiculo from './ModalAgendarVeiculo';
 import ModalIniciarExecucao from './ModalIniciarExecucao';
 import ModalConcluirExecucao from './ModalConcluirExecucao';
 import ModalCancelarSaldoSolicitacao from './ModalCancelarSaldoSolicitacao';
+import { loadingBalance } from '../../utils/loadingBalance';
 
 interface PainelExecucoesProps {
   carregamento: Carregamento;
@@ -20,7 +21,8 @@ export default function PainelExecucoes({
   onChanged,
 }: PainelExecucoesProps) {
   const [execucoes, setExecucoes] = useState<ExecucaoCarregamento[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [showAgendar, setShowAgendar] = useState(false);
   const [iniciando, setIniciando] = useState<ExecucaoCarregamento | null>(null);
   const [concluindo, setConcluindo] = useState<ExecucaoCarregamento | null>(null);
@@ -28,32 +30,25 @@ export default function PainelExecucoes({
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
       const rows = await getExecucoesByCarregamento(carregamento.id);
       setExecucoes(rows);
+    } catch {
+      setError('Não foi possível consultar as execuções. Atualize antes de movimentar o saldo.');
     } finally {
       setLoading(false);
     }
-  }, [carregamento.id]);
+  }, [carregamento.id, carregamento.atualizado_em]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  const saldoAtual = useMemo(() => {
-    const totalConcluido = execucoes
-      .filter((e) => e.status === 'concluido')
-      .reduce((acc, e) => acc + Number(e.quantidade_carregada ?? 0), 0);
-    const totalReservado = execucoes
-      .filter((e) => e.status === 'agendado' || e.status === 'em_carregamento')
-      .reduce((acc, e) => acc + Number(e.quantidade_agendada ?? 0), 0);
-    return (
-      Number(carregamento.quantidade_total ?? 0) -
-      totalConcluido -
-      totalReservado -
-      Number(carregamento.quantidade_cancelada ?? 0)
-    );
-  }, [carregamento.quantidade_total, carregamento.quantidade_cancelada, execucoes]);
+  const balance = useMemo(() => loadingBalance(carregamento, execucoes), [carregamento, execucoes]);
+  const saldoAtual = balance.available;
+  const unavailable =
+    loading || !!error || ['carregado', 'cancelado'].includes(carregamento.status);
 
   const handleUpdated = async () => {
     await load();
@@ -65,16 +60,32 @@ export default function PainelExecucoes({
       <div className="flex justify-between items-center">
         <h4 className="text-sm font-bold text-stone-800">Execuções de Veículo</h4>
         <span className="text-xs text-stone-500">
-          Saldo atual da solicitação: <strong>{saldoAtual.toFixed(3)} ton</strong>
+          Liberado para agendar: <strong>{saldoAtual.toFixed(3)} ton</strong>
         </span>
       </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs text-stone-600">
+        <span>Solicitado: {balance.total.toFixed(3)} t</span>
+        <span>Aguardando liberação: {balance.awaitingRelease.toFixed(3)} t</span>
+        <span>Reservado em veículos: {balance.reserved.toFixed(3)} t</span>
+        <span>Carregado: {balance.loaded.toFixed(3)} t</span>
+        <span>Cancelado: {balance.cancelled.toFixed(3)} t</span>
+      </div>
+      {error && (
+        <p role="alert" className="text-sm text-red-700">
+          {error}{' '}
+          <button type="button" onClick={load}>
+            Tentar novamente
+          </button>
+        </p>
+      )}
 
       {canManage && (
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => setShowAgendar(true)}
-            disabled={saldoAtual <= 0}
+            disabled={unavailable || saldoAtual <= 0}
             className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 text-white disabled:bg-emerald-300"
           >
             Agendar Veículo
@@ -82,7 +93,7 @@ export default function PainelExecucoes({
           <button
             type="button"
             onClick={() => setCancelandoSaldo(true)}
-            disabled={saldoAtual <= 0}
+            disabled={unavailable || balance.cancellable <= 0}
             className="px-3 py-1.5 rounded-lg text-xs font-bold bg-red-600 text-white disabled:bg-red-300"
           >
             Cancelar Saldo Restante
@@ -92,7 +103,7 @@ export default function PainelExecucoes({
 
       {loading ? (
         <p className="text-xs text-stone-500">Carregando execuções...</p>
-      ) : execucoes.length === 0 ? (
+      ) : error ? null : execucoes.length === 0 ? (
         <p className="text-xs text-stone-500">Nenhuma execução agendada.</p>
       ) : (
         <div className="space-y-2">
@@ -105,7 +116,7 @@ export default function PainelExecucoes({
               <div className="text-stone-500 mt-1">
                 {exec.motorista_nome} · Agendado: {exec.quantidade_agendada.toFixed(3)} ton
               </div>
-              {canManage && (
+              {canManage && !unavailable && (
                 <div className="mt-2 flex gap-2">
                   {exec.status === 'agendado' && (
                     <button
@@ -161,7 +172,7 @@ export default function PainelExecucoes({
       {cancelandoSaldo && (
         <ModalCancelarSaldoSolicitacao
           carregamento={carregamento}
-          saldoAtual={saldoAtual}
+          saldoAtual={balance.cancellable}
           onClose={() => setCancelandoSaldo(false)}
           onUpdated={handleUpdated}
         />

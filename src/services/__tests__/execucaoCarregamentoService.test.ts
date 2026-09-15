@@ -14,6 +14,8 @@ vi.mock('../supabase', () => ({
 
 import {
   concluirExecucao,
+  cancelarSaldoCarregamento,
+  getExecucoesByCarregamento,
   createExecucao,
   updateExecucaoStatus,
 } from '../execucaoCarregamentoService';
@@ -22,6 +24,31 @@ describe('execucaoCarregamentoService', () => {
   beforeEach(() => {
     fromMock.mockReset();
     rpcMock.mockReset();
+  });
+
+  it('propaga falha ao consultar execuções em vez de apresentar saldo livre', async () => {
+    const query = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      order: vi.fn().mockResolvedValue({ data: null, error: new Error('sem conexão') }),
+    };
+    fromMock.mockReturnValue(query);
+    await expect(getExecucoesByCarregamento('car-1')).rejects.toThrow('sem conexão');
+  });
+
+  it('cancela por operação transacional e não confirma falha como sucesso', async () => {
+    rpcMock.mockResolvedValueOnce({ error: null });
+    await cancelarSaldoCarregamento('car-1', 5, ' Ajuste ');
+    expect(rpcMock).toHaveBeenCalledWith('cancelar_saldo_carregamento', {
+      p_carregamento_id: 'car-1',
+      p_quantidade: 5,
+      p_motivo: 'Ajuste',
+    });
+    expect(fromMock).not.toHaveBeenCalled();
+    rpcMock.mockResolvedValueOnce({ error: new Error('saldo reservado') });
+    await expect(cancelarSaldoCarregamento('car-1', 5, 'Ajuste')).rejects.toThrow(
+      'saldo reservado'
+    );
   });
 
   it('agenda execução com status agendado', async () => {

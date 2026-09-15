@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { Carregamento, ExecucaoCarregamento } from '../../types/carregamento';
 import { createExecucao } from '../../services/execucaoCarregamentoService';
@@ -26,12 +26,17 @@ export default function ModalAgendarVeiculo({
   const [quantidade, setQuantidade] = useState('');
   const [dataAgendamento, setDataAgendamento] = useState('');
   const [saving, setSaving] = useState(false);
+  const busy = useRef(false);
+  const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const quantidadeNum = Number(quantidade || 0);
     if (quantidadeNum <= 0 || quantidadeNum > saldoAtual) return;
 
+    if (busy.current) return;
+    busy.current = true;
+    setError('');
     setSaving(true);
     try {
       const created = await createExecucao({
@@ -46,7 +51,12 @@ export default function ModalAgendarVeiculo({
       });
       onCreated(created);
       onClose();
+    } catch {
+      setError(
+        'Não foi possível confirmar. Atualize a solicitação e confira o saldo e o status do veículo.'
+      );
     } finally {
+      busy.current = false;
       setSaving(false);
     }
   };
@@ -57,9 +67,14 @@ export default function ModalAgendarVeiculo({
       onMouseDown={(event) => closeModalOnBackdrop(event, onClose, saving)}
     >
       <form onSubmit={handleSubmit} className="w-full max-w-lg bg-white rounded-xl shadow-xl">
+        {error && (
+          <p role="alert" className="p-4 text-sm text-red-700">
+            {error}
+          </p>
+        )}
         <div className="p-4 border-b border-stone-200 flex justify-between items-center">
           <h3 className="font-bold text-stone-800">Agendar Veículo</h3>
-          <button type="button" onClick={onClose}>
+          <button type="button" onClick={onClose} disabled={saving}>
             <X className="w-5 h-5 text-stone-500" />
           </button>
         </div>
