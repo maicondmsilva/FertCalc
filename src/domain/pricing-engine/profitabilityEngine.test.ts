@@ -19,12 +19,12 @@ describe('profitability engine', () => {
     const result = calculateProfitability(input, { today: new Date('2026-01-16T12:00:00') });
     expect(result.daysOfInterest).toBe(30);
     expect(result.taxDeduction).toBe(127.27);
-    expect(result.commissionDeduction).toBe(60.61);
-    expect(result.interestDeduction).toBe(23.77);
+    expect(result.commissionDeduction).toBe(63.64);
+    expect(result.interestDeduction).toBe(23.71);
     expect(result.packagingDeduction).toBe(25);
-    expect(result.netRevenue).toBe(1163.35);
-    expect(result.profitability).toBe(163.35);
-    expect(result.profitabilityPercent).toBeCloseTo(16.335);
+    expect(result.netRevenue).toBe(1160.38);
+    expect(result.profitability).toBe(160.38);
+    expect(result.profitabilityPercent).toBeCloseTo(16.038);
   });
 
   it('aplica juros compostos proporcionalmente a uma fração de mês', () => {
@@ -94,13 +94,13 @@ describe('profitability engine', () => {
     expect(analysis.calculationIndex).toBe(2);
     expect(analysis.analyzedByUserId).toBe('user-1');
     expect(analysis.analyzedAt).toBe(analyzedAt.toISOString());
-    expect(analysis.profitability).toBeCloseTo(163.35);
+    expect(analysis.profitability).toBeCloseTo(160.38);
     expect(analysis.paymentCondition).toBe('ddf');
     expect(analysis.dataCarregamento).toBe('2026-01-16');
     expect(analysis.ddfDias).toBe(30);
   });
 
-  it('reverte exatamente a cascata comercial do cenário validado', () => {
+  it('calcula a comissão como despesa direta no cenário comercial validado', () => {
     const result = calculateProfitability(
       {
         unitaryPrice: 3650.84,
@@ -119,12 +119,37 @@ describe('profitability engine', () => {
 
     expect(result.daysOfInterest).toBe(60);
     expect(result.baseCostAfterFactor).toBe(3461.57);
-    expect(result.interestDeduction).toBe(120.29);
-    expect(result.commissionDeduction).toBe(34.32);
+    expect(result.interestDeduction).toBe(120.28);
+    expect(result.commissionDeduction).toBe(34.66);
     expect(result.taxDeduction).toBe(34.66);
-    expect(result.netRevenue).toBe(3311.57);
-    expect(result.profitability).toBe(-150);
-    expect(result.profitabilityPercent).toBeCloseTo(-4.3333, 3);
+    expect(result.netRevenue).toBe(3311.24);
+    expect(result.profitability).toBe(-150.33);
+    expect(result.profitabilityPercent).toBeCloseTo(-4.3428, 3);
+  });
+
+  it('mantém o cenário de um financeiro com arredondamento monetário por etapa', () => {
+    const result = calculateProfitability(
+      {
+        unitaryPrice: 3650,
+        factor: 0.8,
+        baseCost: 4825,
+        freightDeduction: 0,
+        commissionRate: 0,
+        interestRate: 1.8,
+        taxRate: 0,
+        dueDate: '2026-10-30',
+        interestStartDate: '2026-09-30',
+        packagingValue: 0,
+      },
+      { today: new Date('2026-09-15T12:00:00') }
+    );
+
+    expect(result.daysOfInterest).toBe(30);
+    expect(result.interestDeduction).toBe(64.54);
+    expect(result.netRevenue).toBe(3585.46);
+    expect(result.baseCostAfterFactor).toBe(3860);
+    expect(result.profitability).toBe(-274.54);
+    expect(result.profitabilityPercent).toBeCloseTo(-7.1124, 4);
   });
 
   it('preserva a moeda de origem e grava o espelho financeiro em reais', () => {

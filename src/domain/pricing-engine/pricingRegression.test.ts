@@ -32,7 +32,7 @@ describe('cenários de regressão do motor de precificação', () => {
     });
   });
 
-  it('mantém a rentabilidade determinística para o cenário CIF de referência', () => {
+  it('mantém a rentabilidade determinística com comissão direta no cenário CIF', () => {
     const scenario = pricingRegressionScenarios[0];
     const summary = calculatePricingSummary(scenario.macros, [], scenario.factors, {
       today: scenario.calculationDate,
@@ -55,8 +55,8 @@ describe('cenários de regressão do motor de precificação', () => {
 
     expect(result.daysOfInterest).toBe(30);
     expect(result.baseCostAfterFactor).toBeCloseTo(1911, 6);
-    expect(result.netRevenue).toBe(1891);
-    expect(result.profitability).toBe(-20);
-    expect(result.profitabilityPercent).toBeCloseTo(-1.046572, 6);
+    expect(result.netRevenue).toBe(1889.27);
+    expect(result.profitability).toBe(-21.73);
+    expect(result.profitabilityPercent).toBeCloseTo(-1.137101, 6);
   });
 });
