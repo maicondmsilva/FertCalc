@@ -14,6 +14,8 @@ vi.mock('../supabase', () => ({
 
 import {
   aprovarCotacaoFrete,
+  createCarregamento,
+  deleteCarregamento,
   getQuantidadeCarregadaPorItem,
   liberarCarregamento,
 } from '../carregamentoService';
@@ -22,6 +24,67 @@ describe('carregamentoService', () => {
   beforeEach(() => {
     fromMock.mockReset();
     rpcMock.mockReset();
+  });
+
+  it('cria cabeçalho e produtos por uma única operação idempotente', async () => {
+    rpcMock.mockResolvedValue({
+      data: {
+        id: 'car-1',
+        numero_carregamento: 'CAR-2026-0001',
+        tipo_frete: 'FOB',
+        status: 'aguardando_liberacao',
+        quantidade_total: 30,
+        quantidade_liberada: 0,
+        quantidade_carregada: 0,
+      },
+      error: null,
+    });
+
+    const result = await createCarregamento(
+      {
+        tipo_frete: 'FOB',
+        status: 'aguardando_liberacao',
+        quantidade_total: 30,
+        quantidade_liberada: 0,
+        quantidade_carregada: 0,
+      },
+      [{ produto_nome: 'Produto', quantidade_ton: 30 }],
+      'request-1'
+    );
+
+    expect(result.numero_carregamento).toBe('CAR-2026-0001');
+    expect(rpcMock).toHaveBeenCalledWith('criar_carregamento', {
+      p_payload: expect.objectContaining({ quantidade_total: 30 }),
+      p_itens: [{ produto_nome: 'Produto', quantidade_ton: 30 }],
+      p_request_id: 'request-1',
+    });
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it('não confirma criação quando a transação falha', async () => {
+    rpcMock.mockResolvedValue({ data: null, error: new Error('saldo alterado') });
+    await expect(
+      createCarregamento(
+        {
+          tipo_frete: 'FOB',
+          status: 'aguardando_liberacao',
+          quantidade_total: 30,
+          quantidade_liberada: 0,
+          quantidade_carregada: 0,
+        },
+        [],
+        'request-1'
+      )
+    ).rejects.toThrow('saldo alterado');
+  });
+
+  it('exclui e audita por uma única operação do banco', async () => {
+    rpcMock.mockResolvedValue({ data: null, error: null });
+    await expect(deleteCarregamento('car-1', 'Duplicidade')).resolves.toBe(true);
+    expect(rpcMock).toHaveBeenCalledWith('excluir_carregamento', {
+      p_id: 'car-1',
+      p_motivo: 'Duplicidade',
+    });
   });
 
   it('carrega o progresso consolidado diretamente dos itens do pedido', async () => {
@@ -89,4 +152,3 @@ describe('carregamentoService', () => {
     );
   });
 });
-

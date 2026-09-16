@@ -42,7 +42,6 @@ import {
   updateCarregamento,
   deleteCarregamento,
   updateStatusCarregamento,
-  gerarNumeroCarregamento,
   getFiliais,
   getTransportadoras,
   getAllTransportadoras,
@@ -226,6 +225,7 @@ interface EnrichedPedido {
 }
 
 export interface CarregamentoFormData {
+  request_id?: string;
   tipo_frete: 'CIF' | 'FOB';
   quantidade_total: string;
   filial_id: string;
@@ -294,6 +294,8 @@ export function ModalNovoCarregamento({
 }: ModalNovoCarregamentoProps) {
   const { showError } = useToast();
   const isEditMode = !!carregamentoEditando;
+  const creationRequestId = React.useRef(crypto.randomUUID());
+  const submitBusy = React.useRef(false);
   const [form, setForm] = useState<CarregamentoFormData>(() => {
     if (carregamentoEditando) {
       return {
@@ -567,6 +569,7 @@ export function ModalNovoCarregamento({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitBusy.current) return;
 
     if (form.pedido_venda_id && pedidoItens.length > 0) {
       const itensQtdInvalida = itensCarregamento
@@ -602,12 +605,14 @@ export function ModalNovoCarregamento({
       }
     }
 
+    submitBusy.current = true;
     setSaving(true);
     try {
-      await onSave(form);
+      await onSave({ ...form, request_id: creationRequestId.current });
     } catch {
       // Error toast is handled by the parent (handleCreateCarregamento)
     } finally {
+      submitBusy.current = false;
       setSaving(false);
     }
   };
@@ -4192,11 +4197,9 @@ export default function CarregamentoModule({
         }
       }
 
-      const numero = await gerarNumeroCarregamento();
       const statusInicial = getStatusInicial(form.tipo_frete);
       await createCarregamento(
         {
-          numero_carregamento: numero,
           tipo_frete: form.tipo_frete,
           quantidade_total: qtdTotal,
           quantidade_liberada: 0,
@@ -4212,7 +4215,8 @@ export default function CarregamentoModule({
           status: statusInicial,
           criado_por: currentUser.id,
         },
-        form.itens
+        form.itens,
+        form.request_id
       );
       showSuccess('Carregamento criado com sucesso!');
       setShowModalNovo(false);
@@ -4229,12 +4233,12 @@ export default function CarregamentoModule({
   };
 
   const handleMarcarAlertaLido = async (alerta: AlertaCarregamento) => {
-    const marcado = await marcarAlertaLido(alerta.id);
-    if (!marcado) {
+    try {
+      await marcarAlertaLido(alerta.id);
+      setAlertas((atuais) => atuais.filter((item) => item.id !== alerta.id));
+    } catch {
       showError('Não foi possível atualizar o alerta.');
-      return;
     }
-    setAlertas((atuais) => atuais.filter((item) => item.id !== alerta.id));
   };
 
   // ── Solicitar cotação (único — usado pelo ModalCotacao na visão geral) ───────
@@ -4330,18 +4334,7 @@ export default function CarregamentoModule({
     setExcluindoLoading(true);
     try {
       const snapshot = excluindoCarregamento;
-      // Register audit log BEFORE deleting
-      await registrarAuditLog({
-        tabela: 'carregamentos',
-        registro_id: snapshot.id,
-        acao: 'DELETE',
-        dados_anteriores: snapshot as unknown as Record<string, unknown>,
-        dados_novos: null,
-        motivo: motivoExclusao.trim(),
-        usuario_id: currentUser.id,
-        usuario_nome: currentUser.name ?? currentUser.id,
-      });
-      await deleteCarregamento(snapshot.id);
+      await deleteCarregamento(snapshot.id, motivoExclusao.trim());
       // Notify solicitante and current user if different
       const destinatarios = new Set<string>();
       if (snapshot.criado_por) destinatarios.add(snapshot.criado_por);
@@ -4447,16 +4440,16 @@ export default function CarregamentoModule({
   // ── Informar transportador ────────────────────────────────────────────────
   const handleInformarTransportador = async (transportadoraId: string, valorFrete?: number) => {
     if (!modalTransportador) return;
-    const saved = await updateCarregamento(modalTransportador.id, {
-      transportadora_id: transportadoraId,
-      valor_frete: valorFrete,
-    });
-    if (!saved) {
+    try {
+      await updateCarregamento(modalTransportador.id, {
+        transportadora_id: transportadoraId,
+        valor_frete: valorFrete,
+      });
+      setModalTransportador(null);
+      await load();
+    } catch {
       showError('Não foi possível salvar a transportadora.');
-      return;
     }
-    setModalTransportador(null);
-    await load();
   };
 
   // ── Page title map ────────────────────────────────────────────────────────

@@ -103,48 +103,6 @@ function mapCotacaoSolicitada(d: Record<string, unknown>): CotacaoSolicitada {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  Gera número único: COT-{ANO}-{NNNN}
-// ─────────────────────────────────────────────────────────────
-
-export async function gerarNumeroCotacao(): Promise<string> {
-  const year = new Date().getFullYear();
-  const prefix = `COT-${year}-`;
-  const maxRetries = 3;
-
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    const { data } = await supabase
-      .from('cotacoes_solicitadas')
-      .select('numero_cotacao')
-      .like('numero_cotacao', `${prefix}%`)
-      .order('numero_cotacao', { ascending: false })
-      .limit(1);
-
-    let nextSeq = 1;
-    if (data && data.length > 0) {
-      const last = data[0].numero_cotacao as string;
-      const lastSeq = parseInt(last.replace(prefix, ''), 10);
-      if (!isNaN(lastSeq)) {
-        nextSeq = lastSeq + 1;
-      }
-    }
-
-    const numero = `${prefix}${nextSeq.toString().padStart(4, '0')}`;
-
-    const { count: existing } = await supabase
-      .from('cotacoes_solicitadas')
-      .select('*', { count: 'exact', head: true })
-      .eq('numero_cotacao', numero);
-
-    if (!existing || existing === 0) {
-      return numero;
-    }
-  }
-
-  const ts = Date.now().toString(36);
-  return `${prefix}${ts}`;
-}
-
-// ─────────────────────────────────────────────────────────────
 //  Queries
 // ─────────────────────────────────────────────────────────────
 
@@ -253,11 +211,9 @@ export async function createCotacaoSolicitada(
     | 'transportadora'
   >
 ): Promise<CotacaoSolicitada> {
-  const numero_cotacao = await gerarNumeroCotacao();
-
   const { data, error } = await supabase
     .from('cotacoes_solicitadas')
-    .insert({ ...payload, numero_cotacao })
+    .insert(payload)
     .select(SELECT_FIELDS)
     .single();
 
@@ -274,12 +230,15 @@ export async function updateCotacaoSolicitada(
     >
   >
 ): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('cotacoes_solicitadas')
     .update({ ...updates, atualizado_em: new Date().toISOString() })
-    .eq('id', id);
+    .eq('id', id)
+    .select('id')
+    .single();
 
-  if (error) throw error;
+  if (error || !data)
+    throw error ?? new Error('Cotação indisponível ou sem permissão para atualizar.');
 }
 
 // ─────────────────────────────────────────────────────────────
