@@ -169,9 +169,9 @@ export async function getAllTransportadoras(): Promise<Transportadora[]> {
 
 export async function createTransportadora(
   payload: Omit<Transportadora, 'id' | 'criado_em'>
-): Promise<Transportadora | null> {
+): Promise<Transportadora> {
   const { data, error } = await supabase.from('transportadoras').insert(payload).select().single();
-  if (error || !data) return null;
+  if (error || !data) throw error ?? new Error('Não foi possível salvar a transportadora.');
   return mapTransportadora(data);
 }
 
@@ -179,13 +179,27 @@ export async function updateTransportadora(
   id: string,
   payload: Partial<Omit<Transportadora, 'id' | 'criado_em'>>
 ): Promise<boolean> {
-  const { error } = await supabase.from('transportadoras').update(payload).eq('id', id);
-  return !error;
+  const { data, error } = await supabase
+    .from('transportadoras')
+    .update(payload)
+    .eq('id', id)
+    .select('id')
+    .single();
+  if (error || !data)
+    throw error ?? new Error('Registro não encontrado ou sem permissão para salvar.');
+  return true;
 }
 
 export async function deleteTransportadora(id: string): Promise<boolean> {
-  const { error } = await supabase.from('transportadoras').delete().eq('id', id);
-  return !error;
+  const { data, error } = await supabase
+    .from('transportadoras')
+    .delete()
+    .eq('id', id)
+    .select('id')
+    .single();
+  if (error || !data)
+    throw error ?? new Error('Registro não encontrado ou sem permissão para salvar.');
+  return true;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -261,61 +275,25 @@ export async function getCarregamentoById(id: string): Promise<Carregamento | nu
 }
 
 export async function createCarregamento(
-  payload: Omit<Carregamento, 'id' | 'criado_em' | 'atualizado_em' | 'filial' | 'transportadora'>,
+  payload: Omit<
+    Carregamento,
+    'id' | 'numero_carregamento' | 'criado_em' | 'atualizado_em' | 'filial' | 'transportadora'
+  >,
   itens?: {
     pedido_venda_item_id?: string;
     produto_nome: string;
     quantidade_ton: number;
     embalagem?: string;
-  }[]
+  }[],
+  requestId: string = crypto.randomUUID()
 ): Promise<Carregamento> {
-  const { data, error } = await supabase.from('carregamentos').insert(payload).select().single();
-  if (error || !data) {
-    if (error?.code === 'P0001') {
-      throw new Error(
-        'Saldo insuficiente para um ou mais itens do carregamento. Revise as quantidades e tente novamente.'
-      );
-    }
-    console.error('Erro ao criar carregamento:', error);
-    throw error ?? new Error('Falha ao criar carregamento: nenhum dado retornado');
-  }
-  if (itens && itens.length > 0) {
-    const rows = itens
-      .filter((item) => item.quantidade_ton > 0)
-      .map((item) => ({
-        carregamento_id: data.id,
-        pedido_venda_item_id: item.pedido_venda_item_id ?? null,
-        produto_nome: item.produto_nome,
-        quantidade_ton: item.quantidade_ton,
-        embalagem: item.embalagem ?? null,
-      }));
-
-    if (rows.length > 0) {
-      const { error: itensError } = await supabase.from('carregamento_itens').insert(rows);
-      if (itensError) {
-        if (itensError.code === 'P0001') {
-          throw new Error(
-            'Saldo insuficiente. A quantidade solicitada excede o saldo disponível do pedido.'
-          );
-        }
-        const { error: rollbackError } = await supabase
-          .from('carregamentos')
-          .delete()
-          .eq('id', data.id);
-        if (rollbackError) {
-          console.error('Falha ao executar rollback do carregamento após erro nos itens:', {
-            carregamentoId: data.id,
-            rollbackError,
-          });
-        }
-        console.error('Falha ao inserir itens do carregamento:', {
-          carregamentoId: data.id,
-          itensError,
-        });
-        throw new Error('Não foi possível salvar os itens do carregamento. Tente novamente.');
-      }
-    }
-  }
+  const { data, error } = await supabase.rpc('criar_carregamento', {
+    p_payload: payload,
+    p_itens: itens ?? [],
+    p_request_id: requestId,
+  });
+  if (error || !data)
+    throw error ?? new Error('Não foi possível confirmar a gravação do carregamento.');
   return mapCarregamento(data);
 }
 
@@ -323,11 +301,15 @@ export async function updateCarregamento(
   id: string,
   payload: Partial<Omit<Carregamento, 'id' | 'criado_em' | 'filial' | 'transportadora'>>
 ): Promise<boolean> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('carregamentos')
     .update({ ...payload, atualizado_em: new Date().toISOString() })
-    .eq('id', id);
-  return !error;
+    .eq('id', id)
+    .select('id')
+    .single();
+  if (error || !data)
+    throw error ?? new Error('Registro não encontrado ou sem permissão para salvar.');
+  return true;
 }
 
 export async function updateStatusCarregamento(
@@ -335,58 +317,21 @@ export async function updateStatusCarregamento(
   status: StatusCarregamento,
   extra?: Partial<Carregamento>
 ): Promise<boolean> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('carregamentos')
     .update({ status, ...extra, atualizado_em: new Date().toISOString() })
-    .eq('id', id);
-  return !error;
+    .eq('id', id)
+    .select('id')
+    .single();
+  if (error || !data)
+    throw error ?? new Error('Registro não encontrado ou sem permissão para salvar.');
+  return true;
 }
 
-export async function deleteCarregamento(id: string): Promise<boolean> {
-  const { error } = await supabase.from('carregamentos').delete().eq('id', id);
-  return !error;
-}
-
-// Generate a unique carregamento number with retry on conflict
-export async function gerarNumeroCarregamento(): Promise<string> {
-  const year = new Date().getFullYear();
-  const prefix = `CAR-${year}-`;
-  const maxRetries = 3;
-
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    // Find the highest existing sequence number for this year
-    const { data } = await supabase
-      .from('carregamentos')
-      .select('numero_carregamento')
-      .like('numero_carregamento', `${prefix}%`)
-      .order('numero_carregamento', { ascending: false })
-      .limit(1);
-
-    let nextSeq = 1;
-    if (data && data.length > 0) {
-      const last = data[0].numero_carregamento as string;
-      const lastSeq = parseInt(last.replace(prefix, ''), 10);
-      if (!isNaN(lastSeq)) {
-        nextSeq = lastSeq + 1;
-      }
-    }
-
-    const numero = `${prefix}${nextSeq.toString().padStart(4, '0')}`;
-
-    // Verify uniqueness before returning
-    const { count: existing } = await supabase
-      .from('carregamentos')
-      .select('*', { count: 'exact', head: true })
-      .eq('numero_carregamento', numero);
-
-    if (!existing || existing === 0) {
-      return numero;
-    }
-  }
-
-  // Fallback: use timestamp-based suffix to guarantee uniqueness
-  const ts = Date.now().toString(36);
-  return `${prefix}${ts}`;
+export async function deleteCarregamento(id: string, motivo: string): Promise<boolean> {
+  const { error } = await supabase.rpc('excluir_carregamento', { p_id: id, p_motivo: motivo });
+  if (error) throw error;
+  return true;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -436,9 +381,9 @@ export async function arquivarCotacao(id: string, userId: string): Promise<void>
 
 export async function createCotacao(
   payload: Omit<CotacaoFrete, 'id' | 'criado_em' | 'atualizado_em' | 'transportadora'>
-): Promise<CotacaoFrete | null> {
+): Promise<CotacaoFrete> {
   const { data, error } = await supabase.from('cotacoes_frete').insert(payload).select().single();
-  if (error || !data) return null;
+  if (error || !data) throw error ?? new Error('Não foi possível salvar a cotação.');
   return mapCotacao(data);
 }
 
@@ -446,11 +391,15 @@ export async function updateCotacao(
   id: string,
   payload: Partial<Omit<CotacaoFrete, 'id' | 'criado_em' | 'transportadora'>>
 ): Promise<boolean> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('cotacoes_frete')
     .update({ ...payload, atualizado_em: new Date().toISOString() })
-    .eq('id', id);
-  return !error;
+    .eq('id', id)
+    .select('id')
+    .single();
+  if (error || !data)
+    throw error ?? new Error('Registro não encontrado ou sem permissão para salvar.');
+  return true;
 }
 
 export async function aprovarCotacaoFrete(cotacaoId: string): Promise<void> {
@@ -484,13 +433,21 @@ export async function getAlertasCarregamento(userId: string): Promise<AlertaCarr
     .eq('destinatario_id', userId)
     .eq('lido', false)
     .order('criado_em', { ascending: false });
-  if (error || !data) return [];
+  if (error) throw error;
+  if (!data) throw new Error('Consulta indisponível. Atualize e tente novamente.');
   return data as AlertaCarregamento[];
 }
 
 export async function marcarAlertaLido(id: string): Promise<boolean> {
-  const { error } = await supabase.from('alertas_carregamento').update({ lido: true }).eq('id', id);
-  return !error;
+  const { data, error } = await supabase
+    .from('alertas_carregamento')
+    .update({ lido: true })
+    .eq('id', id)
+    .select('id')
+    .single();
+  if (error || !data)
+    throw error ?? new Error('Registro não encontrado ou sem permissão para salvar.');
+  return true;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -736,7 +693,8 @@ export async function getCarregamentosLogistica(filialIds?: string[]): Promise<C
   }
 
   const { data, error } = await query;
-  if (error || !data) return [];
+  if (error) throw error;
+  if (!data) throw new Error('Consulta indisponível. Atualize e tente novamente.');
   return data.map((d) => {
     const pv = d.pedidos_venda as Record<string, unknown> | null;
     return {
@@ -871,4 +829,3 @@ export async function getQuantidadeCarregadaPorItem(
 
   return carregadoPorItem;
 }
-

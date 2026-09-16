@@ -63,13 +63,6 @@ describe('execucaoCarregamentoService', () => {
       },
       error: null,
     });
-    const maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
-    const syncEq = vi.fn(() => ({ maybeSingle }));
-    const syncSelect = vi.fn(() => ({ eq: syncEq }));
-    fromMock.mockImplementation((table: string) =>
-      table === 'carregamentos' ? { select: syncSelect } : {}
-    );
-
     const result = await createExecucao({
       carregamento_id: 'car-1',
       motorista_nome: 'João',
@@ -90,24 +83,17 @@ describe('execucaoCarregamentoService', () => {
       p_data_agendamento: null,
       p_observacoes: null,
     });
-    expect(syncSelect).toHaveBeenCalledWith('pedido_venda_id');
+    expect(fromMock).not.toHaveBeenCalled();
   });
 
   it('inicia e conclui execução', async () => {
     rpcMock.mockResolvedValue({ data: null, error: null });
-    const maybeSingle = vi.fn().mockResolvedValue({
-      data: { carregamento_id: 'car-1' },
-      error: null,
-    });
-    const selectEq = vi.fn(() => ({ maybeSingle }));
-    const select = vi.fn(() => ({ eq: selectEq }));
-    fromMock.mockReturnValue({ select });
-
     const started = await updateExecucaoStatus('exec-1', 'em_carregamento');
     const done = await concluirExecucao('exec-1', 28);
 
     expect(started).toBe(true);
     expect(done).toBe(true);
+    expect(fromMock).not.toHaveBeenCalled();
     expect(rpcMock).toHaveBeenNthCalledWith(1, 'transicionar_execucao_carregamento', {
       p_execucao_id: 'exec-1',
       p_acao: 'iniciar',

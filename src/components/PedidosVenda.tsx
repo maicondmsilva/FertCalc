@@ -24,11 +24,7 @@ import {
   PedidoSaldoAlertaPreferencia,
   CancelamentoRelatorioRow,
 } from '../services/pedidosVendaService';
-import {
-  createCarregamento,
-  gerarNumeroCarregamento,
-  getFiliais,
-} from '../services/carregamentoService';
+import { createCarregamento, getFiliais } from '../services/carregamentoService';
 import { getBranches, getClients, getPricingRecords } from '../services/db';
 import { useToast } from './Toast';
 import type { CarregamentoFormData } from './Carregamento';
@@ -298,10 +294,8 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
 
   const handleSolicitarCarregamento = async (form: CarregamentoFormData) => {
     try {
-      const numero = await gerarNumeroCarregamento();
       await createCarregamento(
         {
-          numero_carregamento: numero,
           tipo_frete: form.tipo_frete,
           quantidade_total: parseFloat(form.quantidade_total),
           quantidade_liberada: 0,
@@ -317,7 +311,8 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
           status: getStatusInicial(form.tipo_frete),
           criado_por: currentUser.id,
         },
-        form.itens
+        form.itens,
+        form.request_id
       );
       showSuccess('Carregamento criado com sucesso!');
       setModalCarregamentoAberto(false);
@@ -1336,4 +1331,3 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
     </div>
   );
 }
-
