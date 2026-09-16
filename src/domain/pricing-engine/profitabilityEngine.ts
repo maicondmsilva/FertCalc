@@ -49,17 +49,19 @@ export function calculateProfitability(
     options.today ?? new Date(),
     input.interestStartDate
   );
-  const priceAfterTax = roundMoney(Math.max(0, unitaryPrice - freightDeduction));
+  const priceAfterFreight = roundMoney(Math.max(0, unitaryPrice - freightDeduction));
   const taxRate = Math.max(0, numeric(input.taxRate)) / 100;
-  const priceAfterCommission = roundMoney(priceAfterTax / (1 + taxRate));
-  const taxDeduction = roundMoney(priceAfterTax - priceAfterCommission);
+  const priceAfterTax = roundMoney(priceAfterFreight / (1 + taxRate));
+  const taxDeduction = roundMoney(priceAfterFreight - priceAfterTax);
   const commissionRate = Math.max(0, numeric(input.commissionRate)) / 100;
-  const priceAfterInterest = roundMoney(priceAfterCommission / (1 + commissionRate));
-  const commissionDeduction = roundMoney(priceAfterCommission - priceAfterInterest);
+  // A comissão é uma despesa sobre a receita de venda líquida de frete e alíquota,
+  // não um acréscimo embutido que deva ser descapitalizado.
+  const commissionDeduction = roundMoney(priceAfterTax * commissionRate);
+  const priceAfterCommission = roundMoney(priceAfterTax - commissionDeduction);
   const monthlyRate = Math.max(0, numeric(input.interestRate)) / 100;
   const interestFactor = Math.pow(1 + monthlyRate, Math.max(0, daysOfInterest / 30));
-  const priceBeforeInterest = roundMoney(priceAfterInterest / interestFactor);
-  const interestDeduction = roundMoney(priceAfterInterest - priceBeforeInterest);
+  const priceBeforeInterest = roundMoney(priceAfterCommission / interestFactor);
+  const interestDeduction = roundMoney(priceAfterCommission - priceBeforeInterest);
   const packagingDeduction = numeric(input.packagingValue);
   const netRevenue = roundMoney(priceBeforeInterest - packagingDeduction);
   const profitability = roundMoney(netRevenue - baseCostAfterFactor);

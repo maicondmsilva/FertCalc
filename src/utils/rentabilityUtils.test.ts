@@ -35,9 +35,26 @@ describe('calcRentability', () => {
 
   it('aplica comissão corretamente', () => {
     const result = calcRentability({ ...baseInput, commissionRate: 5 });
-    // O preço informado já contém a comissão: 1500 / 1,05 = 1428,57.
-    expect(result.commissionDeduction).toBe(71.43);
-    expect(result.netRevenue).toBe(1428.57);
+    // A comissão é uma despesa direta de 5% sobre a receita elegível.
+    expect(result.commissionDeduction).toBe(75);
+    expect(result.netRevenue).toBe(1425);
+  });
+
+  it('calcula comissão sobre a venda após o frete', () => {
+    const result = calcRentability({
+      ...baseInput,
+      unitaryPrice: 3030,
+      baseCost: 3959.72,
+      factor: 0.8,
+      freightDeduction: 130,
+      commissionRate: 1,
+    });
+
+    expect(result.commissionDeduction).toBe(29);
+    expect(result.netRevenue).toBe(2871);
+    expect(result.baseCostAfterFactor).toBe(3167.78);
+    expect(result.profitability).toBe(-296.78);
+    expect(result.profitabilityPercent).toBeCloseTo(-9.3687, 4);
   });
 
   it('aplica frete como dedução do preço', () => {
