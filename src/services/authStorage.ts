@@ -1,5 +1,3 @@
-const REMEMBER_SESSION_KEY = 'fertcalc:remember-session';
-
 interface BrowserStorage {
   readonly length: number;
   getItem(key: string): string | null;
@@ -12,15 +10,6 @@ function isBrowser(): boolean {
   return typeof window !== 'undefined';
 }
 
-function shouldRememberSession(): boolean {
-  return isBrowser() && window.localStorage.getItem(REMEMBER_SESSION_KEY) === 'true';
-}
-
-function activeStorage(): BrowserStorage | undefined {
-  if (!isBrowser()) return undefined;
-  return shouldRememberSession() ? window.localStorage : window.sessionStorage;
-}
-
 function clearSupabaseSession(storage: BrowserStorage): void {
   const keys = Array.from({ length: storage.length }, (_, index) => storage.key(index)).filter(
     (key): key is string => Boolean(key?.startsWith('sb-') && key.includes('-auth-token'))
@@ -31,33 +20,32 @@ function clearSupabaseSession(storage: BrowserStorage): void {
   }
 }
 
-/** Define se a próxima sessão ficará apenas nesta execução ou será lembrada no dispositivo. */
-export function setSessionPersistence(remember: boolean): void {
+/** Prepara uma autenticação que existirá somente durante a sessão atual do navegador. */
+export function startBrowserSession(): void {
   if (!isBrowser()) return;
-
-  if (remember) {
-    window.localStorage.setItem(REMEMBER_SESSION_KEY, 'true');
-  } else {
-    window.localStorage.removeItem(REMEMBER_SESSION_KEY);
-  }
-
-  // A tela de login sempre inicia uma nova autenticação. Remover tokens antigos evita
-  // restaurar acidentalmente a conta anterior quando uma tentativa falhar.
   clearSupabaseSession(window.localStorage);
   clearSupabaseSession(window.sessionStorage);
 }
 
-export function isSessionPersistenceEnabled(): boolean {
-  return shouldRememberSession();
-}
-
-/** Storage customizado usado pelo Supabase para respeitar a escolha feita no login. */
+/** Storage do Supabase: persiste em recargas, mas é descartado ao fechar o navegador. */
 export const authStorage = {
   getItem(key: string): string | null {
-    return activeStorage()?.getItem(key) ?? null;
+    if (!isBrowser()) return null;
+    const currentSession = window.sessionStorage.getItem(key);
+    if (currentSession) return currentSession;
+
+    // Migra uma sessão antiga que tenha sido salva como "manter conectado".
+    const legacySession = window.localStorage.getItem(key);
+    if (legacySession) {
+      window.sessionStorage.setItem(key, legacySession);
+      window.localStorage.removeItem(key);
+    }
+    return legacySession;
   },
   setItem(key: string, value: string): void {
-    activeStorage()?.setItem(key, value);
+    if (!isBrowser()) return;
+    window.sessionStorage.setItem(key, value);
+    window.localStorage.removeItem(key);
   },
   removeItem(key: string): void {
     if (!isBrowser()) return;

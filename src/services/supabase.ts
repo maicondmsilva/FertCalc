@@ -16,8 +16,8 @@ if (!supabaseAnonKey) {
 }
 
 /**
- * A sessão é mantida pelo Supabase, mas o armazenamento respeita a escolha do login:
- * sessionStorage por padrão e localStorage somente quando "Manter conectado" estiver ativo.
+ * A sessão é renovada enquanto a página estiver aberta e armazenada apenas na sessão
+ * do navegador. Fechar o navegador descarta as credenciais locais.
  */
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {

@@ -579,14 +579,18 @@ export default function Calculator({
                   value={factors.local_carregamento_id || ''}
                   onChange={(e) => {
                     const localId = e.target.value;
-                    const matchingList = priceLists.find(
-                      (l) => l.local_carregamento_id === localId
-                    );
-                    setFactors({
-                      ...factors,
+                    const matchingList = priceLists
+                      .filter((list) => list.local_carregamento_id === localId)
+                      .slice()
+                      .sort(
+                        (left, right) =>
+                          new Date(right.date).getTime() - new Date(left.date).getTime()
+                      )[0];
+                    setFactors((previous) => ({
+                      ...previous,
                       local_carregamento_id: localId || undefined,
-                      priceListId: matchingList ? matchingList.id : factors.priceListId,
-                    });
+                    }));
+                    handleFactorChange('priceListId', matchingList?.id || '');
                   }}
                   className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
                 >
@@ -1579,9 +1583,7 @@ export default function Calculator({
                                           value={ajusteAtual}
                                           onChange={(e) => {
                                             const ajuste = e.target.value as
-                                              | 'nenhum'
-                                              | 'cobrar'
-                                              | 'descontar';
+                                              'nenhum' | 'cobrar' | 'descontar';
                                             updateCalculationFactors(
                                               calc.id,
                                               'embalagem_ajuste',

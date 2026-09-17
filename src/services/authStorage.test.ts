@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { authStorage, isSessionPersistenceEnabled, setSessionPersistence } from './authStorage';
+import { authStorage, startBrowserSession } from './authStorage';
 
 const AUTH_KEY = 'sb-project-auth-token';
 
@@ -14,23 +14,21 @@ describe('authStorage', () => {
 
     expect(window.sessionStorage.getItem(AUTH_KEY)).toBe('session-token');
     expect(window.localStorage.getItem(AUTH_KEY)).toBeNull();
-    expect(isSessionPersistenceEnabled()).toBe(false);
   });
 
-  it('usa localStorage somente quando o usuário escolhe manter conectado', () => {
-    setSessionPersistence(true);
-    authStorage.setItem(AUTH_KEY, 'remembered-token');
+  it('migra uma sessão antiga para a sessão atual do navegador', () => {
+    window.localStorage.setItem(AUTH_KEY, 'remembered-token');
 
-    expect(window.localStorage.getItem(AUTH_KEY)).toBe('remembered-token');
-    expect(window.sessionStorage.getItem(AUTH_KEY)).toBeNull();
-    expect(isSessionPersistenceEnabled()).toBe(true);
+    expect(authStorage.getItem(AUTH_KEY)).toBe('remembered-token');
+    expect(window.localStorage.getItem(AUTH_KEY)).toBeNull();
+    expect(window.sessionStorage.getItem(AUTH_KEY)).toBe('remembered-token');
   });
 
   it('remove tokens antigos antes de iniciar uma nova autenticação', () => {
     window.localStorage.setItem(AUTH_KEY, 'old-local-token');
     window.sessionStorage.setItem(AUTH_KEY, 'old-session-token');
 
-    setSessionPersistence(false);
+    startBrowserSession();
 
     expect(window.localStorage.getItem(AUTH_KEY)).toBeNull();
     expect(window.sessionStorage.getItem(AUTH_KEY)).toBeNull();

@@ -70,6 +70,7 @@ import {
   withOfficialListPrice,
 } from '../utils/temporaryMaterialPrice';
 import { isExtraProductAvailableAtLocation } from '../utils/extraProductAvailability';
+import { resetCalculationForPriceList } from '../utils/priceListSelection';
 
 interface UseCalculatorProps {
   initialData?: PricingRecord | null;
@@ -190,6 +191,7 @@ export function useCalculator({
   const currencySnapshotPriceListId = useRef(
     initialData?.factors.priceListCurrency ? initialData.factors.priceListId : ''
   );
+  const priceListResetRequested = useRef<string>('');
 
   const getProductFormulaLabel = (material?: RawMaterial | null) => {
     if (!material) return '';
@@ -345,12 +347,16 @@ export function useCalculator({
 
     const defaultBranch = branches.find((branch) => branch.name === DEFAULT_BRANCH_NAME);
     const defaultLocal = locaisCarregamento.find((local) => local.nome === DEFAULT_LOCAL_NAME);
-    const latestPriceList = priceLists[0];
+    const selectedLocalId = initialLoadingLocationId || defaultLocal?.id || '';
+    const latestPriceList = priceLists
+      .filter((list) => !selectedLocalId || list.local_carregamento_id === selectedLocalId)
+      .slice()
+      .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime())[0];
 
     setFactors((prev) => ({
       ...prev,
       branchId: prev.branchId || initialBranchId || defaultBranch?.id || '',
-      local_carregamento_id: prev.local_carregamento_id || defaultLocal?.id || undefined,
+      local_carregamento_id: prev.local_carregamento_id || selectedLocalId || undefined,
       priceListId: prev.priceListId || initialPriceListId || latestPriceList?.id || '',
     }));
 
@@ -359,6 +365,7 @@ export function useCalculator({
     branches,
     initialBranchId,
     initialData,
+    initialLoadingLocationId,
     initialPriceListId,
     isMaterialsLoading,
     locaisCarregamento,
@@ -374,6 +381,7 @@ export function useCalculator({
         const currencySnapshot = getPriceListCurrencySnapshot(selectedList);
         const shouldRefreshCurrencySnapshot =
           currencySnapshotPriceListId.current !== selectedList.id;
+        const shouldResetProducts = priceListResetRequested.current === selectedList.id;
         if (shouldRefreshCurrencySnapshot) {
           currencySnapshotPriceListId.current = selectedList.id;
           setFactors((previousFactors) => ({
@@ -406,7 +414,8 @@ export function useCalculator({
           ...selectedList.macros.map((material) => ({
             ...withOfficialListPrice(material),
             isOutsidePriceList: false,
-            selected: material.isPremiumLine ? false : (material.selected ?? true),
+            selected: !material.isPremiumLine,
+            quantity: 0,
             minQty:
               material.minQuantity !== undefined
                 ? material.minQuantity
@@ -431,6 +440,7 @@ export function useCalculator({
             ...withOfficialListPrice(material),
             isOutsidePriceList: false,
             selected: false,
+            quantity: 0,
             minQty:
               material.minQuantity !== undefined ? material.minQuantity : material.minQty || 0,
           })),
@@ -457,6 +467,16 @@ export function useCalculator({
 
         setCalculations((prevCalculations) =>
           prevCalculations.map((calc) => {
+            if (shouldResetProducts) {
+              return resetCalculationForPriceList(
+                calc,
+                newMacros,
+                newMicros,
+                selectedList.id,
+                currencySnapshot
+              );
+            }
+
             if (!calc.selected) {
               return shouldRefreshCurrencySnapshot
                 ? { ...calc, factors: { ...calc.factors, ...currencySnapshot }, summary: undefined }
@@ -501,6 +521,11 @@ export function useCalculator({
             };
           })
         );
+        if (shouldResetProducts) {
+          priceListResetRequested.current = '';
+          setFormulaProductSelections({});
+          setFormulaProductSnapshots({});
+        }
       }
     }
   }, [
@@ -571,7 +596,10 @@ export function useCalculator({
   };
 
   const handleFactorChange = (field: keyof PricingFactors, value: string | number | boolean) => {
-    setFactors({ ...factors, [field]: value });
+    if (field === 'priceListId') {
+      priceListResetRequested.current = String(value || '');
+    }
+    setFactors((previous) => ({ ...previous, [field]: value }));
   };
 
   const addMacro = () => {
