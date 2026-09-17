@@ -4,7 +4,7 @@ import { User } from '../types';
 import { signIn, resetPassword } from '../services/authService';
 import { updateUser } from '../services/db';
 import { supabase } from '../services/supabase';
-import { isSessionPersistenceEnabled, setSessionPersistence } from '../services/authStorage';
+import { startBrowserSession } from '../services/authStorage';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -22,7 +22,6 @@ export default function Login({
   const [emailOrNickname, setEmailOrNickname] = useState('');
   const [resetEmail, setResetEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [rememberSession, setRememberSession] = useState(isSessionPersistenceEnabled);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -35,7 +34,7 @@ export default function Login({
     setLoading(true);
     setError('');
 
-    setSessionPersistence(rememberSession);
+    startBrowserSession();
     const { user, error: authError } = await signIn(emailOrNickname, password);
 
     if (authError) {
@@ -289,16 +288,7 @@ export default function Login({
                   required
                 />
               </div>
-              <div className="mt-3 flex items-center justify-between gap-3">
-                <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-stone-600">
-                  <input
-                    type="checkbox"
-                    checked={rememberSession}
-                    onChange={(event) => setRememberSession(event.target.checked)}
-                    className="h-4 w-4 rounded border-stone-300 text-emerald-600 focus:ring-emerald-500"
-                  />
-                  Manter conectado neste dispositivo
-                </label>
+              <div className="mt-3 flex items-center justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => {
@@ -312,8 +302,7 @@ export default function Login({
                 </button>
               </div>
               <p className="mt-2 text-[10px] leading-4 text-stone-400">
-                Se esta opção ficar desmarcada, será necessário entrar novamente após fechar o
-                navegador.
+                Sua sessão continuará ativa enquanto o navegador estiver aberto.
               </p>
             </div>
             <button

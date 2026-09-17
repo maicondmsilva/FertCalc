@@ -10,7 +10,16 @@ import {
 import { getLocaisAtivos } from '../services/locaisCarregamentoService';
 import { getProdutoFormuladoBySavedFormulaId } from '../services/produtosFormuladosService';
 import { addHistoricoPrecos } from '../services/historicoPrecoService';
-import { SavedFormula, User, PriceList, AppSettings, Client, Embalagem, Brand } from '../types';
+import {
+  SavedFormula,
+  User,
+  PriceList,
+  PriceListCurrency,
+  AppSettings,
+  Client,
+  Embalagem,
+  Brand,
+} from '../types';
 import { getEmbalagens } from '../services/embalagensService';
 import { LocalCarregamento } from '../types/carregamento';
 import { formatId } from '../utils/formatId';
@@ -44,6 +53,7 @@ import {
   ReportCommercialFactors,
 } from '../utils/savedFormulaWorkflow';
 import Calculator from './Calculator';
+import { formatPricingMoney } from '../utils/pricingCurrency';
 
 interface SavedFormulasProps {
   currentUser: User;
@@ -75,13 +85,24 @@ interface ReportFactorsFormProps {
   id: string;
   factors: ReportCommercialFactors;
   embalagens: Embalagem[];
+  currency: PriceListCurrency;
+  exchangeRate?: number;
   onChange: <K extends keyof ReportCommercialFactors>(
     field: K,
     value: ReportCommercialFactors[K]
   ) => void;
 }
 
-function ReportFactorsForm({ id, factors, embalagens, onChange }: ReportFactorsFormProps) {
+const getListCurrency = (list?: PriceList): PriceListCurrency => list?.currency ?? 'BRL';
+
+function ReportFactorsForm({
+  id,
+  factors,
+  embalagens,
+  currency,
+  exchangeRate,
+  onChange,
+}: ReportFactorsFormProps) {
   const selectedPackage = embalagens.find((item) => item.id === factors.embalagem_id);
   const packageAdjustment = factors.embalagem_ajuste || 'nenhum';
 
@@ -91,10 +112,14 @@ function ReportFactorsForm({ id, factors, embalagens, onChange }: ReportFactorsF
       onChange('embalagem_valor', 0);
       return;
     }
-    const value =
+    const registeredValue =
       adjustment === 'cobrar'
         ? Number(selectedPackage.valor_cobrar ?? selectedPackage.valor ?? 0)
         : -Number(selectedPackage.valor_descontar ?? selectedPackage.valor ?? 0);
+    const value =
+      currency === 'USD' && Number(exchangeRate) > 0
+        ? registeredValue / Number(exchangeRate)
+        : registeredValue;
     onChange('embalagem_valor', value);
   };
 
@@ -111,7 +136,7 @@ function ReportFactorsForm({ id, factors, embalagens, onChange }: ReportFactorsF
         />
       </label>
       <label className="text-xs font-medium text-stone-600">
-        Desconto (R$/t)
+        Desconto ({currency}/t)
         <input
           type="number"
           step="0.01"
@@ -156,7 +181,7 @@ function ReportFactorsForm({ id, factors, embalagens, onChange }: ReportFactorsF
         </div>
       </div>
       <label className="text-xs font-medium text-stone-600">
-        Frete (R$/t)
+        Frete ({currency}/t)
         <input
           type="number"
           step="0.01"
@@ -359,6 +384,7 @@ function ModalGerarRelatorio({
 
   const getFactors = (formulaId: string) =>
     applyToAll ? globalFactors : perFormulaFactors[formulaId] || DEFAULT_REPORT_COMMERCIAL_FACTORS;
+  const reportCurrency = getListCurrency(selectedList);
 
   const calcPrecoFinal = (formula: SavedFormula): number => {
     const { total } = getFormulaCost(formula, selectedList);
@@ -439,18 +465,14 @@ function ModalGerarRelatorio({
           formula.name,
           formula.targetFormula,
           Number(reportFactors.totalTons || 0).toLocaleString('pt-BR'),
-          precoFinal > 0
-            ? precoFinal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-            : '—',
-          totalSale > 0
-            ? totalSale.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-            : '—',
+          precoFinal > 0 ? formatPricingMoney(precoFinal, reportCurrency) : '—',
+          totalSale > 0 ? formatPricingMoney(totalSale, reportCurrency) : '—',
         ];
       });
 
       autoTable(doc, {
         startY: currentY,
-        head: [['ID', 'Produto / Fórmula', 'NPK', 'Ton.', 'Preço R$/t', 'Total']],
+        head: [['ID', 'Produto / Fórmula', 'NPK', 'Ton.', `Preço ${reportCurrency}/t`, 'Total']],
         body: tableBody,
         styles: { fontSize: 9, cellPadding: 4, font: 'helvetica' },
         headStyles: { fillColor: [16, 124, 65], textColor: 255, fontStyle: 'bold' },
@@ -551,7 +573,11 @@ function ModalGerarRelatorio({
               preco_final: finalPrice,
               quantidade_tons: reportFactors.totalTons,
               valor_total: finalPrice * Number(reportFactors.totalTons || 0),
-              fatores_comerciais: { ...reportFactors },
+              fatores_comerciais: {
+                ...reportFactors,
+                priceListCurrency: reportCurrency,
+                priceListExchangeRate: selectedList?.exchangeRate,
+              },
               origem: 'relatorio_precos' as const,
               registrado_por: currentUser.name,
             };
@@ -707,6 +733,8 @@ function ModalGerarRelatorio({
                 id="all"
                 factors={globalFactors}
                 embalagens={embalagens}
+                currency={reportCurrency}
+                exchangeRate={selectedList?.exchangeRate}
                 onChange={(field, value) =>
                   setGlobalFactors((current) => ({ ...current, [field]: value }))
                 }
@@ -726,6 +754,8 @@ function ModalGerarRelatorio({
                     id={formula.id}
                     factors={perFormulaFactors[formula.id] || DEFAULT_REPORT_COMMERCIAL_FACTORS}
                     embalagens={embalagens}
+                    currency={reportCurrency}
+                    exchangeRate={selectedList?.exchangeRate}
                     onChange={(field, value) =>
                       setPerFormulaFactors((current) => ({
                         ...current,
@@ -755,12 +785,7 @@ function ModalGerarRelatorio({
                       {formatId(formula.id_numeric, 'BAT-')} — {formula.name}
                     </span>
                     <span className="font-bold text-emerald-700">
-                      {precoFinal > 0
-                        ? precoFinal.toLocaleString('pt-BR', {
-                            style: 'currency',
-                            currency: 'BRL',
-                          })
-                        : '—'}
+                      {precoFinal > 0 ? formatPricingMoney(precoFinal, reportCurrency) : '—'}
                     </span>
                   </div>
                 );
@@ -992,6 +1017,7 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
   }
 
   const selectedList = compatiblePriceLists.find((l) => l.id === selectedPriceListId);
+  const selectedCurrency = getListCurrency(selectedList);
 
   // Batidas belong to the organization and can be priced at every loading location.
   const normalizedSearch = formulaSearch.trim().toLocaleLowerCase('pt-BR');
@@ -1371,10 +1397,7 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
                           <p className="text-xs text-stone-500">Custo Total (por Ton)</p>
                           <p className="text-lg font-black text-stone-800">
                             {selectedList
-                              ? results.total.toLocaleString('pt-BR', {
-                                  style: 'currency',
-                                  currency: 'BRL',
-                                })
+                              ? formatPricingMoney(results.total, selectedCurrency)
                               : 'Selecione uma tabela'}
                           </p>
                         </div>
