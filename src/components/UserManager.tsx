@@ -17,12 +17,13 @@ import {
   Check,
 } from 'lucide-react';
 import { User, Branch } from '../types';
-import { getUsers, updateUser, deleteUser, getBranches } from '../services/db';
+import { getUsers, deleteUser, getBranches } from '../services/db';
 import { closeModalOnBackdrop } from '../utils/modalUtils';
 import {
   createAuthUser,
   adminUpdateAuthPassword,
   adminDeleteAuthUser,
+  adminUpdateAuthUser,
 } from '../services/authService';
 import { useToast } from './Toast';
 import { useConfirm } from '../hooks/useConfirm';
@@ -229,21 +230,6 @@ function getRoleBadgeClass(role: string): string {
       return 'bg-amber-100 text-amber-700';
     default:
       return 'bg-green-100 text-green-700';
-  }
-}
-
-function getRoleLabel(role: string): string {
-  switch (role) {
-    case 'master':
-      return 'Master';
-    case 'admin':
-      return 'Administrador';
-    case 'manager':
-      return 'Gerente';
-    case 'transportadora':
-      return 'Transportadora';
-    default:
-      return 'Vendedor';
   }
 }
 
@@ -472,16 +458,19 @@ export default function UserManager({ currentUser }: UserManagerProps) {
         ) {
           throw new Error('Você não tem permissão para atribuir este nível de acesso.');
         }
-        await updateUser(editingId, {
+        const updateResult = await adminUpdateAuthUser({
+          user_id: editingId,
           name: formData.name,
           email: normalizedEmail,
           nickname: formData.nickname,
           role: formData.role,
           ativo: formData.ativo,
-          managedUserIds: formData.role === 'manager' ? formData.managedUserIds : [],
+          managed_user_ids: formData.role === 'manager' ? formData.managedUserIds : [],
           permissions: formData.permissions,
           filiais_permitidas: formData.filiais_permitidas,
+          access_profile_id: appliedProfileId || undefined,
         });
+        if (!updateResult.success) throw new Error(updateResult.error || 'Erro ao atualizar usuário.');
       } else {
         const authResult = await createAuthUser({
           email: normalizedEmail,
@@ -494,6 +483,7 @@ export default function UserManager({ currentUser }: UserManagerProps) {
           managed_user_ids: formData.role === 'manager' ? formData.managedUserIds : [],
           permissions: formData.permissions as Record<string, unknown>,
           filiais_permitidas: formData.filiais_permitidas,
+          access_profile_id: appliedProfileId || undefined,
         });
         if (!authResult.success) {
           showError(`Erro ao criar autenticação: ${authResult.error || 'Erro desconhecido'}`);
@@ -539,7 +529,7 @@ export default function UserManager({ currentUser }: UserManagerProps) {
       (basePerms as any)?.carregamento_all_filiais ??
       !(Array.isArray(carregamentoFilialIds) && carregamentoFilialIds.length > 0);
     setEditingId(user.id);
-    setAppliedProfileId('');
+    setAppliedProfileId(user.accessProfileId || '');
     setFormData({
       name: user.name,
       email: user.email,
@@ -605,7 +595,10 @@ export default function UserManager({ currentUser }: UserManagerProps) {
       u.name.toLowerCase().includes(q) ||
       u.email.toLowerCase().includes(q) ||
       (u.nickname || '').toLowerCase().includes(q) ||
-      getRoleLabel(u.role).toLowerCase().includes(q) ||
+      (accessLevelsByCode.get(u.role)?.name || u.role).toLowerCase().includes(q) ||
+      (accessProfiles.find((profile) => profile.id === u.accessProfileId)?.name || '')
+        .toLowerCase()
+        .includes(q) ||
       branchNames.includes(q)
     );
   });
@@ -1327,6 +1320,8 @@ export default function UserManager({ currentUser }: UserManagerProps) {
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {filteredUsers.map((user) => {
             const initials = getInitials(user.name);
+            const accessProfile = accessProfiles.find((profile) => profile.id === user.accessProfileId);
+            const accessLevelName = accessLevelsByCode.get(user.role)?.name || user.role;
             const userBranches = (user.filiais_permitidas || [])
               .map((id) => branches.find((b) => b.id === id)?.name)
               .filter(Boolean) as string[];
@@ -1351,14 +1346,15 @@ export default function UserManager({ currentUser }: UserManagerProps) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-bold text-stone-800 truncate">{user.name}</p>
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase flex-shrink-0 ${getRoleBadgeClass(user.role)}`}
-                      >
-                        {getRoleLabel(user.role)}
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase flex-shrink-0 bg-emerald-100 text-emerald-700">
+                        {accessProfile?.name || 'Sem perfil'}
                       </span>
                     </div>
                     <p className="text-xs text-stone-500 truncate">{user.email}</p>
                     {user.nickname && <p className="text-xs text-stone-400">@{user.nickname}</p>}
+                    <p className={`mt-1 inline-flex px-2 py-0.5 rounded text-[10px] font-semibold ${getRoleBadgeClass(user.role)}`}>
+                      Nível: {accessLevelName}
+                    </p>
                   </div>
                   <div
                     className={`w-2 h-2 rounded-full flex-shrink-0 mt-1 ${user.ativo ? 'bg-emerald-500' : 'bg-red-400'}`}

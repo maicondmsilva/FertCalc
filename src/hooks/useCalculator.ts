@@ -8,6 +8,7 @@ import {
   Client,
   Agent,
   User as AppUser,
+  AppSettings,
   PricingHistoryEntry,
   TargetFormula,
   IncompatibilityRule,
@@ -30,6 +31,7 @@ import {
   getCompatibilityCategories,
   getMacroMaterials,
   getMicroMaterials,
+  getAppSettings,
 } from '../services/db';
 import { useToast } from '../components/Toast';
 import { formatNPK } from '../utils/formatters';
@@ -157,6 +159,12 @@ export function useCalculator({
   const [materialsLoadError, setMaterialsLoadError] = useState<boolean>(false);
   const [incompatibilityRules, setIncompatibilityRules] = useState<IncompatibilityRule[]>([]);
   const [compCategories, setCompCategories] = useState<any[]>([]);
+  const [appSettings, setAppSettings] = useState<AppSettings>({
+    companyName: 'FertCalc Pro',
+    companyLogo: '',
+    defaultFactorBRL: 0.8,
+    defaultFactorUSD: 0,
+  });
 
   const isLocked = initialData && initialData.status !== 'Em Andamento';
 
@@ -281,6 +289,7 @@ export function useCalculator({
           savedCategories,
           savedCatalogMacros,
           savedCatalogMicros,
+          savedAppSettings,
         ] = await Promise.all([
           getBranches(),
           getPriceLists(),
@@ -290,6 +299,7 @@ export function useCalculator({
           getCompatibilityCategories(),
           getMacroMaterials(),
           getMicroMaterials(),
+          getAppSettings(),
         ]);
         setBranches(savedBranches);
         setPriceLists(savedLists);
@@ -299,6 +309,7 @@ export function useCalculator({
         setCompCategories(savedCategories);
         setCatalogMacros(savedCatalogMacros);
         setCatalogMicros(savedCatalogMicros);
+        if (savedAppSettings) setAppSettings(savedAppSettings);
       } catch (error) {
         console.error('[useCalculator] Falha ao carregar dados da calculadora:', error);
         showError(
@@ -379,6 +390,10 @@ export function useCalculator({
       const selectedList = priceLists.find((l) => l.id === factors.priceListId);
       if (selectedList) {
         const currencySnapshot = getPriceListCurrencySnapshot(selectedList);
+        const defaultFactor =
+          currencySnapshot.priceListCurrency === 'USD'
+            ? (appSettings.defaultFactorUSD ?? 0)
+            : (appSettings.defaultFactorBRL ?? 0.8);
         const shouldRefreshCurrencySnapshot =
           currencySnapshotPriceListId.current !== selectedList.id;
         const shouldResetProducts = priceListResetRequested.current === selectedList.id;
@@ -387,6 +402,7 @@ export function useCalculator({
           setFactors((previousFactors) => ({
             ...previousFactors,
             ...currencySnapshot,
+            ...(!initialData ? { factor: defaultFactor } : {}),
           }));
         }
         const canViewExtraProducts =
@@ -398,6 +414,7 @@ export function useCalculator({
         const extraMacros = canViewExtraProducts
           ? catalogMacros.filter(
               (material) =>
+                material.ativo !== false &&
                 isExtraProductAvailableAtLocation(material, factors.local_carregamento_id) &&
                 !listedMacroIds.has(material.id)
             )
@@ -405,13 +422,17 @@ export function useCalculator({
         const extraMicros = canViewExtraProducts
           ? catalogMicros.filter(
               (material) =>
+                material.ativo !== false &&
                 isExtraProductAvailableAtLocation(material, factors.local_carregamento_id) &&
                 !listedMicroIds.has(material.id)
             )
           : [];
         // Macros da Linha Diferenciada chegam desmarcadas por padrão
         const newMacros = [
-          ...selectedList.macros.map((material) => ({
+          ...selectedList.macros.filter((material) => {
+            const catalogMaterial = catalogMacros.find((item) => item.id === material.id);
+            return catalogMaterial?.ativo !== false;
+          }).map((material) => ({
             ...withOfficialListPrice(material),
             isOutsidePriceList: false,
             selected: !material.isPremiumLine,
@@ -436,7 +457,10 @@ export function useCalculator({
         ];
         // Micros chegam sempre desmarcados — usuário escolhe quais usar
         const newMicros = [
-          ...selectedList.micros.map((material) => ({
+          ...selectedList.micros.filter((material) => {
+            const catalogMaterial = catalogMicros.find((item) => item.id === material.id);
+            return catalogMaterial?.ativo !== false;
+          }).map((material) => ({
             ...withOfficialListPrice(material),
             isOutsidePriceList: false,
             selected: false,
@@ -473,13 +497,22 @@ export function useCalculator({
                 newMacros,
                 newMicros,
                 selectedList.id,
-                currencySnapshot
+                currencySnapshot,
+                defaultFactor
               );
             }
 
             if (!calc.selected) {
               return shouldRefreshCurrencySnapshot
-                ? { ...calc, factors: { ...calc.factors, ...currencySnapshot }, summary: undefined }
+                ? {
+                    ...calc,
+                    factors: {
+                      ...calc.factors,
+                      ...currencySnapshot,
+                      ...(!initialData ? { factor: defaultFactor } : {}),
+                    },
+                    summary: undefined,
+                  }
                 : calc;
             }
 
@@ -514,7 +547,11 @@ export function useCalculator({
             return {
               ...calc,
               factors: shouldRefreshCurrencySnapshot
-                ? { ...calc.factors, ...currencySnapshot }
+                ? {
+                    ...calc.factors,
+                    ...currencySnapshot,
+                    ...(!initialData ? { factor: defaultFactor } : {}),
+                  }
                 : calc.factors,
               macros: updatedCalcMacros,
               micros: updatedCalcMicros,
@@ -531,9 +568,12 @@ export function useCalculator({
   }, [
     catalogMacros,
     catalogMicros,
+    appSettings.defaultFactorBRL,
+    appSettings.defaultFactorUSD,
     currentUser,
     factors.local_carregamento_id,
     factors.priceListId,
+    initialData,
     priceLists,
   ]);
 
@@ -1132,7 +1172,9 @@ export function useCalculator({
       return;
     }
 
-    const selectedCalculations = updatedCalculations.filter((calculation) => calculation.selected);
+    const selectedCalculations: TargetFormula[] = updatedCalculations.filter(
+      (calculation) => calculation.selected
+    );
     const selectedCalculation = selectedCalculations[0];
 
     // Merge global factors with selected calculation's factors (CIF/FOB, freight)
@@ -1241,6 +1283,13 @@ export function useCalculator({
               formula_nome: calculation.formula,
               preco_base: calculation.summary.baseCost,
               preco_final: calculation.summary.finalPrice,
+              moeda: calculationFactors.priceListCurrency || 'BRL',
+              taxa_cambio:
+                calculationFactors.appliedExchangeRate || calculationFactors.priceListExchangeRate,
+              preco_final_brl:
+                calculationFactors.priceListCurrency === 'USD'
+                  ? calculation.summary.finalPriceBRL
+                  : calculation.summary.finalPrice,
               quantidade_tons: calculationFactors.totalTons,
               valor_total: calculation.summary.totalSaleValue,
               fatores_comerciais: {

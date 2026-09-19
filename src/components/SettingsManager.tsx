@@ -17,7 +17,9 @@ export default function SettingsManager() {
 
   const [settings, setSettings] = useState<AppSettings>({
     companyName: 'FertCalc Pro',
-    companyLogo: ''
+    companyLogo: '',
+    defaultFactorBRL: 0.8,
+    defaultFactorUSD: 0,
   });
 
   useEffect(() => {
@@ -38,8 +40,16 @@ export default function SettingsManager() {
   };
 
   const saveSettings = async () => {
-    await saveAppSettings(settings);
-    showSuccess('Configurações salvas com sucesso!');
+    if ((settings.defaultFactorBRL ?? 0) < 0 || (settings.defaultFactorUSD ?? 0) < 0) {
+      showError('Os fatores padrão não podem ser negativos.');
+      return;
+    }
+    try {
+      await saveAppSettings(settings);
+      showSuccess('Configurações salvas com sucesso!');
+    } catch (error) {
+      showError(`Erro ao salvar configurações: ${error instanceof Error ? error.message : 'Tente novamente.'}`);
+    }
   };
 
   const handleBackup = () => {
@@ -295,6 +305,31 @@ export default function SettingsManager() {
                 <FileText className="w-4 h-4 mr-2" /> Módulo Precificação
               </h4>
               <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-emerald-600 uppercase mb-1">Fator padrão — Real</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={settings.defaultFactorBRL ?? 0.8}
+                      onChange={(event) => setSettings({ ...settings, defaultFactorBRL: Math.max(0, Number(event.target.value)) })}
+                      className="w-full px-3 py-2 border border-emerald-200 rounded-lg focus:ring-2 focus:ring-emerald-500 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-emerald-600 uppercase mb-1">Fator padrão — Dólar</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={settings.defaultFactorUSD ?? 0}
+                      onChange={(event) => setSettings({ ...settings, defaultFactorUSD: Math.max(0, Number(event.target.value)) })}
+                      className="w-full px-3 py-2 border border-emerald-200 rounded-lg focus:ring-2 focus:ring-emerald-500 text-sm"
+                    />
+                    <p className="mt-1 text-[10px] text-emerald-700">Zero não altera o custo da lista em dólar.</p>
+                  </div>
+                </div>
                 <div>
                   <label className="block text-[10px] font-bold text-emerald-600 uppercase mb-1">Termos Comerciais Padrão</label>
                   <textarea

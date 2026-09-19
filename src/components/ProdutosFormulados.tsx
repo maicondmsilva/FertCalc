@@ -46,6 +46,7 @@ export default function ProdutosFormulados() {
   const [historyPriceListId, setHistoryPriceListId] = useState('');
   const [historyDateFrom, setHistoryDateFrom] = useState('');
   const [historyDateTo, setHistoryDateTo] = useState('');
+  const [historyCurrency, setHistoryCurrency] = useState<'BRL' | 'USD'>('BRL');
 
   useEffect(() => {
     loadData();
@@ -137,7 +138,7 @@ export default function ProdutosFormulados() {
       priceListId: historyPriceListId || undefined,
       dateFrom: historyDateFrom || undefined,
       dateTo: historyDateTo || undefined,
-    });
+    }).filter((history) => (history.moeda || 'BRL') === historyCurrency);
 
   if (loading) {
     return (
@@ -192,7 +193,15 @@ export default function ProdutosFormulados() {
           <TrendingUp className="w-4 h-4 text-emerald-600" />
           <p className="text-sm font-bold text-stone-700">Filtros do histórico de preços</p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
+          <select
+            value={historyCurrency}
+            onChange={(event) => setHistoryCurrency(event.target.value as 'BRL' | 'USD')}
+            className="text-sm border border-stone-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500"
+          >
+            <option value="BRL">Preços em reais</option>
+            <option value="USD">Preços em dólar</option>
+          </select>
           <select
             value={historyLocalId}
             onChange={(e) => {
@@ -410,13 +419,13 @@ export default function ProdutosFormulados() {
                                   <YAxis
                                     tick={{ fontSize: 10, fill: '#78716c' }}
                                     tickFormatter={(v) =>
-                                      `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`
+                                      `${historyCurrency === 'USD' ? 'US$' : 'R$'} ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`
                                     }
                                   />
                                   <Tooltip
                                     formatter={(value: number, name: string, item) => [
-                                      `R$ ${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · ${item.payload.local} · ${item.payload.lista}`,
-                                      name === 'preco' ? 'Preço R$/t' : name,
+                                      `${historyCurrency === 'USD' ? 'US$' : 'R$'} ${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · ${item.payload.local} · ${item.payload.lista}`,
+                                      name === 'preco' ? `Preço ${historyCurrency}/t` : name,
                                     ]}
                                   />
                                   <Line
@@ -436,7 +445,8 @@ export default function ProdutosFormulados() {
                                       <th className="px-3 py-2 text-left">Data</th>
                                       <th className="px-3 py-2 text-left">Local</th>
                                       <th className="px-3 py-2 text-left">Lista</th>
-                                      <th className="px-3 py-2 text-right">Preço R$/t</th>
+                                      <th className="px-3 py-2 text-right">Preço {historyCurrency}/t</th>
+                                      <th className="px-3 py-2 text-right">Câmbio</th>
                                       <th className="px-3 py-2 text-right">Toneladas</th>
                                       <th className="px-3 py-2 text-right">Total</th>
                                       <th className="px-3 py-2 text-left">Origem</th>
@@ -462,8 +472,13 @@ export default function ProdutosFormulados() {
                                           <td className="px-3 py-2 text-right font-semibold">
                                             {history.preco_final.toLocaleString('pt-BR', {
                                               style: 'currency',
-                                              currency: 'BRL',
+                                              currency: history.moeda || 'BRL',
                                             })}
+                                          </td>
+                                          <td className="px-3 py-2 text-right">
+                                            {history.moeda === 'USD' && history.taxa_cambio
+                                              ? `R$ ${history.taxa_cambio.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`
+                                              : '—'}
                                           </td>
                                           <td className="px-3 py-2 text-right">
                                             {history.quantidade_tons?.toLocaleString('pt-BR') ||
@@ -472,7 +487,7 @@ export default function ProdutosFormulados() {
                                           <td className="px-3 py-2 text-right">
                                             {history.valor_total?.toLocaleString('pt-BR', {
                                               style: 'currency',
-                                              currency: 'BRL',
+                                              currency: history.moeda || 'BRL',
                                             }) || '—'}
                                           </td>
                                           <td className="px-3 py-2">

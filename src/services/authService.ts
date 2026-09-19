@@ -25,6 +25,48 @@ export interface CreateAuthUserPayload {
   permissions?: Record<string, unknown>;
   filiais_permitidas?: string[];
   requer_alteracao_senha?: boolean;
+  access_profile_id?: string;
+}
+
+export interface UpdateAuthUserPayload {
+  user_id: string;
+  email: string;
+  name: string;
+  nickname: string;
+  role: string;
+  ativo: boolean;
+  managed_user_ids: string[];
+  permissions: Record<string, unknown>;
+  filiais_permitidas: string[];
+  access_profile_id?: string;
+}
+
+export async function adminUpdateAuthUser(
+  payload: UpdateAuthUserPayload
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) return { success: false, error: 'Usuário não autenticado' };
+    const response = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-update-user`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify(payload),
+      }
+    );
+    const body = (await response.json().catch(() => ({}))) as { error?: string };
+    return response.ok
+      ? { success: true }
+      : { success: false, error: body.error || 'Erro ao atualizar usuário' };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 /**

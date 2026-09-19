@@ -6,7 +6,8 @@ export function resetCalculationForPriceList(
   macros: RawMaterial[],
   micros: RawMaterial[],
   priceListId: string,
-  currencySnapshot: PriceListCurrencySnapshot
+  currencySnapshot: PriceListCurrencySnapshot,
+  defaultFactor?: number
 ): TargetFormula {
   return {
     ...calculation,
@@ -16,6 +17,7 @@ export function resetCalculationForPriceList(
       ...calculation.factors,
       priceListId,
       ...currencySnapshot,
+      ...(defaultFactor !== undefined ? { factor: defaultFactor } : {}),
     },
     macros: macros.map((material) => ({ ...material })),
     micros: micros.map((material) => ({ ...material })),

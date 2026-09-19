@@ -19,6 +19,9 @@ export interface HistoricoPrecoFormulado {
   valor_total?: number;
   fatores_comerciais?: Record<string, unknown>;
   origem?: 'precificacao' | 'relatorio_precos';
+  moeda?: 'BRL' | 'USD';
+  taxa_cambio?: number;
+  preco_final_brl?: number;
 }
 
 function mapHistorico(d: Record<string, unknown>): HistoricoPrecoFormulado {
@@ -41,6 +44,9 @@ function mapHistorico(d: Record<string, unknown>): HistoricoPrecoFormulado {
     valor_total: d.valor_total != null ? Number(d.valor_total) : undefined,
     fatores_comerciais: (d.fatores_comerciais || {}) as Record<string, unknown>,
     origem: d.origem as HistoricoPrecoFormulado['origem'],
+    moeda: (d.moeda as HistoricoPrecoFormulado['moeda']) || 'BRL',
+    taxa_cambio: d.taxa_cambio != null ? Number(d.taxa_cambio) : undefined,
+    preco_final_brl: d.preco_final_brl != null ? Number(d.preco_final_brl) : undefined,
   };
 }
 
@@ -85,6 +91,9 @@ export async function addHistoricoPrecos(
       valor_total: entry.valor_total ?? null,
       fatores_comerciais: entry.fatores_comerciais ?? {},
       origem: entry.origem ?? 'precificacao',
+      moeda: entry.moeda ?? 'BRL',
+      taxa_cambio: entry.taxa_cambio ?? null,
+      preco_final_brl: entry.preco_final_brl ?? entry.preco_final,
     }))
   );
   if (error) {

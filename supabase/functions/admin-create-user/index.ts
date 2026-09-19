@@ -12,6 +12,7 @@ type CreateUserPayload = {
   permissions?: Record<string, unknown>;
   filiais_permitidas?: string[];
   requer_alteracao_senha?: boolean;
+  access_profile_id?: string;
 };
 
 function jsonResponse(body: Record<string, unknown>, status: number) {
@@ -142,6 +143,7 @@ Deno.serve(async (req: Request) => {
       permissions: payload.permissions ?? {},
       filiais_permitidas: payload.filiais_permitidas ?? [],
       requer_alteracao_senha: payload.requer_alteracao_senha ?? true,
+      access_profile_id: payload.access_profile_id || null,
       password: '', // satisfy legacy password column not-null constraint
     });
 
