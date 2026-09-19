@@ -38,7 +38,8 @@ describe('resetCalculationForPriceList', () => {
       [material('macro-novo', 'macro')],
       [material('micro-novo', 'micro')],
       'lista-nova',
-      { priceListCurrency: 'USD', priceListExchangeRate: 5.2, appliedExchangeRate: 5.2 }
+      { priceListCurrency: 'USD', priceListExchangeRate: 5.2, appliedExchangeRate: 5.2 },
+      0
     );
 
     expect(updated.category).toBe('all');
@@ -49,6 +50,7 @@ describe('resetCalculationForPriceList', () => {
       priceListId: 'lista-nova',
       priceListCurrency: 'USD',
       appliedExchangeRate: 5.2,
+      factor: 0,
     });
     expect(updated.summary).toBeUndefined();
   });

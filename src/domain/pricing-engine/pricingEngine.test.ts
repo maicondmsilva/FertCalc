@@ -187,7 +187,7 @@ describe('pricing engine compatibility', () => {
     expect(result.finalPrice).toBe(result.basePrice);
   });
 
-  it('mantém o preço em USD e calcula todos os equivalentes em BRL', () => {
+  it('desconta em USD e aplica frete e encargos fixos em BRL sem alterar a cascata', () => {
     const result = calculatePricingSummary(
       [material],
       [],
@@ -204,12 +204,35 @@ describe('pricing engine compatibility', () => {
 
     expect(result.currency).toBe('USD');
     expect(result.baseCost).toBe(100);
-    expect(result.finalPrice).toBe(110);
+    expect(result.finalPrice).toBe(102);
     expect(result.baseCostBRL).toBe(500);
-    expect(result.freightValueBRL).toBe(50);
-    expect(result.finalPriceBRL).toBe(550);
-    expect(result.totalSaleValueBRL).toBe(1100);
+    expect(result.freightValueBRL).toBe(10);
+    expect(result.finalPriceBRL).toBe(510);
+    expect(result.totalSaleValueBRL).toBe(1020);
     expect(result.exchangeRateSource).toBe('list');
+  });
+
+  it('trata fator USD zero como neutro e desconto antes da conversão', () => {
+    const result = calculatePricingSummary(
+      [{ ...material, price: 1000, quantity: 1000 }],
+      [],
+      factors({
+        factor: 0,
+        discount: 10,
+        priceListCurrency: 'USD',
+        appliedExchangeRate: 5,
+        exchangeRateSource: 'manual',
+        embalagem_valor: 20,
+        freight: 30,
+        tipoFrete: 'CIF',
+      })
+    );
+
+    expect(result.baseCost).toBe(1000);
+    expect(result.basePriceBRL).toBe(4970);
+    expect(result.freightValueBRL).toBe(30);
+    expect(result.finalPriceBRL).toBe(5000);
+    expect(result.finalPrice).toBe(1000);
   });
 
   it('prioriza o câmbio manual e registra sua origem', () => {

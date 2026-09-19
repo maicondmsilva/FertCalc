@@ -571,6 +571,12 @@ function ModalGerarRelatorio({
               formula_nome: formula.name,
               preco_base: baseCost,
               preco_final: finalPrice,
+              moeda: reportCurrency,
+              taxa_cambio: reportCurrency === 'USD' ? selectedList?.exchangeRate : undefined,
+              preco_final_brl:
+                reportCurrency === 'USD'
+                  ? finalPrice * Number(selectedList?.exchangeRate || 0)
+                  : finalPrice,
               quantidade_tons: reportFactors.totalTons,
               valor_total: finalPrice * Number(reportFactors.totalTons || 0),
               fatores_comerciais: {

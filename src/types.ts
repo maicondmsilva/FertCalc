@@ -33,6 +33,7 @@ export interface UnifiedProduct {
   extraLoadingLocationIds?: string[];
   description?: string;
   price?: number;
+  ativo?: boolean;
 }
 
 export interface MicroGuarantee {
@@ -79,6 +80,7 @@ export interface RawMaterial {
   availableInCalculatorWithoutPriceList?: boolean;
   extraLoadingLocationIds?: string[];
   isOutsidePriceList?: boolean;
+  ativo?: boolean;
 }
 
 export interface CompatibilityCategory {
@@ -99,6 +101,7 @@ export interface User {
   nickname: string;
   ativo: boolean;
   role: string;
+  accessProfileId?: string;
   managedUserIds?: string[];
   filiais_permitidas?: string[]; // array de UUIDs de branches permitidas
   requer_alteracao_senha?: boolean;
@@ -259,6 +262,8 @@ export interface AppSettings {
   companyLogo: string; // Base64
   companyCnpj?: string;
   pricingTerms?: string;
+  defaultFactorBRL?: number;
+  defaultFactorUSD?: number;
 }
 
 export interface Address {
@@ -367,6 +372,7 @@ export interface MacroMaterial {
   minQuantity?: number;
   availableInCalculatorWithoutPriceList?: boolean;
   extraLoadingLocationIds?: string[];
+  ativo?: boolean;
 }
 
 export interface MicroMaterial {
@@ -381,6 +387,7 @@ export interface MicroMaterial {
   isPremiumLine?: boolean;
   availableInCalculatorWithoutPriceList?: boolean;
   extraLoadingLocationIds?: string[];
+  ativo?: boolean;
 }
 
 export interface ProfitabilityAnalysis {

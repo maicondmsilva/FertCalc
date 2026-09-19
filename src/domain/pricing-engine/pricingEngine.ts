@@ -101,6 +101,7 @@ export function calculatePricingSummary(
 ): PricingSummary {
   const composition = calculateMaterialComposition(macros, micros);
   const adjustedCost = roundMoney(composition.baseCost * (numberOrZero(factors.factor) || 1));
+  const currencyContext = getPricingCurrencyContext(factors);
   const days = calculateInterestDays(
     factors.dueDate,
     Boolean(factors.exemptCurrentMonth),
@@ -108,9 +109,17 @@ export function calculatePricingSummary(
     factors.interestStartDate
   );
   const freightType = factors.tipoFrete ?? (numberOrZero(factors.freight) > 0 ? 'CIF' : 'FOB');
+  const useMixedCurrencyWaterfall =
+    currencyContext.currency === 'USD' &&
+    currencyContext.exchangeRateValid &&
+    currencyContext.exchangeRate !== undefined;
+  const exchangeRate = currencyContext.exchangeRate ?? 1;
+  const adjustedCostForWaterfall = useMixedCurrencyWaterfall
+    ? roundMoney((adjustedCost - numberOrZero(factors.discount)) * exchangeRate)
+    : adjustedCost;
   const commercial = applyCommercialWaterfall({
-    adjustedCost,
-    discount: factors.discount,
+    adjustedCost: adjustedCostForWaterfall,
+    discount: useMixedCurrencyWaterfall ? 0 : factors.discount,
     packagingAdjustment: factors.embalagem_valor,
     monthlyInterestRate: factors.monthlyInterestRate,
     interestDays: days,
@@ -118,10 +127,15 @@ export function calculatePricingSummary(
     taxRate: factors.taxRate,
     freight: freightType === 'CIF' ? factors.freight : 0,
   });
-  const { basePrice, interestValue, taxValue, commissionValue, freightValue, finalPrice } =
-    commercial;
+  const toSourceCurrency = (value: number) =>
+    useMixedCurrencyWaterfall ? roundMoney(value / exchangeRate) : value;
+  const basePrice = toSourceCurrency(commercial.basePrice);
+  const interestValue = toSourceCurrency(commercial.interestValue);
+  const taxValue = toSourceCurrency(commercial.taxValue);
+  const commissionValue = toSourceCurrency(commercial.commissionValue);
+  const freightValue = toSourceCurrency(commercial.freightValue);
+  const finalPrice = toSourceCurrency(commercial.finalPrice);
   const totalSaleValue = roundMoney(finalPrice * numberOrZero(factors.totalTons));
-  const currencyContext = getPricingCurrencyContext(factors);
 
   return {
     ...composition,
@@ -137,12 +151,14 @@ export function calculatePricingSummary(
     finalPrice,
     totalSaleValue,
     baseCostBRL: convertPriceToBRL(composition.baseCost, currencyContext),
-    basePriceBRL: convertPriceToBRL(basePrice, currencyContext),
-    interestValueBRL: convertPriceToBRL(interestValue, currencyContext),
-    taxValueBRL: convertPriceToBRL(taxValue, currencyContext),
-    commissionValueBRL: convertPriceToBRL(commissionValue, currencyContext),
-    freightValueBRL: convertPriceToBRL(freightValue, currencyContext),
-    finalPriceBRL: convertPriceToBRL(finalPrice, currencyContext),
-    totalSaleValueBRL: convertPriceToBRL(totalSaleValue, currencyContext),
+    basePriceBRL: useMixedCurrencyWaterfall ? commercial.basePrice : convertPriceToBRL(basePrice, currencyContext),
+    interestValueBRL: useMixedCurrencyWaterfall ? commercial.interestValue : convertPriceToBRL(interestValue, currencyContext),
+    taxValueBRL: useMixedCurrencyWaterfall ? commercial.taxValue : convertPriceToBRL(taxValue, currencyContext),
+    commissionValueBRL: useMixedCurrencyWaterfall ? commercial.commissionValue : convertPriceToBRL(commissionValue, currencyContext),
+    freightValueBRL: useMixedCurrencyWaterfall ? commercial.freightValue : convertPriceToBRL(freightValue, currencyContext),
+    finalPriceBRL: useMixedCurrencyWaterfall ? commercial.finalPrice : convertPriceToBRL(finalPrice, currencyContext),
+    totalSaleValueBRL: useMixedCurrencyWaterfall
+      ? roundMoney(commercial.finalPrice * numberOrZero(factors.totalTons))
+      : convertPriceToBRL(totalSaleValue, currencyContext),
   };
 }

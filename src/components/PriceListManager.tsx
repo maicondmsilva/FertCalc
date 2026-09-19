@@ -486,12 +486,12 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
   ) => setMicros((prev) => prev.map((m) => (m.id === id ? { ...m, [field]: value } : m)));
 
   const addMacrosFromModal = (ids: string[]) => {
-    const toAdd = allMacros.filter((m) => ids.includes(m.id) && !macros.some((x) => x.id === m.id));
+    const toAdd = allMacros.filter((m) => m.ativo !== false && ids.includes(m.id) && !macros.some((x) => x.id === m.id));
     setMacros((prev) => [...prev, ...toAdd.map(macroToRow)]);
   };
 
   const addMicrosFromModal = (ids: string[]) => {
-    const toAdd = allMicros.filter((m) => ids.includes(m.id) && !micros.some((x) => x.id === m.id));
+    const toAdd = allMicros.filter((m) => m.ativo !== false && ids.includes(m.id) && !micros.some((x) => x.id === m.id));
     setMicros((prev) => [...prev, ...toAdd.map(microToRow)]);
   };
 
@@ -659,7 +659,7 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
       {showMacroModal && (
         <SelectModal
           title="Selecionar Macronutrientes"
-          items={allMacros}
+          items={allMacros.filter((item) => item.ativo !== false)}
           alreadyAdded={macros.map((m) => m.id)}
           onSelect={addMacrosFromModal}
           onClose={() => setShowMacroModal(false)}
@@ -668,7 +668,7 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
       {showMicroModal && (
         <SelectModal
           title="Selecionar Micronutrientes"
-          items={allMicros}
+          items={allMicros.filter((item) => item.ativo !== false)}
           alreadyAdded={micros.map((m) => m.id)}
           onSelect={addMicrosFromModal}
           onClose={() => setShowMicroModal(false)}

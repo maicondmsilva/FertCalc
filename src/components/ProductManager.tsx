@@ -31,6 +31,7 @@ import {
   getUnifiedProducts,
   saveUnifiedProduct,
   deleteUnifiedProduct,
+  updateProductActiveStatus,
   getBrands,
   getCompatibilityCategories,
 } from '../services/db';
@@ -99,6 +100,7 @@ export default function ProductManager() {
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
@@ -143,11 +145,16 @@ export default function ProductManager() {
   };
 
   const currentItems = products.filter((p) => p.type === (tab as NutrientType));
-  const filtered = currentItems.filter(
-    (p) =>
+  const filtered = currentItems.filter((p) => {
+    const matchesSearch =
       p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.code.toLowerCase().includes(search.toLowerCase())
-  );
+      p.code.toLowerCase().includes(search.toLowerCase());
+    const matchesStatus =
+      statusFilter === 'all' ||
+      (statusFilter === 'active' && p.ativo !== false) ||
+      (statusFilter === 'inactive' && p.ativo === false);
+    return matchesSearch && matchesStatus;
+  });
   const filteredEmbalagens = embalagens.filter((e) =>
     e.nome.toLowerCase().includes(search.toLowerCase())
   );
@@ -309,6 +316,21 @@ export default function ProductManager() {
     }
   };
 
+  const handleToggleProductActive = async (item: UnifiedProduct) => {
+    if (item.type !== 'macro' && item.type !== 'micro') return;
+    try {
+      await updateProductActiveStatus(item.id, item.type, item.ativo === false);
+      setProducts((current) =>
+        current.map((product) =>
+          product.id === item.id ? { ...product, ativo: item.ativo === false } : product
+        )
+      );
+      showSuccess(`Produto ${item.ativo === false ? 'ativado' : 'desativado'} com sucesso!`);
+    } catch (error) {
+      showError(`Erro ao alterar status: ${error instanceof Error ? error.message : 'Tente novamente.'}`);
+    }
+  };
+
   const addGuarantee = () =>
     setForm((p) => ({
       ...p,
@@ -374,15 +396,28 @@ export default function ProductManager() {
         ))}
       </div>
 
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
-        <input
+      <div className="flex gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+          <input
           type="text"
           placeholder="Buscar por nome ou código..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full pl-10 pr-4 py-2 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-        />
+          />
+        </div>
+        {(tab === 'macro' || tab === 'micro') && (
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
+            className="rounded-lg border border-stone-200 px-3 py-2 text-sm text-stone-700"
+          >
+            <option value="all">Todos os status</option>
+            <option value="active">Ativos</option>
+            <option value="inactive">Inativos</option>
+          </select>
+        )}
       </div>
 
       {tab !== 'embalagem' ? (
@@ -421,7 +456,7 @@ export default function ProductManager() {
               )}
               {!tableLoading &&
                 filtered.map((item) => (
-                  <tr key={item.id} className="hover:bg-stone-50 transition-colors">
+                  <tr key={item.id} className={`hover:bg-stone-50 transition-colors ${item.ativo === false ? 'opacity-60' : ''}`}>
                     <td className="px-5 py-3 font-mono font-bold text-emerald-600">{item.code}</td>
                     <td className="px-5 py-3 font-medium text-stone-800">
                       <div className="flex items-center gap-1.5">
@@ -435,6 +470,11 @@ export default function ProductManager() {
                         {item.availableInCalculatorWithoutPriceList && (
                           <span className="rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">
                             Extra em {item.extraLoadingLocationIds?.length || 0} local(is)
+                          </span>
+                        )}
+                        {(item.type === 'macro' || item.type === 'micro') && (
+                          <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${item.ativo === false ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-700'}`}>
+                            {item.ativo === false ? 'Inativo' : 'Ativo'}
                           </span>
                         )}
                       </div>
@@ -485,6 +525,15 @@ export default function ProductManager() {
                     )}
                     <td className="px-5 py-3 text-right">
                       <div className="flex justify-end gap-1">
+                        {(item.type === 'macro' || item.type === 'micro') && (
+                          <button
+                            onClick={() => handleToggleProductActive(item)}
+                            className="p-1.5 text-stone-400 hover:text-amber-600 hover:bg-amber-50 rounded"
+                            title={item.ativo === false ? 'Ativar' : 'Desativar'}
+                          >
+                            {item.ativo === false ? <ToggleLeft className="w-4 h-4" /> : <ToggleRight className="w-4 h-4" />}
+                          </button>
+                        )}
                         <button
                           onClick={() => openEdit(item, true)}
                           className="p-1.5 text-stone-400 hover:text-emerald-600 hover:bg-emerald-50 rounded"

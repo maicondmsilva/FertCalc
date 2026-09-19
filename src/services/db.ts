@@ -47,6 +47,8 @@ export async function getAppSettings(): Promise<AppSettings | null> {
     companyLogo: data.company_logo || '',
     companyCnpj: data.company_cnpj,
     pricingTerms: data.pricing_terms,
+    defaultFactorBRL: data.default_factor_brl == null ? 0.8 : Number(data.default_factor_brl),
+    defaultFactorUSD: data.default_factor_usd == null ? 0 : Number(data.default_factor_usd),
   };
 }
 
@@ -57,12 +59,16 @@ export async function saveAppSettings(settings: AppSettings): Promise<void> {
     company_logo: settings.companyLogo,
     company_cnpj: settings.companyCnpj,
     pricing_terms: settings.pricingTerms,
+    default_factor_brl: settings.defaultFactorBRL ?? 0.8,
+    default_factor_usd: settings.defaultFactorUSD ?? 0,
     updated_at: new Date().toISOString(),
   };
   if (existing?.id) {
-    await supabase.from('app_settings').update(payload).eq('id', existing.id);
+    const { error } = await supabase.from('app_settings').update(payload).eq('id', existing.id);
+    if (error) throw error;
   } else {
-    await supabase.from('app_settings').insert(payload);
+    const { error } = await supabase.from('app_settings').insert(payload);
+    if (error) throw error;
   }
 }
 
@@ -109,6 +115,7 @@ export async function createUser(user: Omit<User, 'id'> & { id?: string }): Prom
       permissions: user.permissions || {},
       filiais_permitidas: user.filiais_permitidas || [],
       requer_alteracao_senha: user.requer_alteracao_senha ?? false,
+      access_profile_id: user.accessProfileId || null,
       password: '', // satisfy legacy password column not-null constraint
     })
     .select()
@@ -129,6 +136,7 @@ export async function updateUser(id: string, user: Partial<User>): Promise<void>
   if (user.filiais_permitidas !== undefined) payload.filiais_permitidas = user.filiais_permitidas;
   if (user.requer_alteracao_senha !== undefined)
     payload.requer_alteracao_senha = user.requer_alteracao_senha;
+  if (user.accessProfileId !== undefined) payload.access_profile_id = user.accessProfileId || null;
   const { error } = await supabase.from('app_users').update(payload).eq('id', id);
   if (error) throw error;
 }
@@ -153,6 +161,7 @@ function mapUser(data: Record<string, unknown>): User {
     filiais_permitidas: (data.filiais_permitidas as string[]) || [],
     permissions: data.permissions || {},
     requer_alteracao_senha: !!data.requer_alteracao_senha,
+    accessProfileId: (data.access_profile_id as string | null) || undefined,
   } as User;
 }
 
@@ -462,6 +471,7 @@ function macroToDb(m: Partial<MacroMaterial>) {
   if (m.formulaSuffix !== undefined) d.formula_suffix = m.formulaSuffix;
   if (m.isPremiumLine !== undefined) d.is_premium_line = m.isPremiumLine;
   if (m.minQuantity !== undefined) d.min_quantity = m.minQuantity;
+  if (m.ativo !== undefined) d.ativo = m.ativo;
   if (m.availableInCalculatorWithoutPriceList !== undefined)
     d.available_in_calculator_without_price_list = m.availableInCalculatorWithoutPriceList;
   return d;
@@ -484,6 +494,7 @@ function mapMacro(data: Record<string, unknown>): MacroMaterial {
     formulaSuffix: data.formula_suffix,
     isPremiumLine: data.is_premium_line || false,
     minQuantity: data.min_quantity ? Number(data.min_quantity) : 0,
+    ativo: data.ativo !== false,
     availableInCalculatorWithoutPriceList: data.available_in_calculator_without_price_list || false,
   } as MacroMaterial;
 }
@@ -631,6 +642,7 @@ function microToDb(m: Partial<MicroMaterial>) {
   if (m.formulaSuffix !== undefined) d.formula_suffix = m.formulaSuffix;
   if (m.minQuantity !== undefined) d.min_quantity = m.minQuantity;
   if (m.isPremiumLine !== undefined) d.is_premium_line = m.isPremiumLine;
+  if (m.ativo !== undefined) d.ativo = m.ativo;
   if (m.availableInCalculatorWithoutPriceList !== undefined)
     d.available_in_calculator_without_price_list = m.availableInCalculatorWithoutPriceList;
   return d;
@@ -647,6 +659,7 @@ function mapMicro(data: Record<string, unknown>): MicroMaterial {
     formulaSuffix: data.formula_suffix,
     minQuantity: data.min_quantity ? Number(data.min_quantity) : 0,
     isPremiumLine: data.is_premium_line || false,
+    ativo: data.ativo !== false,
     availableInCalculatorWithoutPriceList: data.available_in_calculator_without_price_list || false,
   } as MicroMaterial;
 }
@@ -744,6 +757,7 @@ export async function getUnifiedProducts(): Promise<UnifiedProduct[]> {
       isPremiumLine: m.isPremiumLine,
       availableInCalculatorWithoutPriceList: m.availableInCalculatorWithoutPriceList,
       extraLoadingLocationIds: m.extraLoadingLocationIds,
+      ativo: m.ativo !== false,
     })),
     ...micros.map((m) => ({
       id: m.id,
@@ -757,6 +771,7 @@ export async function getUnifiedProducts(): Promise<UnifiedProduct[]> {
       isPremiumLine: m.isPremiumLine,
       availableInCalculatorWithoutPriceList: m.availableInCalculatorWithoutPriceList,
       extraLoadingLocationIds: m.extraLoadingLocationIds,
+      ativo: m.ativo !== false,
     })),
     ...finished.map((f) => ({
       id: f.id,
@@ -860,6 +875,19 @@ export async function deleteUnifiedProduct(id: string, type: NutrientType): Prom
   if (type === 'macro') await deleteMacroMaterial(id);
   else if (type === 'micro') await deleteMicroMaterial(id);
   else if (type === 'finished') await deleteFinishedProduct(id);
+}
+
+export async function updateProductActiveStatus(
+  id: string,
+  type: Extract<NutrientType, 'macro' | 'micro'>,
+  ativo: boolean
+): Promise<void> {
+  const table = type === 'macro' ? 'macro_materials' : 'micro_materials';
+  const { error } = await supabase
+    .from(table)
+    .update({ ativo, updated_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw error;
 }
 
 // ============================================================
