@@ -448,6 +448,7 @@ export interface TargetFormula {
   targetK?: number;
   targetCa?: number;
   targetS?: number;
+  targetMicros?: Record<string, number>;
   profitabilityAnalysis?: ProfitabilityAnalysis;
 }
 
@@ -463,6 +464,7 @@ export interface SavedFormula {
   category?: TargetFormula['category'];
   targetCa?: number;
   targetS?: number;
+  targetMicros?: Record<string, number>;
   macros: RawMaterial[];
   micros: RawMaterial[];
   local_carregamento_id?: string;

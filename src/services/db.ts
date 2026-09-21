@@ -1401,6 +1401,7 @@ export async function getSavedFormulas(): Promise<SavedFormula[]> {
     category: d.category as SavedFormula['category'],
     targetCa: d.target_ca != null ? Number(d.target_ca) : undefined,
     targetS: d.target_s != null ? Number(d.target_s) : undefined,
+    targetMicros: (d.target_micros as Record<string, number> | null) || undefined,
     macros: d.macros || [],
     micros: d.micros || [],
     local_carregamento_id: d.local_carregamento_id as string | undefined,
@@ -1423,6 +1424,7 @@ export async function createSavedFormula(formula: Omit<SavedFormula, 'id'>): Pro
       category: formula.category ?? 'all',
       target_ca: formula.targetCa ?? null,
       target_s: formula.targetS ?? null,
+      target_micros: formula.targetMicros ?? {},
       macros: formula.macros,
       micros: formula.micros,
     })
@@ -1443,6 +1445,7 @@ export async function createSavedFormula(formula: Omit<SavedFormula, 'id'>): Pro
     category: data.category as SavedFormula['category'],
     targetCa: data.target_ca != null ? Number(data.target_ca) : undefined,
     targetS: data.target_s != null ? Number(data.target_s) : undefined,
+    targetMicros: (data.target_micros as Record<string, number> | null) || undefined,
     macros: data.macros || [],
     micros: data.micros || [],
     local_carregamento_id: data.local_carregamento_id as string | undefined,
@@ -1460,6 +1463,7 @@ export async function updateSavedFormula(
   if (formula.category !== undefined) payload.category = formula.category;
   if (formula.targetCa !== undefined) payload.target_ca = formula.targetCa;
   if (formula.targetS !== undefined) payload.target_s = formula.targetS;
+  if (formula.targetMicros !== undefined) payload.target_micros = formula.targetMicros;
   if (formula.macros !== undefined) payload.macros = formula.macros;
   if (formula.micros !== undefined) payload.micros = formula.micros;
 

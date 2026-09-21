@@ -57,6 +57,45 @@ describe('LP optimization engine', () => {
     expect(result.composition.resultingCa).toBeCloseTo(4);
   });
 
+  it('atinge a meta de micro somando garantias de macros e micros selecionados', () => {
+    const macroComBoro = material({
+      id: 'macro-boro',
+      name: 'Macro com Boro',
+      n: 0,
+      price: 10,
+      minQty: 500,
+      maxQty: 500,
+      microGuarantees: [{ name: 'B', value: 0.1 }],
+    });
+    const boro = material({
+      id: 'boro',
+      type: 'micro',
+      name: 'Boro 5%',
+      n: 0,
+      price: 20,
+      microGuarantees: [{ name: 'B', value: 5 }],
+    });
+    const enchimento = material({
+      id: 'enchimento',
+      name: 'Enchimento',
+      n: 0,
+      price: 1,
+    });
+
+    const result = optimizeFormula({
+      target: { n: 0, p: 0, k: 0 },
+      targetMicros: { B: 0.3 },
+      macros: [macroComBoro, enchimento],
+      micros: [boro],
+      incompatibilityRules: [],
+    });
+
+    expect(result.feasible).toBe(true);
+    expect(result.macros.find((item) => item.id === 'macro-boro')?.quantity).toBeCloseTo(500);
+    expect(result.micros[0].quantity).toBeCloseTo(50);
+    expect(result.composition.resultingMicros.B).toBeCloseTo(0.3);
+  });
+
   it('informa quando os materiais não conseguem fechar a fórmula', () => {
     const result = optimizeFormula({
       target: { n: 0, p: 0, k: 60 }, macros: [material()], micros: [], incompatibilityRules: [],

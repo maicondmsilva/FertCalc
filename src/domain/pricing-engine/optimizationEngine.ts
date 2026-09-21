@@ -18,6 +18,7 @@ export interface FormulaOptimizationInput {
   target: FormulaTarget;
   targetS?: number;
   targetCa?: number;
+  targetMicros?: Record<string, number>;
   macros: RawMaterial[];
   micros: RawMaterial[];
   incompatibilityRules: IncompatibilityRule[];
@@ -37,10 +38,15 @@ export function buildFormulaOptimizationModel({
   target,
   targetS = 0,
   targetCa = 0,
+  targetMicros = {},
   macros,
   micros,
   incompatibilityRules,
 }: FormulaOptimizationInput): OptimizationModel {
+  const microTargets = Object.entries(targetMicros)
+    .map(([name, value]) => ({ name: name.trim(), value: numeric(value) }))
+    .filter(({ name, value }) => name.length > 0 && value > 0)
+    .map((target, index) => ({ ...target, constraint: `micro_target_${index}` }));
   const model: OptimizationModel = {
     optimize: 'cost',
     opType: 'min',
@@ -50,6 +56,9 @@ export function buildFormulaOptimizationModel({
       k_eq: { min: target.k * 10, max: target.k * 10 + 9 },
       ...(targetS > 0 ? { s_eq: { min: targetS * 10, max: targetS * 10 + 9 } } : {}),
       ...(targetCa > 0 ? { ca_eq: { min: targetCa * 10, max: targetCa * 10 + 9 } } : {}),
+      ...Object.fromEntries(
+        microTargets.map(({ constraint, value }) => [constraint, { equal: value * 10 }])
+      ),
       weight: { equal: 1000 },
     },
     variables: {},
@@ -62,6 +71,14 @@ export function buildFormulaOptimizationModel({
     const minimumLink = `link_min_${material.id}`;
     const maximumLink = `link_max_${material.id}`;
     const minimumQuantity = numeric(material.minQty);
+    const microContributions = Object.fromEntries(
+      microTargets.flatMap(({ name, constraint }) => {
+        const guarantee = (material.microGuarantees || [])
+          .filter((item) => item.name.trim().localeCompare(name, 'pt-BR', { sensitivity: 'base' }) === 0)
+          .reduce((total, item) => total + numeric(item.value), 0);
+        return guarantee > 0 ? [[constraint, guarantee / 100]] : [];
+      })
+    );
     model.variables[material.id] = {
       cost: numeric(material.price),
       ...(numeric(material.n) !== 0 ? { n_eq: numeric(material.n) / 100 } : {}),
@@ -69,6 +86,7 @@ export function buildFormulaOptimizationModel({
       ...(numeric(material.k) !== 0 ? { k_eq: numeric(material.k) / 100 } : {}),
       ...(targetS > 0 && numeric(material.s) !== 0 ? { s_eq: numeric(material.s) / 100 } : {}),
       ...(targetCa > 0 && numeric(material.ca) !== 0 ? { ca_eq: numeric(material.ca) / 100 } : {}),
+      ...microContributions,
       weight: 1,
       ...(minimumQuantity > 0 ? { [minimumLink]: 1 } : {}),
       [maximumLink]: 1,
