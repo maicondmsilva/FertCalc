@@ -104,4 +104,28 @@ describe('calculation orchestration engine', () => {
     expect(result.calculation.macros[0].quantity).toBe(0);
     expect(result.calculation.summary?.totalWeight).toBe(0);
   });
+
+  it('encaminha metas de micronutrientes para o solver', () => {
+    const result = execute(
+      calculation({
+        formula: '00-00-00',
+        targetMicros: { Zn: 0.25 },
+        macros: [material({ id: 'enchimento', n: 0, price: 1 })],
+        micros: [
+          material({
+            id: 'zinco',
+            type: 'micro',
+            name: 'Zinco 5%',
+            n: 0,
+            price: 100,
+            microGuarantees: [{ name: 'Zn', value: 5 }],
+          }),
+        ],
+      })
+    );
+
+    expect(result.issue).toBeUndefined();
+    expect(result.calculation.micros[0].quantity).toBeCloseTo(50);
+    expect(result.calculation.summary?.resultingMicros.Zn).toBeCloseTo(0.25);
+  });
 });

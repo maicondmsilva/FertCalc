@@ -257,6 +257,7 @@ export function useCalculator({
           category: initialFormulaToLoad.category ?? 'all',
           targetCa: initialFormulaToLoad.targetCa,
           targetS: initialFormulaToLoad.targetS,
+          targetMicros: initialFormulaToLoad.targetMicros,
           modo_calculo: DEFAULT_CALCULATION_MODE,
           produtos_livres: [],
           factors: {
@@ -759,7 +760,7 @@ export function useCalculator({
   const updateCalculation = (
     id: string,
     field: keyof TargetFormula,
-    value: string | number | boolean | RawMaterial[]
+    value: TargetFormula[keyof TargetFormula]
   ) => {
     setCalculations(
       calculations.map((c) => {
@@ -1466,6 +1467,7 @@ export function useCalculator({
               category: selectedCalc.category ?? 'all',
               targetCa: selectedCalc.targetCa,
               targetS: selectedCalc.targetS,
+              targetMicros: selectedCalc.targetMicros,
               macros: stripTemporaryMaterialPrices(selectedCalc.macros || macros),
               micros: stripTemporaryMaterialPrices(selectedCalc.micros || micros),
             });
@@ -1531,6 +1533,7 @@ export function useCalculator({
                 category: selectedCalc.category ?? 'all',
                 targetCa: selectedCalc.targetCa,
                 targetS: selectedCalc.targetS,
+                targetMicros: selectedCalc.targetMicros,
                 macros: stripTemporaryMaterialPrices(selectedCalc.macros || macros),
                 micros: stripTemporaryMaterialPrices(selectedCalc.micros || micros),
               });
@@ -1566,6 +1569,7 @@ export function useCalculator({
             category: selectedCalc.category ?? 'all',
             targetCa: selectedCalc.targetCa,
             targetS: selectedCalc.targetS,
+            targetMicros: selectedCalc.targetMicros,
             macros: stripTemporaryMaterialPrices(selectedCalc.macros || macros),
             micros: stripTemporaryMaterialPrices(selectedCalc.micros || micros),
           });

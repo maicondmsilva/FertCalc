@@ -110,6 +110,7 @@ export function calculateTargetFormula({
     target,
     targetS: calculation.targetS,
     targetCa: calculation.targetCa,
+    targetMicros: calculation.targetMicros,
     macros: currentMacros,
     micros: currentMicros,
     incompatibilityRules,

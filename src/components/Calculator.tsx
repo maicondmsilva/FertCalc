@@ -177,6 +177,8 @@ export default function Calculator({
   const [savedFormulas, setSavedFormulas] = useState<SavedFormula[]>([]);
   const [activeSearchCalcId, setActiveSearchCalcId] = useState<string | null>(null);
   const [formulaSearchTerm, setFormulaSearchTerm] = useState<Record<string, string>>({});
+  const [microTargetsOpen, setMicroTargetsOpen] = useState<Record<string, boolean>>({});
+  const [microTargetInputs, setMicroTargetInputs] = useState<Record<string, string>>({});
   const [exchangeRateInput, setExchangeRateInput] = useState('');
   const protectedMaterialIds = initialFormulaToLoad?.protectedMaterialIds || [];
   const isSavedFormulaRevision = initialFormulaToLoad?.isRevisionFromSavedFormula === true;
@@ -218,6 +220,35 @@ export default function Calculator({
     ]
       .filter((material) => material.name)
       .sort((left, right) => left.name.localeCompare(right.name, 'pt-BR'));
+
+  const getAvailableMicroTargets = (calc: (typeof calculations)[number]) => {
+    const names = new Map<string, string>();
+    [...calc.macros, ...calc.micros]
+      .filter((material) => material.selected)
+      .flatMap((material) => material.microGuarantees || [])
+      .filter((guarantee) => guarantee.name.trim() && Number(guarantee.value) > 0)
+      .forEach((guarantee) => {
+        const normalizedName = guarantee.name.trim().toLocaleUpperCase('pt-BR');
+        if (!names.has(normalizedName)) names.set(normalizedName, guarantee.name.trim());
+      });
+    Object.keys(calc.targetMicros || {}).forEach((name) => {
+      const normalizedName = name.trim().toLocaleUpperCase('pt-BR');
+      if (name.trim() && !names.has(normalizedName)) names.set(normalizedName, name.trim());
+    });
+    return Array.from(names.values()).sort((left, right) => left.localeCompare(right, 'pt-BR'));
+  };
+
+  const updateMicroTarget = (calc: (typeof calculations)[number], name: string, rawValue: string) => {
+    if (!/^\d*(?:[.,]\d*)?$/.test(rawValue)) return;
+    const inputKey = `${calc.id}:${name}`;
+    setMicroTargetInputs((current) => ({ ...current, [inputKey]: rawValue }));
+    const parsedValue = Number(rawValue.replace(',', '.'));
+    if (rawValue !== '' && !Number.isFinite(parsedValue)) return;
+    const nextTargets = { ...(calc.targetMicros || {}) };
+    if (rawValue === '' || parsedValue <= 0) delete nextTargets[name];
+    else nextTargets[name] = parsedValue;
+    updateCalculation(calc.id, 'targetMicros', nextTargets);
+  };
 
   const formatFormulaProductDetails = (
     product?: ReturnType<typeof getAvailableProductsForCalc>[number] | null
@@ -911,6 +942,7 @@ export default function Calculator({
                                                           category: savedF.category ?? 'all',
                                                           targetCa: savedF.targetCa,
                                                           targetS: savedF.targetS,
+                                                          targetMicros: savedF.targetMicros,
                                                           macros: updatedMacros,
                                                           micros: updatedMicros,
                                                         }
@@ -975,6 +1007,37 @@ export default function Calculator({
                                 className="w-14 px-1.5 py-1 text-xs border border-yellow-300 rounded focus:ring-1 focus:ring-yellow-400 bg-yellow-50"
                               />
                             </div>
+                            {!isProdutosLivresMode && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setMicroTargetsOpen((current) => ({
+                                    ...current,
+                                    [calc.id]: !current[calc.id],
+                                  }))
+                                }
+                                className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-bold transition-colors ${
+                                  microTargetsOpen[calc.id]
+                                    ? 'border-cyan-300 bg-cyan-100 text-cyan-800'
+                                    : 'border-cyan-200 text-cyan-700 hover:bg-cyan-50'
+                                }`}
+                                title="Definir garantias-alvo de micronutrientes"
+                              >
+                                <Beaker className="w-3.5 h-3.5" />
+                                <span>Micros alvo</span>
+                                {Object.values(calc.targetMicros || {}).filter(
+                                  (value) => Number(value) > 0
+                                ).length > 0 && (
+                                  <span className="rounded-full bg-cyan-700 px-1.5 py-0.5 text-[9px] text-white">
+                                    {
+                                      Object.values(calc.targetMicros || {}).filter(
+                                        (value) => Number(value) > 0
+                                      ).length
+                                    }
+                                  </span>
+                                )}
+                              </button>
+                            )}
                             <select
                               value={calc.category || 'all'}
                               onChange={(e) =>
@@ -1043,6 +1106,66 @@ export default function Calculator({
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
+
+                          {!isProdutosLivresMode && microTargetsOpen[calc.id] && (
+                            <div className="rounded-xl border border-cyan-200 bg-cyan-50/60 p-3">
+                              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                                <div>
+                                  <p className="text-xs font-bold text-cyan-900">
+                                    Garantias-alvo de micronutrientes
+                                  </p>
+                                  <p className="text-[10px] text-cyan-700">
+                                    O solver soma as garantias dos macros e dos micros selecionados.
+                                  </p>
+                                </div>
+                              </div>
+                              {getAvailableMicroTargets(calc).length === 0 ? (
+                                <p className="rounded-lg border border-dashed border-cyan-200 bg-white/70 px-3 py-2 text-xs text-stone-500">
+                                  Selecione em Produtos ao menos uma matéria-prima com garantia de micronutriente.
+                                </p>
+                              ) : (
+                                <div className="flex flex-wrap gap-2">
+                                  {getAvailableMicroTargets(calc).map((name) => {
+                                    const inputKey = `${calc.id}:${name}`;
+                                    const targetValue = calc.targetMicros?.[name];
+                                    return (
+                                      <label
+                                        key={name}
+                                        className="flex items-center gap-1 rounded-lg border border-cyan-200 bg-white px-2 py-1.5"
+                                      >
+                                        <span className="text-[10px] font-bold text-cyan-800">
+                                          {name}%
+                                        </span>
+                                        <input
+                                          type="text"
+                                          inputMode="decimal"
+                                          value={
+                                            microTargetInputs[inputKey] ??
+                                            (Number(targetValue || 0) > 0
+                                              ? String(targetValue).replace('.', ',')
+                                              : '')
+                                          }
+                                          onChange={(event) =>
+                                            updateMicroTarget(calc, name, event.target.value)
+                                          }
+                                          onBlur={() =>
+                                            setMicroTargetInputs((current) => {
+                                              const next = { ...current };
+                                              delete next[inputKey];
+                                              return next;
+                                            })
+                                          }
+                                          placeholder="0,00"
+                                          aria-label={`${name} alvo em porcentagem`}
+                                          className="w-16 rounded border border-cyan-300 bg-cyan-50 px-1.5 py-1 text-xs text-stone-800 focus:ring-1 focus:ring-cyan-500"
+                                        />
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          )}
 
                           {isProdutosLivresMode && (
                             <div className="space-y-2">

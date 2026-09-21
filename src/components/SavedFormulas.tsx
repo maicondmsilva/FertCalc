@@ -1345,6 +1345,23 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
                           {formula.targetFormula}
                         </p>
 
+                        {Object.entries(formula.targetMicros || {}).some(
+                          ([, value]) => Number(value) > 0
+                        ) && (
+                          <div className="mb-3 flex flex-wrap gap-1.5">
+                            {Object.entries(formula.targetMicros || {})
+                              .filter(([, value]) => Number(value) > 0)
+                              .map(([name, value]) => (
+                                <span
+                                  key={name}
+                                  className="rounded-full border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[10px] font-bold text-cyan-800"
+                                >
+                                  {name}: {Number(value).toFixed(2)}%
+                                </span>
+                              ))}
+                          </div>
+                        )}
+
                         <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-1 border-t border-stone-200 pt-2">
                           Composição (kg)
                         </p>
