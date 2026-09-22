@@ -252,18 +252,18 @@ export default function Calculator({
     );
     Object.keys(calc.targetMicros || {}).forEach((name) => {
       const normalizedName = normalizeMicronutrientKey(name);
-      if (
-        normalizedName &&
-        !isSecondaryNutrientGuarantee(name) &&
-        !names.has(normalizedName)
-      ) {
+      if (normalizedName && !isSecondaryNutrientGuarantee(name) && !names.has(normalizedName)) {
         names.set(normalizedName, formatMicronutrientLabel(name));
       }
     });
     return Array.from(names.values()).sort((left, right) => left.localeCompare(right, 'pt-BR'));
   };
 
-  const updateMicroTarget = (calc: (typeof calculations)[number], name: string, rawValue: string) => {
+  const updateMicroTarget = (
+    calc: (typeof calculations)[number],
+    name: string,
+    rawValue: string
+  ) => {
     if (!/^\d*(?:[.,]\d*)?$/.test(rawValue)) return;
     const inputKey = `${calc.id}:${name}`;
     setMicroTargetInputs((current) => ({ ...current, [inputKey]: rawValue }));
@@ -310,10 +310,7 @@ export default function Calculator({
     );
   };
 
-  const getSummaryGuaranteeClass = (
-    target: number | undefined,
-    calculated: number | undefined
-  ) => {
+  const getSummaryGuaranteeClass = (target: number | undefined, calculated: number | undefined) => {
     const status = getMicronutrientTargetStatus(target, calculated);
     if (status === 'met') return 'border-emerald-700/70 bg-emerald-950 text-emerald-300';
     if (status === 'divergent') return 'border-amber-700/70 bg-amber-950 text-amber-300';
@@ -440,7 +437,9 @@ export default function Calculator({
               <div className="flex items-start gap-3">
                 <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-blue-700" />
                 <div>
-                  <p className="text-sm font-black text-blue-950">Minhas autorizações de garantias</p>
+                  <p className="text-sm font-black text-blue-950">
+                    Minhas autorizações de garantias
+                  </p>
                   <p className="text-xs text-blue-700">
                     {isLoadingGuaranteeRequests
                       ? 'Atualizando solicitações…'
@@ -1216,13 +1215,15 @@ export default function Calculator({
                                     Garantias-alvo de micronutrientes
                                   </p>
                                   <p className="text-[10px] text-cyan-700">
-                                    Campos gerados pelo cadastro. O solver usa somente macros e micros selecionados.
+                                    Campos gerados pelo cadastro. O solver usa somente macros e
+                                    micros selecionados.
                                   </p>
                                 </div>
                               </div>
                               {getAvailableMicroTargets(calc).length === 0 ? (
                                 <p className="rounded-lg border border-dashed border-cyan-200 bg-white/70 px-3 py-2 text-xs text-stone-500">
-                                  Nenhuma garantia de micronutriente foi encontrada nos produtos ativos cadastrados.
+                                  Nenhuma garantia de micronutriente foi encontrada nos produtos
+                                  ativos cadastrados.
                                 </p>
                               ) : (
                                 <div className="flex flex-wrap gap-2">
@@ -2477,8 +2478,10 @@ export default function Calculator({
                           {((calc.summary?.resultingS || 0) > 0 || (calc.targetS || 0) > 0) && (
                             <p
                               className={`text-xs font-mono ${
-                                getMicronutrientTargetStatus(calc.targetS, calc.summary?.resultingS) ===
-                                'met'
+                                getMicronutrientTargetStatus(
+                                  calc.targetS,
+                                  calc.summary?.resultingS
+                                ) === 'met'
                                   ? 'text-emerald-400'
                                   : (calc.targetS || 0) > 0
                                     ? 'text-amber-400'
@@ -2595,7 +2598,11 @@ export default function Calculator({
                   ${isLocked ? 'hidden' : 'bg-stone-800 hover:bg-stone-700 border border-stone-600 text-stone-200 shadow-lg shadow-black/20 disabled:cursor-not-allowed disabled:opacity-60'}`}
                 >
                   <Beaker className="w-4 h-4 mr-2" />
-                  {isSavingFormula ? 'Salvando batida…' : 'Salvar Fórmula/Batida'}
+                  {isSavingFormula
+                    ? 'Salvando batida…'
+                    : isSavedFormulaRevision
+                      ? 'Atualizar Batida'
+                      : 'Salvar Nova Batida'}
                 </button>
               )}
               {canSavePricing && (

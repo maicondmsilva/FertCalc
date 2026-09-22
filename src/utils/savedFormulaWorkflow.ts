@@ -97,3 +97,33 @@ export function getFormulaUpdateProtection(
         : undefined,
   };
 }
+
+export function getSavedFormulaCompositionKey(
+  formula: Pick<
+    SavedFormula,
+    'targetFormula' | 'category' | 'targetCa' | 'targetS' | 'targetMicros' | 'macros' | 'micros'
+  >
+): string {
+  const normalizeMaterials = (materials: SavedFormula['macros']) =>
+    materials
+      .filter((material) => Number(material.quantity || 0) > 0)
+      .map((material) => ({
+        id: material.id,
+        quantity: Number(Number(material.quantity || 0).toFixed(6)),
+        suffix: (material.formulaSuffix || '').replace(/^[Cc]\/\s*/, '').trim(),
+      }))
+      .sort((a, b) => a.id.localeCompare(b.id));
+
+  return JSON.stringify({
+    targetFormula: formula.targetFormula.trim(),
+    category: formula.category ?? 'all',
+    targetCa: Number(formula.targetCa || 0),
+    targetS: Number(formula.targetS || 0),
+    targetMicros: Object.entries(formula.targetMicros || {})
+      .filter(([, value]) => Number(value) > 0)
+      .map(([nutrient, value]) => [nutrient, Number(Number(value).toFixed(6))])
+      .sort(([a], [b]) => String(a).localeCompare(String(b))),
+    macros: normalizeMaterials(formula.macros),
+    micros: normalizeMaterials(formula.micros),
+  });
+}
