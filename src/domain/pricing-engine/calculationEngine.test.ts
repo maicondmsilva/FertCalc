@@ -128,4 +128,29 @@ describe('calculation orchestration engine', () => {
     expect(result.calculation.micros[0].quantity).toBeCloseTo(50);
     expect(result.calculation.summary?.resultingMicros.Zn).toBeCloseTo(0.25);
   });
+
+  it('explica quando a meta não possui fonte entre os produtos selecionados', () => {
+    const result = execute(
+      calculation({
+        formula: '00-00-00',
+        targetMicros: { Zn: 0.25 },
+        macros: [material({ id: 'enchimento', n: 0, price: 1 })],
+        micros: [
+          material({
+            id: 'zinco',
+            type: 'micro',
+            name: 'Zinco 5%',
+            n: 0,
+            selected: false,
+            microGuarantees: [{ name: 'Zn', value: 5 }],
+          }),
+        ],
+      })
+    );
+
+    expect(result.issue).toEqual({
+      code: 'MISSING_MICRO_TARGET_SOURCE',
+      micronutrients: ['Zn'],
+    });
+  });
 });

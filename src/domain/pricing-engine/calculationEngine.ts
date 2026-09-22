@@ -1,6 +1,7 @@
 import type { IncompatibilityRule, RawMaterial, TargetFormula } from '../../types';
 import { applyProdutosLivresToMaterials, getCalculationMode } from '../../utils/calculationMode';
 import { formatNPK } from '../../utils/formatters';
+import { getMissingSelectedMicronutrientSources } from '../../utils/micronutrients';
 import { hasFormulaTarget, parseFormulaTarget } from './formulaEngine';
 import { optimizeFormula } from './optimizationEngine';
 import { calculatePricingSummary } from './pricingEngine';
@@ -8,6 +9,7 @@ import { calculatePricingSummary } from './pricingEngine';
 export type CalculationIssue =
   | { code: 'EMPTY_FREE_PRODUCTS' }
   | { code: 'UNKNOWN_FREE_PRODUCT'; productId: string }
+  | { code: 'MISSING_MICRO_TARGET_SOURCE'; micronutrients: string[] }
   | { code: 'INFEASIBLE_FORMULA'; formula: string };
 
 export interface CalculateTargetFormulaInput {
@@ -105,6 +107,20 @@ export function calculateTargetFormula({
 
   const target = parseFormulaTarget(calculation.formula);
   if (!target) return { calculation };
+
+  const missingMicronutrientSources = getMissingSelectedMicronutrientSources(
+    calculation.targetMicros,
+    [...currentMacros, ...currentMicros]
+  );
+  if (missingMicronutrientSources.length > 0) {
+    return {
+      calculation,
+      issue: {
+        code: 'MISSING_MICRO_TARGET_SOURCE',
+        micronutrients: missingMicronutrientSources,
+      },
+    };
+  }
 
   const optimization = optimizeFormula({
     target,

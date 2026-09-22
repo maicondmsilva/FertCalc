@@ -729,6 +729,10 @@ export function useCalculator({
         showError(
           `Produto livre (${result.issue.productId}) não foi encontrado na lista de preço atual.`
         );
+      } else if (result.issue?.code === 'MISSING_MICRO_TARGET_SOURCE') {
+        showError(
+          `Selecione em Produtos uma matéria-prima que forneça: ${result.issue.micronutrients.join(', ')}.`
+        );
       } else if (result.issue?.code === 'INFEASIBLE_FORMULA') {
         showError(
           `A formulação ${result.issue.formula} não fecha com os produtos selecionados. Verifique as restrições ou adicione enchimento.`
@@ -1662,6 +1666,8 @@ export function useCalculator({
     setMacros,
     micros,
     setMicros,
+    catalogMacros,
+    catalogMicros,
     incompatibilityRules,
     compCategories,
     isMaterialsLoading,

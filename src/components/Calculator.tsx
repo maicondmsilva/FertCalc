@@ -35,6 +35,12 @@ import { getEmbalagens } from '../services/embalagensService';
 import { getSavedFormulas } from '../services/db';
 import { getProdutosFormulados, ProdutoFormulado } from '../services/produtosFormuladosService';
 import { isValidExchangeRate } from '../utils/priceListCurrency';
+import {
+  formatMicronutrientLabel,
+  getCatalogMicronutrientNames,
+  getMissingSelectedMicronutrientSources,
+  normalizeMicronutrientKey,
+} from '../utils/micronutrients';
 
 const formatPricingMoney = (value: number | undefined, currency: 'BRL' | 'USD' = 'BRL') =>
   Number(value || 0).toLocaleString('pt-BR', {
@@ -118,6 +124,8 @@ export default function Calculator({
     setShowAgentResults,
     macros,
     micros,
+    catalogMacros,
+    catalogMicros,
     compCategories,
     isMaterialsLoading,
     hasNoMaterialsInDatabase,
@@ -222,18 +230,17 @@ export default function Calculator({
       .sort((left, right) => left.name.localeCompare(right.name, 'pt-BR'));
 
   const getAvailableMicroTargets = (calc: (typeof calculations)[number]) => {
-    const names = new Map<string, string>();
-    [...calc.macros, ...calc.micros]
-      .filter((material) => material.selected)
-      .flatMap((material) => material.microGuarantees || [])
-      .filter((guarantee) => guarantee.name.trim() && Number(guarantee.value) > 0)
-      .forEach((guarantee) => {
-        const normalizedName = guarantee.name.trim().toLocaleUpperCase('pt-BR');
-        if (!names.has(normalizedName)) names.set(normalizedName, guarantee.name.trim());
-      });
+    const names = new Map(
+      getCatalogMicronutrientNames([...catalogMacros, ...catalogMicros]).map((name) => [
+        normalizeMicronutrientKey(name),
+        name,
+      ])
+    );
     Object.keys(calc.targetMicros || {}).forEach((name) => {
-      const normalizedName = name.trim().toLocaleUpperCase('pt-BR');
-      if (name.trim() && !names.has(normalizedName)) names.set(normalizedName, name.trim());
+      const normalizedName = normalizeMicronutrientKey(name);
+      if (normalizedName && !names.has(normalizedName)) {
+        names.set(normalizedName, formatMicronutrientLabel(name));
+      }
     });
     return Array.from(names.values()).sort((left, right) => left.localeCompare(right, 'pt-BR'));
   };
@@ -245,10 +252,29 @@ export default function Calculator({
     const parsedValue = Number(rawValue.replace(',', '.'));
     if (rawValue !== '' && !Number.isFinite(parsedValue)) return;
     const nextTargets = { ...(calc.targetMicros || {}) };
-    if (rawValue === '' || parsedValue <= 0) delete nextTargets[name];
-    else nextTargets[name] = parsedValue;
+    const targetKey = normalizeMicronutrientKey(name);
+    Object.keys(nextTargets).forEach((currentName) => {
+      if (normalizeMicronutrientKey(currentName) === targetKey) delete nextTargets[currentName];
+    });
+    if (rawValue !== '' && parsedValue > 0) {
+      nextTargets[formatMicronutrientLabel(name)] = parsedValue;
+    }
     updateCalculation(calc.id, 'targetMicros', nextTargets);
   };
+
+  const getMicroTargetValue = (calc: (typeof calculations)[number], name: string) => {
+    const targetKey = normalizeMicronutrientKey(name);
+    return Object.entries(calc.targetMicros || {}).find(
+      ([currentName]) => normalizeMicronutrientKey(currentName) === targetKey
+    )?.[1];
+  };
+
+  const getActiveMicroTargetCount = (calc: (typeof calculations)[number]) =>
+    new Set(
+      Object.entries(calc.targetMicros || {})
+        .filter(([, value]) => Number(value) > 0)
+        .map(([name]) => normalizeMicronutrientKey(name))
+    ).size;
 
   const formatFormulaProductDetails = (
     product?: ReturnType<typeof getAvailableProductsForCalc>[number] | null
@@ -1025,15 +1051,9 @@ export default function Calculator({
                               >
                                 <Beaker className="w-3.5 h-3.5" />
                                 <span>Micros alvo</span>
-                                {Object.values(calc.targetMicros || {}).filter(
-                                  (value) => Number(value) > 0
-                                ).length > 0 && (
+                                {getActiveMicroTargetCount(calc) > 0 && (
                                   <span className="rounded-full bg-cyan-700 px-1.5 py-0.5 text-[9px] text-white">
-                                    {
-                                      Object.values(calc.targetMicros || {}).filter(
-                                        (value) => Number(value) > 0
-                                      ).length
-                                    }
+                                    {getActiveMicroTargetCount(calc)}
                                   </span>
                                 )}
                               </button>
@@ -1115,23 +1135,33 @@ export default function Calculator({
                                     Garantias-alvo de micronutrientes
                                   </p>
                                   <p className="text-[10px] text-cyan-700">
-                                    O solver soma as garantias dos macros e dos micros selecionados.
+                                    Campos gerados pelo cadastro. O solver usa somente macros e micros selecionados.
                                   </p>
                                 </div>
                               </div>
                               {getAvailableMicroTargets(calc).length === 0 ? (
                                 <p className="rounded-lg border border-dashed border-cyan-200 bg-white/70 px-3 py-2 text-xs text-stone-500">
-                                  Selecione em Produtos ao menos uma matéria-prima com garantia de micronutriente.
+                                  Nenhuma garantia de micronutriente foi encontrada nos produtos ativos cadastrados.
                                 </p>
                               ) : (
                                 <div className="flex flex-wrap gap-2">
                                   {getAvailableMicroTargets(calc).map((name) => {
                                     const inputKey = `${calc.id}:${name}`;
-                                    const targetValue = calc.targetMicros?.[name];
+                                    const targetValue = getMicroTargetValue(calc, name);
+                                    const missingSelectedSource =
+                                      Number(targetValue || 0) > 0 &&
+                                      getMissingSelectedMicronutrientSources(
+                                        { [name]: Number(targetValue) },
+                                        [...calc.macros, ...calc.micros]
+                                      ).length > 0;
                                     return (
-                                      <label
+                                      <div
                                         key={name}
-                                        className="flex items-center gap-1 rounded-lg border border-cyan-200 bg-white px-2 py-1.5"
+                                        className={`flex items-center gap-1 rounded-lg border bg-white px-2 py-1.5 ${
+                                          missingSelectedSource
+                                            ? 'border-red-300 ring-1 ring-red-100'
+                                            : 'border-cyan-200'
+                                        }`}
                                       >
                                         <span className="text-[10px] font-bold text-cyan-800">
                                           {name}%
@@ -1159,7 +1189,13 @@ export default function Calculator({
                                           aria-label={`${name} alvo em porcentagem`}
                                           className="w-16 rounded border border-cyan-300 bg-cyan-50 px-1.5 py-1 text-xs text-stone-800 focus:ring-1 focus:ring-cyan-500"
                                         />
-                                      </label>
+                                        {missingSelectedSource && (
+                                          <AlertTriangle
+                                            className="h-3.5 w-3.5 text-red-500"
+                                            aria-label={`Nenhum produto selecionado fornece ${name}`}
+                                          />
+                                        )}
+                                      </div>
                                     );
                                   })}
                                 </div>

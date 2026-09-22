@@ -1,22 +1,9 @@
 import type { PricingFactors, PricingSummary, RawMaterial } from '../../types';
 import { convertPriceToBRL, getPricingCurrencyContext } from '../../utils/priceListCurrency';
 import { applyCommercialWaterfall, roundMoney } from './commercialWaterfall';
+import { formatMicronutrientLabel, normalizeMicronutrientKey } from '../../utils/micronutrients';
 
 const numberOrZero = (value: unknown): number => Number(value) || 0;
-
-const micronutrientKey = (name: string) =>
-  name
-    .trim()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLocaleUpperCase('pt-BR');
-
-const micronutrientLabel = (name: string) => {
-  const trimmedName = name.trim();
-  return /^[a-z]{1,3}$/i.test(trimmedName)
-    ? `${trimmedName.charAt(0).toLocaleUpperCase('pt-BR')}${trimmedName.slice(1).toLocaleLowerCase('pt-BR')}`
-    : trimmedName;
-};
 
 export interface PricingEngineOptions {
   today?: Date;
@@ -63,11 +50,11 @@ export function calculateMaterialComposition(macros: RawMaterial[], micros: RawM
     totalS += quantity * (numberOrZero(material.s) / 100);
     totalCa += quantity * (numberOrZero(material.ca) / 100);
     material.microGuarantees?.forEach((guarantee) => {
-      const key = micronutrientKey(guarantee.name);
+      const key = normalizeMicronutrientKey(guarantee.name);
       if (!key) return;
       const current = micronutrients.get(key);
       micronutrients.set(key, {
-        label: current?.label || micronutrientLabel(guarantee.name),
+        label: current?.label || formatMicronutrientLabel(guarantee.name),
         amount: (current?.amount || 0) + quantity * (numberOrZero(guarantee.value) / 100),
       });
     });
