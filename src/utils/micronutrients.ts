@@ -58,3 +58,25 @@ export function getMissingSelectedMicronutrientSources(
     });
   return Array.from(missing.values()).sort((left, right) => left.localeCompare(right, 'pt-BR'));
 }
+
+export function getCalculatedMicronutrientValue(
+  calculated: Record<string, number> | undefined,
+  name: string
+): number | undefined {
+  const key = normalizeMicronutrientKey(name);
+  return Object.entries(calculated || {}).find(
+    ([calculatedName]) => normalizeMicronutrientKey(calculatedName) === key
+  )?.[1];
+}
+
+export type MicronutrientTargetStatus = 'inactive' | 'pending' | 'met' | 'divergent';
+
+export function getMicronutrientTargetStatus(
+  target: number | undefined,
+  calculated: number | undefined,
+  tolerance = 0.01
+): MicronutrientTargetStatus {
+  if (!Number.isFinite(target) || Number(target) <= 0) return 'inactive';
+  if (!Number.isFinite(calculated)) return 'pending';
+  return Math.abs(Number(calculated) - Number(target)) <= tolerance ? 'met' : 'divergent';
+}
