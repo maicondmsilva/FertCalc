@@ -786,12 +786,27 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                   </span>
                 </div>
                 {getPricingGuaranteeAuthorizationSummary(p).hasAuthorizedDivergence && (
-                  <div className="flex items-center">
+                  <div className="flex items-start">
                     <AlertTriangle className="mr-2 h-4 w-4 text-amber-500" />
-                    <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">
-                      Garantia divergente autorizada ·{' '}
-                      {getPricingGuaranteeAuthorizationSummary(p).divergenceCount} item(ns)
-                    </span>
+                    <div className="rounded bg-amber-100 px-2 py-1 text-xs text-amber-900">
+                      <span className="font-bold">
+                        Garantia divergente autorizada ·{' '}
+                        {getPricingGuaranteeAuthorizationSummary(p).divergenceCount} item(ns)
+                      </span>
+                      <span className="mt-0.5 block">
+                        {getPricingGuaranteeAuthorizationSummary(p).latestAuthorization
+                          ?.authorizedByUserName || 'Usuário não identificado'}
+                        {' · '}
+                        {getPricingGuaranteeAuthorizationSummary(p).latestAuthorization?.authorizedAt
+                          ? new Date(
+                              getPricingGuaranteeAuthorizationSummary(p).latestAuthorization!
+                                .authorizedAt
+                            ).toLocaleString('pt-BR')
+                          : 'Data não informada'}
+                        {' · '}
+                        {getPricingGuaranteeAuthorizationSummary(p).latestAuthorization?.justification}
+                      </span>
+                    </div>
                   </div>
                 )}
                 <div className="flex items-center">

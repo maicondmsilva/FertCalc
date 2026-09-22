@@ -74,3 +74,33 @@ export function getPricingGuaranteeAuthorizationSummary(pricing: PricingRecord) 
     latestAuthorization: latest,
   };
 }
+
+export function formatPricingGuaranteeAuthorizationAudit(pricing: PricingRecord): string {
+  const authorizations = (pricing.calculations || [])
+    .map((calculation) => ({
+      formula: calculation.formula,
+      authorization: calculation.guaranteeDivergenceAuthorization,
+    }))
+    .filter(
+      (entry): entry is {
+        formula: string;
+        authorization: NonNullable<TargetFormula['guaranteeDivergenceAuthorization']>;
+      } => Boolean(entry.authorization)
+    )
+    .sort((left, right) =>
+      right.authorization.authorizedAt.localeCompare(left.authorization.authorizedAt)
+    );
+
+  if (authorizations.length === 0) return 'Sem exceção';
+
+  return authorizations
+    .map(({ formula, authorization }) => {
+      const nutrients = authorization.divergences.map((item) => item.nutrient).join(', ');
+      const authorizedAt = new Date(authorization.authorizedAt);
+      const dateLabel = Number.isNaN(authorizedAt.getTime())
+        ? authorization.authorizedAt
+        : authorizedAt.toLocaleString('pt-BR');
+      return `${formula}: ${authorization.authorizedByUserName} em ${dateLabel} — ${authorization.justification} (${nutrients})`;
+    })
+    .join(' | ');
+}
