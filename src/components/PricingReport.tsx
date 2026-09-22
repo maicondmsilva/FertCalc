@@ -25,7 +25,10 @@ import {
   getPricingRecordCurrencies,
   getPricingTotalSaleValueBRL,
 } from '../utils/pricingCurrency';
-import { getPricingGuaranteeAuthorizationSummary } from '../utils/guaranteeAuthorization';
+import {
+  formatPricingGuaranteeAuthorizationAudit,
+  getPricingGuaranteeAuthorizationSummary,
+} from '../utils/guaranteeAuthorization';
 
 const PricingDetailModal = React.lazy(() => import('./PricingDetailModal'));
 
@@ -263,9 +266,7 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
           formatPricingRecordTotal(p),
           p.status,
           p.approvalStatus || 'Pendente',
-          getPricingGuaranteeAuthorizationSummary(p).hasAuthorizedDivergence
-            ? `Autorizada (${getPricingGuaranteeAuthorizationSummary(p).divergenceCount})`
-            : 'Sem exceção',
+          formatPricingGuaranteeAuthorizationAudit(p),
         ]),
         theme: 'striped',
         headStyles: { fillColor: [28, 25, 23], fontSize: 7 },
@@ -352,9 +353,7 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
           formatPricingRecordTotal(p),
           p.status,
           p.approvalStatus || 'Pendente',
-          getPricingGuaranteeAuthorizationSummary(p).hasAuthorizedDivergence
-            ? `Autorizada (${getPricingGuaranteeAuthorizationSummary(p).divergenceCount})`
-            : 'Sem exceção',
+          formatPricingGuaranteeAuthorizationAudit(p),
         ]),
       ];
       const ws = XLSX.utils.aoa_to_sheet(wsData);
@@ -730,10 +729,30 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
                       </td>
                       <td className="px-4 py-3">
                         {getPricingGuaranteeAuthorizationSummary(p).hasAuthorizedDivergence ? (
-                          <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-2 py-1 text-[10px] font-bold uppercase text-amber-800">
-                            <TriangleAlert className="h-3 w-3" /> Autorizada ·{' '}
-                            {getPricingGuaranteeAuthorizationSummary(p).divergenceCount}
-                          </span>
+                          <div>
+                            <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-2 py-1 text-[10px] font-bold uppercase text-amber-800">
+                              <TriangleAlert className="h-3 w-3" /> Autorizada ·{' '}
+                              {getPricingGuaranteeAuthorizationSummary(p).divergenceCount}
+                            </span>
+                            <span
+                              className="mt-1 block max-w-48 truncate text-[10px] text-stone-500"
+                              title={formatPricingGuaranteeAuthorizationAudit(p)}
+                            >
+                              {getPricingGuaranteeAuthorizationSummary(p).latestAuthorization
+                                ?.authorizedByUserName}
+                              {' · '}
+                              {getPricingGuaranteeAuthorizationSummary(p).latestAuthorization
+                                ?.authorizedAt
+                                ? new Date(
+                                    getPricingGuaranteeAuthorizationSummary(p).latestAuthorization!
+                                      .authorizedAt
+                                  ).toLocaleString('pt-BR')
+                                : 'Data não informada'}
+                              {' · '}
+                              {getPricingGuaranteeAuthorizationSummary(p).latestAuthorization
+                                ?.justification}
+                            </span>
+                          </div>
                         ) : (
                           <span className="text-[10px] font-bold uppercase text-stone-400">
                             Sem exceção
@@ -812,10 +831,28 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
                     fórmula(s)
                   </p>
                   {getPricingGuaranteeAuthorizationSummary(p).hasAuthorizedDivergence && (
-                    <span className="mt-2 inline-flex items-center gap-1 rounded bg-amber-100 px-2 py-1 text-[10px] font-bold uppercase text-amber-800">
-                      <TriangleAlert className="h-3 w-3" /> Divergência autorizada ·{' '}
-                      {getPricingGuaranteeAuthorizationSummary(p).divergenceCount}
-                    </span>
+                    <div
+                      className="mt-2 rounded bg-amber-100 px-2 py-1 text-[10px] text-amber-900"
+                      title={formatPricingGuaranteeAuthorizationAudit(p)}
+                    >
+                      <span className="inline-flex items-center gap-1 font-bold uppercase">
+                        <TriangleAlert className="h-3 w-3" /> Divergência autorizada ·{' '}
+                        {getPricingGuaranteeAuthorizationSummary(p).divergenceCount}
+                      </span>
+                      <span className="mt-0.5 block">
+                        {getPricingGuaranteeAuthorizationSummary(p).latestAuthorization
+                          ?.authorizedByUserName}
+                        {' · '}
+                        {getPricingGuaranteeAuthorizationSummary(p).latestAuthorization?.authorizedAt
+                          ? new Date(
+                              getPricingGuaranteeAuthorizationSummary(p).latestAuthorization!
+                                .authorizedAt
+                            ).toLocaleString('pt-BR')
+                          : 'Data não informada'}
+                        {' · '}
+                        {getPricingGuaranteeAuthorizationSummary(p).latestAuthorization?.justification}
+                      </span>
+                    </div>
                   )}
                 </button>
               );

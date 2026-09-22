@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { TargetFormula, User } from '../types';
 import {
   canAuthorizeGuaranteeDivergence,
+  formatPricingGuaranteeAuthorizationAudit,
   getGuaranteeDivergences,
   getPricingGuaranteeAuthorizationSummary,
 } from './guaranteeAuthorization';
@@ -48,5 +49,24 @@ describe('guarantee divergence authorization', () => {
     expect(summary.authorizedFormulaCount).toBe(1);
     expect(summary.divergenceCount).toBe(1);
     expect(summary.latestAuthorization?.authorizedByUserName).toBe('Supervisor');
+  });
+
+  it('formata a trilha completa de autorização para relatórios e auditoria', () => {
+    const authorization = {
+      authorizedByUserId: 'u1', authorizedByUserName: 'Supervisor',
+      authorizedAt: '2026-09-22T12:00:00.000Z', justification: 'Ajuste aprovado',
+      divergences: [{ nutrient: 'B', target: 0.2, calculated: 0.18 }],
+    };
+    const pricing = {
+      calculations: [calculation({ formula: '10-20-30', guaranteeDivergenceAuthorization: authorization })],
+    } as unknown as import('../types').PricingRecord;
+
+    const audit = formatPricingGuaranteeAuthorizationAudit(pricing);
+
+    expect(audit).toContain('10-20-30: Supervisor');
+    expect(audit).toContain('Ajuste aprovado');
+    expect(audit).toContain('(B)');
+    expect(formatPricingGuaranteeAuthorizationAudit({ calculations: [] } as unknown as import('../types').PricingRecord))
+      .toBe('Sem exceção');
   });
 });
