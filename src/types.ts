@@ -138,6 +138,7 @@ export interface User {
     calculator_fertigranP?: boolean;
     calculator_profitabilityCheck?: boolean;
     calculator_extraProducts?: boolean;
+    calculator_overrideGuaranteeDivergence?: boolean;
     // Sub-permissões de Histórico
     history_changeStatus?: boolean;
     history_editPricing?: boolean;
@@ -449,6 +450,17 @@ export interface TargetFormula {
   targetCa?: number;
   targetS?: number;
   targetMicros?: Record<string, number>;
+  guaranteeDivergenceAuthorization?: {
+    authorizedByUserId: string;
+    authorizedByUserName: string;
+    authorizedAt: string;
+    justification: string;
+    divergences: Array<{
+      nutrient: string;
+      target: number;
+      calculated: number;
+    }>;
+  };
   profitabilityAnalysis?: ProfitabilityAnalysis;
 }
 

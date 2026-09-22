@@ -1616,6 +1616,36 @@ export default function PricingDetailModal({
                     </div>
                   </div>
 
+                  {calc.guaranteeDivergenceAuthorization && (
+                    <div className="rounded-xl border border-amber-300 bg-amber-50 p-4">
+                      <h4 className="text-xs font-black uppercase tracking-wider text-amber-800">
+                        Garantias divergentes autorizadas
+                      </h4>
+                      <p className="mt-1 text-xs text-amber-900">
+                        Por <strong>{calc.guaranteeDivergenceAuthorization.authorizedByUserName}</strong>{' '}
+                        em{' '}
+                        {new Date(
+                          calc.guaranteeDivergenceAuthorization.authorizedAt
+                        ).toLocaleString('pt-BR')}
+                      </p>
+                      <p className="mt-2 text-sm text-stone-700">
+                        <strong>Justificativa:</strong>{' '}
+                        {calc.guaranteeDivergenceAuthorization.justification}
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {calc.guaranteeDivergenceAuthorization.divergences.map((item) => (
+                          <span
+                            key={`${item.nutrient}-${item.target}`}
+                            className="rounded-md border border-amber-200 bg-white px-2 py-1 text-[11px] font-bold text-amber-800"
+                          >
+                            {item.nutrient}: {item.calculated.toFixed(2)}% · alvo{' '}
+                            {item.target.toFixed(2)}%
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Análise de Rentabilidade (se existir) */}
                   {(calc as any).profitabilityAnalysis &&
                     (() => {

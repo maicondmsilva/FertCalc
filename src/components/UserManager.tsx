@@ -78,6 +78,7 @@ const PERMISSION_GROUPS: PermissionGroup[] = [
       { id: 'calculator_fertigranP', label: 'Comparador Fertigran P' },
       { id: 'calculator_profitabilityCheck', label: 'Análise de Rentabilidade' },
       { id: 'calculator_extraProducts', label: 'Ver produtos extras fora da lista de preços' },
+      { id: 'calculator_overrideGuaranteeDivergence', label: 'Autorizar garantia divergente' },
       { id: 'history_changeStatus', label: 'Alterar Status' },
       { id: 'history_editPricing', label: 'Editar Precificação Existente' },
       { id: 'savedFormulas_delete', label: 'Excluir Batidas Salvas' },
@@ -315,6 +316,7 @@ export default function UserManager({ currentUser }: UserManagerProps) {
       managementReports: false,
       calculator_profitabilityCheck: false,
       calculator_extraProducts: false,
+      calculator_overrideGuaranteeDivergence: false,
     };
     if (role === 'master' || role === 'admin') {
       const allCrud: Record<string, boolean> = {};
@@ -328,6 +330,7 @@ export default function UserManager({ currentUser }: UserManagerProps) {
         approvals_canApprove: true,
         calculator_profitabilityCheck: true,
         calculator_extraProducts: true,
+        calculator_overrideGuaranteeDivergence: true,
         ...allCrud,
       };
       Object.keys(base).forEach((key) => {
@@ -353,6 +356,7 @@ export default function UserManager({ currentUser }: UserManagerProps) {
         pricingBySeller: true,
         goals: true,
         calculator_profitabilityCheck: true,
+        calculator_overrideGuaranteeDivergence: true,
         creditCard: 'approver',
         ...allCrud,
       };
