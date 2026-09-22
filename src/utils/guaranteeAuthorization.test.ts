@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { TargetFormula, User } from '../types';
-import { canAuthorizeGuaranteeDivergence, getGuaranteeDivergences } from './guaranteeAuthorization';
+import {
+  canAuthorizeGuaranteeDivergence,
+  getGuaranteeDivergences,
+  getPricingGuaranteeAuthorizationSummary,
+} from './guaranteeAuthorization';
 
 const calculation = (overrides: Partial<TargetFormula> = {}): TargetFormula => ({
   id: 'f1', formula: '10-20-30', selected: true, factors: {} as TargetFormula['factors'],
@@ -28,5 +32,21 @@ describe('guarantee divergence authorization', () => {
     expect(canAuthorizeGuaranteeDivergence(user('admin'))).toBe(true);
     expect(canAuthorizeGuaranteeDivergence(user('user', true))).toBe(true);
     expect(canAuthorizeGuaranteeDivergence(user('user'))).toBe(false);
+  });
+
+  it('resume autorizações gravadas nas fórmulas da precificação', () => {
+    const authorization = {
+      authorizedByUserId: 'u1', authorizedByUserName: 'Supervisor',
+      authorizedAt: '2026-09-22T12:00:00.000Z', justification: 'Ajuste aprovado',
+      divergences: [{ nutrient: 'B', target: 0.2, calculated: 0.18 }],
+    };
+    const summary = getPricingGuaranteeAuthorizationSummary({
+      calculations: [calculation({ guaranteeDivergenceAuthorization: authorization })],
+    } as unknown as import('../types').PricingRecord);
+
+    expect(summary.hasAuthorizedDivergence).toBe(true);
+    expect(summary.authorizedFormulaCount).toBe(1);
+    expect(summary.divergenceCount).toBe(1);
+    expect(summary.latestAuthorization?.authorizedByUserName).toBe('Supervisor');
   });
 });
