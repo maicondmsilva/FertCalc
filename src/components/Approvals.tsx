@@ -31,6 +31,11 @@ import { closeModalOnBackdrop } from '../utils/modalUtils';
 import { formatDatePtBr, getPricingDueDate } from '../utils/pricingDisplay';
 import { formatPricingMoney, getPricingCurrency } from '../utils/pricingCurrency';
 import { getPricingGuaranteeAuthorizationSummary } from '../utils/guaranteeAuthorization';
+import {
+  decideGuaranteeAuthorizationRequest,
+  getGuaranteeAuthorizationRequests,
+  type GuaranteeAuthorizationRequest,
+} from '../services/guaranteeAuthorizationRequestService';
 
 interface ApprovalsProps {
   currentUser: AppUser;
@@ -39,7 +44,9 @@ interface ApprovalsProps {
 export default function Approvals({ currentUser }: ApprovalsProps) {
   const { showSuccess, showError } = useToast();
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
-  const [activeTab, setActiveTab] = useState<'pricings' | 'goals' | 'deletions'>('pricings');
+  const [activeTab, setActiveTab] = useState<
+    'pricings' | 'guarantees' | 'goals' | 'deletions'
+  >('pricings');
   const [allPricings, setAllPricings] = useState<PricingRecord[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [selectedPricing, setSelectedPricing] = useState<PricingRecord | null>(null);
@@ -49,6 +56,13 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
   });
   const [showNovoPedido, setShowNovoPedido] = useState(false);
   const [novoPedidoPricing, setNovoPedidoPricing] = useState<PricingRecord | null>(null);
+  const [guaranteeRequests, setGuaranteeRequests] = useState<GuaranteeAuthorizationRequest[]>([]);
+  const [reviewingGuaranteeRequest, setReviewingGuaranteeRequest] = useState<{
+    request: GuaranteeAuthorizationRequest;
+    decision: 'approved' | 'rejected';
+  } | null>(null);
+  const [guaranteeReviewReason, setGuaranteeReviewReason] = useState('');
+  const [savingGuaranteeReview, setSavingGuaranteeReview] = useState(false);
 
   // Modal de reprovação de precificação
   const [showRejectionModal, setShowRejectionModal] = useState(false);
@@ -66,14 +80,20 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
     currentUser.role === 'admin' ||
     (currentUser.permissions as any)?.approvals_canApprove === true;
   const canApprove = canApproveTotal || currentUser.role === 'manager';
+  const canReviewGuarantees =
+    currentUser.role === 'master' ||
+    currentUser.role === 'admin' ||
+    currentUser.role === 'manager' ||
+    (currentUser.permissions as any)?.calculator_overrideGuaranteeDivergence === true;
 
   const loadData = async () => {
     setAllPricings([]);
     setGoals([]);
-    const [fetchedPricings, allGoals, settings] = await Promise.all([
+    const [fetchedPricings, allGoals, settings, pendingGuaranteeRequests] = await Promise.all([
       getPricingRecords(),
       getGoals(),
       getAppSettings(),
+      canReviewGuarantees ? getGuaranteeAuthorizationRequests('pending') : Promise.resolve([]),
     ]);
     if (settings) setAppSettings(settings);
 
@@ -100,6 +120,7 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
     }
     setAllPricings(filteredPricings);
     setGoals(filteredGoals);
+    setGuaranteeRequests(pendingGuaranteeRequests);
   };
 
   useEffect(() => {
@@ -333,11 +354,65 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
     }
   };
 
+  const openGuaranteeReview = (
+    request: GuaranteeAuthorizationRequest,
+    decision: 'approved' | 'rejected'
+  ) => {
+    setGuaranteeReviewReason('');
+    setReviewingGuaranteeRequest({ request, decision });
+  };
+
+  const submitGuaranteeReview = async () => {
+    if (!reviewingGuaranteeRequest || !guaranteeReviewReason.trim()) {
+      showError('Informe a justificativa da decisão.');
+      return;
+    }
+    setSavingGuaranteeReview(true);
+    try {
+      const reviewed = await decideGuaranteeAuthorizationRequest(
+        reviewingGuaranteeRequest.request.id,
+        reviewingGuaranteeRequest.decision,
+        guaranteeReviewReason
+      );
+      await createNotification({
+        userId: reviewed.requesterId,
+        title:
+          reviewed.status === 'approved'
+            ? 'Garantias autorizadas ✅'
+            : 'Autorização de garantias rejeitada',
+        message:
+          reviewed.status === 'approved'
+            ? `${currentUser.name} autorizou a composição para ${reviewed.clientName || 'o cliente informado'}.`
+            : `${currentUser.name} rejeitou a solicitação. Motivo: ${reviewed.reviewReason}`,
+        date: new Date().toISOString(),
+        read: false,
+        type: 'pricing_approval',
+        dataId: reviewed.id,
+      });
+      setGuaranteeRequests((previous) =>
+        previous.filter((request) => request.id !== reviewed.id)
+      );
+      setReviewingGuaranteeRequest(null);
+      setGuaranteeReviewReason('');
+      showSuccess(
+        reviewed.status === 'approved'
+          ? 'Garantias autorizadas com sucesso.'
+          : 'Solicitação rejeitada com sucesso.'
+      );
+    } catch (error) {
+      logger.error('Erro ao revisar autorização de garantias:', error);
+      showError('Não foi possível concluir a decisão. Atualize a página e tente novamente.');
+    } finally {
+      setSavingGuaranteeReview(false);
+    }
+  };
+
   if (
     currentUser.role !== 'master' &&
     currentUser.role !== 'admin' &&
     currentUser.role !== 'manager' &&
-    !(currentUser.permissions as any)?.approvals
+    !(currentUser.permissions as any)?.approvals &&
+    !canReviewGuarantees
   ) {
     return (
       <div className="p-6 bg-white rounded-xl shadow-sm border border-stone-200 text-center">
@@ -372,6 +447,14 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
         >
           Precificações ({pendingPricings.length})
         </button>
+        {canReviewGuarantees && (
+          <button
+            onClick={() => setActiveTab('guarantees')}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'guarantees' ? 'bg-amber-600 text-white shadow-lg shadow-amber-200' : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-50'}`}
+          >
+            Garantias ({guaranteeRequests.length})
+          </button>
+        )}
         <button
           onClick={() => setActiveTab('goals')}
           className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'goals' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200' : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-50'}`}
@@ -385,6 +468,68 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
           Exclusões ({pendingDeletionRequests.length})
         </button>
       </div>
+
+      {activeTab === 'guarantees' && canReviewGuarantees && (
+        <div className="space-y-4">
+          {guaranteeRequests.length > 0 ? (
+            guaranteeRequests.map((request) => (
+              <div key={request.id} className="rounded-xl border border-amber-200 bg-amber-50 p-5">
+                <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <AlertTriangle className="h-5 w-5 text-amber-600" />
+                      <h3 className="font-black text-stone-800">
+                        {request.clientName || 'Cliente não informado'}
+                      </h3>
+                      <span className="rounded bg-white px-2 py-1 text-[10px] font-bold uppercase text-amber-700">
+                        {request.divergences.length} divergência(s)
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-stone-500">
+                      Solicitado por <strong>{request.requesterName}</strong> em{' '}
+                      {new Date(request.createdAt).toLocaleString('pt-BR')}
+                    </p>
+                    <div className="mt-3 rounded-lg border border-amber-100 bg-white p-3">
+                      <p className="text-[10px] font-bold uppercase text-stone-400">Motivo</p>
+                      <p className="mt-1 text-sm text-stone-700">{request.requestReason}</p>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {request.divergences.map((divergence, index) => (
+                        <span
+                          key={`${divergence.formulaId}-${divergence.nutrient}-${index}`}
+                          className="rounded-md border border-amber-200 bg-white px-2 py-1 text-xs font-bold text-amber-800"
+                        >
+                          {divergence.formula} · {divergence.nutrient}:{' '}
+                          {Number(divergence.calculated).toFixed(2)}% · alvo{' '}
+                          {Number(divergence.target).toFixed(2)}%
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    <button
+                      onClick={() => openGuaranteeReview(request, 'approved')}
+                      className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700"
+                    >
+                      Autorizar
+                    </button>
+                    <button
+                      onClick={() => openGuaranteeReview(request, 'rejected')}
+                      className="rounded-lg bg-red-600 px-4 py-2 text-xs font-bold text-white hover:bg-red-700"
+                    >
+                      Rejeitar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="rounded-xl border border-dashed bg-white p-6 text-center text-stone-500">
+              Nenhuma autorização de garantias pendente.
+            </p>
+          )}
+        </div>
+      )}
 
       {activeTab === 'pricings' && (
         <div className="space-y-4">
@@ -605,6 +750,63 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
           onUpdateApproval={handlePricingApproval}
           appSettings={appSettings}
         />
+      )}
+
+      {reviewingGuaranteeRequest && (
+        <div
+          className="fixed inset-0 z-[220] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+          onMouseDown={(event) =>
+            closeModalOnBackdrop(event, () => setReviewingGuaranteeRequest(null))
+          }
+        >
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-stone-100 p-6">
+              <h3
+                className={`text-lg font-black ${reviewingGuaranteeRequest.decision === 'approved' ? 'text-emerald-700' : 'text-red-700'}`}
+              >
+                {reviewingGuaranteeRequest.decision === 'approved'
+                  ? 'Autorizar garantias'
+                  : 'Rejeitar solicitação'}
+              </h3>
+              <button
+                onClick={() => setReviewingGuaranteeRequest(null)}
+                className="text-stone-400 hover:text-stone-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-4 p-6">
+              <p className="text-sm text-stone-600">
+                Registre a justificativa da decisão. Ela ficará disponível para o solicitante e na
+                auditoria administrativa.
+              </p>
+              <textarea
+                value={guaranteeReviewReason}
+                onChange={(event) => setGuaranteeReviewReason(event.target.value)}
+                rows={4}
+                maxLength={1000}
+                placeholder="Justificativa obrigatória"
+                className="w-full rounded-xl border border-stone-300 p-3 text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setReviewingGuaranteeRequest(null)}
+                  disabled={savingGuaranteeReview}
+                  className="rounded-lg border border-stone-200 px-4 py-2 text-sm font-bold text-stone-600"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => void submitGuaranteeReview()}
+                  disabled={savingGuaranteeReview || !guaranteeReviewReason.trim()}
+                  className={`rounded-lg px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50 ${reviewingGuaranteeRequest.decision === 'approved' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'}`}
+                >
+                  {savingGuaranteeReview ? 'Salvando...' : 'Confirmar decisão'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Modal de Reprovação de Precificação */}

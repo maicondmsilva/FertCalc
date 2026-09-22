@@ -79,6 +79,13 @@ import {
   getGuaranteeDivergences,
 } from '../utils/guaranteeAuthorization';
 import { logAudit } from '../services/auditService';
+import { createGuaranteeAuthorizationFingerprint } from '../utils/guaranteeAuthorizationFingerprint';
+import {
+  consumeGuaranteeAuthorizationRequest,
+  createGuaranteeAuthorizationRequest,
+  findApprovedGuaranteeAuthorizationRequest,
+  type GuaranteeAuthorizationRequest,
+} from '../services/guaranteeAuthorizationRequestService';
 
 interface UseCalculatorProps {
   initialData?: PricingRecord | null;
@@ -1092,7 +1099,11 @@ export function useCalculator({
 
   // ─── Save functions ───────────────────────────────────────
 
-  const performSavePricing = async (overrideJustification?: string) => {
+  const performSavePricing = async (
+    overrideJustification?: string,
+    approvedGuaranteeRequest?: GuaranteeAuthorizationRequest,
+    approvedCompositionHash?: string
+  ) => {
     if (isLocked) {
       showError('Esta precificação está finalizada e não pode ser alterada.');
       return;
@@ -1193,12 +1204,106 @@ export function useCalculator({
     const guaranteeDivergences = getGuaranteeDivergences(selectedCalculations);
     if (guaranteeDivergences.length > 0 && !overrideJustification?.trim()) {
       if (!canAuthorizeGuaranteeDivergence(currentUser)) {
+        let compositionHash: string;
+        try {
+          compositionHash = await createGuaranteeAuthorizationFingerprint(
+            selectedCalculations,
+            guaranteeDivergences
+          );
+          const approvedRequest = await findApprovedGuaranteeAuthorizationRequest(compositionHash);
+          if (approvedRequest) {
+            await performSavePricing(
+              approvedRequest.reviewReason || approvedRequest.requestReason,
+              approvedRequest,
+              compositionHash
+            );
+            return;
+          }
+        } catch (lookupError: any) {
+          showError(
+            `Não foi possível verificar as autorizações desta composição: ${lookupError?.message || 'tente novamente.'}`
+          );
+          return;
+        }
+
         const affected = Array.from(
           new Set(guaranteeDivergences.map((item) => `${item.formula}: ${item.nutrient}`))
         ).join(', ');
-        showError(
-          `Não é possível salvar: existem garantias divergentes (${affected}). Solicite autorização de um supervisor.`
-        );
+        setPromptState({
+          isOpen: true,
+          defaultValue: '',
+          title: 'Solicitar autorização ao supervisor',
+          message: `Existem garantias divergentes (${affected}). Informe o motivo comercial ou técnico para enviar a solicitação.`,
+          placeholder: 'Motivo da solicitação',
+          confirmLabel: 'Enviar solicitação',
+          onConfirm: async (reason: string) => {
+            setPromptState((previous) => ({ ...previous, isOpen: false }));
+            if (!currentUser.organizationId) {
+              showError('Seu usuário não possui uma organização válida para enviar a solicitação.');
+              return;
+            }
+            try {
+              const request = await createGuaranteeAuthorizationRequest({
+                organizationId: currentUser.organizationId,
+                requesterId: currentUser.id,
+                requesterName: currentUser.name,
+                clientId: factors.client?.id,
+                clientName: factors.client?.name,
+                compositionHash,
+                pricingSnapshot: {
+                  userId: currentUser.id,
+                  userName: currentUser.name,
+                  userCode: currentUser.nickname,
+                  date: initialData?.date || new Date().toISOString(),
+                  status,
+                  macros,
+                  micros,
+                  factors,
+                  calculations: selectedCalculations,
+                },
+                divergences: guaranteeDivergences,
+                requestReason: reason,
+              });
+
+              const managersList = await getManagersOfUser(currentUser.id);
+              const users = await getUsers();
+              const authorizedReviewers = users.filter(
+                (user) =>
+                  user.role === 'master' ||
+                  user.role === 'admin' ||
+                  (user.permissions as any)?.calculator_overrideGuaranteeDivergence === true
+              );
+              const recipientIds = new Set([
+                ...managersList.map((manager) => manager.id),
+                ...authorizedReviewers.map((user) => user.id),
+              ]);
+              await Promise.allSettled(
+                Array.from(recipientIds)
+                  .filter((userId) => userId !== currentUser.id)
+                  .map((userId) =>
+                    createNotification({
+                      userId,
+                      title: 'Autorização de garantias solicitada',
+                      message: `${currentUser.name} solicitou autorização para ${factors.client?.name || 'cliente não informado'} (${guaranteeDivergences.length} divergência(s)).`,
+                      date: new Date().toISOString(),
+                      read: false,
+                      type: 'pricing_approval',
+                      dataId: request.id,
+                    })
+                  )
+              );
+              showSuccess('Solicitação enviada aos responsáveis. A composição foi preservada.');
+            } catch (requestError: any) {
+              if (requestError?.code === '23505') {
+                showError('Já existe uma solicitação pendente para esta mesma composição.');
+                return;
+              }
+              showError(
+                `Não foi possível enviar a solicitação: ${requestError?.message || 'tente novamente.'}`
+              );
+            }
+          },
+        });
         return;
       }
 
@@ -1234,10 +1339,12 @@ export function useCalculator({
         guaranteeDivergenceAuthorization:
           divergences.length > 0 && overrideJustification?.trim()
             ? {
-                authorizedByUserId: currentUser.id,
-                authorizedByUserName: currentUser.name,
-                authorizedAt: authorizationTimestamp,
-                justification: overrideJustification.trim(),
+                authorizedByUserId: approvedGuaranteeRequest?.reviewedBy || currentUser.id,
+                authorizedByUserName:
+                  approvedGuaranteeRequest?.reviewedByName || currentUser.name,
+                authorizedAt: approvedGuaranteeRequest?.reviewedAt || authorizationTimestamp,
+                justification:
+                  approvedGuaranteeRequest?.reviewReason || overrideJustification.trim(),
                 divergences: divergences.map(({ nutrient, target, calculated }) => ({
                   nutrient,
                   target,
@@ -1248,7 +1355,11 @@ export function useCalculator({
       };
     });
     if (guaranteeDivergences.length > 0) {
-      historyEntry.action += ` · Divergência de garantias autorizada por ${currentUser.name}: ${overrideJustification!.trim()}`;
+      const authorizationUserName =
+        approvedGuaranteeRequest?.reviewedByName || currentUser.name;
+      const authorizationReason =
+        approvedGuaranteeRequest?.reviewReason || overrideJustification!.trim();
+      historyEntry.action += ` · Divergência de garantias autorizada por ${authorizationUserName}: ${authorizationReason}`;
     }
     const selectedCalculation = selectedCalculations[0];
 
@@ -1338,6 +1449,23 @@ export function useCalculator({
           ...buildGuaranteeAuthorizationAuditMetadata(selectedCalculations),
         },
       });
+    }
+
+    let approvalConsumptionFailed = false;
+    if (approvedGuaranteeRequest && approvedCompositionHash) {
+      try {
+        await consumeGuaranteeAuthorizationRequest(
+          approvedGuaranteeRequest.id,
+          approvedCompositionHash,
+          savedRecord.id
+        );
+      } catch (consumptionError) {
+        approvalConsumptionFailed = true;
+        console.error(
+          '[savePricing] A precificação foi salva, mas a autorização não pôde ser consumida:',
+          consumptionError
+        );
+      }
     }
 
     // Record one contextual history point for each linked formulated product.
@@ -1486,7 +1614,7 @@ export function useCalculator({
 
     // === BLOCO 3: Sucesso sempre chegará aqui ===
     showSuccess(
-      `Precificação ${wasApproved || wasRejected ? 'atualizada' : 'salva'} com sucesso!${wasApproved || wasRejected ? ' Notificação enviada aos gerentes.' : ''}`
+      `Precificação ${wasApproved || wasRejected ? 'atualizada' : 'salva'} com sucesso!${wasApproved || wasRejected ? ' Notificação enviada aos gerentes.' : ''}${approvalConsumptionFailed ? ' Atenção: não foi possível finalizar o vínculo da autorização; contate o administrador.' : ''}`
     );
     setClientSearch('');
     setAgentSearch('');
