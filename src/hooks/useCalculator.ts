@@ -806,7 +806,7 @@ export function useCalculator({
             );
           }
 
-          return updatedFormula;
+          return { ...updatedFormula, summary: undefined };
         }
         return c;
       })

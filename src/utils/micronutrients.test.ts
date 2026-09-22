@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getCalculatedMicronutrientValue,
   getCatalogMicronutrientNames,
   getMissingSelectedMicronutrientSources,
+  getMicronutrientTargetStatus,
 } from './micronutrients';
 
 describe('micronutrient catalog helpers', () => {
@@ -26,5 +28,14 @@ describe('micronutrient catalog helpers', () => {
     );
 
     expect(result).toEqual(['Zn']);
+  });
+
+  it('compara meta e resultado ignorando diferenças na grafia do nutriente', () => {
+    const calculated = getCalculatedMicronutrientValue({ ZN: 0.255 }, 'Zn');
+
+    expect(calculated).toBe(0.255);
+    expect(getMicronutrientTargetStatus(0.25, calculated)).toBe('met');
+    expect(getMicronutrientTargetStatus(0.25, 0.3)).toBe('divergent');
+    expect(getMicronutrientTargetStatus(0.25, undefined)).toBe('pending');
   });
 });

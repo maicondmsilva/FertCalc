@@ -17,6 +17,7 @@ import {
   AlertTriangle,
   Copy,
   ChevronDown,
+  CheckCircle2,
 } from 'lucide-react';
 import { PricingRecord, SavedFormula, User as AppUser, Embalagem } from '../types';
 import { useToast } from './Toast';
@@ -37,8 +38,10 @@ import { getProdutosFormulados, ProdutoFormulado } from '../services/produtosFor
 import { isValidExchangeRate } from '../utils/priceListCurrency';
 import {
   formatMicronutrientLabel,
+  getCalculatedMicronutrientValue,
   getCatalogMicronutrientNames,
   getMissingSelectedMicronutrientSources,
+  getMicronutrientTargetStatus,
   normalizeMicronutrientKey,
 } from '../utils/micronutrients';
 
@@ -1154,46 +1157,82 @@ export default function Calculator({
                                         { [name]: Number(targetValue) },
                                         [...calc.macros, ...calc.micros]
                                       ).length > 0;
+                                    const calculatedValue = getCalculatedMicronutrientValue(
+                                      calc.summary?.resultingMicros,
+                                      name
+                                    );
+                                    const targetStatus = getMicronutrientTargetStatus(
+                                      Number(targetValue || 0),
+                                      calculatedValue
+                                    );
                                     return (
                                       <div
                                         key={name}
-                                        className={`flex items-center gap-1 rounded-lg border bg-white px-2 py-1.5 ${
+                                        className={`flex flex-col gap-1 rounded-lg border bg-white px-2 py-1.5 ${
                                           missingSelectedSource
                                             ? 'border-red-300 ring-1 ring-red-100'
                                             : 'border-cyan-200'
                                         }`}
                                       >
-                                        <span className="text-[10px] font-bold text-cyan-800">
-                                          {name}%
-                                        </span>
-                                        <input
-                                          type="text"
-                                          inputMode="decimal"
-                                          value={
-                                            microTargetInputs[inputKey] ??
-                                            (Number(targetValue || 0) > 0
-                                              ? String(targetValue).replace('.', ',')
-                                              : '')
-                                          }
-                                          onChange={(event) =>
-                                            updateMicroTarget(calc, name, event.target.value)
-                                          }
-                                          onBlur={() =>
-                                            setMicroTargetInputs((current) => {
-                                              const next = { ...current };
-                                              delete next[inputKey];
-                                              return next;
-                                            })
-                                          }
-                                          placeholder="0,00"
-                                          aria-label={`${name} alvo em porcentagem`}
-                                          className="w-16 rounded border border-cyan-300 bg-cyan-50 px-1.5 py-1 text-xs text-stone-800 focus:ring-1 focus:ring-cyan-500"
-                                        />
-                                        {missingSelectedSource && (
-                                          <AlertTriangle
-                                            className="h-3.5 w-3.5 text-red-500"
-                                            aria-label={`Nenhum produto selecionado fornece ${name}`}
+                                        <div className="flex items-center gap-1">
+                                          <span className="text-[10px] font-bold text-cyan-800">
+                                            {name}%
+                                          </span>
+                                          <input
+                                            type="text"
+                                            inputMode="decimal"
+                                            value={
+                                              microTargetInputs[inputKey] ??
+                                              (Number(targetValue || 0) > 0
+                                                ? String(targetValue).replace('.', ',')
+                                                : '')
+                                            }
+                                            onChange={(event) =>
+                                              updateMicroTarget(calc, name, event.target.value)
+                                            }
+                                            onBlur={() =>
+                                              setMicroTargetInputs((current) => {
+                                                const next = { ...current };
+                                                delete next[inputKey];
+                                                return next;
+                                              })
+                                            }
+                                            placeholder="0,00"
+                                            aria-label={`${name} alvo em porcentagem`}
+                                            className="w-16 rounded border border-cyan-300 bg-cyan-50 px-1.5 py-1 text-xs text-stone-800 focus:ring-1 focus:ring-cyan-500"
                                           />
+                                          {missingSelectedSource && (
+                                            <AlertTriangle
+                                              className="h-3.5 w-3.5 text-red-500"
+                                              aria-label={`Nenhum produto selecionado fornece ${name}`}
+                                            />
+                                          )}
+                                        </div>
+                                        {Number(targetValue || 0) > 0 && (
+                                          <span
+                                            className={`flex items-center gap-1 text-[9px] font-bold ${
+                                              missingSelectedSource
+                                                ? 'text-red-600'
+                                                : targetStatus === 'met'
+                                                  ? 'text-emerald-600'
+                                                  : targetStatus === 'divergent'
+                                                    ? 'text-amber-600'
+                                                    : 'text-stone-400'
+                                            }`}
+                                          >
+                                            {targetStatus === 'met' && (
+                                              <CheckCircle2 className="h-3 w-3" />
+                                            )}
+                                            {missingSelectedSource
+                                              ? 'Sem fonte selecionada'
+                                              : targetStatus === 'pending'
+                                                ? 'Aguardando cálculo'
+                                                : `Calculado: ${Number(calculatedValue || 0).toFixed(2)}% · ${
+                                                    targetStatus === 'met'
+                                                      ? 'Meta atendida'
+                                                      : 'Fora da meta'
+                                                  }`}
+                                          </span>
                                         )}
                                       </div>
                                     );
