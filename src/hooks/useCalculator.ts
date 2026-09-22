@@ -74,9 +74,11 @@ import {
 import { isExtraProductAvailableAtLocation } from '../utils/extraProductAvailability';
 import { resetCalculationForPriceList } from '../utils/priceListSelection';
 import {
+  buildGuaranteeAuthorizationAuditMetadata,
   canAuthorizeGuaranteeDivergence,
   getGuaranteeDivergences,
 } from '../utils/guaranteeAuthorization';
+import { logAudit } from '../services/auditService';
 
 interface UseCalculatorProps {
   initialData?: PricingRecord | null;
@@ -1320,6 +1322,22 @@ export function useCalculator({
       showError(`Erro ao salvar precificação: ${msg}`);
       console.error('[savePricing] Erro no Supabase:', error);
       return;
+    }
+
+    if (guaranteeDivergences.length > 0 && overrideJustification?.trim()) {
+      await logAudit({
+        user_id: currentUser.id,
+        user_name: currentUser.name,
+        action: 'pricing.guarantee_divergence_authorized',
+        entity_type: 'pricing_record',
+        entity_id: savedRecord.id,
+        metadata: {
+          client_id: factors.client?.id,
+          client_name: factors.client?.name,
+          operation: initialData ? 'update' : 'create',
+          ...buildGuaranteeAuthorizationAuditMetadata(selectedCalculations),
+        },
+      });
     }
 
     // Record one contextual history point for each linked formulated product.

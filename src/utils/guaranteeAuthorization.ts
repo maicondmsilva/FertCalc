@@ -104,3 +104,30 @@ export function formatPricingGuaranteeAuthorizationAudit(pricing: PricingRecord)
     })
     .join(' | ');
 }
+
+export function buildGuaranteeAuthorizationAuditMetadata(calculations: TargetFormula[]) {
+  const formulas = calculations
+    .filter((calculation) => calculation.guaranteeDivergenceAuthorization)
+    .map((calculation) => {
+      const authorization = calculation.guaranteeDivergenceAuthorization!;
+      return {
+        formula_id: calculation.id,
+        formula: calculation.formula,
+        authorized_by_user_id: authorization.authorizedByUserId,
+        authorized_by_user_name: authorization.authorizedByUserName,
+        authorized_at: authorization.authorizedAt,
+        justification: authorization.justification,
+        divergences: authorization.divergences.map((item) => ({
+          nutrient: item.nutrient,
+          target: item.target,
+          calculated: item.calculated,
+        })),
+      };
+    });
+
+  return {
+    authorized_formula_count: formulas.length,
+    divergence_count: formulas.reduce((total, formula) => total + formula.divergences.length, 0),
+    formulas,
+  };
+}
