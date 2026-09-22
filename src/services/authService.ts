@@ -61,6 +61,19 @@ export async function adminUpdateAuthUser(
       }
     );
     const body = (await response.json().catch(() => ({}))) as { error?: string };
+    if (response.status === 404) {
+      return {
+        success: false,
+        error:
+          'Serviço de atualização de usuários indisponível. Publique a função admin-update-user.',
+      };
+    }
+    if (response.status === 401) {
+      return { success: false, error: 'Sessão inválida ou expirada. Entre novamente.' };
+    }
+    if (response.status === 403) {
+      return { success: false, error: body.error || 'Sem permissão para alterar este usuário.' };
+    }
     return response.ok
       ? { success: true }
       : { success: false, error: body.error || 'Erro ao atualizar usuário' };

@@ -46,11 +46,11 @@ Deno.serve(async (req: Request) => {
     const email = payload.email?.trim().toLowerCase();
     const password = payload.password?.trim();
     const name = payload.name?.trim();
-    const nickname = payload.nickname?.trim();
+    const nickname = payload.nickname?.trim() || payload.name?.trim() || '';
     const role = (payload.role?.trim() || 'user').toLowerCase();
 
-    if (!email || !password || !name || !nickname) {
-      return jsonResponse({ error: 'Campos obrigatórios: email, password, name e nickname' }, 422);
+    if (!email || !password || !name) {
+      return jsonResponse({ error: 'Campos obrigatórios: email, password e name' }, 422);
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -110,6 +110,18 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: 'Unable to resolve caller organization' }, 403);
     }
 
+    const accessProfileId = payload.access_profile_id?.trim() || null;
+    if (accessProfileId) {
+      const { data: accessProfile, error: accessProfileError } = await supabaseAdmin
+        .from('access_profiles')
+        .select('id')
+        .eq('id', accessProfileId)
+        .maybeSingle();
+      if (accessProfileError || !accessProfile) {
+        return jsonResponse({ error: 'Perfil de acesso não encontrado' }, 422);
+      }
+    }
+
     const { data: createdAuth, error: createAuthError } = await supabaseAdmin.auth.admin.createUser(
       {
         email,
@@ -143,7 +155,7 @@ Deno.serve(async (req: Request) => {
       permissions: payload.permissions ?? {},
       filiais_permitidas: payload.filiais_permitidas ?? [],
       requer_alteracao_senha: payload.requer_alteracao_senha ?? true,
-      access_profile_id: payload.access_profile_id || null,
+      access_profile_id: accessProfileId,
       password: '', // satisfy legacy password column not-null constraint
     });
 

@@ -31,13 +31,22 @@ Deno.serve(async (req: Request) => {
     const userId = payload.user_id?.trim();
     const email = payload.email?.trim().toLowerCase();
     const name = payload.name?.trim();
-    const nickname = payload.nickname?.trim();
+    const nickname = payload.nickname?.trim() || payload.name?.trim() || '';
     const role = payload.role?.trim().toLowerCase();
-    if (!userId || !email || !name || !nickname || !role) {
+    if (!userId || !email || !name || !role) {
       return response({ error: 'Dados obrigatórios do usuário não informados' }, 422);
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return response({ error: 'E-mail inválido' }, 422);
+    }
+    if (
+      name.length > 120 ||
+      nickname.length > 80 ||
+      email.length > 254 ||
+      (payload.managed_user_ids?.length ?? 0) > 200 ||
+      (payload.filiais_permitidas?.length ?? 0) > 200
+    ) {
+      return response({ error: 'Dados do usuário excedem os limites permitidos' }, 422);
     }
 
     const url = Deno.env.get('SUPABASE_URL') ?? '';
@@ -55,13 +64,11 @@ Deno.serve(async (req: Request) => {
       caller.rpc('can_manage_user', { target_user_id: userId }),
       caller.rpc('can_assign_role', { new_role: role }),
     ]);
-    if (
-      manageDecision.error ||
-      roleDecision.error ||
-      !manageDecision.data ||
-      !roleDecision.data
-    ) {
-      return response({ error: 'Sem permissão para editar este usuário ou atribuir este nível' }, 403);
+    if (manageDecision.error || roleDecision.error || !manageDecision.data || !roleDecision.data) {
+      return response(
+        { error: 'Sem permissão para editar este usuário ou atribuir este nível' },
+        403
+      );
     }
 
     const { data: currentProfile, error: profileError } = await admin
@@ -76,8 +83,21 @@ Deno.serve(async (req: Request) => {
       return response({ error: 'Usuário fora da organização atual' }, 403);
     }
 
+    const accessProfileId = payload.access_profile_id?.trim() || null;
+    if (accessProfileId) {
+      const { data: accessProfile, error: accessProfileError } = await admin
+        .from('access_profiles')
+        .select('id')
+        .eq('id', accessProfileId)
+        .maybeSingle();
+      if (accessProfileError || !accessProfile) {
+        return response({ error: 'Perfil de acesso não encontrado' }, 422);
+      }
+    }
+
     const { data: oldAuth, error: oldAuthError } = await admin.auth.admin.getUserById(userId);
-    if (oldAuthError || !oldAuth.user) return response({ error: 'Usuário não encontrado no Auth' }, 404);
+    if (oldAuthError || !oldAuth.user)
+      return response({ error: 'Usuário não encontrado no Auth' }, 404);
 
     const previousMetadata = oldAuth.user.user_metadata ?? {};
     const { error: authError } = await admin.auth.admin.updateUserById(userId, {
@@ -87,10 +107,13 @@ Deno.serve(async (req: Request) => {
     });
     if (authError) {
       const duplicate = /already|exists|registered/i.test(authError.message);
-      return response({ error: duplicate ? 'Este e-mail já está cadastrado no Auth' : authError.message }, duplicate ? 409 : 400);
+      return response(
+        { error: duplicate ? 'Este e-mail já está cadastrado no Auth' : authError.message },
+        duplicate ? 409 : 400
+      );
     }
 
-    const { error: appError } = await admin
+    const { data: updatedProfile, error: appError } = await admin
       .from('app_users')
       .update({
         email,
@@ -101,18 +124,35 @@ Deno.serve(async (req: Request) => {
         managed_user_ids: payload.managed_user_ids ?? [],
         permissions: payload.permissions ?? {},
         filiais_permitidas: payload.filiais_permitidas ?? [],
-        access_profile_id: payload.access_profile_id || null,
+        access_profile_id: accessProfileId,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', userId);
+      .eq('id', userId)
+      .select('id')
+      .single();
 
-    if (appError) {
-      await admin.auth.admin.updateUserById(userId, {
+    if (appError || !updatedProfile) {
+      const { error: rollbackError } = await admin.auth.admin.updateUserById(userId, {
         email: oldAuth.user.email,
         email_confirm: true,
         user_metadata: previousMetadata,
       });
-      return response({ error: `Falha ao atualizar cadastro interno: ${appError.message}` }, 500);
+      if (rollbackError) {
+        console.error('[admin-update-user] auth rollback failed:', rollbackError.message);
+        return response(
+          {
+            error:
+              'Cadastro interno não foi atualizado e a identidade exige reconciliação administrativa',
+          },
+          500
+        );
+      }
+      return response(
+        {
+          error: `Falha ao atualizar cadastro interno: ${appError?.message ?? 'registro não localizado'}`,
+        },
+        500
+      );
     }
 
     return response({ user_id: userId }, 200);
