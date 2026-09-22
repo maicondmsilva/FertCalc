@@ -99,6 +99,42 @@ export async function getGuaranteeAuthorizationRequests(
   return (data || []).map((row) => mapRequest(row as Record<string, unknown>));
 }
 
+export async function getMyGuaranteeAuthorizationRequests(
+  requesterId: string
+): Promise<GuaranteeAuthorizationRequest[]> {
+  const { data, error } = await supabase
+    .from('guarantee_authorization_requests')
+    .select('*')
+    .eq('requester_id', requesterId)
+    .in('status', ['pending', 'approved', 'rejected'])
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data || []).map((row) => mapRequest(row as Record<string, unknown>));
+}
+
+export function subscribeToMyGuaranteeAuthorizationRequests(
+  requesterId: string,
+  onChange: () => void
+): () => void {
+  const channel = supabase
+    .channel(`guarantee-authorization-requests-${requesterId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'guarantee_authorization_requests',
+        filter: `requester_id=eq.${requesterId}`,
+      },
+      onChange
+    )
+    .subscribe();
+
+  return () => {
+    void supabase.removeChannel(channel);
+  };
+}
+
 export async function decideGuaranteeAuthorizationRequest(
   requestId: string,
   decision: 'approved' | 'rejected',

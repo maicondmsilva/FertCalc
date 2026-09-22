@@ -18,6 +18,9 @@ import {
   Copy,
   ChevronDown,
   CheckCircle2,
+  ShieldCheck,
+  RefreshCw,
+  Clock3,
 } from 'lucide-react';
 import { PricingRecord, SavedFormula, User as AppUser, Embalagem } from '../types';
 import { useToast } from './Toast';
@@ -92,6 +95,7 @@ export default function Calculator({
 
   const {
     confirmState,
+    confirm,
     handleConfirm,
     handleCancel,
     promptState,
@@ -154,6 +158,11 @@ export default function Calculator({
     isSavingFormula,
     savePricing,
     saveToFormulasList,
+    myGuaranteeRequests,
+    isLoadingGuaranteeRequests,
+    guaranteeRequestsError,
+    refreshMyGuaranteeRequests,
+    restoreGuaranteeAuthorizationRequest,
   } = useCalculator({
     initialData,
     initialFormulaToLoad,
@@ -192,6 +201,7 @@ export default function Calculator({
   const [microTargetsOpen, setMicroTargetsOpen] = useState<Record<string, boolean>>({});
   const [microTargetInputs, setMicroTargetInputs] = useState<Record<string, string>>({});
   const [exchangeRateInput, setExchangeRateInput] = useState('');
+  const [showGuaranteeRequests, setShowGuaranteeRequests] = useState(false);
   const protectedMaterialIds = initialFormulaToLoad?.protectedMaterialIds || [];
   const isSavedFormulaRevision = initialFormulaToLoad?.isRevisionFromSavedFormula === true;
 
@@ -407,9 +417,46 @@ export default function Calculator({
     ]);
   };
 
+  const restoreRequestedComposition = async (request: (typeof myGuaranteeRequests)[number]) => {
+    const confirmed = await confirm({
+      title: 'Retomar composição?',
+      message:
+        'Os dados atuais da calculadora serão substituídos pela composição preservada nesta solicitação.',
+      confirmLabel: 'Retomar composição',
+      cancelLabel: 'Cancelar',
+    });
+    if (!confirmed) return;
+    if (restoreGuaranteeAuthorizationRequest(request)) setShowGuaranteeRequests(false);
+  };
+
   return (
     <div className="grid min-w-0 grid-cols-1 gap-4 pb-12 sm:gap-6 lg:grid-cols-3">
       <>
+        {!isSimplified &&
+          (myGuaranteeRequests.length > 0 ||
+            isLoadingGuaranteeRequests ||
+            guaranteeRequestsError) && (
+            <div className="lg:col-span-3 flex flex-col gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-blue-700" />
+                <div>
+                  <p className="text-sm font-black text-blue-950">Minhas autorizações de garantias</p>
+                  <p className="text-xs text-blue-700">
+                    {isLoadingGuaranteeRequests
+                      ? 'Atualizando solicitações…'
+                      : `${myGuaranteeRequests.length} solicitação(ões) disponível(is) para consulta ou retomada.`}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowGuaranteeRequests(true)}
+                className="rounded-lg bg-blue-700 px-4 py-2 text-xs font-bold text-white hover:bg-blue-800"
+              >
+                Consultar solicitações
+              </button>
+            </div>
+          )}
         {isSavedFormulaRevision && (
           <div className="lg:col-span-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             <p className="font-bold">Revisão de batida salva</p>
@@ -2595,6 +2642,117 @@ export default function Calculator({
             showSuccess('Receita Fertigran adicionada na Precificação!');
           }}
         />
+      )}
+
+      {showGuaranteeRequests && (
+        <div
+          className="fixed inset-0 z-[230] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm"
+          onMouseDown={(event) =>
+            closeModalOnBackdrop(event, () => setShowGuaranteeRequests(false))
+          }
+        >
+          <div className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-stone-200 p-5">
+              <div>
+                <h3 className="flex items-center gap-2 text-lg font-black text-stone-900">
+                  <ShieldCheck className="h-5 w-5 text-blue-700" /> Minhas autorizações
+                </h3>
+                <p className="mt-1 text-xs text-stone-500">
+                  Acompanhe a decisão e restaure a composição preservada.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void refreshMyGuaranteeRequests()}
+                  disabled={isLoadingGuaranteeRequests}
+                  className="rounded-lg border border-stone-200 p-2 text-stone-500 hover:bg-stone-50 disabled:opacity-50"
+                  title="Atualizar solicitações"
+                >
+                  <RefreshCw
+                    className={`h-4 w-4 ${isLoadingGuaranteeRequests ? 'animate-spin' : ''}`}
+                  />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowGuaranteeRequests(false)}
+                  className="rounded-lg p-2 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+            <div className="space-y-3 overflow-y-auto p-5">
+              {guaranteeRequestsError && (
+                <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                  Não foi possível atualizar as solicitações. Tente novamente.
+                </div>
+              )}
+              {!isLoadingGuaranteeRequests && myGuaranteeRequests.length === 0 && (
+                <div className="rounded-xl border border-dashed border-stone-300 p-8 text-center text-sm text-stone-500">
+                  Nenhuma solicitação disponível.
+                </div>
+              )}
+              {myGuaranteeRequests.map((request) => {
+                const statusConfig = {
+                  pending: {
+                    label: 'Aguardando análise',
+                    className: 'border-amber-200 bg-amber-50 text-amber-800',
+                  },
+                  approved: {
+                    label: 'Autorizada',
+                    className: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+                  },
+                  rejected: {
+                    label: 'Rejeitada',
+                    className: 'border-red-200 bg-red-50 text-red-800',
+                  },
+                }[request.status as 'pending' | 'approved' | 'rejected'];
+                return (
+                  <div key={request.id} className="rounded-xl border border-stone-200 p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-black text-stone-800">
+                            {request.clientName || 'Cliente não informado'}
+                          </p>
+                          {statusConfig && (
+                            <span
+                              className={`rounded-full border px-2 py-1 text-[10px] font-black uppercase ${statusConfig.className}`}
+                            >
+                              {statusConfig.label}
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-1 flex items-center gap-1 text-xs text-stone-500">
+                          <Clock3 className="h-3.5 w-3.5" />
+                          {new Date(request.createdAt).toLocaleString('pt-BR')} ·{' '}
+                          {request.divergences.length} divergência(s)
+                        </p>
+                        <p className="mt-3 text-sm text-stone-700">
+                          <strong>Solicitação:</strong> {request.requestReason}
+                        </p>
+                        {request.reviewReason && (
+                          <p className="mt-1 text-sm text-stone-700">
+                            <strong>Decisão de {request.reviewedByName || 'responsável'}:</strong>{' '}
+                            {request.reviewReason}
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void restoreRequestedComposition(request)}
+                        className="shrink-0 rounded-lg bg-stone-900 px-4 py-2 text-xs font-bold text-white hover:bg-stone-700"
+                      >
+                        Retomar composição
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
       )}
       <CalculatorSettingsModal
         isOpen={isSettingsOpen}

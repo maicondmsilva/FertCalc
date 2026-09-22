@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   RawMaterial,
   PricingFactors,
@@ -84,6 +84,8 @@ import {
   consumeGuaranteeAuthorizationRequest,
   createGuaranteeAuthorizationRequest,
   findApprovedGuaranteeAuthorizationRequest,
+  getMyGuaranteeAuthorizationRequests,
+  subscribeToMyGuaranteeAuthorizationRequests,
   type GuaranteeAuthorizationRequest,
 } from '../services/guaranteeAuthorizationRequestService';
 
@@ -149,6 +151,11 @@ export function useCalculator({
   );
   const [isSavingPricing, setIsSavingPricing] = useState(false);
   const [isSavingFormula, setIsSavingFormula] = useState(false);
+  const [myGuaranteeRequests, setMyGuaranteeRequests] = useState<
+    GuaranteeAuthorizationRequest[]
+  >([]);
+  const [isLoadingGuaranteeRequests, setIsLoadingGuaranteeRequests] = useState(false);
+  const [guaranteeRequestsError, setGuaranteeRequestsError] = useState(false);
   const pricingSaveInFlightRef = useRef(false);
   const formulaSaveInFlightRef = useRef(false);
 
@@ -231,6 +238,19 @@ export function useCalculator({
 
     return guarantees.length > 0 ? guarantees.join(' + ') : material.name;
   };
+
+  const refreshMyGuaranteeRequests = useCallback(async () => {
+    setIsLoadingGuaranteeRequests(true);
+    setGuaranteeRequestsError(false);
+    try {
+      setMyGuaranteeRequests(await getMyGuaranteeAuthorizationRequests(currentUser.id));
+    } catch (error) {
+      console.error('[useCalculator] Falha ao carregar solicitações de garantias:', error);
+      setGuaranteeRequestsError(true);
+    } finally {
+      setIsLoadingGuaranteeRequests(false);
+    }
+  }, [currentUser.id]);
 
   // ─── Effects ──────────────────────────────────────────────
 
@@ -348,6 +368,13 @@ export function useCalculator({
     };
     loadData();
   }, []);
+
+  useEffect(() => {
+    void refreshMyGuaranteeRequests();
+    return subscribeToMyGuaranteeAuthorizationRequests(currentUser.id, () => {
+      void refreshMyGuaranteeRequests();
+    });
+  }, [currentUser.id, refreshMyGuaranteeRequests]);
 
   const [currency, setCurrency] = useState<'BRL' | 'USD'>('BRL');
 
@@ -599,6 +626,45 @@ export function useCalculator({
 
   const [expandedCalc, setExpandedCalc] = useState<string | null>(null);
   const [microsInGear, setMicrosInGear] = useState<boolean>(true);
+
+  const restoreGuaranteeAuthorizationRequest = (
+    request: GuaranteeAuthorizationRequest
+  ): boolean => {
+    const snapshot = request.pricingSnapshot;
+    if (
+      !snapshot?.factors ||
+      !Array.isArray(snapshot.macros) ||
+      !Array.isArray(snapshot.micros) ||
+      !Array.isArray(snapshot.calculations) ||
+      snapshot.calculations.length === 0
+    ) {
+      showError('A composição desta solicitação está incompleta e não pode ser restaurada.');
+      return false;
+    }
+
+    setMacros(snapshot.macros);
+    setMicros(snapshot.micros);
+    setFactors(snapshot.factors);
+    setCalculations(snapshot.calculations);
+    setStatus(
+      snapshot.status === 'Fechada' || snapshot.status === 'Perdida'
+        ? snapshot.status
+        : 'Em Andamento'
+    );
+    setClientSearch(snapshot.factors.client?.name || '');
+    setAgentSearch(snapshot.factors.agent?.name || '');
+    setFormulaProductSelections({});
+    setFormulaProductSnapshots({});
+    setSavedPricingId(undefined);
+    setExpandedCalc(snapshot.calculations[0]?.id || null);
+    hasAppliedInitialDefaults.current = true;
+    showSuccess(
+      request.status === 'approved'
+        ? 'Composição autorizada restaurada. Revise os dados e salve a precificação.'
+        : 'Composição da solicitação restaurada para revisão.'
+    );
+    return true;
+  };
   const hasNoMaterialsInDatabase =
     !isMaterialsLoading &&
     !materialsLoadError &&
@@ -1292,6 +1358,7 @@ export function useCalculator({
                     })
                   )
               );
+              await refreshMyGuaranteeRequests();
               showSuccess('Solicitação enviada aos responsáveis. A composição foi preservada.');
             } catch (requestError: any) {
               if (requestError?.code === '23505') {
@@ -1459,6 +1526,7 @@ export function useCalculator({
           approvedCompositionHash,
           savedRecord.id
         );
+        await refreshMyGuaranteeRequests();
       } catch (consumptionError) {
         approvalConsumptionFailed = true;
         console.error(
@@ -1857,6 +1925,13 @@ export function useCalculator({
     // Saved pricing
     savedPricingId,
     setSavedPricingId,
+
+    // Guarantee authorization requests
+    myGuaranteeRequests,
+    isLoadingGuaranteeRequests,
+    guaranteeRequestsError,
+    refreshMyGuaranteeRequests,
+    restoreGuaranteeAuthorizationRequest,
 
     // Lookup data
     branches,
