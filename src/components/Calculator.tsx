@@ -2554,7 +2554,7 @@ export default function Calculator({
               {canSavePricing && (
                 <button
                   type="button"
-                  onClick={savePricing}
+                  onClick={() => void savePricing()}
                   disabled={Boolean(isLocked) || !hasValidExchangeRate || isSavingPricing}
                   className="mt-3 inline-flex w-full min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-emerald-950/30 hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-stone-600"
                 >
@@ -2631,10 +2631,11 @@ export default function Calculator({
       <ConfirmDialog {...confirmState} onConfirm={handleConfirm} onCancel={handleCancel} />
       <PromptDialog
         isOpen={promptState.isOpen}
-        title="Salvar Batida"
-        message="Dê um nome para esta Batida Salva:"
+        title={promptState.title || 'Salvar Batida'}
+        message={promptState.message || 'Dê um nome para esta Batida Salva:'}
         defaultValue={promptState.defaultValue}
-        confirmLabel="Salvar"
+        placeholder={promptState.placeholder}
+        confirmLabel={promptState.confirmLabel || 'Salvar'}
         onConfirm={promptState.onConfirm}
         onCancel={() => setPromptState((prev) => ({ ...prev, isOpen: false }))}
       />

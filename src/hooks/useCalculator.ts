@@ -73,6 +73,10 @@ import {
 } from '../utils/temporaryMaterialPrice';
 import { isExtraProductAvailableAtLocation } from '../utils/extraProductAvailability';
 import { resetCalculationForPriceList } from '../utils/priceListSelection';
+import {
+  canAuthorizeGuaranteeDivergence,
+  getGuaranteeDivergences,
+} from '../utils/guaranteeAuthorization';
 
 interface UseCalculatorProps {
   initialData?: PricingRecord | null;
@@ -108,7 +112,11 @@ export function useCalculator({
   const [promptState, setPromptState] = useState<{
     isOpen: boolean;
     defaultValue: string;
-    onConfirm: (v: string) => void;
+    title?: string;
+    message?: string;
+    placeholder?: string;
+    confirmLabel?: string;
+    onConfirm: (v: string) => void | Promise<void>;
   }>({ isOpen: false, defaultValue: '', onConfirm: () => {} });
 
   const { isSettingsOpen, activeFormulaId, openSettings, closeSettings } = useCalculatorSettings();
@@ -1082,7 +1090,7 @@ export function useCalculator({
 
   // ─── Save functions ───────────────────────────────────────
 
-  const performSavePricing = async () => {
+  const performSavePricing = async (overrideJustification?: string) => {
     if (isLocked) {
       showError('Esta precificação está finalizada e não pode ser alterada.');
       return;
@@ -1177,9 +1185,69 @@ export function useCalculator({
       return;
     }
 
-    const selectedCalculations: TargetFormula[] = updatedCalculations.filter(
+    let selectedCalculations: TargetFormula[] = updatedCalculations.filter(
       (calculation) => calculation.selected
     );
+    const guaranteeDivergences = getGuaranteeDivergences(selectedCalculations);
+    if (guaranteeDivergences.length > 0 && !overrideJustification?.trim()) {
+      if (!canAuthorizeGuaranteeDivergence(currentUser)) {
+        const affected = Array.from(
+          new Set(guaranteeDivergences.map((item) => `${item.formula}: ${item.nutrient}`))
+        ).join(', ');
+        showError(
+          `Não é possível salvar: existem garantias divergentes (${affected}). Solicite autorização de um supervisor.`
+        );
+        return;
+      }
+
+      const preview = guaranteeDivergences
+        .slice(0, 5)
+        .map(
+          (item) =>
+            `${item.formula} · ${item.nutrient}: ${item.calculated.toFixed(2)}% (alvo ${item.target.toFixed(2)}%)`
+        )
+        .join(' | ');
+      setPromptState({
+        isOpen: true,
+        defaultValue: '',
+        title: 'Autorizar garantias divergentes',
+        message: `${preview}${guaranteeDivergences.length > 5 ? ` e mais ${guaranteeDivergences.length - 5}` : ''}. Informe a justificativa para continuar.`,
+        placeholder: 'Motivo da autorização',
+        confirmLabel: 'Autorizar e salvar',
+        onConfirm: async (justification: string) => {
+          setPromptState((previous) => ({ ...previous, isOpen: false }));
+          await savePricing(justification);
+        },
+      });
+      return;
+    }
+
+    const authorizationTimestamp = new Date().toISOString();
+    selectedCalculations = selectedCalculations.map((calculation) => {
+      const divergences = guaranteeDivergences.filter(
+        (item) => item.formulaId === calculation.id
+      );
+      return {
+        ...calculation,
+        guaranteeDivergenceAuthorization:
+          divergences.length > 0 && overrideJustification?.trim()
+            ? {
+                authorizedByUserId: currentUser.id,
+                authorizedByUserName: currentUser.name,
+                authorizedAt: authorizationTimestamp,
+                justification: overrideJustification.trim(),
+                divergences: divergences.map(({ nutrient, target, calculated }) => ({
+                  nutrient,
+                  target,
+                  calculated,
+                })),
+              }
+            : undefined,
+      };
+    });
+    if (guaranteeDivergences.length > 0) {
+      historyEntry.action += ` · Divergência de garantias autorizada por ${currentUser.name}: ${overrideJustification!.trim()}`;
+    }
     const selectedCalculation = selectedCalculations[0];
 
     // Merge global factors with selected calculation's factors (CIF/FOB, freight)
@@ -1409,13 +1477,13 @@ export function useCalculator({
     if (onSaveSuccess) onSaveSuccess(savedRecord);
   };
 
-  const savePricing = async () => {
+  const savePricing = async (overrideJustification?: string) => {
     if (pricingSaveInFlightRef.current) return;
 
     pricingSaveInFlightRef.current = true;
     setIsSavingPricing(true);
     try {
-      await performSavePricing();
+      await performSavePricing(overrideJustification);
     } finally {
       pricingSaveInFlightRef.current = false;
       setIsSavingPricing(false);
