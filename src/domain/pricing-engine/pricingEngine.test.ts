@@ -69,6 +69,26 @@ describe('pricing engine compatibility', () => {
     expect(Object.keys(result.resultingMicros)).toHaveLength(1);
   });
 
+  it('consolida garantias de Ca e S dos micros nos campos principais sem duplicá-las', () => {
+    const result = calculateMaterialComposition([], [
+      {
+        ...material,
+        quantity: 1000,
+        ca: 1,
+        s: 2,
+        microGuarantees: [
+          { name: 'Cálcio', value: 4 },
+          { name: 'Enxofre', value: 3 },
+          { name: 'B', value: 0.5 },
+        ],
+      },
+    ]);
+
+    expect(result.resultingCa).toBeCloseTo(5);
+    expect(result.resultingS).toBeCloseTo(5);
+    expect(result.resultingMicros).toEqual({ B: 0.5 });
+  });
+
   it('ignora o restante do mês corrente quando solicitado', () => {
     const today = new Date(2026, 0, 10, 12);
     expect(calculateInterestDays('2026-02-10T12:00:00', true, today)).toBe(9);

@@ -2,6 +2,10 @@ import solver from 'javascript-lp-solver';
 import type { IncompatibilityRule, RawMaterial } from '../../types';
 import type { FormulaTarget } from './formulaEngine';
 import { calculateMaterialComposition } from './pricingEngine';
+import {
+  getMaterialSecondaryNutrientPercentage,
+  isSecondaryNutrientGuarantee,
+} from '../../utils/micronutrients';
 
 type Constraint = Record<string, number>;
 type Variable = Record<string, number>;
@@ -45,7 +49,10 @@ export function buildFormulaOptimizationModel({
 }: FormulaOptimizationInput): OptimizationModel {
   const microTargets = Object.entries(targetMicros)
     .map(([name, value]) => ({ name: name.trim(), value: numeric(value) }))
-    .filter(({ name, value }) => name.length > 0 && value > 0)
+    .filter(
+      ({ name, value }) =>
+        name.length > 0 && value > 0 && !isSecondaryNutrientGuarantee(name)
+    )
     .map((target, index) => ({ ...target, constraint: `micro_target_${index}` }));
   const model: OptimizationModel = {
     optimize: 'cost',
@@ -71,6 +78,8 @@ export function buildFormulaOptimizationModel({
     const minimumLink = `link_min_${material.id}`;
     const maximumLink = `link_max_${material.id}`;
     const minimumQuantity = numeric(material.minQty);
+    const sulfurPercentage = getMaterialSecondaryNutrientPercentage(material, 's');
+    const calciumPercentage = getMaterialSecondaryNutrientPercentage(material, 'ca');
     const microContributions = Object.fromEntries(
       microTargets.flatMap(({ name, constraint }) => {
         const guarantee = (material.microGuarantees || [])
@@ -84,8 +93,8 @@ export function buildFormulaOptimizationModel({
       ...(numeric(material.n) !== 0 ? { n_eq: numeric(material.n) / 100 } : {}),
       ...(numeric(material.p) !== 0 ? { p_eq: numeric(material.p) / 100 } : {}),
       ...(numeric(material.k) !== 0 ? { k_eq: numeric(material.k) / 100 } : {}),
-      ...(targetS > 0 && numeric(material.s) !== 0 ? { s_eq: numeric(material.s) / 100 } : {}),
-      ...(targetCa > 0 && numeric(material.ca) !== 0 ? { ca_eq: numeric(material.ca) / 100 } : {}),
+      ...(targetS > 0 && sulfurPercentage !== 0 ? { s_eq: sulfurPercentage / 100 } : {}),
+      ...(targetCa > 0 && calciumPercentage !== 0 ? { ca_eq: calciumPercentage / 100 } : {}),
       ...microContributions,
       weight: 1,
       ...(minimumQuantity > 0 ? { [minimumLink]: 1 } : {}),

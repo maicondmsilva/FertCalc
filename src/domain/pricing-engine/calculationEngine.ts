@@ -1,7 +1,11 @@
 import type { IncompatibilityRule, RawMaterial, TargetFormula } from '../../types';
 import { applyProdutosLivresToMaterials, getCalculationMode } from '../../utils/calculationMode';
 import { formatNPK } from '../../utils/formatters';
-import { getMissingSelectedMicronutrientSources } from '../../utils/micronutrients';
+import {
+  getMissingSelectedMicronutrientSources,
+  getSecondaryNutrientTarget,
+  isSecondaryNutrientGuarantee,
+} from '../../utils/micronutrients';
 import { hasFormulaTarget, parseFormulaTarget } from './formulaEngine';
 import { optimizeFormula } from './optimizationEngine';
 import { calculatePricingSummary } from './pricingEngine';
@@ -108,8 +112,13 @@ export function calculateTargetFormula({
   const target = parseFormulaTarget(calculation.formula);
   if (!target) return { calculation };
 
+  const micronutrientTargets = Object.fromEntries(
+    Object.entries(calculation.targetMicros || {}).filter(
+      ([name]) => !isSecondaryNutrientGuarantee(name)
+    )
+  );
   const missingMicronutrientSources = getMissingSelectedMicronutrientSources(
-    calculation.targetMicros,
+    micronutrientTargets,
     [...currentMacros, ...currentMicros]
   );
   if (missingMicronutrientSources.length > 0) {
@@ -124,9 +133,9 @@ export function calculateTargetFormula({
 
   const optimization = optimizeFormula({
     target,
-    targetS: calculation.targetS,
-    targetCa: calculation.targetCa,
-    targetMicros: calculation.targetMicros,
+    targetS: calculation.targetS || getSecondaryNutrientTarget(calculation.targetMicros, 's'),
+    targetCa: calculation.targetCa || getSecondaryNutrientTarget(calculation.targetMicros, 'ca'),
+    targetMicros: micronutrientTargets,
     macros: currentMacros,
     micros: currentMicros,
     incompatibilityRules,

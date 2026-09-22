@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   getCalculatedMicronutrientValue,
   getCatalogMicronutrientNames,
+  getMaterialSecondaryNutrientPercentage,
+  getSecondaryNutrientTarget,
   getMissingSelectedMicronutrientSources,
   getMicronutrientTargetStatus,
+  isSecondaryNutrientGuarantee,
 } from './micronutrients';
 
 describe('micronutrient catalog helpers', () => {
@@ -37,5 +40,44 @@ describe('micronutrient catalog helpers', () => {
     expect(getMicronutrientTargetStatus(0.25, calculated)).toBe('met');
     expect(getMicronutrientTargetStatus(0.25, 0.3)).toBe('divergent');
     expect(getMicronutrientTargetStatus(0.25, undefined)).toBe('pending');
+  });
+
+  it('não oferece cálcio e enxofre novamente como micros alvo', () => {
+    const result = getCatalogMicronutrientNames([
+      {
+        ativo: true,
+        microGuarantees: [
+          { name: 'Ca', value: 10 },
+          { name: 'Enxofre', value: 5 },
+          { name: 'B', value: 2 },
+        ],
+      },
+    ]);
+
+    expect(result).toEqual(['B']);
+    expect(isSecondaryNutrientGuarantee('Cálcio')).toBe(true);
+    expect(isSecondaryNutrientGuarantee('S')).toBe(true);
+  });
+
+  it('soma garantias cadastradas nos micros aos campos próprios de Ca e S', () => {
+    const material = {
+      ca: 2,
+      s: 1,
+      microGuarantees: [
+        { name: 'Cálcio', value: 8 },
+        { name: 'S', value: 4 },
+        { name: 'B', value: 5 },
+      ],
+    };
+
+    expect(getMaterialSecondaryNutrientPercentage(material, 'ca')).toBe(10);
+    expect(getMaterialSecondaryNutrientPercentage(material, 's')).toBe(5);
+  });
+
+  it('recupera metas antigas de Ca e S salvas entre os micros alvo', () => {
+    const targets = { Cálcio: 1.2, Enxofre: 2.5, B: 0.2 };
+
+    expect(getSecondaryNutrientTarget(targets, 'ca')).toBe(1.2);
+    expect(getSecondaryNutrientTarget(targets, 's')).toBe(2.5);
   });
 });
