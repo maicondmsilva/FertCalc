@@ -9,6 +9,13 @@ interface MicronutrientCarrier {
   microGuarantees?: MicronutrientGuarantee[];
 }
 
+type SecondaryNutrient = 'ca' | 's';
+
+const SECONDARY_NUTRIENT_KEYS: Record<SecondaryNutrient, Set<string>> = {
+  ca: new Set(['CA', 'CALCIO']),
+  s: new Set(['S', 'ENXOFRE']),
+};
+
 export const normalizeMicronutrientKey = (name: string) =>
   name
     .trim()
@@ -23,12 +30,43 @@ export const formatMicronutrientLabel = (name: string) => {
     : trimmedName;
 };
 
+export const isSecondaryNutrientGuarantee = (name: string) => {
+  const key = normalizeMicronutrientKey(name);
+  return SECONDARY_NUTRIENT_KEYS.ca.has(key) || SECONDARY_NUTRIENT_KEYS.s.has(key);
+};
+
+export function getMaterialSecondaryNutrientPercentage(
+  material: MicronutrientCarrier & Partial<Record<SecondaryNutrient, number>>,
+  nutrient: SecondaryNutrient
+): number {
+  const registeredPercentage = Number(material[nutrient]) || 0;
+  const guaranteePercentage = (material.microGuarantees || [])
+    .filter((guarantee) => SECONDARY_NUTRIENT_KEYS[nutrient].has(normalizeMicronutrientKey(guarantee.name)))
+    .reduce((total, guarantee) => total + (Number(guarantee.value) || 0), 0);
+  return registeredPercentage + guaranteePercentage;
+}
+
+export function getSecondaryNutrientTarget(
+  targets: Record<string, number> | undefined,
+  nutrient: SecondaryNutrient
+): number | undefined {
+  const entry = Object.entries(targets || {}).find(([name]) =>
+    SECONDARY_NUTRIENT_KEYS[nutrient].has(normalizeMicronutrientKey(name))
+  );
+  return entry ? Number(entry[1]) || undefined : undefined;
+}
+
 export function getCatalogMicronutrientNames(materials: MicronutrientCarrier[]): string[] {
   const names = new Map<string, string>();
   materials
     .filter((material) => material.ativo !== false)
     .flatMap((material) => material.microGuarantees || [])
-    .filter((guarantee) => guarantee.name.trim() && Number(guarantee.value) > 0)
+    .filter(
+      (guarantee) =>
+        guarantee.name.trim() &&
+        Number(guarantee.value) > 0 &&
+        !isSecondaryNutrientGuarantee(guarantee.name)
+    )
     .forEach((guarantee) => {
       const key = normalizeMicronutrientKey(guarantee.name);
       if (!names.has(key)) names.set(key, formatMicronutrientLabel(guarantee.name));

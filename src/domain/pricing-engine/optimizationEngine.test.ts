@@ -57,6 +57,36 @@ describe('LP optimization engine', () => {
     expect(result.composition.resultingCa).toBeCloseTo(4);
   });
 
+  it('atinge as metas principais de Ca e S usando garantias cadastradas nos micros', () => {
+    const filler = material({ id: 'enchimento', n: 0, price: 1 });
+    const calciumAndSulfur = material({
+      id: 'micro-ca-s',
+      type: 'micro',
+      name: 'Fonte de Ca e S',
+      n: 0,
+      price: 20,
+      microGuarantees: [
+        { name: 'Ca', value: 10 },
+        { name: 'S', value: 20 },
+      ],
+    });
+
+    const result = optimizeFormula({
+      target: { n: 0, p: 0, k: 0 },
+      targetCa: 0.5,
+      targetS: 1,
+      macros: [filler],
+      micros: [calciumAndSulfur],
+      incompatibilityRules: [],
+    });
+
+    expect(result.feasible).toBe(true);
+    expect(result.micros[0].quantity).toBeCloseTo(50);
+    expect(result.composition.resultingCa).toBeCloseTo(0.5);
+    expect(result.composition.resultingS).toBeCloseTo(1);
+    expect(result.composition.resultingMicros).toEqual({});
+  });
+
   it('atinge a meta de micro somando garantias de macros e micros selecionados', () => {
     const macroComBoro = material({
       id: 'macro-boro',
