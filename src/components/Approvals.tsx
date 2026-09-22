@@ -30,6 +30,7 @@ import { ConfirmDialog } from './ui/ConfirmDialog';
 import { closeModalOnBackdrop } from '../utils/modalUtils';
 import { formatDatePtBr, getPricingDueDate } from '../utils/pricingDisplay';
 import { formatPricingMoney, getPricingCurrency } from '../utils/pricingCurrency';
+import { getPricingGuaranteeAuthorizationSummary } from '../utils/guaranteeAuthorization';
 
 interface ApprovalsProps {
   currentUser: AppUser;
@@ -399,6 +400,13 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
                     Solicitado por: {p.userName} | Vendedor: @{p.userCode}
                   </p>
                   <p className="text-xs font-bold text-emerald-600 mt-1">Status: {p.status}</p>
+                  {getPricingGuaranteeAuthorizationSummary(p).hasAuthorizedDivergence && (
+                    <div className="mt-2 inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-100 px-2 py-1 text-xs font-bold text-amber-800">
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                      Divergência autorizada ·{' '}
+                      {getPricingGuaranteeAuthorizationSummary(p).divergenceCount} garantia(s)
+                    </div>
+                  )}
                   <p className="text-xs text-stone-500 mt-1">
                     Emissão: {formatDatePtBr(p.date)}
                     <br />

@@ -13,6 +13,7 @@ import {
   Download,
   LayoutGrid,
   Table2,
+  TriangleAlert,
 } from 'lucide-react';
 import { getPricingTotalTons, getPricingAverageCommissionRate } from '../utils/pricingMetrics';
 import { formatPricingCode } from './CommissionReport';
@@ -24,6 +25,7 @@ import {
   getPricingRecordCurrencies,
   getPricingTotalSaleValueBRL,
 } from '../utils/pricingCurrency';
+import { getPricingGuaranteeAuthorizationSummary } from '../utils/guaranteeAuthorization';
 
 const PricingDetailModal = React.lazy(() => import('./PricingDetailModal'));
 
@@ -53,6 +55,7 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [currencyFilter, setCurrencyFilter] = useState('');
+  const [guaranteeFilter, setGuaranteeFilter] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [selectedPricing, setSelectedPricing] = useState<PricingRecord | null>(null);
   const [exporting, setExporting] = useState<'pdf' | 'excel' | null>(null);
@@ -101,8 +104,12 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
   };
   const filteredPricings = filterPricingRecords(pricings, reportFilters).filter(
     (pricing) =>
-      !currencyFilter ||
-      getPricingRecordCurrencies(pricing).includes(currencyFilter as 'BRL' | 'USD')
+      (!currencyFilter ||
+        getPricingRecordCurrencies(pricing).includes(currencyFilter as 'BRL' | 'USD')) &&
+      (!guaranteeFilter ||
+        (guaranteeFilter === 'authorized'
+          ? getPricingGuaranteeAuthorizationSummary(pricing).hasAuthorizedDivergence
+          : !getPricingGuaranteeAuthorizationSummary(pricing).hasAuthorizedDivergence))
   );
 
   // Estatísticas
@@ -193,6 +200,7 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
         `Status: ${statusFilter || 'Todos'}`,
         `Aprovação: ${approvalFilter || 'Todas'}`,
         `Moeda: ${currencyFilter || 'Todas'}`,
+        `Garantias: ${guaranteeFilter === 'authorized' ? 'Divergência autorizada' : guaranteeFilter === 'standard' ? 'Sem divergência autorizada' : 'Todas'}`,
         search ? `Busca: ${search}` : '',
       ]
         .filter(Boolean)
@@ -238,6 +246,7 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
             'Valor Total',
             'Status',
             'Aprovação',
+            'Garantias',
           ],
         ],
         body: filteredPricings.map((p) => [
@@ -254,6 +263,9 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
           formatPricingRecordTotal(p),
           p.status,
           p.approvalStatus || 'Pendente',
+          getPricingGuaranteeAuthorizationSummary(p).hasAuthorizedDivergence
+            ? `Autorizada (${getPricingGuaranteeAuthorizationSummary(p).divergenceCount})`
+            : 'Sem exceção',
         ]),
         theme: 'striped',
         headStyles: { fillColor: [28, 25, 23], fontSize: 7 },
@@ -302,6 +314,12 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
           approvalFilter || 'Todas',
           'Moeda',
           currencyFilter || 'Todas',
+          'Garantias',
+          guaranteeFilter === 'authorized'
+            ? 'Divergência autorizada'
+            : guaranteeFilter === 'standard'
+              ? 'Sem divergência autorizada'
+              : 'Todas',
         ],
         [],
         [
@@ -318,6 +336,7 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
           'Valor Total',
           'Status',
           'Aprovação',
+          'Garantias',
         ],
         ...filteredPricings.map((p) => [
           formatPricingCode(p.formattedCod),
@@ -333,6 +352,9 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
           formatPricingRecordTotal(p),
           p.status,
           p.approvalStatus || 'Pendente',
+          getPricingGuaranteeAuthorizationSummary(p).hasAuthorizedDivergence
+            ? `Autorizada (${getPricingGuaranteeAuthorizationSummary(p).divergenceCount})`
+            : 'Sem exceção',
         ]),
       ];
       const ws = XLSX.utils.aoa_to_sheet(wsData);
@@ -354,6 +376,7 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
     setStartDate('');
     setEndDate('');
     setCurrencyFilter('');
+    setGuaranteeFilter('');
   };
 
   if (loading) {
@@ -525,6 +548,15 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
             <option value="USD">Dólar (USD)</option>
           </select>
           <select
+            value={guaranteeFilter}
+            onChange={(e) => setGuaranteeFilter(e.target.value)}
+            className="px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+          >
+            <option value="">Todas as garantias</option>
+            <option value="authorized">Divergência autorizada</option>
+            <option value="standard">Sem divergência autorizada</option>
+          </select>
+          <select
             value={branchFilter}
             onChange={(e) => setBranchFilter(e.target.value)}
             className="px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
@@ -644,6 +676,7 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
                   <th className="px-4 py-3 text-right">Total Venda</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Aprov.</th>
+                  <th className="px-4 py-3">Garantias</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100 bg-white">
@@ -696,6 +729,18 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
                         </span>
                       </td>
                       <td className="px-4 py-3">
+                        {getPricingGuaranteeAuthorizationSummary(p).hasAuthorizedDivergence ? (
+                          <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-2 py-1 text-[10px] font-bold uppercase text-amber-800">
+                            <TriangleAlert className="h-3 w-3" /> Autorizada ·{' '}
+                            {getPricingGuaranteeAuthorizationSummary(p).divergenceCount}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold uppercase text-stone-400">
+                            Sem exceção
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
                         <span
                           className={`inline-flex px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${getApprovalColor(p.approvalStatus || 'Pendente')}`}
                         >
@@ -707,7 +752,7 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
                 })}
                 {filteredPricings.length === 0 && (
                   <tr>
-                    <td colSpan={12} className="px-4 py-8 text-center text-stone-500">
+                    <td colSpan={13} className="px-4 py-8 text-center text-stone-500">
                       Nenhuma precificação encontrada com os filtros atuais.
                     </td>
                   </tr>
@@ -766,6 +811,12 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
                     {new Date(p.date).toLocaleDateString('pt-BR')} · {p.calculations?.length || 0}{' '}
                     fórmula(s)
                   </p>
+                  {getPricingGuaranteeAuthorizationSummary(p).hasAuthorizedDivergence && (
+                    <span className="mt-2 inline-flex items-center gap-1 rounded bg-amber-100 px-2 py-1 text-[10px] font-bold uppercase text-amber-800">
+                      <TriangleAlert className="h-3 w-3" /> Divergência autorizada ·{' '}
+                      {getPricingGuaranteeAuthorizationSummary(p).divergenceCount}
+                    </span>
+                  )}
                 </button>
               );
             })}

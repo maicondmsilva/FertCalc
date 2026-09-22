@@ -53,6 +53,7 @@ import {
   formatPricingSummaryMoney,
   getPricingCurrency,
 } from '../utils/pricingCurrency';
+import { getPricingGuaranteeAuthorizationSummary } from '../utils/guaranteeAuthorization';
 
 const HISTORY_PAGE_SIZE = 12;
 const PricingDetailModal = React.lazy(() => import('./PricingDetailModal'));
@@ -124,6 +125,7 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
   };
   const [filter, setFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [guaranteeFilter, setGuaranteeFilter] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [selectedPricing, setSelectedPricing] = useState<PricingRecord | null>(null);
@@ -143,6 +145,11 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
       clientName.toLowerCase().includes(filter.toLowerCase()) ||
       agentName.toLowerCase().includes(filter.toLowerCase());
     const matchesStatus = statusFilter ? p.status === statusFilter : true;
+    const hasAuthorizedDivergence =
+      getPricingGuaranteeAuthorizationSummary(p).hasAuthorizedDivergence;
+    const matchesGuarantee =
+      !guaranteeFilter ||
+      (guaranteeFilter === 'authorized' ? hasAuthorizedDivergence : !hasAuthorizedDivergence);
 
     // Date filter
     const pricingDate = new Date(p.date);
@@ -152,7 +159,7 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
 
     const matchesDate = (!start || pricingDate >= start) && (!end || pricingDate <= end);
 
-    return matchesName && matchesStatus && matchesDate;
+    return matchesName && matchesStatus && matchesGuarantee && matchesDate;
   });
   const tabPricings = filteredPricings.filter((p) =>
     activeTab === 'deleted' ? p.status === 'Excluída' : p.status !== 'Excluída'
@@ -163,7 +170,7 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeTab, endDate, filter, startDate, statusFilter]);
+  }, [activeTab, endDate, filter, guaranteeFilter, startDate, statusFilter]);
 
   const stats = {
     total: pricings.length,
@@ -605,6 +612,15 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
               <option value="Fechada">Fechada</option>
               <option value="Perdida">Perdida</option>
             </select>
+            <select
+              value={guaranteeFilter}
+              onChange={(e) => setGuaranteeFilter(e.target.value)}
+              className="px-4 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+            >
+              <option value="">Todas as garantias</option>
+              <option value="authorized">Com divergência autorizada</option>
+              <option value="standard">Sem divergência autorizada</option>
+            </select>
           </div>
         </div>
       </div>
@@ -769,6 +785,15 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                     {p.approvalStatus || 'Pendente'}
                   </span>
                 </div>
+                {getPricingGuaranteeAuthorizationSummary(p).hasAuthorizedDivergence && (
+                  <div className="flex items-center">
+                    <AlertTriangle className="mr-2 h-4 w-4 text-amber-500" />
+                    <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">
+                      Garantia divergente autorizada ·{' '}
+                      {getPricingGuaranteeAuthorizationSummary(p).divergenceCount} item(ns)
+                    </span>
+                  </div>
+                )}
                 <div className="flex items-center">
                   <Tag className="w-4 h-4 mr-2 text-stone-400" />
                   Fórmulas:{' '}

@@ -1,4 +1,4 @@
-import type { TargetFormula, User } from '../types';
+import type { PricingRecord, TargetFormula, User } from '../types';
 import { parseFormulaTarget } from '../domain/pricing-engine/formulaEngine';
 import { buildGuaranteeComparisons } from './guaranteeComparison';
 
@@ -55,4 +55,22 @@ export function canAuthorizeGuaranteeDivergence(user: User): boolean {
     user.role === 'manager' ||
     user.permissions?.calculator_overrideGuaranteeDivergence === true
   );
+}
+
+export function getPricingGuaranteeAuthorizationSummary(pricing: PricingRecord) {
+  const authorizations = (pricing.calculations || [])
+    .map((calculation) => calculation.guaranteeDivergenceAuthorization)
+    .filter((authorization): authorization is NonNullable<typeof authorization> => Boolean(authorization));
+  const latest = [...authorizations].sort((left, right) =>
+    right.authorizedAt.localeCompare(left.authorizedAt)
+  )[0];
+  return {
+    hasAuthorizedDivergence: authorizations.length > 0,
+    authorizedFormulaCount: authorizations.length,
+    divergenceCount: authorizations.reduce(
+      (total, authorization) => total + authorization.divergences.length,
+      0
+    ),
+    latestAuthorization: latest,
+  };
 }
