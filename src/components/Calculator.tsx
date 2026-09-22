@@ -284,6 +284,32 @@ export default function Calculator({
         .map(([name]) => normalizeMicronutrientKey(name))
     ).size;
 
+  const getSummaryMicroGuarantees = (calc: (typeof calculations)[number]) => {
+    const guarantees = new Map<string, string>();
+    Object.keys(calc.summary?.resultingMicros || {}).forEach((name) => {
+      guarantees.set(normalizeMicronutrientKey(name), formatMicronutrientLabel(name));
+    });
+    Object.entries(calc.targetMicros || {})
+      .filter(([name, value]) => Number(value) > 0 && !isSecondaryNutrientGuarantee(name))
+      .forEach(([name]) => {
+        const key = normalizeMicronutrientKey(name);
+        if (!guarantees.has(key)) guarantees.set(key, formatMicronutrientLabel(name));
+      });
+    return Array.from(guarantees.values()).sort((left, right) =>
+      left.localeCompare(right, 'pt-BR')
+    );
+  };
+
+  const getSummaryGuaranteeClass = (
+    target: number | undefined,
+    calculated: number | undefined
+  ) => {
+    const status = getMicronutrientTargetStatus(target, calculated);
+    if (status === 'met') return 'border-emerald-700/70 bg-emerald-950 text-emerald-300';
+    if (status === 'divergent') return 'border-amber-700/70 bg-amber-950 text-amber-300';
+    return 'border-blue-900 bg-blue-950 text-blue-300';
+  };
+
   const formatFormulaProductDetails = (
     product?: ReturnType<typeof getAvailableProductsForCalc>[number] | null
   ) => {
@@ -2383,28 +2409,67 @@ export default function Calculator({
                               calc.summary?.resultingK || 0
                             )}
                           </p>
-                          {(calc.summary?.resultingCa || 0) > 0 && (
-                            <p className="text-xs font-mono text-amber-400 mt-1">
-                              CA: {calc.summary!.resultingCa.toFixed(2)}%
+                          {((calc.summary?.resultingCa || 0) > 0 || (calc.targetCa || 0) > 0) && (
+                            <p
+                              className={`mt-1 text-xs font-mono ${
+                                getMicronutrientTargetStatus(
+                                  calc.targetCa,
+                                  calc.summary?.resultingCa
+                                ) === 'met'
+                                  ? 'text-emerald-400'
+                                  : (calc.targetCa || 0) > 0
+                                    ? 'text-amber-400'
+                                    : 'text-stone-300'
+                              }`}
+                            >
+                              CA: {Number(calc.summary?.resultingCa || 0).toFixed(2)}%
+                              {(calc.targetCa || 0) > 0 &&
+                                ` · alvo ${Number(calc.targetCa).toFixed(2)}%`}
                             </p>
                           )}
-                          {(calc.summary?.resultingS || 0) > 0 && (
-                            <p className="text-xs font-mono text-yellow-500">
-                              S: {calc.summary!.resultingS.toFixed(2)}%
+                          {((calc.summary?.resultingS || 0) > 0 || (calc.targetS || 0) > 0) && (
+                            <p
+                              className={`text-xs font-mono ${
+                                getMicronutrientTargetStatus(calc.targetS, calc.summary?.resultingS) ===
+                                'met'
+                                  ? 'text-emerald-400'
+                                  : (calc.targetS || 0) > 0
+                                    ? 'text-amber-400'
+                                    : 'text-stone-300'
+                              }`}
+                            >
+                              S: {Number(calc.summary?.resultingS || 0).toFixed(2)}%
+                              {(calc.targetS || 0) > 0 &&
+                                ` · alvo ${Number(calc.targetS).toFixed(2)}%`}
                             </p>
                           )}
-                          {Object.keys(calc.summary?.resultingMicros || {}).length > 0 && (
+                          {getSummaryMicroGuarantees(calc).length > 0 && (
                             <div className="mt-2 flex flex-wrap justify-end gap-1">
-                              {Object.entries(calc.summary!.resultingMicros).map(
-                                ([name, value]) => (
+                              {getSummaryMicroGuarantees(calc).map((name) => {
+                                const calculated = getCalculatedMicronutrientValue(
+                                  calc.summary?.resultingMicros,
+                                  name
+                                );
+                                const target = getMicroTargetValue(calc, name);
+                                return (
                                   <span
                                     key={name}
-                                    className="rounded bg-blue-950 px-2 py-1 text-[10px] font-bold text-blue-300"
+                                    className={`rounded border px-2 py-1 text-[10px] font-bold ${getSummaryGuaranteeClass(
+                                      target,
+                                      calculated
+                                    )}`}
+                                    title={
+                                      Number(target || 0) > 0
+                                        ? `${name}: calculado ${Number(calculated || 0).toFixed(2)}%, alvo ${Number(target).toFixed(2)}%`
+                                        : `${name}: calculado ${Number(calculated || 0).toFixed(2)}%`
+                                    }
                                   >
-                                    {name}: {Number(value).toFixed(2)}%
+                                    {name}: {Number(calculated || 0).toFixed(2)}%
+                                    {Number(target || 0) > 0 &&
+                                      ` · alvo ${Number(target).toFixed(2)}%`}
                                   </span>
-                                )
-                              )}
+                                );
+                              })}
                             </div>
                           )}
                         </div>
