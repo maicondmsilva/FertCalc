@@ -7,6 +7,7 @@ import {
   getPricingCurrency,
   getPricingExchangeRate,
 } from './pricingCurrency';
+import { buildGuaranteeComparisons } from './guaranteeComparison';
 
 const fmtN = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -92,6 +93,39 @@ export const generatePricingPDF = (
     productRows = `<tr><td colspan="8" style="padding:24px;text-align:center;color:#aaa;font-style:italic;">Nenhum produto calculado</td></tr>`;
   }
 
+  const guaranteeRows = validCalcs
+    .map((calc, index) => {
+      const summary = calc.summary!;
+      const comparisons = buildGuaranteeComparisons(summary, {
+        targetCa: calc.targetCa,
+        targetS: calc.targetS,
+        targetMicros: calc.targetMicros,
+      });
+      const guarantees = comparisons
+        .map((item) => {
+          const targetText =
+            item.target !== undefined
+              ? ` / alvo ${fmtN(item.target)}% (${item.status === 'met' ? 'atendida' : 'divergente'})`
+              : '';
+          const color =
+            item.status === 'met'
+              ? '#047857'
+              : item.status === 'divergent'
+                ? '#b45309'
+                : '#334155';
+          return `<span style="display:inline-block;margin:2px 5px 2px 0;padding:3px 7px;border:1px solid ${color}40;border-radius:5px;color:${color};font-weight:700;">${item.label}: ${fmtN(item.calculated)}%${targetText}</span>`;
+        })
+        .join('');
+      const npk = `${fmtN(Number(summary.resultingN))}-${fmtN(Number(summary.resultingP))}-${fmtN(Number(summary.resultingK))}`;
+      return `
+        <tr style="background:${index % 2 === 0 ? '#fff' : '#f9fafb'};border-bottom:1px solid #e5e7eb;">
+          <td style="padding:6px;font-weight:800;white-space:nowrap;">${calc.formula}</td>
+          <td style="padding:6px;font-family:monospace;font-weight:700;white-space:nowrap;">${npk}</td>
+          <td style="padding:4px 6px;">${guarantees || '<span style="color:#94a3b8;">Sem garantias adicionais</span>'}</td>
+        </tr>`;
+    })
+    .join('');
+
   const clientDeliveryCity =
     record.factors?.client?.deliveryAddress?.city || record.factors?.client?.address?.city || '';
   const clientDeliveryState =
@@ -170,6 +204,21 @@ export const generatePricingPDF = (
             <td style="padding:10px 8px;text-align:right;font-weight:900;font-size:14px;color:#fff;background:#1a1a2e;">${formatPricingMoney(grandTotalBRL, 'BRL')}</td>
           </tr>
         </tbody>
+      </table>
+    </div>
+
+    <!-- GARANTIAS CALCULADAS E ALVOS -->
+    <div style="margin-bottom:15px;">
+      <div style="font-size:10px;font-weight:900;text-transform:uppercase;color:#1a1a2e;margin-bottom:5px;letter-spacing:0.5px;">Garantias calculadas e metas</div>
+      <table style="width:100%;border-collapse:collapse;border:1px solid #d1d5db;font-size:9px;">
+        <thead>
+          <tr style="background:#e5e7eb;color:#1f2937;">
+            <th style="padding:5px 6px;text-align:left;">Formulação</th>
+            <th style="padding:5px 6px;text-align:left;">N-P-K real</th>
+            <th style="padding:5px 6px;text-align:left;">Ca, S e micronutrientes</th>
+          </tr>
+        </thead>
+        <tbody>${guaranteeRows}</tbody>
       </table>
     </div>
 
