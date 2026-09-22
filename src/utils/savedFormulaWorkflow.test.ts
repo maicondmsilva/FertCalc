@@ -5,6 +5,7 @@ import {
   DEFAULT_REPORT_COMMERCIAL_FACTORS,
   getFormulaUpdateProtection,
   getPriceListsForLoadingLocation,
+  getSavedFormulaCompositionKey,
 } from './savedFormulaWorkflow';
 
 describe('calculateReportPrice', () => {
@@ -93,5 +94,29 @@ describe('saved formula workflow', () => {
       canUpdate: false,
       protectedMaterialIds: ['macro-1', 'micro-1'],
     });
+  });
+
+  it('detects the same composition independently of material order', () => {
+    const reordered = {
+      ...formula,
+      macros: [material('macro-2', 'macro'), material('macro-1', 'macro')],
+    };
+    const originalOrder = {
+      ...formula,
+      macros: [material('macro-1', 'macro'), material('macro-2', 'macro')],
+    };
+
+    expect(getSavedFormulaCompositionKey(reordered)).toBe(
+      getSavedFormulaCompositionKey(originalOrder)
+    );
+  });
+
+  it('distinguishes formulas when a material quantity changes', () => {
+    const changed = {
+      ...formula,
+      macros: [{ ...formula.macros[0], quantity: 11 }],
+    };
+
+    expect(getSavedFormulaCompositionKey(changed)).not.toBe(getSavedFormulaCompositionKey(formula));
   });
 });

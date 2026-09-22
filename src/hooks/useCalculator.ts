@@ -22,9 +22,7 @@ import {
   getIncompatibilityRules,
   createPricingRecord,
   updatePricingRecord,
-  createSavedFormula,
   getSavedFormulas,
-  updateSavedFormula,
   createNotification,
   getUsers,
   getManagersOfUser,
@@ -51,10 +49,7 @@ import { notifyPricingCreated, notifyPricingEdited } from '../services/notificat
 import { useConfirm } from './useConfirm';
 import { getLocaisAtivos } from '../services/locaisCarregamentoService';
 import { LocalCarregamento } from '../types/carregamento';
-import {
-  syncProdutoFormuladoWithSavedFormula,
-  getProdutoFormuladoBySavedFormulaId,
-} from '../services/produtosFormuladosService';
+import { getProdutoFormuladoBySavedFormulaId } from '../services/produtosFormuladosService';
 import { addHistoricoPrecos } from '../services/historicoPrecoService';
 import {
   applyFreeCompositionSummary,
@@ -88,6 +83,8 @@ import {
   subscribeToMyGuaranteeAuthorizationRequests,
   type GuaranteeAuthorizationRequest,
 } from '../services/guaranteeAuthorizationRequestService';
+import { saveFormulaWithProduct } from '../services/savedFormulaService';
+import { getSavedFormulaCompositionKey } from '../utils/savedFormulaWorkflow';
 
 interface UseCalculatorProps {
   initialData?: PricingRecord | null;
@@ -151,9 +148,9 @@ export function useCalculator({
   );
   const [isSavingPricing, setIsSavingPricing] = useState(false);
   const [isSavingFormula, setIsSavingFormula] = useState(false);
-  const [myGuaranteeRequests, setMyGuaranteeRequests] = useState<
-    GuaranteeAuthorizationRequest[]
-  >([]);
+  const [myGuaranteeRequests, setMyGuaranteeRequests] = useState<GuaranteeAuthorizationRequest[]>(
+    []
+  );
   const [isLoadingGuaranteeRequests, setIsLoadingGuaranteeRequests] = useState(false);
   const [guaranteeRequestsError, setGuaranteeRequestsError] = useState(false);
   const pricingSaveInFlightRef = useRef(false);
@@ -474,21 +471,23 @@ export function useCalculator({
           : [];
         // Macros da Linha Diferenciada chegam desmarcadas por padrão
         const newMacros = [
-          ...selectedList.macros.filter((material) => {
-            const catalogMaterial = catalogMacros.find((item) => item.id === material.id);
-            return catalogMaterial?.ativo !== false;
-          }).map((material) => ({
-            ...withOfficialListPrice(material),
-            isOutsidePriceList: false,
-            selected: !material.isPremiumLine,
-            quantity: 0,
-            minQty:
-              material.minQuantity !== undefined
-                ? material.minQuantity
-                : material.type === 'macro' && !material.name.toLowerCase().includes('enchimento')
-                  ? 50
-                  : material.minQty || 0,
-          })),
+          ...selectedList.macros
+            .filter((material) => {
+              const catalogMaterial = catalogMacros.find((item) => item.id === material.id);
+              return catalogMaterial?.ativo !== false;
+            })
+            .map((material) => ({
+              ...withOfficialListPrice(material),
+              isOutsidePriceList: false,
+              selected: !material.isPremiumLine,
+              quantity: 0,
+              minQty:
+                material.minQuantity !== undefined
+                  ? material.minQuantity
+                  : material.type === 'macro' && !material.name.toLowerCase().includes('enchimento')
+                    ? 50
+                    : material.minQty || 0,
+            })),
           ...extraMacros.map((m) => ({
             ...m,
             type: 'macro' as const,
@@ -502,17 +501,19 @@ export function useCalculator({
         ];
         // Micros chegam sempre desmarcados — usuário escolhe quais usar
         const newMicros = [
-          ...selectedList.micros.filter((material) => {
-            const catalogMaterial = catalogMicros.find((item) => item.id === material.id);
-            return catalogMaterial?.ativo !== false;
-          }).map((material) => ({
-            ...withOfficialListPrice(material),
-            isOutsidePriceList: false,
-            selected: false,
-            quantity: 0,
-            minQty:
-              material.minQuantity !== undefined ? material.minQuantity : material.minQty || 0,
-          })),
+          ...selectedList.micros
+            .filter((material) => {
+              const catalogMaterial = catalogMicros.find((item) => item.id === material.id);
+              return catalogMaterial?.ativo !== false;
+            })
+            .map((material) => ({
+              ...withOfficialListPrice(material),
+              isOutsidePriceList: false,
+              selected: false,
+              quantity: 0,
+              minQty:
+                material.minQuantity !== undefined ? material.minQuantity : material.minQty || 0,
+            })),
           ...extraMicros.map((m) => ({
             ...m,
             type: 'micro' as const,
@@ -1398,17 +1399,14 @@ export function useCalculator({
 
     const authorizationTimestamp = new Date().toISOString();
     selectedCalculations = selectedCalculations.map((calculation) => {
-      const divergences = guaranteeDivergences.filter(
-        (item) => item.formulaId === calculation.id
-      );
+      const divergences = guaranteeDivergences.filter((item) => item.formulaId === calculation.id);
       return {
         ...calculation,
         guaranteeDivergenceAuthorization:
           divergences.length > 0 && overrideJustification?.trim()
             ? {
                 authorizedByUserId: approvedGuaranteeRequest?.reviewedBy || currentUser.id,
-                authorizedByUserName:
-                  approvedGuaranteeRequest?.reviewedByName || currentUser.name,
+                authorizedByUserName: approvedGuaranteeRequest?.reviewedByName || currentUser.name,
                 authorizedAt: approvedGuaranteeRequest?.reviewedAt || authorizationTimestamp,
                 justification:
                   approvedGuaranteeRequest?.reviewReason || overrideJustification.trim(),
@@ -1422,8 +1420,7 @@ export function useCalculator({
       };
     });
     if (guaranteeDivergences.length > 0) {
-      const authorizationUserName =
-        approvedGuaranteeRequest?.reviewedByName || currentUser.name;
+      const authorizationUserName = approvedGuaranteeRequest?.reviewedByName || currentUser.name;
       const authorizationReason =
         approvedGuaranteeRequest?.reviewReason || overrideJustification!.trim();
       historyEntry.action += ` · Divergência de garantias autorizada por ${authorizationUserName}: ${authorizationReason}`;
@@ -1705,36 +1702,31 @@ export function useCalculator({
   };
 
   const saveToFormulasList = async () => {
+    if (formulaSaveInFlightRef.current || isSavingFormula || promptState.isOpen) return;
+
     const selectedCalc = calculations.find((c) => c.selected);
     if (!selectedCalc) {
       showError('Calcule e selecione uma fórmula para salvar a batida.');
       return;
     }
 
-    const suffixes: string[] = [];
-    selectedCalc.macros.forEach((m) => {
-      if (m.quantity > 0 && m.formulaSuffix) {
-        const cleanSuffix = m.formulaSuffix.replace(/^[Cc]\/\s*/, '').trim();
-        if (cleanSuffix) suffixes.push(cleanSuffix);
-      }
-    });
-    selectedCalc.micros.forEach((m) => {
-      if (m.quantity > 0 && m.formulaSuffix) {
-        const cleanSuffix = m.formulaSuffix.replace(/^[Cc]\/\s*/, '').trim();
-        if (cleanSuffix) suffixes.push(cleanSuffix);
-      }
-    });
-    const microSummary = selectedCalc.summary?.resultingMicros || {};
-
-    const defaultName = getDetailedFormulaName(
-      selectedCalc.formula,
-      selectedCalc.macros,
-      selectedCalc.micros,
-      selectedCalc.summary?.resultingMicros
-    );
+    const isRevision = initialFormulaToLoad?.isRevisionFromSavedFormula === true;
+    const defaultName = isRevision
+      ? initialFormulaToLoad.name
+      : getDetailedFormulaName(
+          selectedCalc.formula,
+          selectedCalc.macros,
+          selectedCalc.micros,
+          selectedCalc.summary?.resultingMicros
+        );
 
     setPromptState({
       isOpen: true,
+      title: isRevision ? 'Atualizar Batida' : 'Salvar Nova Batida',
+      message: isRevision
+        ? 'Altere a descrição, se necessário, e confirme a atualização:'
+        : 'Dê uma descrição para esta nova batida:',
+      confirmLabel: isRevision ? 'Atualizar' : 'Salvar',
       defaultValue: defaultName,
       onConfirm: async (name: string) => {
         if (formulaSaveInFlightRef.current) return;
@@ -1743,92 +1735,46 @@ export function useCalculator({
         setIsSavingFormula(true);
         setPromptState((prev) => ({ ...prev, isOpen: false }));
         try {
-          const existing = await getSavedFormulas();
+          const normalizedName = name.trim();
+          if (!normalizedName) {
+            showError('Informe uma descrição para a batida.');
+            return;
+          }
 
-          if (initialFormulaToLoad?.isRevisionFromSavedFormula) {
-            await updateSavedFormula(initialFormulaToLoad.id, {
-              name: name.trim(),
-              date: new Date().toISOString(),
-              targetFormula: selectedCalc.formula,
-              category: selectedCalc.category ?? 'all',
-              targetCa: selectedCalc.targetCa,
-              targetS: selectedCalc.targetS,
-              targetMicros: selectedCalc.targetMicros,
-              macros: stripTemporaryMaterialPrices(selectedCalc.macros || macros),
-              micros: stripTemporaryMaterialPrices(selectedCalc.micros || micros),
-            });
-            await syncProdutoFormuladoWithSavedFormula({
-              saved_formula_id: initialFormulaToLoad.id,
-              nome: name.trim(),
-              formula_npk: selectedCalc.formula,
-              criado_por: currentUser.id,
-            });
+          const formulaPayload = {
+            name: normalizedName,
+            targetFormula: selectedCalc.formula,
+            category: selectedCalc.category ?? 'all',
+            targetCa: selectedCalc.targetCa,
+            targetS: selectedCalc.targetS,
+            targetMicros: selectedCalc.targetMicros,
+            macros: stripTemporaryMaterialPrices(selectedCalc.macros || macros),
+            micros: stripTemporaryMaterialPrices(selectedCalc.micros || micros),
+          };
+
+          if (isRevision && initialFormulaToLoad) {
+            await saveFormulaWithProduct({ id: initialFormulaToLoad.id, ...formulaPayload });
             showSuccess('Batida atualizada com sucesso!');
             onSavedFormulaSuccess?.();
             return;
           }
 
-          const currentSuffixes = Array.from(new Set(suffixes)).sort().join(',');
-          const currentFormula = selectedCalc.formula;
-          const currentMicros = JSON.stringify(
-            Object.entries(microSummary)
-              .filter(([_, v]) => (v as number) > 0)
-              .sort()
+          const existing = await getSavedFormulas();
+          const currentCompositionKey = getSavedFormulaCompositionKey(formulaPayload);
+          const duplicate = existing.find(
+            (formula) => getSavedFormulaCompositionKey(formula) === currentCompositionKey
           );
-
-          const duplicate = existing.find((f) => {
-            const fSuffixes: string[] = [];
-            f.macros.forEach((m) => {
-              if (m.quantity > 0 && m.formulaSuffix) {
-                const clean = m.formulaSuffix.replace(/^[Cc]\/\s*/, '').trim();
-                if (clean) fSuffixes.push(clean);
-              }
-            });
-            f.micros.forEach((m) => {
-              if (m.quantity > 0 && m.formulaSuffix) {
-                const clean = m.formulaSuffix.replace(/^[Cc]\/\s*/, '').trim();
-                if (clean) fSuffixes.push(clean);
-              }
-            });
-            const fSuffixStr = Array.from(new Set(fSuffixes)).sort().join(',');
-            const fSummary = calculateSummary(f.macros, f.micros, factors);
-            const fMicrosStr = JSON.stringify(
-              Object.entries(fSummary.resultingMicros)
-                .filter(([_, v]) => (v as number) > 0)
-                .sort()
-            );
-            return (
-              f.targetFormula === currentFormula &&
-              fSuffixStr === currentSuffixes &&
-              fMicrosStr === currentMicros
-            );
-          });
 
           if (duplicate) {
             const ok = await confirm({
               title: 'Batida Duplicada',
-              message: `Já existe uma batida salva ("${duplicate.name}") com a mesma composição. Deseja atualizar a batida existente com o novo nome e data?`,
+              message: `Já existe a batida "${duplicate.name}" com a mesma composição. Atualize a existente ou salve uma nova cópia com outra descrição.`,
               confirmLabel: 'Atualizar',
+              cancelLabel: 'Salvar como nova',
               variant: 'warning',
             });
             if (ok) {
-              await updateSavedFormula(duplicate.id, {
-                name: name.trim(),
-                date: new Date().toISOString(),
-                targetFormula: selectedCalc.formula,
-                category: selectedCalc.category ?? 'all',
-                targetCa: selectedCalc.targetCa,
-                targetS: selectedCalc.targetS,
-                targetMicros: selectedCalc.targetMicros,
-                macros: stripTemporaryMaterialPrices(selectedCalc.macros || macros),
-                micros: stripTemporaryMaterialPrices(selectedCalc.micros || micros),
-              });
-              await syncProdutoFormuladoWithSavedFormula({
-                saved_formula_id: duplicate.id,
-                nome: name.trim(),
-                formula_npk: selectedCalc.formula,
-                criado_por: currentUser.id,
-              });
+              await saveFormulaWithProduct({ id: duplicate.id, ...formulaPayload });
               showSuccess('Batida existente atualizada com sucesso!');
               onSavedFormulaSuccess?.();
               return;
@@ -1839,38 +1785,14 @@ export function useCalculator({
             existing.some(
               (f) =>
                 f.userId === currentUser.id &&
-                f.name.trim().toLowerCase() === name.trim().toLowerCase()
+                f.name.trim().toLowerCase() === normalizedName.toLowerCase()
             )
           ) {
             showError('Você já possui uma fórmula salva com esse nome. Escolha outro nome.');
             return;
           }
 
-          const savedFormula = await createSavedFormula({
-            userId: currentUser.id,
-            userName: currentUser.name,
-            name: name.trim(),
-            date: new Date().toISOString(),
-            targetFormula: selectedCalc.formula,
-            category: selectedCalc.category ?? 'all',
-            targetCa: selectedCalc.targetCa,
-            targetS: selectedCalc.targetS,
-            targetMicros: selectedCalc.targetMicros,
-            macros: stripTemporaryMaterialPrices(selectedCalc.macros || macros),
-            micros: stripTemporaryMaterialPrices(selectedCalc.micros || micros),
-          });
-          // Also save to produtos_formulados
-          try {
-            await syncProdutoFormuladoWithSavedFormula({
-              nome: name.trim(),
-              formula_npk: selectedCalc.formula,
-              saved_formula_id: savedFormula.id,
-              criado_por: currentUser.id,
-            });
-          } catch (pfError) {
-            console.warn('[saveToFormulasList] Failed to create produto_formulado:', pfError);
-            showError('Batida salva, mas houve um erro ao registrar em Produtos Formulados.');
-          }
+          await saveFormulaWithProduct(formulaPayload);
           showSuccess('Batida salva com sucesso nas suas Fórmulas!');
           onSavedFormulaSuccess?.();
         } catch (error: unknown) {
