@@ -4,6 +4,20 @@ import { applyCommercialWaterfall, roundMoney } from './commercialWaterfall';
 
 const numberOrZero = (value: unknown): number => Number(value) || 0;
 
+const micronutrientKey = (name: string) =>
+  name
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleUpperCase('pt-BR');
+
+const micronutrientLabel = (name: string) => {
+  const trimmedName = name.trim();
+  return /^[a-z]{1,3}$/i.test(trimmedName)
+    ? `${trimmedName.charAt(0).toLocaleUpperCase('pt-BR')}${trimmedName.slice(1).toLocaleLowerCase('pt-BR')}`
+    : trimmedName;
+};
+
 export interface PricingEngineOptions {
   today?: Date;
 }
@@ -37,7 +51,7 @@ export function calculateMaterialComposition(macros: RawMaterial[], micros: RawM
   let totalK = 0;
   let totalS = 0;
   let totalCa = 0;
-  const micronutrients: Record<string, number> = {};
+  const micronutrients = new Map<string, { label: string; amount: number }>();
 
   selected.forEach((material) => {
     const quantity = numberOrZero(material.quantity);
@@ -49,8 +63,13 @@ export function calculateMaterialComposition(macros: RawMaterial[], micros: RawM
     totalS += quantity * (numberOrZero(material.s) / 100);
     totalCa += quantity * (numberOrZero(material.ca) / 100);
     material.microGuarantees?.forEach((guarantee) => {
-      micronutrients[guarantee.name] =
-        (micronutrients[guarantee.name] || 0) + quantity * (numberOrZero(guarantee.value) / 100);
+      const key = micronutrientKey(guarantee.name);
+      if (!key) return;
+      const current = micronutrients.get(key);
+      micronutrients.set(key, {
+        label: current?.label || micronutrientLabel(guarantee.name),
+        amount: (current?.amount || 0) + quantity * (numberOrZero(guarantee.value) / 100),
+      });
     });
   });
 
@@ -64,7 +83,7 @@ export function calculateMaterialComposition(macros: RawMaterial[], micros: RawM
     resultingS: percentage(totalS),
     resultingCa: percentage(totalCa),
     resultingMicros: Object.fromEntries(
-      Object.entries(micronutrients).map(([name, amount]) => [name, percentage(amount)])
+      Array.from(micronutrients.values()).map(({ label, amount }) => [label, percentage(amount)])
     ),
   };
 }

@@ -56,6 +56,19 @@ describe('pricing engine compatibility', () => {
     expect(calculatePricingSummary([], [material], factors()).resultingMicros.Zn).toBe(20);
   });
 
+  it('consolida o mesmo micronutriente com diferenças de maiúsculas e minúsculas', () => {
+    const upperCaseMaterial = {
+      ...material,
+      id: 'micro-2',
+      quantity: 100,
+      microGuarantees: [{ name: 'ZN', value: 10 }],
+    };
+    const result = calculateMaterialComposition([], [material, upperCaseMaterial]);
+
+    expect(result.resultingMicros).toEqual({ Zn: 15 });
+    expect(Object.keys(result.resultingMicros)).toHaveLength(1);
+  });
+
   it('ignora o restante do mês corrente quando solicitado', () => {
     const today = new Date(2026, 0, 10, 12);
     expect(calculateInterestDays('2026-02-10T12:00:00', true, today)).toBe(9);
