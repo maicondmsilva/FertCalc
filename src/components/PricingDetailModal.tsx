@@ -59,6 +59,7 @@ import {
   getPricingHistory,
   PricingHistoryEntry as DBPricingHistoryEntry,
 } from '../services/pricingHistoryService';
+import { buildGuaranteeComparisons } from '../utils/guaranteeComparison';
 
 interface PricingDetailModalProps {
   selectedPricing: PricingRecord;
@@ -1237,6 +1238,11 @@ export default function PricingDetailModal({
               : [selectedPricing]
             ).map((calc, calcIdx) => {
               const calcSummary = getCalculationSummary(calc);
+              const guaranteeComparisons = buildGuaranteeComparisons(calcSummary, {
+                targetCa: calc.targetCa,
+                targetS: calc.targetS,
+                targetMicros: calc.targetMicros,
+              });
               const calcMaterials = getCalculationMaterials(calc);
               const calcFormula = getCalculationFormulaLabel(calc);
               const calcFactors = calc.factors || selectedPricing.factors;
@@ -1557,7 +1563,7 @@ export default function PricingDetailModal({
                     <h4 className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-4">
                       Garantias Finais
                     </h4>
-                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-center">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4 text-center">
                       <div className="p-3 bg-stone-800 rounded-xl">
                         <p className="text-[10px] text-stone-500 font-bold mb-1">NITROGÊNIO (N)</p>
                         <p className="text-xl font-mono font-bold">
@@ -1576,35 +1582,38 @@ export default function PricingDetailModal({
                           {Number(calcSummary.resultingK).toFixed(2)}%
                         </p>
                       </div>
-                      <div className="p-3 bg-stone-800 rounded-xl">
-                        <p className="text-[10px] text-stone-500 font-bold mb-1">ENXOFRE (S)</p>
-                        <p className="text-xl font-mono font-bold">
-                          {Number(calcSummary.resultingS).toFixed(2)}%
-                        </p>
-                      </div>
-                      <div className="p-3 bg-stone-800 rounded-xl">
-                        <p className="text-[10px] text-stone-500 font-bold mb-1">CÁLCIO (Ca)</p>
-                        <p className="text-xl font-mono font-bold">
-                          {Number(calcSummary.resultingCa).toFixed(2)}%
-                        </p>
-                      </div>
-                    </div>
-                    {calcSummary.resultingMicros &&
-                      Object.keys(calcSummary.resultingMicros).length > 0 && (
-                        <div className="mt-4 pt-4 border-t border-stone-800 flex flex-wrap gap-4 justify-center">
-                          {Object.entries(calcSummary.resultingMicros).map(([name, val]) => (
-                            <div
-                              key={name}
-                              className="flex items-center gap-2 px-3 py-1 bg-stone-800 rounded-full"
+                      {guaranteeComparisons.map((guarantee) => (
+                        <div
+                          key={guarantee.key}
+                          className={`rounded-xl border p-3 ${
+                            guarantee.status === 'met'
+                              ? 'border-emerald-700 bg-emerald-950/70'
+                              : guarantee.status === 'divergent'
+                                ? 'border-amber-700 bg-amber-950/70'
+                                : 'border-stone-700 bg-stone-800'
+                          }`}
+                        >
+                          <p className="mb-1 text-[10px] font-bold uppercase text-stone-400">
+                            {guarantee.label}
+                          </p>
+                          <p className="text-xl font-mono font-bold">
+                            {guarantee.calculated.toFixed(2)}%
+                          </p>
+                          {guarantee.target !== undefined && (
+                            <p
+                              className={`mt-1 text-[10px] font-bold ${
+                                guarantee.status === 'met'
+                                  ? 'text-emerald-300'
+                                  : 'text-amber-300'
+                              }`}
                             >
-                              <span className="text-[10px] font-bold text-stone-500">{name}:</span>
-                              <span className="text-sm font-mono font-bold">
-                                {(val as number).toFixed(2)}%
-                              </span>
-                            </div>
-                          ))}
+                              Alvo: {guarantee.target.toFixed(2)}% ·{' '}
+                              {guarantee.status === 'met' ? 'Atendida' : 'Divergente'}
+                            </p>
+                          )}
                         </div>
-                      )}
+                      ))}
+                    </div>
                   </div>
 
                   {/* Análise de Rentabilidade (se existir) */}
