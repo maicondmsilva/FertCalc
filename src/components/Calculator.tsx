@@ -42,6 +42,7 @@ import {
   getCatalogMicronutrientNames,
   getMissingSelectedMicronutrientSources,
   getMicronutrientTargetStatus,
+  isSecondaryNutrientGuarantee,
   normalizeMicronutrientKey,
 } from '../utils/micronutrients';
 
@@ -241,7 +242,11 @@ export default function Calculator({
     );
     Object.keys(calc.targetMicros || {}).forEach((name) => {
       const normalizedName = normalizeMicronutrientKey(name);
-      if (normalizedName && !names.has(normalizedName)) {
+      if (
+        normalizedName &&
+        !isSecondaryNutrientGuarantee(name) &&
+        !names.has(normalizedName)
+      ) {
         names.set(normalizedName, formatMicronutrientLabel(name));
       }
     });
@@ -275,7 +280,7 @@ export default function Calculator({
   const getActiveMicroTargetCount = (calc: (typeof calculations)[number]) =>
     new Set(
       Object.entries(calc.targetMicros || {})
-        .filter(([, value]) => Number(value) > 0)
+        .filter(([name, value]) => Number(value) > 0 && !isSecondaryNutrientGuarantee(name))
         .map(([name]) => normalizeMicronutrientKey(name))
     ).size;
 

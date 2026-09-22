@@ -1,7 +1,12 @@
 import type { PricingFactors, PricingSummary, RawMaterial } from '../../types';
 import { convertPriceToBRL, getPricingCurrencyContext } from '../../utils/priceListCurrency';
 import { applyCommercialWaterfall, roundMoney } from './commercialWaterfall';
-import { formatMicronutrientLabel, normalizeMicronutrientKey } from '../../utils/micronutrients';
+import {
+  formatMicronutrientLabel,
+  getMaterialSecondaryNutrientPercentage,
+  isSecondaryNutrientGuarantee,
+  normalizeMicronutrientKey,
+} from '../../utils/micronutrients';
 
 const numberOrZero = (value: unknown): number => Number(value) || 0;
 
@@ -47,9 +52,10 @@ export function calculateMaterialComposition(macros: RawMaterial[], micros: RawM
     totalN += quantity * (numberOrZero(material.n) / 100);
     totalP += quantity * (numberOrZero(material.p) / 100);
     totalK += quantity * (numberOrZero(material.k) / 100);
-    totalS += quantity * (numberOrZero(material.s) / 100);
-    totalCa += quantity * (numberOrZero(material.ca) / 100);
+    totalS += quantity * (getMaterialSecondaryNutrientPercentage(material, 's') / 100);
+    totalCa += quantity * (getMaterialSecondaryNutrientPercentage(material, 'ca') / 100);
     material.microGuarantees?.forEach((guarantee) => {
+      if (isSecondaryNutrientGuarantee(guarantee.name)) return;
       const key = normalizeMicronutrientKey(guarantee.name);
       if (!key) return;
       const current = micronutrients.get(key);
