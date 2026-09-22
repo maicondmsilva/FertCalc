@@ -60,6 +60,7 @@ import {
   PricingHistoryEntry as DBPricingHistoryEntry,
 } from '../services/pricingHistoryService';
 import { buildGuaranteeComparisons } from '../utils/guaranteeComparison';
+import { getAuditLogs, type AuditLogEntry } from '../services/auditService';
 
 interface PricingDetailModalProps {
   selectedPricing: PricingRecord;
@@ -144,9 +145,21 @@ export default function PricingDetailModal({
   const [embalagens, setEmbalagens] = useState<Embalagem[]>([]);
   const [loadingEmbalagens, setLoadingEmbalagens] = useState(false);
   const [dbHistory, setDbHistory] = useState<DBPricingHistoryEntry[]>([]);
+  const [guaranteeAuthorizationAudit, setGuaranteeAuthorizationAudit] = useState<
+    AuditLogEntry[]
+  >([]);
+  const [loadingGuaranteeAuthorizationAudit, setLoadingGuaranteeAuthorizationAudit] =
+    useState(false);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [priceLists, setPriceLists] = useState<PriceList[]>([]);
   const [loadingLocations, setLoadingLocations] = useState<LocalCarregamento[]>([]);
+  const canReadAdministrativeAudit =
+    currentUser.role === 'master' || currentUser.role === 'admin';
+  const hasGuaranteeAuthorization = Boolean(
+    selectedPricing.calculations?.some(
+      (calculation) => calculation.guaranteeDivergenceAuthorization
+    )
+  );
   const embalagemOptions = useMemo(
     () => embalagens.map((e) => e.nome).filter(Boolean),
     [embalagens]
@@ -159,6 +172,24 @@ export default function PricingDetailModal({
       .then(setDbHistory)
       .catch(() => setDbHistory([]));
   }, [selectedPricing.id]);
+
+  React.useEffect(() => {
+    if (!canReadAdministrativeAudit) {
+      setGuaranteeAuthorizationAudit([]);
+      return;
+    }
+
+    setLoadingGuaranteeAuthorizationAudit(true);
+    getAuditLogs({
+      entity_type: 'pricing_record',
+      entity_id: selectedPricing.id,
+      action: 'pricing.guarantee_divergence_authorized',
+      limit: 50,
+    })
+      .then(setGuaranteeAuthorizationAudit)
+      .catch(() => setGuaranteeAuthorizationAudit([]))
+      .finally(() => setLoadingGuaranteeAuthorizationAudit(false));
+  }, [canReadAdministrativeAudit, selectedPricing.id]);
 
   React.useEffect(() => {
     Promise.all([getBranches(), getPriceLists(), getLocaisCarregamento()])
@@ -1875,6 +1906,96 @@ export default function PricingDetailModal({
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {canReadAdministrativeAudit && hasGuaranteeAuthorization && (
+            <div className="rounded-2xl border border-violet-200 bg-violet-50 p-6">
+              <h3 className="mb-1 text-xs font-bold uppercase tracking-widest text-violet-700">
+                Auditoria administrativa das garantias
+              </h3>
+              <p className="mb-4 text-xs text-violet-700/80">
+                Registro protegido das autorizações excepcionais desta precificação.
+              </p>
+
+              {loadingGuaranteeAuthorizationAudit ? (
+                <p className="text-sm text-stone-500">Carregando auditoria...</p>
+              ) : guaranteeAuthorizationAudit.length === 0 ? (
+                <p className="rounded-lg border border-violet-100 bg-white p-3 text-sm text-stone-500">
+                  Nenhum evento administrativo localizado. Autorizações anteriores à implantação da
+                  auditoria permanecem disponíveis nos detalhes das fórmulas.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {guaranteeAuthorizationAudit.map((entry) => {
+                    const metadata = entry.metadata as {
+                      operation?: string;
+                      divergence_count?: number;
+                      formulas?: Array<{
+                        formula_id?: string;
+                        formula?: string;
+                        authorized_by_user_name?: string;
+                        authorized_at?: string;
+                        justification?: string;
+                        divergences?: Array<{
+                          nutrient?: string;
+                          target?: number;
+                          calculated?: number;
+                        }>;
+                      }>;
+                    };
+                    return (
+                      <div
+                        key={entry.id || `${entry.created_at}-${entry.user_id}`}
+                        className="rounded-xl border border-violet-100 bg-white p-4"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-sm font-bold text-stone-800">
+                            {entry.user_name || 'Usuário identificado pela sessão'}
+                          </p>
+                          <p className="text-xs text-stone-500">
+                            {entry.created_at
+                              ? new Date(entry.created_at).toLocaleString('pt-BR')
+                              : 'Data não informada'}
+                          </p>
+                        </div>
+                        <p className="mt-1 text-xs text-stone-500">
+                          {metadata.operation === 'update' ? 'Atualização' : 'Criação'} ·{' '}
+                          {metadata.divergence_count || 0} divergência(s)
+                        </p>
+                        <div className="mt-3 space-y-2">
+                          {(metadata.formulas || []).map((formula, formulaIndex) => (
+                            <div
+                              key={formula.formula_id || `${formula.formula}-${formulaIndex}`}
+                              className="rounded-lg bg-violet-50 p-3"
+                            >
+                              <p className="text-xs font-black text-violet-800">
+                                {formula.formula || 'Fórmula não identificada'}
+                              </p>
+                              <p className="mt-1 text-xs text-stone-700">
+                                <strong>Justificativa:</strong>{' '}
+                                {formula.justification || 'Não informada'}
+                              </p>
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {(formula.divergences || []).map((divergence, index) => (
+                                  <span
+                                    key={`${divergence.nutrient}-${index}`}
+                                    className="rounded border border-violet-200 bg-white px-2 py-1 text-[10px] font-bold text-violet-800"
+                                  >
+                                    {divergence.nutrient}: {Number(divergence.calculated || 0).toFixed(2)}%
+                                    {' · alvo '}
+                                    {Number(divergence.target || 0).toFixed(2)}%
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
