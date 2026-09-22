@@ -35,7 +35,66 @@ vi.mock('../utils/logger', () => ({
   },
 }));
 
-import { adminDeleteAuthUser, createAuthUser, restoreSession, signIn } from './authService';
+import {
+  adminDeleteAuthUser,
+  adminUpdateAuthUser,
+  createAuthUser,
+  restoreSession,
+  signIn,
+} from './authService';
+
+describe('adminUpdateAuthUser', () => {
+  const payload = {
+    user_id: 'user-1',
+    email: 'usuario@example.com',
+    name: 'Usuário',
+    nickname: 'usuario',
+    role: 'user',
+    ativo: true,
+    managed_user_ids: [],
+    permissions: { calculator: true },
+    filiais_permitidas: [],
+    access_profile_id: 'profile-1',
+  };
+
+  beforeEach(() => {
+    getSessionMock.mockReset();
+    vi.unstubAllGlobals();
+  });
+
+  it('envia perfil e permissões para a atualização administrativa', async () => {
+    getSessionMock.mockResolvedValue({ data: { session: { access_token: 'token-valido' } } });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ user_id: 'user-1' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(adminUpdateAuthUser(payload)).resolves.toEqual({ success: true });
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({
+      permissions: { calculator: true },
+      access_profile_id: 'profile-1',
+    });
+  });
+
+  it('explica quando a função de atualização ainda não foi publicada', async () => {
+    getSessionMock.mockResolvedValue({ data: { session: { access_token: 'token-valido' } } });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+        json: async () => ({ error: 'Not Found' }),
+      })
+    );
+
+    const result = await adminUpdateAuthUser(payload);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('admin-update-user');
+  });
+});
 
 describe('signIn', () => {
   beforeEach(() => {

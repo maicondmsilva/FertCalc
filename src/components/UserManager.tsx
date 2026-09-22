@@ -434,6 +434,7 @@ export default function UserManager({ currentUser }: UserManagerProps) {
 
   const saveUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     if (!formData.name || !formData.email || !formData.role) {
       showError('Nome, e-mail e nível de acesso são obrigatórios.');
       return;
@@ -466,7 +467,7 @@ export default function UserManager({ currentUser }: UserManagerProps) {
           user_id: editingId,
           name: formData.name,
           email: normalizedEmail,
-          nickname: formData.nickname,
+          nickname: formData.nickname.trim() || formData.name.trim(),
           role: formData.role,
           ativo: formData.ativo,
           managed_user_ids: formData.role === 'manager' ? formData.managedUserIds : [],
@@ -474,13 +475,14 @@ export default function UserManager({ currentUser }: UserManagerProps) {
           filiais_permitidas: formData.filiais_permitidas,
           access_profile_id: appliedProfileId || undefined,
         });
-        if (!updateResult.success) throw new Error(updateResult.error || 'Erro ao atualizar usuário.');
+        if (!updateResult.success)
+          throw new Error(updateResult.error || 'Erro ao atualizar usuário.');
       } else {
         const authResult = await createAuthUser({
           email: normalizedEmail,
           password: formData.password,
           name: formData.name,
-          nickname: formData.nickname,
+          nickname: formData.nickname.trim() || formData.name.trim(),
           role: formData.role,
           ativo: formData.ativo,
           requer_alteracao_senha: true,
@@ -1324,7 +1326,9 @@ export default function UserManager({ currentUser }: UserManagerProps) {
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {filteredUsers.map((user) => {
             const initials = getInitials(user.name);
-            const accessProfile = accessProfiles.find((profile) => profile.id === user.accessProfileId);
+            const accessProfile = accessProfiles.find(
+              (profile) => profile.id === user.accessProfileId
+            );
             const accessLevelName = accessLevelsByCode.get(user.role)?.name || user.role;
             const userBranches = (user.filiais_permitidas || [])
               .map((id) => branches.find((b) => b.id === id)?.name)
@@ -1356,7 +1360,9 @@ export default function UserManager({ currentUser }: UserManagerProps) {
                     </div>
                     <p className="text-xs text-stone-500 truncate">{user.email}</p>
                     {user.nickname && <p className="text-xs text-stone-400">@{user.nickname}</p>}
-                    <p className={`mt-1 inline-flex px-2 py-0.5 rounded text-[10px] font-semibold ${getRoleBadgeClass(user.role)}`}>
+                    <p
+                      className={`mt-1 inline-flex px-2 py-0.5 rounded text-[10px] font-semibold ${getRoleBadgeClass(user.role)}`}
+                    >
                       Nível: {accessLevelName}
                     </p>
                   </div>
@@ -1436,4 +1442,3 @@ export default function UserManager({ currentUser }: UserManagerProps) {
     </div>
   );
 }
-
