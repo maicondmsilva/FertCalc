@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { TargetFormula, User } from '../types';
 import {
+  buildGuaranteeAuthorizationAuditMetadata,
   canAuthorizeGuaranteeDivergence,
   formatPricingGuaranteeAuthorizationAudit,
   getGuaranteeDivergences,
@@ -68,5 +69,29 @@ describe('guarantee divergence authorization', () => {
     expect(audit).toContain('(B)');
     expect(formatPricingGuaranteeAuthorizationAudit({ calculations: [] } as unknown as import('../types').PricingRecord))
       .toBe('Sem exceção');
+  });
+
+  it('gera metadados estruturados para a auditoria administrativa', () => {
+    const authorization = {
+      authorizedByUserId: 'u1', authorizedByUserName: 'Supervisor',
+      authorizedAt: '2026-09-22T12:00:00.000Z', justification: 'Ajuste aprovado',
+      divergences: [
+        { nutrient: 'B', target: 0.2, calculated: 0.18 },
+        { nutrient: 'Zn', target: 0.1, calculated: 0.08 },
+      ],
+    };
+
+    const metadata = buildGuaranteeAuthorizationAuditMetadata([
+      calculation({ guaranteeDivergenceAuthorization: authorization }),
+      calculation({ id: 'f2', formula: '20-00-20', guaranteeDivergenceAuthorization: undefined }),
+    ]);
+
+    expect(metadata.authorized_formula_count).toBe(1);
+    expect(metadata.divergence_count).toBe(2);
+    expect(metadata.formulas[0]).toMatchObject({
+      formula_id: 'f1',
+      authorized_by_user_name: 'Supervisor',
+      justification: 'Ajuste aprovado',
+    });
   });
 });
