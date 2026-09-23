@@ -8,6 +8,7 @@ import { NotificationBell } from './notifications/NotificationBell';
 import { NotificationCard } from './notifications/NotificationCard';
 import { NotificationPanel } from './notifications/NotificationPanel';
 import AppSidebar from './AppSidebar';
+import ChatWidget from './chat/ChatWidget';
 
 interface AppShellProps {
   activeModule: ActiveModule;
@@ -57,6 +58,10 @@ export default function AppShell({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const canUseChat =
+    currentUser.role === 'master' ||
+    currentUser.role === 'admin' ||
+    currentUser.permissions?.chat_access === true;
 
   useEffect(() => {
     const closeNotifications = (event: MouseEvent) => {
@@ -120,6 +125,8 @@ export default function AppShell({
                   Instalar App
                 </button>
               )}
+
+              {canUseChat && <ChatWidget currentUser={currentUser} />}
 
               <div className="relative notification-trigger">
                 <NotificationBell

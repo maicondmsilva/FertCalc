@@ -64,6 +64,11 @@ const PERMISSION_GROUPS: PermissionGroup[] = [
     ],
   },
   {
+    title: '💬 Comunicação',
+    headerClass: 'bg-cyan-700 text-white',
+    items: [{ id: 'chat_access', label: 'Acessar Chat Interno' }],
+  },
+  {
     title: '🧮 Precificação',
     headerClass: 'bg-blue-700 text-white',
     items: [
