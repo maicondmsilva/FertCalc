@@ -13,6 +13,8 @@ vi.mock('./supabase', () => ({
 }));
 
 import {
+  deleteChatMessage,
+  editChatMessage,
   listChatConversations,
   listChatMessagesAfter,
   sendChatMessage,
@@ -21,7 +23,7 @@ import {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  on.mockReturnValue({ subscribe });
+  on.mockReturnValue({ on, subscribe });
   channel.mockReturnValue({ on });
   subscribe.mockReturnValue({ topic: 'chat' });
   removeChannel.mockResolvedValue('ok');
@@ -113,12 +115,46 @@ describe('chatService', () => {
     );
   });
 
+  it('edita e exclui mensagens pelas operações protegidas', async () => {
+    const base = {
+      id: 'message-1',
+      conversation_id: 'conversation-1',
+      organization_id: 'organization-1',
+      sender_id: 'user-1',
+      client_message_id: 'client-1',
+      body: 'Mensagem editada',
+      created_at: '2026-09-23T10:00:00.000Z',
+      edited_at: '2026-09-23T10:01:00.000Z',
+      deleted_at: null,
+    };
+    rpc.mockResolvedValueOnce({ data: base, error: null }).mockResolvedValueOnce({
+      data: { ...base, body: '', deleted_at: '2026-09-23T10:02:00.000Z' },
+      error: null,
+    });
+
+    await expect(editChatMessage('message-1', 'Mensagem editada')).resolves.toEqual(
+      expect.objectContaining({ body: 'Mensagem editada', editedAt: base.edited_at })
+    );
+    expect(rpc).toHaveBeenNthCalledWith(1, 'edit_chat_message', {
+      p_message_id: 'message-1',
+      p_body: 'Mensagem editada',
+    });
+
+    await expect(deleteChatMessage('message-1')).resolves.toEqual(
+      expect.objectContaining({ body: '', deletedAt: '2026-09-23T10:02:00.000Z' })
+    );
+    expect(rpc).toHaveBeenNthCalledWith(2, 'delete_chat_message', {
+      p_message_id: 'message-1',
+    });
+  });
+
   it('normaliza mensagens recebidas em tempo real e remove o canal ao sair', () => {
     const callback = vi.fn();
     const unsubscribe = subscribeToChatMessages('user-1', callback);
-    const realtimeCallback = on.mock.calls[0][2];
+    const insertCallback = on.mock.calls[0][2];
+    const updateCallback = on.mock.calls[1][2];
 
-    realtimeCallback({
+    insertCallback({
       new: {
         id: 'message-2',
         conversation_id: 'conversation-1',
@@ -132,6 +168,21 @@ describe('chatService', () => {
 
     expect(callback).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'message-2', conversationId: 'conversation-1' })
+    );
+    updateCallback({
+      new: {
+        id: 'message-2',
+        conversation_id: 'conversation-1',
+        organization_id: 'organization-1',
+        sender_id: 'user-2',
+        client_message_id: 'client-2',
+        body: '',
+        created_at: '2026-09-23T10:01:00.000Z',
+        deleted_at: '2026-09-23T10:02:00.000Z',
+      },
+    });
+    expect(callback).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: 'message-2', body: '', deletedAt: expect.any(String) })
     );
     unsubscribe();
     expect(removeChannel).toHaveBeenCalledWith({ topic: 'chat' });
