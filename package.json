@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "NODE_OPTIONS='--max-old-space-size=4096' vite build --logLevel info",
+    "build:pricing-app": "NODE_OPTIONS='--max-old-space-size=4096' vite build --mode pricing-app --logLevel info",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",

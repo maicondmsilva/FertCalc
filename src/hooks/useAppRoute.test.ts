@@ -34,6 +34,39 @@ describe('app routing', () => {
     expect(getAppRoute('/reset-password', '').isPasswordReset).toBe(true);
   });
 
+  it('abre diretamente a calculadora na variante exclusiva de precificação', () => {
+    expect(getAppRoute('/', '', 'pricing')).toMatchObject({
+      activeTab: 'calculator',
+      activeModule: 'pricing',
+    });
+  });
+
+  it('bloqueia módulos externos à precificação na variante do aplicativo', () => {
+    expect(getAppRoute('/users', '', 'pricing')).toMatchObject({
+      activeTab: 'calculator',
+      activeModule: 'pricing',
+    });
+    expect(getAppRoute('/carregamento_visao_geral', '', 'pricing')).toMatchObject({
+      activeTab: 'calculator',
+      activeModule: 'pricing',
+    });
+  });
+
+  it('preserva as rotas do módulo de precificação na variante do aplicativo', () => {
+    expect(getAppRoute('/saved_formulas', '', 'pricing')).toMatchObject({
+      activeTab: 'saved_formulas',
+      activeModule: 'pricing',
+    });
+  });
+
+  it('não bloqueia a recuperação de senha na variante do aplicativo', () => {
+    expect(getAppRoute('/reset-password', '', 'pricing')).toMatchObject({
+      activeTab: 'reset-password',
+      activeModule: null,
+      isPasswordReset: true,
+    });
+  });
+
   it('acompanha a localização fornecida pelo roteador', () => {
     const wrapper = ({ children }: { children: ReactNode }) =>
       createElement(MemoryRouter, { initialEntries: ['/users?standalone=true'] }, children);
