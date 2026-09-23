@@ -25,6 +25,34 @@ const mapMessage = (row: ChatMessageRow): ChatMessage => ({
   deletedAt: row.deleted_at,
 });
 
+export type ChatMetricOperation = 'message_send' | 'message_recovery' | 'realtime_connection';
+
+export async function recordChatOperationMetric(
+  operation: ChatMetricOperation,
+  status: 'success' | 'error',
+  durationMs?: number,
+  details: Record<string, string | number | boolean | null> = {}
+): Promise<void> {
+  const { error } = await supabase.rpc('record_chat_operation_metric', {
+    p_operation: operation,
+    p_status: status,
+    p_duration_ms: durationMs == null ? null : Math.max(0, Math.round(durationMs)),
+    p_details: details,
+  });
+  if (error) throw error;
+}
+
+const observeChatOperation = (
+  operation: ChatMetricOperation,
+  status: 'success' | 'error',
+  startedAt: number,
+  details?: Record<string, string | number | boolean | null>
+) => {
+  void recordChatOperationMetric(operation, status, performance.now() - startedAt, details).catch(
+    (error) => console.warn('[Chat] Falha ao registrar métrica operacional:', error)
+  );
+};
+
 export async function listChatContacts(search = '', limit = 20): Promise<ChatContact[]> {
   const { data, error } = await supabase.rpc('list_chat_contacts', {
     p_search: search || null,
@@ -93,13 +121,22 @@ export async function sendChatMessage(
   body: string,
   clientMessageId: string
 ): Promise<ChatMessage> {
-  const { data, error } = await supabase.rpc('send_chat_message', {
-    p_conversation_id: conversationId,
-    p_body: body,
-    p_client_message_id: clientMessageId,
-  });
-  if (error) throw error;
-  return mapMessage(data as ChatMessageRow);
+  const startedAt = performance.now();
+  try {
+    const { data, error } = await supabase.rpc('send_chat_message', {
+      p_conversation_id: conversationId,
+      p_body: body,
+      p_client_message_id: clientMessageId,
+    });
+    if (error) throw error;
+    observeChatOperation('message_send', 'success', startedAt);
+    return mapMessage(data as ChatMessageRow);
+  } catch (error) {
+    observeChatOperation('message_send', 'error', startedAt, {
+      code: typeof error === 'object' && error && 'code' in error ? String(error.code) : 'unknown',
+    });
+    throw error;
+  }
 }
 
 export async function markChatRead(conversationId: string): Promise<void> {

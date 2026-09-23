@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   listChatMessages: vi.fn(),
   listChatMessagesAfter: vi.fn(),
   markChatRead: vi.fn(),
+  recordChatOperationMetric: vi.fn(),
   sendChatMessage: vi.fn(),
   subscribeToChatMessages: vi.fn(),
   showError: vi.fn(),
@@ -22,6 +23,7 @@ vi.mock('../../services/chatService', () => ({
   listChatMessages: mocks.listChatMessages,
   listChatMessagesAfter: mocks.listChatMessagesAfter,
   markChatRead: mocks.markChatRead,
+  recordChatOperationMetric: mocks.recordChatOperationMetric,
   sendChatMessage: mocks.sendChatMessage,
   subscribeToChatMessages: mocks.subscribeToChatMessages,
 }));
@@ -65,6 +67,7 @@ beforeEach(() => {
   mocks.listChatMessagesAfter.mockResolvedValue([]);
   mocks.listChatContacts.mockResolvedValue([]);
   mocks.markChatRead.mockResolvedValue(undefined);
+  mocks.recordChatOperationMetric.mockResolvedValue(undefined);
   mocks.subscribeToChatMessages.mockImplementation(
     (_userId: string, messageCallback: typeof onMessage, statusCallback: typeof onStatus) => {
       onMessage = messageCallback;
@@ -85,6 +88,20 @@ const openConversation = async () => {
 };
 
 describe('ChatWidget resiliente', () => {
+  it('expõe diálogo acessível, fecha com Escape e devolve o foco ao acionador', async () => {
+    render(<ChatWidget currentUser={currentUser} />);
+    const trigger = screen.getByLabelText('Abrir chat interno');
+    fireEvent.click(trigger);
+
+    const dialog = await screen.findByRole('dialog', { name: 'Chat interno' });
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
+  });
+
   it('recupera mensagens posteriores ao cursor quando o tempo real reconecta', async () => {
     await openConversation();
 
