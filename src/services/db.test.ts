@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PricingRecord, TargetFormula } from '../types';
 
-const { fromMock } = vi.hoisted(() => ({ fromMock: vi.fn() }));
+const { fromMock, rpcMock } = vi.hoisted(() => ({
+  fromMock: vi.fn(),
+  rpcMock: vi.fn(),
+}));
 
 vi.mock('./supabase', () => ({
-  supabase: { from: fromMock },
+  supabase: { from: fromMock, rpc: rpcMock },
 }));
 
 import {
@@ -12,11 +15,13 @@ import {
   getGoals,
   getPricingRecords,
   normalizeCalculationsForDb,
+  saveProfitabilityToCalc,
   updatePricingRecord,
 } from './db';
 
 beforeEach(() => {
   fromMock.mockReset();
+  rpcMock.mockReset();
 });
 
 describe('normalizeCalculationsForDb', () => {
@@ -69,6 +74,27 @@ describe('pricing record persistence', () => {
       },
     ],
   } as unknown as Omit<PricingRecord, 'id'>;
+
+  it('salva a rentabilidade atomicamente sem reler todos os cálculos', async () => {
+    rpcMock.mockResolvedValue({ error: null });
+    const analysis = { profitability: 123.45 } as never;
+
+    await saveProfitabilityToCalc('pricing-1', 2, analysis);
+
+    expect(rpcMock).toHaveBeenCalledWith('save_profitability_analysis', {
+      p_pricing_record_id: 'pricing-1',
+      p_calculation_index: 2,
+      p_analysis: analysis,
+    });
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it('propaga falha do banco ao salvar a rentabilidade', async () => {
+    const error = new Error('registro indisponível');
+    rpcMock.mockResolvedValue({ error });
+
+    await expect(saveProfitabilityToCalc('pricing-1', 0, {} as never)).rejects.toBe(error);
+  });
 
   it('cria a precificação com cálculos normalizados e tenant atribuído pelo servidor', async () => {
     const returnedRow = {

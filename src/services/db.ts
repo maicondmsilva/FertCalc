@@ -1149,26 +1149,11 @@ export async function saveProfitabilityToCalc(
   calcIndex: number,
   analysis: ProfitabilityAnalysis
 ): Promise<void> {
-  const { data, error: fetchError } = await supabase
-    .from('pricing_records')
-    .select('calculations')
-    .eq('id', pricingRecordId)
-    .single();
-  if (fetchError) throw fetchError;
-
-  const calculations = data.calculations ? [...data.calculations] : [];
-
-  if (calculations[calcIndex]) {
-    calculations[calcIndex] = {
-      ...calculations[calcIndex],
-      profitabilityAnalysis: analysis,
-    };
-  }
-
-  const { error } = await supabase
-    .from('pricing_records')
-    .update({ calculations, updated_at: new Date().toISOString() })
-    .eq('id', pricingRecordId);
+  const { error } = await supabase.rpc('save_profitability_analysis', {
+    p_pricing_record_id: pricingRecordId,
+    p_calculation_index: calcIndex,
+    p_analysis: analysis,
+  });
   if (error) throw error;
 }
 
@@ -1191,9 +1176,7 @@ const EMPTY_PRICING_SUMMARY: PricingRecord['summary'] = {
 };
 const FREE_PRODUCTS_FORMULA_LABEL = 'Produtos Livres';
 type CalculationDbInput =
-  | Partial<NonNullable<PricingRecord['calculations']>[number]>
-  | null
-  | undefined;
+  Partial<NonNullable<PricingRecord['calculations']>[number]> | null | undefined;
 
 const parseFiniteNumber = (value: unknown, fallback = 0) => {
   const parsed = Number(value);

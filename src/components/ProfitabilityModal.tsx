@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, TrendingUp, Search, Link2, Calculator } from 'lucide-react';
 import { TargetFormula, User, PricingRecord } from '../types';
 import { calculateProfitability, createProfitabilityAnalysis } from '../domain/pricing-engine';
@@ -88,6 +88,7 @@ export default function ProfitabilityModal({
 
   const [result, setResult] = useState<ReturnType<typeof calculateProfitability> | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const savingRef = useRef(false);
 
   // Reset on open
   useEffect(() => {
@@ -209,6 +210,7 @@ export default function ProfitabilityModal({
   };
 
   const handleSave = async () => {
+    if (savingRef.current) return;
     if (!result) return;
     if (!linkedPricingRecordId) {
       showError(
@@ -244,6 +246,7 @@ export default function ProfitabilityModal({
       analyzedByName: currentUser.name,
     });
 
+    savingRef.current = true;
     setIsSaving(true);
     try {
       await saveProfitabilityToCalc(linkedPricingRecordId, calcIndex, analysis);
@@ -252,6 +255,7 @@ export default function ProfitabilityModal({
     } catch {
       showError('Erro ao salvar rentabilidade.');
     } finally {
+      savingRef.current = false;
       setIsSaving(false);
     }
   };
