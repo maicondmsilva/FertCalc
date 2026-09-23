@@ -48,8 +48,8 @@ const observeChatOperation = (
   startedAt: number,
   details?: Record<string, string | number | boolean | null>
 ) => {
-  void recordChatOperationMetric(operation, status, performance.now() - startedAt, details).catch(
-    (error) => console.warn('[Chat] Falha ao registrar métrica operacional:', error)
+  void recordChatOperationMetric(operation, status, Date.now() - startedAt, details).catch(
+    (error) => console.error('[Chat] Falha ao registrar métrica operacional:', error)
   );
 };
 
@@ -121,7 +121,7 @@ export async function sendChatMessage(
   body: string,
   clientMessageId: string
 ): Promise<ChatMessage> {
-  const startedAt = performance.now();
+  const startedAt = Date.now();
   try {
     const { data, error } = await supabase.rpc('send_chat_message', {
       p_conversation_id: conversationId,

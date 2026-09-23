@@ -96,7 +96,7 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
 
     recoveringRef.current = true;
     setRealtimeStatus('recovering');
-    const startedAt = performance.now();
+    const startedAt = Date.now();
     try {
       let cursor = { createdAt: latestKnown.createdAt, id: latestKnown.id };
       const recovered: ChatMessage[] = [];
@@ -116,20 +116,17 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
       }
       await refreshConversations();
       setRealtimeStatus('connected');
-      void recordChatOperationMetric('message_recovery', 'success', performance.now() - startedAt, {
+      void recordChatOperationMetric('message_recovery', 'success', Date.now() - startedAt, {
         recovered_count: recovered.length,
       }).catch((metricError) =>
-        console.warn('[Chat] Falha ao registrar métrica de recuperação:', metricError)
+        console.error('[Chat] Falha ao registrar métrica de recuperação:', metricError)
       );
     } catch (error) {
       console.error('[Chat] Falha ao reconciliar mensagens:', error);
       setRealtimeStatus('recovering');
-      void recordChatOperationMetric(
-        'message_recovery',
-        'error',
-        performance.now() - startedAt
-      ).catch((metricError) =>
-        console.warn('[Chat] Falha ao registrar métrica de recuperação:', metricError)
+      void recordChatOperationMetric('message_recovery', 'error', Date.now() - startedAt).catch(
+        (metricError) =>
+          console.error('[Chat] Falha ao registrar métrica de recuperação:', metricError)
       );
     } finally {
       recoveringRef.current = false;
@@ -178,7 +175,7 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
         if (status === 'SUBSCRIBED') {
           setRealtimeStatus('connected');
           void recordChatOperationMetric('realtime_connection', 'success').catch((metricError) =>
-            console.warn('[Chat] Falha ao registrar métrica do tempo real:', metricError)
+            console.error('[Chat] Falha ao registrar métrica do tempo real:', metricError)
           );
           void refreshConversations();
           void reconcileSelectedConversation();
@@ -187,7 +184,7 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
           void recordChatOperationMetric('realtime_connection', 'error', undefined, {
             status,
           }).catch((metricError) =>
-            console.warn('[Chat] Falha ao registrar métrica do tempo real:', metricError)
+            console.error('[Chat] Falha ao registrar métrica do tempo real:', metricError)
           );
         }
       }
