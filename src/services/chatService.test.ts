@@ -12,7 +12,12 @@ vi.mock('./supabase', () => ({
   supabase: { rpc, channel, removeChannel },
 }));
 
-import { listChatConversations, sendChatMessage, subscribeToChatMessages } from './chatService';
+import {
+  listChatConversations,
+  listChatMessagesAfter,
+  sendChatMessage,
+  subscribeToChatMessages,
+} from './chatService';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -73,6 +78,39 @@ describe('chatService', () => {
       p_client_message_id: 'client-1',
     });
     expect(result).toEqual(expect.objectContaining({ id: 'message-1', body: 'Mensagem' }));
+  });
+
+  it('recupera mensagens posteriores ao último cursor conhecido', async () => {
+    rpc.mockResolvedValue({
+      data: [
+        {
+          id: 'message-2',
+          conversation_id: 'conversation-1',
+          organization_id: 'organization-1',
+          sender_id: 'user-2',
+          client_message_id: 'client-2',
+          body: 'Mensagem recuperada',
+          created_at: '2026-09-23T10:01:00.000Z',
+        },
+      ],
+      error: null,
+    });
+
+    const result = await listChatMessagesAfter(
+      'conversation-1',
+      { createdAt: '2026-09-23T10:00:00.000Z', id: 'message-1' },
+      100
+    );
+
+    expect(rpc).toHaveBeenCalledWith('get_chat_messages_after', {
+      p_conversation_id: 'conversation-1',
+      p_after_created_at: '2026-09-23T10:00:00.000Z',
+      p_after_id: 'message-1',
+      p_limit: 100,
+    });
+    expect(result[0]).toEqual(
+      expect.objectContaining({ id: 'message-2', body: 'Mensagem recuperada' })
+    );
   });
 
   it('normaliza mensagens recebidas em tempo real e remove o canal ao sair', () => {

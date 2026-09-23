@@ -51,6 +51,17 @@ begin
   if (select count(*) from public.get_chat_messages(conversation_one, null, null, 50)) <> 1 then
     raise exception 'Paginação não retornou a mensagem esperada.';
   end if;
+  if (
+    select count(*)
+    from public.get_chat_messages_after(
+      conversation_one,
+      '2000-01-01T00:00:00Z',
+      '00000000-0000-0000-0000-000000000000',
+      100
+    )
+  ) <> 1 then
+    raise exception 'Recuperação após desconexão não retornou a mensagem esperada.';
+  end if;
 
   if (select count(*) from public.list_chat_contacts('Chat A2', 20)) <> 1 then
     raise exception 'Busca segura de contatos retornou resultado incorreto.';
