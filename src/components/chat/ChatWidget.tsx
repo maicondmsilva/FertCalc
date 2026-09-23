@@ -7,6 +7,7 @@ import {
   listChatContacts,
   listChatConversations,
   listChatMessages,
+  listChatMessagesAfter,
   markChatRead,
   sendChatMessage,
   subscribeToChatMessages,
@@ -27,6 +28,15 @@ const formatChatTime = (value?: string | null) =>
       }).format(new Date(value))
     : '';
 
+const mergeMessages = (current: ChatMessage[], incoming: ChatMessage[]) => {
+  const byId = new Map(current.map((message) => [message.id, message]));
+  incoming.forEach((message) => byId.set(message.id, message));
+  return [...byId.values()].sort(
+    (first, second) =>
+      first.createdAt.localeCompare(second.createdAt) || first.id.localeCompare(second.id)
+  );
+};
+
 export default function ChatWidget({ currentUser }: ChatWidgetProps) {
   const { showError } = useToast();
   const [isOpen, setIsOpen] = useState(false);
@@ -41,8 +51,14 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasOlder, setHasOlder] = useState(false);
+  const [realtimeStatus, setRealtimeStatus] = useState<'connecting' | 'connected' | 'recovering'>(
+    'connecting'
+  );
   const sendingRef = useRef(false);
+  const recoveringRef = useRef(false);
+  const isOpenRef = useRef(false);
   const selectedRef = useRef<ChatConversation | null>(null);
+  const messagesRef = useRef<ChatMessage[]>([]);
   const endRef = useRef<HTMLDivElement | null>(null);
 
   const unreadCount = useMemo(
@@ -65,9 +81,51 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
     }
   }, []);
 
+  const reconcileSelectedConversation = useCallback(async () => {
+    const conversation = selectedRef.current;
+    const latestKnown = messagesRef.current.at(-1);
+    if (!conversation || !latestKnown || recoveringRef.current) return;
+
+    recoveringRef.current = true;
+    setRealtimeStatus('recovering');
+    try {
+      let cursor = { createdAt: latestKnown.createdAt, id: latestKnown.id };
+      const recovered: ChatMessage[] = [];
+
+      for (let page = 0; page < 10; page += 1) {
+        const rows = await listChatMessagesAfter(conversation.conversationId, cursor, 100);
+        recovered.push(...rows);
+        if (rows.length < 100) break;
+        const last = rows.at(-1);
+        if (!last) break;
+        cursor = { createdAt: last.createdAt, id: last.id };
+      }
+
+      if (recovered.length > 0) {
+        setMessages((current) => mergeMessages(current, recovered));
+        if (isOpenRef.current) await markChatRead(conversation.conversationId);
+      }
+      await refreshConversations();
+      setRealtimeStatus('connected');
+    } catch (error) {
+      console.error('[Chat] Falha ao reconciliar mensagens:', error);
+      setRealtimeStatus('recovering');
+    } finally {
+      recoveringRef.current = false;
+    }
+  }, [refreshConversations]);
+
   useEffect(() => {
     selectedRef.current = selected;
   }, [selected]);
+
+  useEffect(() => {
+    isOpenRef.current = isOpen;
+  }, [isOpen]);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   useEffect(() => {
     void refreshConversations();
@@ -75,21 +133,46 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
       currentUser.id,
       (message) => {
         if (selectedRef.current?.conversationId === message.conversationId) {
-          setMessages((current) =>
-            current.some((item) => item.id === message.id) ? current : [...current, message]
-          );
-          if (message.senderId !== currentUser.id) {
+          setMessages((current) => mergeMessages(current, [message]));
+          if (message.senderId !== currentUser.id && isOpenRef.current) {
             void markChatRead(message.conversationId).then(refreshConversations);
+          } else {
+            void refreshConversations();
           }
         } else {
           void refreshConversations();
         }
       },
       (status) => {
-        if (status === 'SUBSCRIBED') void refreshConversations();
+        if (status === 'SUBSCRIBED') {
+          setRealtimeStatus('connected');
+          void refreshConversations();
+          void reconcileSelectedConversation();
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          setRealtimeStatus('recovering');
+        }
       }
     );
-  }, [currentUser.id, refreshConversations]);
+  }, [currentUser.id, reconcileSelectedConversation, refreshConversations]);
+
+  useEffect(() => {
+    const recover = () => {
+      void refreshConversations();
+      void reconcileSelectedConversation();
+    };
+    const recoverWhenVisible = () => {
+      if (document.visibilityState === 'visible') recover();
+    };
+
+    window.addEventListener('online', recover);
+    window.addEventListener('focus', recover);
+    document.addEventListener('visibilitychange', recoverWhenVisible);
+    return () => {
+      window.removeEventListener('online', recover);
+      window.removeEventListener('focus', recover);
+      document.removeEventListener('visibilitychange', recoverWhenVisible);
+    };
+  }, [reconcileSelectedConversation, refreshConversations]);
 
   useEffect(() => {
     if (!isOpen || !showContacts) return;
@@ -110,11 +193,14 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
 
   const openConversation = async (conversation: ChatConversation) => {
     setSelected(conversation);
+    selectedRef.current = conversation;
+    setMessages([]);
+    messagesRef.current = [];
     setShowContacts(false);
     setLoadingMessages(true);
     try {
       const rows = await listChatMessages(conversation.conversationId);
-      setMessages([...rows].reverse());
+      setMessages((current) => mergeMessages(current, [...rows].reverse()));
       setHasOlder(rows.length === 50);
       await markChatRead(conversation.conversationId);
       await refreshConversations();
@@ -211,7 +297,12 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
             <div className="flex h-16 items-center justify-between border-b border-stone-200 px-4">
               <div>
                 <h2 className="font-bold text-stone-900">Chat interno</h2>
-                <p className="text-xs text-stone-500">Conversas da sua organização</p>
+                <p className="flex items-center gap-1.5 text-xs text-stone-500">
+                  <span
+                    className={`h-2 w-2 rounded-full ${realtimeStatus === 'connected' ? 'bg-emerald-500' : 'animate-pulse bg-amber-500'}`}
+                  />
+                  {realtimeStatus === 'connected' ? 'Em tempo real' : 'Reconectando...'}
+                </p>
               </div>
               <div className="flex gap-1">
                 <button

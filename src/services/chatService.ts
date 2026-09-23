@@ -73,6 +73,21 @@ export async function listChatMessages(
   return ((data ?? []) as ChatMessageRow[]).map(mapMessage);
 }
 
+export async function listChatMessagesAfter(
+  conversationId: string,
+  cursor: { createdAt: string; id: string },
+  limit = 100
+): Promise<ChatMessage[]> {
+  const { data, error } = await supabase.rpc('get_chat_messages_after', {
+    p_conversation_id: conversationId,
+    p_after_created_at: cursor.createdAt,
+    p_after_id: cursor.id,
+    p_limit: limit,
+  });
+  if (error) throw error;
+  return ((data ?? []) as ChatMessageRow[]).map(mapMessage);
+}
+
 export async function sendChatMessage(
   conversationId: string,
   body: string,
