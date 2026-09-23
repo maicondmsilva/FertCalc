@@ -15,10 +15,12 @@ vi.mock('./supabase', () => ({
 import {
   deleteChatMessage,
   editChatMessage,
+  listChatMessageReactions,
   listChatConversations,
   listChatMessagesAfter,
   sendChatMessage,
   subscribeToChatMessages,
+  toggleChatMessageReaction,
 } from './chatService';
 
 beforeEach(() => {
@@ -113,6 +115,31 @@ describe('chatService', () => {
     expect(result[0]).toEqual(
       expect.objectContaining({ id: 'message-2', body: 'Mensagem recuperada' })
     );
+  });
+
+  it('lista e alterna reações de mensagens', async () => {
+    rpc
+      .mockResolvedValueOnce({
+        data: [
+          {
+            message_id: 'message-1',
+            emoji: '👍',
+            reaction_count: '2',
+            reacted_by_me: true,
+          },
+        ],
+        error: null,
+      })
+      .mockResolvedValueOnce({ data: false, error: null });
+
+    await expect(listChatMessageReactions('conversation-1')).resolves.toEqual([
+      { messageId: 'message-1', emoji: '👍', count: 2, reactedByMe: true },
+    ]);
+    await expect(toggleChatMessageReaction('message-1', '👍')).resolves.toBe(false);
+    expect(rpc).toHaveBeenNthCalledWith(2, 'toggle_chat_message_reaction', {
+      p_message_id: 'message-1',
+      p_emoji: '👍',
+    });
   });
 
   it('edita e exclui mensagens pelas operações protegidas', async () => {

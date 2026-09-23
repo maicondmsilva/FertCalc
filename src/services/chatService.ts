@@ -7,6 +7,7 @@ import type {
   ChatMessageReceipt,
   ChatPresenceStatus,
   ChatProfile,
+  ChatReactionSummary,
 } from '../types/chat.types';
 
 export async function updateChatPreferences(
@@ -177,6 +178,33 @@ export async function getChatMessageReceipts(
   }));
 }
 
+export async function listChatMessageReactions(
+  conversationId: string
+): Promise<ChatReactionSummary[]> {
+  const { data, error } = await supabase.rpc('list_chat_message_reactions', {
+    p_conversation_id: conversationId,
+  });
+  if (error) throw error;
+  return ((data ?? []) as Record<string, unknown>[]).map((row) => ({
+    messageId: row.message_id as string,
+    emoji: row.emoji as string,
+    count: Number(row.reaction_count ?? 0),
+    reactedByMe: Boolean(row.reacted_by_me),
+  }));
+}
+
+export async function toggleChatMessageReaction(
+  messageId: string,
+  emoji: string
+): Promise<boolean> {
+  const { data, error } = await supabase.rpc('toggle_chat_message_reaction', {
+    p_message_id: messageId,
+    p_emoji: emoji,
+  });
+  if (error) throw error;
+  return Boolean(data);
+}
+
 export async function getChatProfile(userId: string): Promise<ChatProfile | null> {
   const { data, error } = await supabase.rpc('get_chat_profile', { p_user_id: userId });
   if (error) throw error;
@@ -263,6 +291,18 @@ export function subscribeToChatReads(callback: () => void) {
     .on(
       'postgres_changes',
       { event: 'UPDATE', schema: 'public', table: 'chat_participants' },
+      callback
+    )
+    .subscribe();
+  return () => void supabase.removeChannel(channel);
+}
+
+export function subscribeToChatReactions(callback: () => void) {
+  const channel = supabase
+    .channel('chat-message-reactions')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'chat_message_reactions' },
       callback
     )
     .subscribe();

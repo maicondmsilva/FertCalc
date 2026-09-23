@@ -10,6 +10,7 @@ import {
   Search,
   Send,
   Smile,
+  SmilePlus,
   Trash2,
   UserRound,
   Users,
@@ -23,6 +24,7 @@ import type {
   ChatMessageReceipt,
   ChatPresenceStatus,
   ChatProfile,
+  ChatReactionSummary,
 } from '../../types/chat.types';
 import {
   createGroupChat,
@@ -36,12 +38,15 @@ import {
   listChatConversations,
   listChatMessages,
   listChatMessagesAfter,
+  listChatMessageReactions,
   markChatRead,
   recordChatOperationMetric,
   sendChatMessage,
   subscribeToChatPresence,
   subscribeToChatReads,
   subscribeToChatMessages,
+  subscribeToChatReactions,
+  toggleChatMessageReaction,
   updateOwnChatProfile,
   uploadOwnChatAvatar,
 } from '../../services/chatService';
@@ -70,6 +75,35 @@ const mergeMessages = (current: ChatMessage[], incoming: ChatMessage[]) => {
   );
 };
 
+const EMOJI_CATEGORIES = {
+  recentes: [] as string[],
+  rostos: [
+    '😀',
+    '😃',
+    '😄',
+    '😁',
+    '😂',
+    '🤣',
+    '😊',
+    '😍',
+    '🤩',
+    '😎',
+    '🤔',
+    '😮',
+    '😢',
+    '😭',
+    '😡',
+    '🥳',
+  ],
+  gestos: ['👍', '👎', '👏', '🙏', '💪', '🤝', '👌', '✌️', '🫶', '👋', '👉', '✅'],
+  trabalho: ['📦', '🚚', '💰', '📊', '📈', '📅', '📌', '💡', '⚠️', '🎯', '🔔', '✉️'],
+  natureza: ['🌱', '🌿', '🌾', '🌽', '🌻', '☘️', '🌧️', '☀️', '💧', '🌎'],
+  celebracao: ['🎉', '🎊', '🏆', '🌟', '❤️', '💚', '🔥', '💯', '🎁', '🥂'],
+} as const;
+
+type EmojiCategory = keyof typeof EMOJI_CATEGORIES;
+const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '✅'];
+
 export default function ChatWidget({ currentUser }: ChatWidgetProps) {
   const { showError } = useToast();
   const [isOpen, setIsOpen] = useState(false);
@@ -90,6 +124,16 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
   const [contactStatuses, setContactStatuses] = useState<Record<string, ChatPresenceStatus>>({});
   const [avatarUrls, setAvatarUrls] = useState<Record<string, string>>({});
   const [showEmojis, setShowEmojis] = useState(false);
+  const [emojiCategory, setEmojiCategory] = useState<EmojiCategory>('rostos');
+  const [recentEmojis, setRecentEmojis] = useState<string[]>(() => {
+    try {
+      return JSON.parse(window.localStorage.getItem('fertcalc-chat-recent-emojis') ?? '[]');
+    } catch {
+      return [];
+    }
+  });
+  const [reactionPickerMessageId, setReactionPickerMessageId] = useState<string | null>(null);
+  const [reactions, setReactions] = useState<Record<string, ChatReactionSummary[]>>({});
   const [receipts, setReceipts] = useState<Record<string, ChatMessageReceipt>>({});
   const [profile, setProfile] = useState<ChatProfile | null>(null);
   const [showProfile, setShowProfile] = useState(false);
@@ -109,6 +153,7 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
   const endRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
 
   const unreadCount = useMemo(
     () => conversations.reduce((total, item) => total + item.unreadCount, 0),
@@ -251,6 +296,20 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
     }
   }, []);
 
+  const refreshReactions = useCallback(async (conversationId: string) => {
+    try {
+      const rows = await listChatMessageReactions(conversationId);
+      setReactions(
+        rows.reduce<Record<string, ChatReactionSummary[]>>((grouped, reaction) => {
+          (grouped[reaction.messageId] ??= []).push(reaction);
+          return grouped;
+        }, {})
+      );
+    } catch (error) {
+      console.error('[Chat] Falha ao atualizar reações:', error);
+    }
+  }, []);
+
   useEffect(
     () =>
       subscribeToChatReads(() => {
@@ -258,6 +317,15 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
         if (conversationId) void refreshReceipts(conversationId);
       }),
     [refreshReceipts]
+  );
+
+  useEffect(
+    () =>
+      subscribeToChatReactions(() => {
+        const conversationId = selectedRef.current?.conversationId;
+        if (conversationId) void refreshReactions(conversationId);
+      }),
+    [refreshReactions]
   );
 
   useEffect(() => {
@@ -332,6 +400,14 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length]);
 
+  useEffect(() => {
+    const composer = composerRef.current;
+    if (!composer) return;
+    composer.style.height = 'auto';
+    composer.style.height = `${Math.min(composer.scrollHeight, 144)}px`;
+    composer.style.overflowY = composer.scrollHeight > 144 ? 'auto' : 'hidden';
+  }, [draft]);
+
   const openConversation = async (conversation: ChatConversation) => {
     setSelected(conversation);
     selectedRef.current = conversation;
@@ -345,6 +421,7 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
       setHasOlder(rows.length === 50);
       await markChatRead(conversation.conversationId);
       await refreshReceipts(conversation.conversationId);
+      await refreshReactions(conversation.conversationId);
       await refreshConversations();
     } catch (error) {
       console.error('[Chat] Falha ao abrir conversa:', error);
@@ -521,6 +598,37 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
       showError('Não foi possível excluir a mensagem.');
     } finally {
       setMessageActionId(null);
+    }
+  };
+
+  const rememberEmoji = (emoji: string) => {
+    setRecentEmojis((current) => {
+      const next = [emoji, ...current.filter((item) => item !== emoji)].slice(0, 18);
+      window.localStorage.setItem('fertcalc-chat-recent-emojis', JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const insertEmoji = (emoji: string) => {
+    const composer = composerRef.current;
+    const start = composer?.selectionStart ?? draft.length;
+    const end = composer?.selectionEnd ?? draft.length;
+    setDraft(`${draft.slice(0, start)}${emoji}${draft.slice(end)}`.slice(0, 4000));
+    rememberEmoji(emoji);
+    window.requestAnimationFrame(() => {
+      composerRef.current?.focus();
+      composerRef.current?.setSelectionRange(start + emoji.length, start + emoji.length);
+    });
+  };
+
+  const handleToggleReaction = async (messageId: string, emoji: string) => {
+    try {
+      await toggleChatMessageReaction(messageId, emoji);
+      rememberEmoji(emoji);
+      setReactionPickerMessageId(null);
+      if (selected) await refreshReactions(selected.conversationId);
+    } catch {
+      showError('Não foi possível atualizar a reação.');
     }
   };
 
@@ -935,6 +1043,20 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                                   </button>
                                 </div>
                               )}
+                              {!deleted && editingMessageId !== message.id && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setReactionPickerMessageId((current) =>
+                                      current === message.id ? null : message.id
+                                    )
+                                  }
+                                  className={`absolute -bottom-3 ${mine ? 'left-2' : 'right-2'} rounded-full border border-stone-200 bg-white p-1 text-stone-500 opacity-80 shadow-sm hover:bg-stone-50 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100`}
+                                  aria-label="Reagir à mensagem"
+                                >
+                                  <SmilePlus className="h-3.5 w-3.5" />
+                                </button>
+                              )}
                               <p
                                 className={`mt-1 flex items-center justify-end gap-1 text-right text-[10px] ${mine && !deleted ? 'text-emerald-100' : 'text-stone-400'}`}
                               >
@@ -944,6 +1066,40 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                                   <Eye className="h-3 w-3" aria-label="Visualizada" />
                                 )}
                               </p>
+                              {!deleted && (reactions[message.id]?.length ?? 0) > 0 && (
+                                <div className="mt-1.5 flex flex-wrap gap-1">
+                                  {reactions[message.id].map((reaction) => (
+                                    <button
+                                      key={reaction.emoji}
+                                      type="button"
+                                      onClick={() =>
+                                        void handleToggleReaction(message.id, reaction.emoji)
+                                      }
+                                      className={`rounded-full border px-1.5 py-0.5 text-xs ${reaction.reactedByMe ? 'border-emerald-400 bg-emerald-50 text-emerald-800' : 'border-stone-200 bg-white text-stone-700'}`}
+                                      aria-label={`${reaction.reactedByMe ? 'Remover' : 'Adicionar'} reação ${reaction.emoji}`}
+                                    >
+                                      {reaction.emoji} {reaction.count}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                              {reactionPickerMessageId === message.id && (
+                                <div
+                                  className={`absolute bottom-8 z-10 flex gap-1 rounded-xl border border-stone-200 bg-white p-1.5 shadow-xl ${mine ? 'right-0' : 'left-0'}`}
+                                >
+                                  {QUICK_REACTIONS.map((emoji) => (
+                                    <button
+                                      key={emoji}
+                                      type="button"
+                                      onClick={() => void handleToggleReaction(message.id, emoji)}
+                                      className="rounded-lg p-1 text-lg hover:bg-stone-100"
+                                      aria-label={`Reagir com ${emoji}`}
+                                    >
+                                      {emoji}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           </div>
                         );
@@ -954,23 +1110,36 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                 </div>
                 <footer className="border-t border-stone-200 bg-white p-3">
                   {showEmojis && (
-                    <div className="mb-2 flex flex-wrap gap-1 rounded-xl border border-stone-200 bg-white p-2 shadow-sm">
-                      {['😀', '😂', '😍', '👍', '👏', '🙏', '✅', '🎉', '🚚', '🌱', '📦', '💰'].map(
-                        (emoji) => (
+                    <div className="mb-2 rounded-xl border border-stone-200 bg-white p-2 shadow-sm">
+                      <div className="mb-2 flex gap-1 overflow-x-auto border-b border-stone-100 pb-2">
+                        {(Object.keys(EMOJI_CATEGORIES) as EmojiCategory[]).map((category) => (
+                          <button
+                            key={category}
+                            type="button"
+                            onClick={() => setEmojiCategory(category)}
+                            disabled={category === 'recentes' && recentEmojis.length === 0}
+                            className={`whitespace-nowrap rounded-lg px-2 py-1 text-xs font-semibold capitalize ${emojiCategory === category ? 'bg-emerald-100 text-emerald-800' : 'text-stone-500 hover:bg-stone-100'} disabled:opacity-40`}
+                          >
+                            {category}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="grid max-h-36 grid-cols-8 gap-1 overflow-y-auto">
+                        {(emojiCategory === 'recentes'
+                          ? recentEmojis
+                          : EMOJI_CATEGORIES[emojiCategory]
+                        ).map((emoji) => (
                           <button
                             key={emoji}
                             type="button"
-                            onClick={() => {
-                              setDraft((value) => `${value}${emoji}`);
-                              setShowEmojis(false);
-                            }}
+                            onClick={() => insertEmoji(emoji)}
                             className="rounded-lg p-1.5 text-xl hover:bg-stone-100"
                             aria-label={`Adicionar ${emoji}`}
                           >
                             {emoji}
                           </button>
-                        )
-                      )}
+                        ))}
+                      </div>
                     </div>
                   )}
                   <div className="flex items-end gap-2">
@@ -983,6 +1152,7 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                       <Smile className="h-5 w-5" />
                     </button>
                     <textarea
+                      ref={composerRef}
                       aria-label="Mensagem do chat"
                       value={draft}
                       onChange={(event) => setDraft(event.target.value.slice(0, 4000))}
@@ -993,7 +1163,7 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                         }
                       }}
                       rows={1}
-                      className="max-h-32 min-h-10 flex-1 resize-none rounded-xl border border-stone-300 px-3 py-2 text-sm outline-none focus:border-emerald-500"
+                      className="max-h-36 min-h-10 flex-1 resize-none rounded-xl border border-stone-300 px-3 py-2 text-sm leading-5 outline-none transition-[height] focus:border-emerald-500"
                       placeholder="Digite uma mensagem"
                     />
                     <button
