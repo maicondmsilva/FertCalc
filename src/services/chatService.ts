@@ -1,5 +1,12 @@
 import { supabase } from './supabase';
-import type { ChatContact, ChatConversation, ChatMessage } from '../types/chat.types';
+import type {
+  ChatContact,
+  ChatConversation,
+  ChatMessage,
+  ChatMessageReceipt,
+  ChatPresenceStatus,
+  ChatProfile,
+} from '../types/chat.types';
 
 type ChatMessageRow = {
   id: string;
@@ -67,15 +74,108 @@ export async function listChatConversations(limit = 50): Promise<ChatConversatio
   if (error) throw error;
   return ((data ?? []) as Record<string, unknown>[]).map((row) => ({
     conversationId: row.conversation_id as string,
-    contactId: row.contact_id as string,
+    conversationType: (row.conversation_type as 'direct' | 'group') ?? 'direct',
+    conversationTitle: row.conversation_title as string | null,
+    contactId: row.contact_id as string | null,
     contactName: row.contact_name as string,
     contactNickname: row.contact_nickname as string | null,
     contactRole: row.contact_role as string,
+    memberCount: Number(row.member_count ?? 2),
     lastMessageBody: row.last_message_body as string | null,
     lastMessageSenderId: row.last_message_sender_id as string | null,
     lastMessageAt: row.last_message_at as string | null,
     unreadCount: Number(row.unread_count ?? 0),
   }));
+}
+
+export async function createGroupChat(name: string, memberIds: string[]): Promise<string> {
+  const { data, error } = await supabase.rpc('create_group_chat', {
+    p_name: name,
+    p_member_ids: memberIds,
+  });
+  if (error) throw error;
+  return data as string;
+}
+
+export async function getChatMessageReceipts(
+  conversationId: string
+): Promise<ChatMessageReceipt[]> {
+  const { data, error } = await supabase.rpc('get_chat_message_receipts', {
+    p_conversation_id: conversationId,
+  });
+  if (error) throw error;
+  return ((data ?? []) as Record<string, unknown>[]).map((row) => ({
+    messageId: row.message_id as string,
+    readByCount: Number(row.read_by_count ?? 0),
+    recipientCount: Number(row.recipient_count ?? 0),
+    fullyRead: Boolean(row.fully_read),
+  }));
+}
+
+export async function getChatProfile(userId: string): Promise<ChatProfile | null> {
+  const { data, error } = await supabase.rpc('get_chat_profile', { p_user_id: userId });
+  if (error) throw error;
+  const row = (data?.[0] ?? null) as Record<string, unknown> | null;
+  if (!row) return null;
+  return {
+    id: row.id as string,
+    name: row.name as string,
+    nickname: row.nickname as string | null,
+    email: row.email as string,
+    phone: row.phone as string | null,
+    jobTitle: row.job_title as string | null,
+    role: row.role as string,
+    chatStatus: row.chat_status as ChatPresenceStatus,
+    chatStatusMessage: row.chat_status_message as string | null,
+  };
+}
+
+export async function updateOwnChatProfile(input: {
+  phone?: string | null;
+  jobTitle?: string | null;
+  status: ChatPresenceStatus;
+  statusMessage?: string | null;
+}): Promise<void> {
+  const { error } = await supabase.rpc('update_own_chat_profile', {
+    p_phone: input.phone ?? null,
+    p_job_title: input.jobTitle ?? null,
+    p_chat_status: input.status,
+    p_chat_status_message: input.statusMessage ?? null,
+  });
+  if (error) throw error;
+}
+
+export function subscribeToChatPresence(
+  organizationId: string,
+  userId: string,
+  callback: (onlineUserIds: Set<string>) => void
+) {
+  const channel = supabase.channel(`chat-presence:${organizationId}`, {
+    config: { private: true, presence: { key: userId } },
+  });
+  channel.on('presence', { event: 'sync' }, () => {
+    callback(new Set(Object.keys(channel.presenceState())));
+  });
+  channel.subscribe(async (status) => {
+    if (status === 'SUBSCRIBED')
+      await channel.track({ user_id: userId, online_at: new Date().toISOString() });
+  });
+  return () => {
+    void channel.untrack();
+    void supabase.removeChannel(channel);
+  };
+}
+
+export function subscribeToChatReads(callback: () => void) {
+  const channel = supabase
+    .channel('chat-read-receipts')
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'chat_participants' },
+      callback
+    )
+    .subscribe();
+  return () => void supabase.removeChannel(channel);
 }
 
 export async function getOrCreateDirectChat(targetUserId: string): Promise<string> {

@@ -5,6 +5,9 @@ import type { User } from '../../types';
 
 const mocks = vi.hoisted(() => ({
   getOrCreateDirectChat: vi.fn(),
+  getChatMessageReceipts: vi.fn(),
+  getChatProfile: vi.fn(),
+  createGroupChat: vi.fn(),
   listChatContacts: vi.fn(),
   listChatConversations: vi.fn(),
   listChatMessages: vi.fn(),
@@ -13,11 +16,17 @@ const mocks = vi.hoisted(() => ({
   recordChatOperationMetric: vi.fn(),
   sendChatMessage: vi.fn(),
   subscribeToChatMessages: vi.fn(),
+  subscribeToChatPresence: vi.fn(),
+  subscribeToChatReads: vi.fn(),
+  updateOwnChatProfile: vi.fn(),
   showError: vi.fn(),
 }));
 
 vi.mock('../../services/chatService', () => ({
   getOrCreateDirectChat: mocks.getOrCreateDirectChat,
+  getChatMessageReceipts: mocks.getChatMessageReceipts,
+  getChatProfile: mocks.getChatProfile,
+  createGroupChat: mocks.createGroupChat,
   listChatContacts: mocks.listChatContacts,
   listChatConversations: mocks.listChatConversations,
   listChatMessages: mocks.listChatMessages,
@@ -26,6 +35,9 @@ vi.mock('../../services/chatService', () => ({
   recordChatOperationMetric: mocks.recordChatOperationMetric,
   sendChatMessage: mocks.sendChatMessage,
   subscribeToChatMessages: mocks.subscribeToChatMessages,
+  subscribeToChatPresence: mocks.subscribeToChatPresence,
+  subscribeToChatReads: mocks.subscribeToChatReads,
+  updateOwnChatProfile: mocks.updateOwnChatProfile,
 }));
 
 vi.mock('../Toast', () => ({
@@ -67,6 +79,11 @@ beforeEach(() => {
   mocks.listChatMessagesAfter.mockResolvedValue([]);
   mocks.listChatContacts.mockResolvedValue([]);
   mocks.markChatRead.mockResolvedValue(undefined);
+  mocks.getChatMessageReceipts.mockResolvedValue([]);
+  mocks.getChatProfile.mockResolvedValue(null);
+  mocks.subscribeToChatReads.mockReturnValue(vi.fn());
+  mocks.subscribeToChatPresence.mockReturnValue(vi.fn());
+  mocks.updateOwnChatProfile.mockResolvedValue(undefined);
   mocks.recordChatOperationMetric.mockResolvedValue(undefined);
   mocks.subscribeToChatMessages.mockImplementation(
     (_userId: string, messageCallback: typeof onMessage, statusCallback: typeof onStatus) => {
