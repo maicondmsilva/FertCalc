@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   getChatProfile: vi.fn(),
   createGroupChat: vi.fn(),
   listChatContacts: vi.fn(),
+  listChatContactStatuses: vi.fn(),
   listChatConversations: vi.fn(),
   listChatMessages: vi.fn(),
   listChatMessagesAfter: vi.fn(),
@@ -28,6 +29,7 @@ vi.mock('../../services/chatService', () => ({
   getChatProfile: mocks.getChatProfile,
   createGroupChat: mocks.createGroupChat,
   listChatContacts: mocks.listChatContacts,
+  listChatContactStatuses: mocks.listChatContactStatuses,
   listChatConversations: mocks.listChatConversations,
   listChatMessages: mocks.listChatMessages,
   listChatMessagesAfter: mocks.listChatMessagesAfter,
@@ -78,6 +80,7 @@ beforeEach(() => {
   mocks.listChatMessages.mockResolvedValue([message]);
   mocks.listChatMessagesAfter.mockResolvedValue([]);
   mocks.listChatContacts.mockResolvedValue([]);
+  mocks.listChatContactStatuses.mockResolvedValue({});
   mocks.markChatRead.mockResolvedValue(undefined);
   mocks.getChatMessageReceipts.mockResolvedValue([]);
   mocks.getChatProfile.mockResolvedValue(null);

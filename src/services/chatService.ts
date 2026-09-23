@@ -49,6 +49,17 @@ export async function searchChatMessages(
   }));
 }
 
+export async function listChatContactStatuses(): Promise<Record<string, ChatPresenceStatus>> {
+  const { data, error } = await supabase.rpc('list_chat_contact_statuses');
+  if (error) throw error;
+  return Object.fromEntries(
+    ((data ?? []) as Record<string, unknown>[]).map((row) => [
+      row.user_id as string,
+      row.chat_status as ChatPresenceStatus,
+    ])
+  );
+}
+
 type ChatMessageRow = {
   id: string;
   conversation_id: string;

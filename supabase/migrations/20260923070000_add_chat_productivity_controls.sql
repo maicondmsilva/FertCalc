@@ -3,8 +3,37 @@
 alter table public.chat_participants
   add column if not exists muted_until timestamptz;
 
+-- O chat já está disponível no produto; habilita os usuários ativos existentes.
+update public.app_users
+set permissions = jsonb_set(coalesce(permissions, '{}'::jsonb), '{chat_access}', 'true'::jsonb, true),
+    updated_at = now()
+where ativo is true
+  and coalesce(permissions -> 'chat_access', 'null'::jsonb) = 'null'::jsonb;
+
 create index if not exists chat_participants_user_active_recent_idx
   on public.chat_participants (user_id, archived_at, conversation_id);
+
+create or replace function public.list_chat_contact_statuses()
+returns table (user_id uuid, chat_status text)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  caller_id uuid := (select auth.uid());
+begin
+  if caller_id is null or not private.chat_user_enabled(caller_id) then
+    raise exception 'Usuário sem acesso ao chat.' using errcode = '42501';
+  end if;
+  return query
+  select user_row.id, user_row.chat_status
+  from public.app_users user_row
+  where user_row.organization_id = private.user_organization(caller_id)
+    and user_row.ativo is true
+    and private.chat_user_enabled(user_row.id);
+end;
+$$;
 
 create or replace function public.update_chat_preferences(
   p_conversation_id uuid,
@@ -120,9 +149,11 @@ with check (
 );
 
 revoke all on function public.update_chat_preferences(uuid, boolean, timestamptz) from public, anon;
+revoke all on function public.list_chat_contact_statuses() from public, anon;
 revoke all on function public.rename_group_chat(uuid, text) from public, anon;
 revoke all on function public.search_chat_messages(text, uuid, integer) from public, anon;
 grant execute on function public.update_chat_preferences(uuid, boolean, timestamptz) to authenticated;
+grant execute on function public.list_chat_contact_statuses() to authenticated;
 grant execute on function public.rename_group_chat(uuid, text) to authenticated;
 grant execute on function public.search_chat_messages(text, uuid, integer) to authenticated;
 
