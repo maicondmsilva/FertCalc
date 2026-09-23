@@ -9,6 +9,7 @@ import {
   listChatMessages,
   listChatMessagesAfter,
   markChatRead,
+  recordChatOperationMetric,
   sendChatMessage,
   subscribeToChatMessages,
 } from '../../services/chatService';
@@ -60,6 +61,8 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
   const selectedRef = useRef<ChatConversation | null>(null);
   const messagesRef = useRef<ChatMessage[]>([]);
   const endRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLElement | null>(null);
 
   const unreadCount = useMemo(
     () => conversations.reduce((total, item) => total + item.unreadCount, 0),
@@ -81,6 +84,11 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
     }
   }, []);
 
+  const closeChat = useCallback(() => {
+    setIsOpen(false);
+    window.setTimeout(() => triggerRef.current?.focus(), 0);
+  }, []);
+
   const reconcileSelectedConversation = useCallback(async () => {
     const conversation = selectedRef.current;
     const latestKnown = messagesRef.current.at(-1);
@@ -88,6 +96,7 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
 
     recoveringRef.current = true;
     setRealtimeStatus('recovering');
+    const startedAt = Date.now();
     try {
       let cursor = { createdAt: latestKnown.createdAt, id: latestKnown.id };
       const recovered: ChatMessage[] = [];
@@ -107,9 +116,18 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
       }
       await refreshConversations();
       setRealtimeStatus('connected');
+      void recordChatOperationMetric('message_recovery', 'success', Date.now() - startedAt, {
+        recovered_count: recovered.length,
+      }).catch((metricError) =>
+        console.error('[Chat] Falha ao registrar métrica de recuperação:', metricError)
+      );
     } catch (error) {
       console.error('[Chat] Falha ao reconciliar mensagens:', error);
       setRealtimeStatus('recovering');
+      void recordChatOperationMetric('message_recovery', 'error', Date.now() - startedAt).catch(
+        (metricError) =>
+          console.error('[Chat] Falha ao registrar métrica de recuperação:', metricError)
+      );
     } finally {
       recoveringRef.current = false;
     }
@@ -121,7 +139,17 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
 
   useEffect(() => {
     isOpenRef.current = isOpen;
+    if (isOpen) window.setTimeout(() => panelRef.current?.focus(), 0);
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeChat();
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [closeChat, isOpen]);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -146,10 +174,18 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
       (status) => {
         if (status === 'SUBSCRIBED') {
           setRealtimeStatus('connected');
+          void recordChatOperationMetric('realtime_connection', 'success').catch((metricError) =>
+            console.error('[Chat] Falha ao registrar métrica do tempo real:', metricError)
+          );
           void refreshConversations();
           void reconcileSelectedConversation();
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
           setRealtimeStatus('recovering');
+          void recordChatOperationMetric('realtime_connection', 'error', undefined, {
+            status,
+          }).catch((metricError) =>
+            console.error('[Chat] Falha ao registrar métrica do tempo real:', metricError)
+          );
         }
       }
     );
@@ -264,7 +300,13 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
     } catch (error) {
       console.error('[Chat] Falha ao enviar mensagem:', error);
       setDraft(body);
-      showError('Não foi possível enviar a mensagem.');
+      const errorMessage =
+        typeof error === 'object' && error && 'message' in error ? String(error.message) : '';
+      showError(
+        errorMessage.includes('Limite de 30 mensagens')
+          ? 'Limite de mensagens atingido. Aguarde um minuto para continuar.'
+          : 'Não foi possível enviar a mensagem.'
+      );
     } finally {
       sendingRef.current = false;
     }
@@ -273,8 +315,9 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
   return (
     <div className="chat-trigger relative">
       <button
+        ref={triggerRef}
         type="button"
-        onClick={() => setIsOpen((value) => !value)}
+        onClick={() => (isOpen ? closeChat() : setIsOpen(true))}
         className="relative flex h-10 w-10 items-center justify-center rounded-full text-stone-500 transition-colors hover:bg-stone-100 hover:text-emerald-700"
         aria-label="Abrir chat interno"
       >
@@ -288,6 +331,10 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
 
       {isOpen && (
         <section
+          ref={panelRef}
+          role="dialog"
+          aria-modal="true"
+          tabIndex={-1}
           className="fixed inset-0 z-[10000] flex bg-white sm:inset-auto sm:right-4 sm:top-16 sm:h-[min(720px,calc(100vh-5rem))] sm:w-[min(860px,calc(100vw-2rem))] sm:overflow-hidden sm:rounded-2xl sm:border sm:border-stone-200 sm:shadow-2xl"
           aria-label="Chat interno"
         >
@@ -297,7 +344,7 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
             <div className="flex h-16 items-center justify-between border-b border-stone-200 px-4">
               <div>
                 <h2 className="font-bold text-stone-900">Chat interno</h2>
-                <p className="flex items-center gap-1.5 text-xs text-stone-500">
+                <p className="flex items-center gap-1.5 text-xs text-stone-500" aria-live="polite">
                   <span
                     className={`h-2 w-2 rounded-full ${realtimeStatus === 'connected' ? 'bg-emerald-500' : 'animate-pulse bg-amber-500'}`}
                   />
@@ -318,7 +365,7 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setIsOpen(false)}
+                  onClick={closeChat}
                   className="rounded-lg p-2 text-stone-500 hover:bg-stone-100"
                   aria-label="Fechar chat"
                 >
@@ -444,7 +491,7 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                   </div>
                   <button
                     type="button"
-                    onClick={() => setIsOpen(false)}
+                    onClick={closeChat}
                     className="rounded-lg p-2 text-stone-500 hover:bg-stone-100"
                     aria-label="Fechar chat"
                   >
@@ -495,6 +542,7 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                 <footer className="border-t border-stone-200 bg-white p-3">
                   <div className="flex items-end gap-2">
                     <textarea
+                      aria-label="Mensagem do chat"
                       value={draft}
                       onChange={(event) => setDraft(event.target.value.slice(0, 4000))}
                       onKeyDown={(event) => {

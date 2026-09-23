@@ -27,6 +27,7 @@ declare
   conversation_two uuid;
   message_one public.chat_messages;
   message_two public.chat_messages;
+  message_index integer;
 begin
   conversation_one := public.get_or_create_direct_chat(
     '41000000-0000-4000-8000-000000000002'
@@ -71,6 +72,26 @@ begin
   end if;
 
   perform public.mark_chat_read(conversation_one, now());
+  perform public.record_chat_operation_metric(
+    'message_recovery', 'success', 25, '{"recovered_count":1}'::jsonb
+  );
+
+  for message_index in 1..29 loop
+    perform public.send_chat_message(
+      conversation_one,
+      'Mensagem de limite ' || message_index,
+      gen_random_uuid()
+    );
+  end loop;
+  begin
+    perform public.send_chat_message(conversation_one, 'Mensagem excedente', gen_random_uuid());
+    raise exception 'Limite de envio não foi aplicado.';
+  exception
+    when raise_exception then
+      if sqlerrm not like 'Limite de 30 mensagens por minuto atingido%' then
+        raise;
+      end if;
+  end;
 
   begin
     perform public.get_or_create_direct_chat('42000000-0000-4000-8000-000000000001');
