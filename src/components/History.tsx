@@ -32,6 +32,7 @@ import {
 import { useToast } from './Toast';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { closeModalOnBackdrop } from '../utils/modalUtils';
+import { saveOrSharePdf } from '../utils/pdfDelivery';
 import { useConfirm } from '../hooks/useConfirm';
 import { getPricingTotalTons, getPricingTotalSaleValue } from '../utils/pricingMetrics';
 import {
@@ -241,7 +242,11 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
       finalY
     );
 
-    doc.save(`Relatorio_Consolidado_${new Date().getTime()}.pdf`);
+    await saveOrSharePdf(
+      doc,
+      `Relatorio_Consolidado_${new Date().getTime()}.pdf`,
+      'Relatório consolidado FertCalc'
+    );
   };
 
   const handleDelete = async (id: string) => {
@@ -797,14 +802,18 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                         {getPricingGuaranteeAuthorizationSummary(p).latestAuthorization
                           ?.authorizedByUserName || 'Usuário não identificado'}
                         {' · '}
-                        {getPricingGuaranteeAuthorizationSummary(p).latestAuthorization?.authorizedAt
+                        {getPricingGuaranteeAuthorizationSummary(p).latestAuthorization
+                          ?.authorizedAt
                           ? new Date(
                               getPricingGuaranteeAuthorizationSummary(p).latestAuthorization!
                                 .authorizedAt
                             ).toLocaleString('pt-BR')
                           : 'Data não informada'}
                         {' · '}
-                        {getPricingGuaranteeAuthorizationSummary(p).latestAuthorization?.justification}
+                        {
+                          getPricingGuaranteeAuthorizationSummary(p).latestAuthorization
+                            ?.justification
+                        }
                       </span>
                     </div>
                   </div>

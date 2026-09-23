@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertTriangle, Info, Trash2, X } from 'lucide-react';
+import { useModalBackNavigation } from '../../hooks/useModalBackNavigation';
 
 export type ConfirmVariant = 'danger' | 'warning' | 'info';
 
@@ -46,6 +47,7 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  useModalBackNavigation(isOpen, onCancel);
   const confirmBtnRef = useRef<HTMLButtonElement>(null);
   const { icon, btnClass, iconBg } = variantConfig[variant];
 
@@ -69,7 +71,7 @@ export function ConfirmDialog({
     <AnimatePresence>
       {isOpen && (
         <div
-          className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+          className="mobile-modal-backdrop fixed inset-0 z-[200] flex items-center justify-center"
           role="dialog"
           aria-modal="true"
           aria-labelledby="confirm-dialog-title"
@@ -86,7 +88,7 @@ export function ConfirmDialog({
 
           {/* Dialog */}
           <motion.div
-            className="relative bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm"
+            className="mobile-modal-panel relative w-full max-w-sm overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl sm:p-6"
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
@@ -123,11 +125,11 @@ export function ConfirmDialog({
               </div>
             </div>
 
-            <div className="mt-6 flex gap-3 justify-end">
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <button
                 type="button"
                 onClick={onCancel}
-                className="px-4 py-2 text-sm font-medium text-stone-600 bg-stone-100 hover:bg-stone-200 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-stone-400"
+                className="min-h-11 px-4 py-2 text-sm font-medium text-stone-600 bg-stone-100 hover:bg-stone-200 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-stone-400"
               >
                 {cancelLabel}
               </button>
@@ -135,7 +137,7 @@ export function ConfirmDialog({
                 ref={confirmBtnRef}
                 type="button"
                 onClick={onConfirm}
-                className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 ${btnClass}`}
+                className={`min-h-11 px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 ${btnClass}`}
               >
                 {confirmLabel}
               </button>

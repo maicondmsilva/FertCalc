@@ -427,7 +427,7 @@ export default function Calculator({
   };
 
   return (
-    <div className="grid min-w-0 grid-cols-1 gap-4 pb-12 sm:gap-6 lg:grid-cols-3">
+    <div className="grid min-w-0 grid-cols-1 gap-4 pb-[max(3rem,env(safe-area-inset-bottom))] sm:gap-6 lg:grid-cols-3">
       <>
         {!isSimplified &&
           (myGuaranteeRequests.length > 0 ||
@@ -2653,12 +2653,12 @@ export default function Calculator({
 
       {showGuaranteeRequests && (
         <div
-          className="fixed inset-0 z-[230] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm"
+          className="mobile-modal-backdrop fixed inset-0 z-[230] flex items-center justify-center bg-black/55 backdrop-blur-sm"
           onMouseDown={(event) =>
             closeModalOnBackdrop(event, () => setShowGuaranteeRequests(false))
           }
         >
-          <div className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+          <div className="mobile-modal-panel flex w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-stone-200 p-5">
               <div>
                 <h3 className="flex items-center gap-2 text-lg font-black text-stone-900">
@@ -2808,10 +2808,10 @@ export default function Calculator({
       {/* Modal: Buscar Cotação Aprovada */}
       {showCotacaoModal && (
         <div
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          className="mobile-modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
           onMouseDown={(event) => closeModalOnBackdrop(event, () => setShowCotacaoModal(false))}
         >
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
+          <div className="mobile-modal-panel flex w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
             <div className="px-6 py-4 bg-emerald-600 text-white flex justify-between items-center">
               <h2 className="text-lg font-bold flex items-center gap-2">
                 <Truck className="w-5 h-5" />

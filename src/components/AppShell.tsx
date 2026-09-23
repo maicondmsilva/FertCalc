@@ -74,7 +74,7 @@ export default function AppShell({
   }, []);
 
   return (
-    <div className="flex h-screen bg-stone-100 overflow-hidden font-sans text-stone-900">
+    <div className="app-safe-x flex h-[100dvh] min-h-0 overflow-hidden bg-stone-100 font-sans text-stone-900">
       <AppSidebar
         activeModule={activeModule}
         activeTab={activeTab}
@@ -90,9 +90,9 @@ export default function AppShell({
         onNavigate={onNavigate}
       />
 
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {!isStandalone && (
-          <header className="h-16 bg-white border-b border-stone-200 flex items-center justify-between px-4 sm:px-6">
+          <header className="app-safe-top min-h-16 shrink-0 border-b border-stone-200 bg-white px-4 sm:px-6 flex items-center justify-between">
             <div className="flex items-center">
               <button
                 className="md:hidden mr-4 text-stone-500 hover:text-stone-700"
@@ -155,12 +155,12 @@ export default function AppShell({
           </header>
         )}
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+        <main className="app-safe-bottom min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 pb-6 sm:p-6 lg:p-8">
           <div className="max-w-full mx-auto">{children}</div>
         </main>
       </div>
 
-      <div className="fixed bottom-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none">
+      <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] z-[9999] flex max-w-[calc(100vw-2rem)] flex-col gap-2 pointer-events-none">
         <AnimatePresence>
           {activeToasts.map((toast) => (
             <div key={toast.id} className="pointer-events-auto">

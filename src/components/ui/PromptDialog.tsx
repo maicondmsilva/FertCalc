@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
+import { useModalBackNavigation } from '../../hooks/useModalBackNavigation';
 
 interface PromptDialogProps {
   isOpen: boolean;
@@ -25,6 +26,7 @@ export function PromptDialog({
   onConfirm,
   onCancel,
 }: PromptDialogProps) {
+  useModalBackNavigation(isOpen, onCancel);
   const [value, setValue] = useState(defaultValue);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -70,7 +72,7 @@ export function PromptDialog({
     <AnimatePresence>
       {isOpen && (
         <div
-          className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+          className="mobile-modal-backdrop fixed inset-0 z-[200] flex items-center justify-center"
           role="dialog"
           aria-modal="true"
           aria-labelledby="prompt-dialog-title"
@@ -86,7 +88,7 @@ export function PromptDialog({
 
           {/* Dialog */}
           <motion.div
-            className="relative bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm"
+            className="mobile-modal-panel relative w-full max-w-sm overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl sm:p-6"
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
@@ -116,19 +118,19 @@ export function PromptDialog({
                 className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
                 required
               />
-              <div className="flex gap-3 justify-end">
+              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                 <button
                   type="button"
                   onClick={onCancel}
                   disabled={isSubmitting}
-                  className="px-4 py-2 text-sm font-medium text-stone-600 bg-stone-100 hover:bg-stone-200 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-stone-400"
+                  className="min-h-11 px-4 py-2 text-sm font-medium text-stone-600 bg-stone-100 hover:bg-stone-200 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-stone-400"
                 >
                   {cancelLabel}
                 </button>
                 <button
                   type="submit"
                   disabled={!value.trim() || isSubmitting}
-                  className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="min-h-11 px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 >
                   {isSubmitting ? 'Salvando…' : confirmLabel}
                 </button>

@@ -5,6 +5,7 @@ import { calculateProfitability, createProfitabilityAnalysis } from '../domain/p
 import { saveProfitabilityToCalc, getPricingRecords } from '../services/db';
 import { useToast } from './Toast';
 import { closeModalOnBackdrop } from '../utils/modalUtils';
+import { useModalBackNavigation } from '../hooks/useModalBackNavigation';
 import {
   convertPricingMoneyToBRL,
   formatPricingMoney,
@@ -46,6 +47,7 @@ export default function ProfitabilityModal({
   currentUser,
   onSaved,
 }: ProfitabilityModalProps) {
+  useModalBackNavigation(isOpen, onClose);
   const { showSuccess, showError } = useToast();
 
   const [factor, setFactor] = useState(calc.factors.factor);
@@ -278,10 +280,10 @@ export default function ProfitabilityModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+      className="mobile-modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/50"
       onMouseDown={(event) => closeModalOnBackdrop(event, onClose, isSaving)}
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div className="mobile-modal-panel w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-stone-200">
           <div className="flex items-center gap-2">
