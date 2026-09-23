@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   getChatMessageReceipts: vi.fn(),
   getChatProfile: vi.fn(),
   createGroupChat: vi.fn(),
+  deleteChatMessage: vi.fn(),
+  editChatMessage: vi.fn(),
   listChatContacts: vi.fn(),
   listChatContactStatuses: vi.fn(),
   listChatConversations: vi.fn(),
@@ -29,6 +31,8 @@ vi.mock('../../services/chatService', () => ({
   getChatMessageReceipts: mocks.getChatMessageReceipts,
   getChatProfile: mocks.getChatProfile,
   createGroupChat: mocks.createGroupChat,
+  deleteChatMessage: mocks.deleteChatMessage,
+  editChatMessage: mocks.editChatMessage,
   listChatContacts: mocks.listChatContacts,
   listChatContactStatuses: mocks.listChatContactStatuses,
   listChatConversations: mocks.listChatConversations,
@@ -84,6 +88,8 @@ beforeEach(() => {
   mocks.listChatContacts.mockResolvedValue([]);
   mocks.listChatContactStatuses.mockResolvedValue({ statuses: {}, avatarUrls: {} });
   mocks.markChatRead.mockResolvedValue(undefined);
+  mocks.deleteChatMessage.mockResolvedValue(undefined);
+  mocks.editChatMessage.mockResolvedValue(undefined);
   mocks.getChatMessageReceipts.mockResolvedValue([]);
   mocks.getChatProfile.mockResolvedValue(null);
   mocks.subscribeToChatReads.mockReturnValue(vi.fn());
@@ -156,5 +162,49 @@ describe('ChatWidget resiliente', () => {
 
     await waitFor(() => expect(mocks.listChatConversations).toHaveBeenCalled());
     expect(mocks.markChatRead).not.toHaveBeenCalled();
+  });
+
+  it('permite editar uma mensagem própria e mostra o marcador editada', async () => {
+    const ownMessage = {
+      ...message,
+      senderId: currentUser.id,
+      createdAt: new Date().toISOString(),
+    };
+    mocks.listChatMessages.mockResolvedValue([ownMessage]);
+    mocks.editChatMessage.mockResolvedValue({
+      ...ownMessage,
+      body: 'Texto corrigido',
+      editedAt: '2026-09-23T10:01:00.000Z',
+    });
+    await openConversation();
+
+    fireEvent.click(screen.getByLabelText('Editar mensagem'));
+    fireEvent.change(screen.getByLabelText('Editar mensagem'), {
+      target: { value: 'Texto corrigido' },
+    });
+    fireEvent.click(screen.getByText('Salvar'));
+
+    await waitFor(() =>
+      expect(mocks.editChatMessage).toHaveBeenCalledWith('message-1', 'Texto corrigido')
+    );
+    expect(await screen.findByText('Texto corrigido')).toBeDefined();
+    expect(screen.getByText('editada')).toBeDefined();
+  });
+
+  it('mantém o espaço da mensagem depois da exclusão', async () => {
+    const ownMessage = { ...message, senderId: currentUser.id };
+    mocks.listChatMessages.mockResolvedValue([ownMessage]);
+    mocks.deleteChatMessage.mockResolvedValue({
+      ...ownMessage,
+      body: '',
+      deletedAt: '2026-09-23T10:01:00.000Z',
+    });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await openConversation();
+
+    fireEvent.click(screen.getByLabelText('Excluir mensagem'));
+
+    await waitFor(() => expect(mocks.deleteChatMessage).toHaveBeenCalledWith('message-1'));
+    expect(await screen.findByText('Mensagem excluída')).toBeDefined();
   });
 });

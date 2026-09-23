@@ -5,10 +5,12 @@ import {
   Eye,
   Loader2,
   MessageCircle,
+  Pencil,
   Plus,
   Search,
   Send,
   Smile,
+  Trash2,
   UserRound,
   Users,
   X,
@@ -24,6 +26,8 @@ import type {
 } from '../../types/chat.types';
 import {
   createGroupChat,
+  deleteChatMessage,
+  editChatMessage,
   getChatMessageReceipts,
   getChatProfile,
   getOrCreateDirectChat,
@@ -79,6 +83,9 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
   const [selected, setSelected] = useState<ChatConversation | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState('');
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState('');
+  const [messageActionId, setMessageActionId] = useState<string | null>(null);
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
   const [contactStatuses, setContactStatuses] = useState<Record<string, ChatPresenceStatus>>({});
   const [avatarUrls, setAvatarUrls] = useState<Record<string, string>>({});
@@ -471,6 +478,52 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
     }
   };
 
+  const beginEditMessage = (message: ChatMessage) => {
+    setEditingMessageId(message.id);
+    setEditDraft(message.body);
+  };
+
+  const cancelEditMessage = () => {
+    setEditingMessageId(null);
+    setEditDraft('');
+  };
+
+  const handleEditMessage = async (messageId: string) => {
+    const body = editDraft.trim();
+    if (!body || messageActionId) return;
+    setMessageActionId(messageId);
+    try {
+      const updated = await editChatMessage(messageId, body);
+      setMessages((current) => mergeMessages(current, [updated]));
+      cancelEditMessage();
+      await refreshConversations();
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : '';
+      showError(
+        detail.includes('15 minutos')
+          ? 'O prazo de 15 minutos para editar esta mensagem terminou.'
+          : 'Não foi possível editar a mensagem.'
+      );
+    } finally {
+      setMessageActionId(null);
+    }
+  };
+
+  const handleDeleteMessage = async (messageId: string) => {
+    if (messageActionId || !window.confirm('Excluir esta mensagem para todos?')) return;
+    setMessageActionId(messageId);
+    try {
+      const updated = await deleteChatMessage(messageId);
+      setMessages((current) => mergeMessages(current, [updated]));
+      if (editingMessageId === messageId) cancelEditMessage();
+      await refreshConversations();
+    } catch {
+      showError('Não foi possível excluir a mensagem.');
+    } finally {
+      setMessageActionId(null);
+    }
+  };
+
   return (
     <div className="chat-trigger relative">
       <button
@@ -805,19 +858,88 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                     <div className="space-y-2">
                       {messages.map((message) => {
                         const mine = message.senderId === currentUser.id;
+                        const deleted = Boolean(message.deletedAt);
+                        const canEdit =
+                          mine &&
+                          !deleted &&
+                          Date.now() - new Date(message.createdAt).getTime() <= 15 * 60 * 1000;
                         return (
                           <div
                             key={message.id}
                             className={`flex ${mine ? 'justify-end' : 'justify-start'}`}
                           >
                             <div
-                              className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm shadow-sm ${mine ? 'rounded-br-sm bg-emerald-600 text-white' : 'rounded-bl-sm border border-stone-200 bg-white text-stone-800'}`}
+                              className={`group relative max-w-[85%] rounded-2xl px-3 py-2 text-sm shadow-sm ${deleted ? 'border border-stone-200 bg-stone-100 text-stone-500' : mine ? 'rounded-br-sm bg-emerald-600 text-white' : 'rounded-bl-sm border border-stone-200 bg-white text-stone-800'}`}
                             >
-                              <p className="whitespace-pre-wrap break-words">{message.body}</p>
+                              {editingMessageId === message.id ? (
+                                <div className="min-w-56 space-y-2">
+                                  <textarea
+                                    aria-label="Editar mensagem"
+                                    value={editDraft}
+                                    maxLength={4000}
+                                    onChange={(event) => setEditDraft(event.target.value)}
+                                    onKeyDown={(event) => {
+                                      if (event.key === 'Escape') cancelEditMessage();
+                                      if (event.key === 'Enter' && !event.shiftKey) {
+                                        event.preventDefault();
+                                        void handleEditMessage(message.id);
+                                      }
+                                    }}
+                                    className="max-h-32 min-h-16 w-full resize-y rounded-lg border border-emerald-300 bg-white px-2 py-1.5 text-stone-900 outline-none"
+                                  />
+                                  <div className="flex justify-end gap-2 text-xs">
+                                    <button
+                                      type="button"
+                                      onClick={cancelEditMessage}
+                                      className="rounded px-2 py-1 text-stone-600 hover:bg-stone-100"
+                                    >
+                                      Cancelar
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleEditMessage(message.id)}
+                                      disabled={!editDraft.trim() || messageActionId === message.id}
+                                      className="rounded bg-emerald-700 px-2 py-1 font-semibold text-white disabled:opacity-50"
+                                    >
+                                      Salvar
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <p
+                                  className={`whitespace-pre-wrap break-words ${deleted ? 'italic' : ''}`}
+                                >
+                                  {deleted ? 'Mensagem excluída' : message.body}
+                                </p>
+                              )}
+                              {mine && !deleted && editingMessageId !== message.id && (
+                                <div className="absolute -top-3 right-2 flex gap-1 rounded-lg border border-stone-200 bg-white p-1 text-stone-600 opacity-80 shadow-md sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+                                  {canEdit && (
+                                    <button
+                                      type="button"
+                                      onClick={() => beginEditMessage(message)}
+                                      className="rounded p-1 hover:bg-stone-100"
+                                      aria-label="Editar mensagem"
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleDeleteMessage(message.id)}
+                                    disabled={messageActionId === message.id}
+                                    className="rounded p-1 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                                    aria-label="Excluir mensagem"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              )}
                               <p
-                                className={`mt-1 flex items-center justify-end gap-1 text-right text-[10px] ${mine ? 'text-emerald-100' : 'text-stone-400'}`}
+                                className={`mt-1 flex items-center justify-end gap-1 text-right text-[10px] ${mine && !deleted ? 'text-emerald-100' : 'text-stone-400'}`}
                               >
                                 {formatChatTime(message.createdAt)}
+                                {message.editedAt && !deleted && <span>editada</span>}
                                 {mine && receipts[message.id]?.fullyRead && (
                                   <Eye className="h-3 w-3" aria-label="Visualizada" />
                                 )}

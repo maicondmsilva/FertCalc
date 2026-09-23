@@ -330,6 +330,23 @@ export async function sendChatMessage(
   }
 }
 
+export async function editChatMessage(messageId: string, body: string): Promise<ChatMessage> {
+  const { data, error } = await supabase.rpc('edit_chat_message', {
+    p_message_id: messageId,
+    p_body: body,
+  });
+  if (error) throw error;
+  return mapMessage(data as ChatMessageRow);
+}
+
+export async function deleteChatMessage(messageId: string): Promise<ChatMessage> {
+  const { data, error } = await supabase.rpc('delete_chat_message', {
+    p_message_id: messageId,
+  });
+  if (error) throw error;
+  return mapMessage(data as ChatMessageRow);
+}
+
 export async function markChatRead(conversationId: string): Promise<void> {
   const { error } = await supabase.rpc('mark_chat_read', {
     p_conversation_id: conversationId,
@@ -347,6 +364,11 @@ export function subscribeToChatMessages(
     .on(
       'postgres_changes',
       { event: 'INSERT', schema: 'public', table: 'chat_messages' },
+      (payload) => callback(mapMessage(payload.new as ChatMessageRow))
+    )
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'chat_messages' },
       (payload) => callback(mapMessage(payload.new as ChatMessageRow))
     )
     .subscribe((status) => onStatus?.(status));
