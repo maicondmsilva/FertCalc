@@ -1,8 +1,29 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Loader2, MessageCircle, Plus, Search, Send, Users, X } from 'lucide-react';
-import type { User } from '../../types';
-import type { ChatContact, ChatConversation, ChatMessage } from '../../types/chat.types';
 import {
+  ArrowLeft,
+  CheckCheck,
+  Loader2,
+  MessageCircle,
+  Plus,
+  Search,
+  Send,
+  UserRound,
+  Users,
+  X,
+} from 'lucide-react';
+import type { User } from '../../types';
+import type {
+  ChatContact,
+  ChatConversation,
+  ChatMessage,
+  ChatMessageReceipt,
+  ChatPresenceStatus,
+  ChatProfile,
+} from '../../types/chat.types';
+import {
+  createGroupChat,
+  getChatMessageReceipts,
+  getChatProfile,
   getOrCreateDirectChat,
   listChatContacts,
   listChatConversations,
@@ -11,7 +32,10 @@ import {
   markChatRead,
   recordChatOperationMetric,
   sendChatMessage,
+  subscribeToChatPresence,
+  subscribeToChatReads,
   subscribeToChatMessages,
+  updateOwnChatProfile,
 } from '../../services/chatService';
 import { useToast } from '../Toast';
 
@@ -42,12 +66,20 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
   const { showError } = useToast();
   const [isOpen, setIsOpen] = useState(false);
   const [showContacts, setShowContacts] = useState(false);
+  const [creatingGroup, setCreatingGroup] = useState(false);
+  const [groupName, setGroupName] = useState('');
+  const [groupMembers, setGroupMembers] = useState<string[]>([]);
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
   const [contacts, setContacts] = useState<ChatContact[]>([]);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<ChatConversation | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState('');
+  const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
+  const [receipts, setReceipts] = useState<Record<string, ChatMessageReceipt>>({});
+  const [profile, setProfile] = useState<ChatProfile | null>(null);
+  const [showProfile, setShowProfile] = useState(false);
+  const [ownStatus, setOwnStatus] = useState<ChatPresenceStatus>('available');
   const [loadingList, setLoadingList] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -152,8 +184,50 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
   }, [closeChat, isOpen]);
 
   useEffect(() => {
+    if (!isOpen) return;
+    const closeOnOutsideClick = (event: Event) => {
+      if (window.innerWidth < 640) return;
+      const target = event.target as Node;
+      if (!panelRef.current?.contains(target) && !triggerRef.current?.contains(target)) closeChat();
+    };
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    return () => document.removeEventListener('pointerdown', closeOnOutsideClick);
+  }, [closeChat, isOpen]);
+
+  useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  useEffect(() => {
+    if (!currentUser.organizationId) return;
+    return subscribeToChatPresence(currentUser.organizationId, currentUser.id, setOnlineUserIds);
+  }, [currentUser.id, currentUser.organizationId]);
+
+  useEffect(() => {
+    void getChatProfile(currentUser.id)
+      .then((result) => {
+        if (result) setOwnStatus(result.chatStatus);
+      })
+      .catch((error) => console.error('[Chat] Falha ao carregar o próprio status:', error));
+  }, [currentUser.id]);
+
+  const refreshReceipts = useCallback(async (conversationId: string) => {
+    try {
+      const rows = await getChatMessageReceipts(conversationId);
+      setReceipts(Object.fromEntries(rows.map((receipt) => [receipt.messageId, receipt])));
+    } catch (error) {
+      console.error('[Chat] Falha ao atualizar recibos de leitura:', error);
+    }
+  }, []);
+
+  useEffect(
+    () =>
+      subscribeToChatReads(() => {
+        const conversationId = selectedRef.current?.conversationId;
+        if (conversationId) void refreshReceipts(conversationId);
+      }),
+    [refreshReceipts]
+  );
 
   useEffect(() => {
     void refreshConversations();
@@ -239,6 +313,7 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
       setMessages((current) => mergeMessages(current, [...rows].reverse()));
       setHasOlder(rows.length === 50);
       await markChatRead(conversation.conversationId);
+      await refreshReceipts(conversation.conversationId);
       await refreshConversations();
     } catch (error) {
       console.error('[Chat] Falha ao abrir conversa:', error);
@@ -253,10 +328,13 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
       const conversationId = await getOrCreateDirectChat(contact.id);
       const conversation: ChatConversation = {
         conversationId,
+        conversationType: 'direct',
+        conversationTitle: null,
         contactId: contact.id,
         contactName: contact.name,
         contactNickname: contact.nickname,
         contactRole: contact.role,
+        memberCount: 2,
         unreadCount: 0,
       };
       await refreshConversations();
@@ -264,6 +342,52 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
     } catch (error) {
       console.error('[Chat] Falha ao iniciar conversa:', error);
       showError('Não foi possível iniciar a conversa.');
+    }
+  };
+
+  const handleCreateGroup = async () => {
+    if (groupName.trim().length < 2 || groupMembers.length === 0) return;
+    try {
+      const conversationId = await createGroupChat(groupName.trim(), groupMembers);
+      const conversation: ChatConversation = {
+        conversationId,
+        conversationType: 'group',
+        conversationTitle: groupName.trim(),
+        contactId: null,
+        contactName: groupName.trim(),
+        contactRole: 'group',
+        memberCount: groupMembers.length + 1,
+        unreadCount: 0,
+      };
+      setCreatingGroup(false);
+      setGroupName('');
+      setGroupMembers([]);
+      await refreshConversations();
+      await openConversation(conversation);
+    } catch (error) {
+      console.error('[Chat] Falha ao criar grupo:', error);
+      showError('Não foi possível criar o grupo. Confira os participantes.');
+    }
+  };
+
+  const openProfile = async (userId: string) => {
+    try {
+      const result = await getChatProfile(userId);
+      setProfile(result);
+      setShowProfile(Boolean(result));
+    } catch (error) {
+      console.error('[Chat] Falha ao abrir perfil:', error);
+      showError('Não foi possível carregar o perfil.');
+    }
+  };
+
+  const changeOwnStatus = async (status: ChatPresenceStatus) => {
+    setOwnStatus(status);
+    try {
+      await updateOwnChatProfile({ status });
+    } catch {
+      setOwnStatus('available');
+      showError('Não foi possível atualizar seu status.');
     }
   };
 
@@ -350,12 +474,26 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                   />
                   {realtimeStatus === 'connected' ? 'Em tempo real' : 'Reconectando...'}
                 </p>
+                <select
+                  aria-label="Meu status no chat"
+                  value={ownStatus}
+                  onChange={(event) =>
+                    void changeOwnStatus(event.target.value as ChatPresenceStatus)
+                  }
+                  className="mt-1 max-w-32 bg-transparent text-xs font-medium text-stone-600 outline-none"
+                >
+                  <option value="available">Disponível</option>
+                  <option value="busy">Ocupado</option>
+                  <option value="away">Ausente</option>
+                  <option value="do_not_disturb">Não perturbe</option>
+                </select>
               </div>
               <div className="flex gap-1">
                 <button
                   type="button"
                   onClick={() => {
                     setShowContacts(true);
+                    setCreatingGroup(false);
                     setSearch('');
                   }}
                   className="rounded-lg p-2 text-stone-500 hover:bg-stone-100"
@@ -393,17 +531,47 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                       placeholder="Buscar nome ou usuário"
                     />
                   </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCreatingGroup((value) => !value);
+                      setGroupMembers([]);
+                    }}
+                    className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-200 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50"
+                  >
+                    <Users className="h-4 w-4" />{' '}
+                    {creatingGroup ? 'Conversa individual' : 'Criar grupo'}
+                  </button>
+                  {creatingGroup && (
+                    <input
+                      aria-label="Nome do grupo"
+                      value={groupName}
+                      onChange={(event) => setGroupName(event.target.value.slice(0, 80))}
+                      className="mt-2 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm outline-none focus:border-emerald-500"
+                      placeholder="Nome do grupo"
+                    />
+                  )}
                 </div>
                 <div className="flex-1 overflow-y-auto p-2">
                   {contacts.map((contact) => (
                     <button
                       key={contact.id}
                       type="button"
-                      onClick={() => void startConversation(contact)}
+                      onClick={() => {
+                        if (!creatingGroup) return void startConversation(contact);
+                        setGroupMembers((current) =>
+                          current.includes(contact.id)
+                            ? current.filter((id) => id !== contact.id)
+                            : [...current, contact.id]
+                        );
+                      }}
                       className="flex w-full items-center gap-3 rounded-xl p-3 text-left hover:bg-stone-100"
                     >
-                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 font-bold text-emerald-700">
+                      <span className="relative flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 font-bold text-emerald-700">
                         {contact.name.slice(0, 1).toUpperCase()}
+                        {onlineUserIds.has(contact.id) && (
+                          <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" />
+                        )}
                       </span>
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-semibold">{contact.name}</span>
@@ -411,6 +579,15 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                           {contact.nickname || contact.role}
                         </span>
                       </span>
+                      {creatingGroup && (
+                        <span
+                          className={`ml-auto h-5 w-5 rounded border ${groupMembers.includes(contact.id) ? 'border-emerald-600 bg-emerald-600' : 'border-stone-300'}`}
+                        >
+                          {groupMembers.includes(contact.id) && (
+                            <CheckCheck className="h-4 w-4 text-white" />
+                          )}
+                        </span>
+                      )}
                     </button>
                   ))}
                   {contacts.length === 0 && (
@@ -419,6 +596,18 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                     </p>
                   )}
                 </div>
+                {creatingGroup && (
+                  <div className="border-t border-stone-200 p-3">
+                    <button
+                      type="button"
+                      onClick={() => void handleCreateGroup()}
+                      disabled={groupName.trim().length < 2 || groupMembers.length === 0}
+                      className="w-full rounded-xl bg-emerald-600 px-3 py-2 text-sm font-bold text-white disabled:bg-stone-300"
+                    >
+                      Criar grupo ({groupMembers.length})
+                    </button>
+                  </div>
+                )}
               </>
             ) : (
               <div className="flex-1 overflow-y-auto p-2">
@@ -439,8 +628,15 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                       onClick={() => void openConversation(conversation)}
                       className={`flex w-full gap-3 rounded-xl p-3 text-left ${selected?.conversationId === conversation.conversationId ? 'bg-emerald-50' : 'hover:bg-stone-100'}`}
                     >
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-stone-200 font-bold text-stone-700">
-                        {conversation.contactName.slice(0, 1).toUpperCase()}
+                      <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-stone-200 font-bold text-stone-700">
+                        {conversation.conversationType === 'group' ? (
+                          <Users className="h-5 w-5" />
+                        ) : (
+                          conversation.contactName.slice(0, 1).toUpperCase()
+                        )}
+                        {conversation.contactId && onlineUserIds.has(conversation.contactId) && (
+                          <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" />
+                        )}
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="flex items-center justify-between gap-2">
@@ -483,12 +679,30 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                   >
                     <ArrowLeft className="h-5 w-5" />
                   </button>
-                  <div className="min-w-0 flex-1">
+                  <button
+                    type="button"
+                    onClick={() => selected.contactId && void openProfile(selected.contactId)}
+                    disabled={!selected.contactId}
+                    className="min-w-0 flex-1 text-left disabled:cursor-default"
+                    title={selected.contactId ? 'Ver perfil e dados de contato' : undefined}
+                  >
                     <h3 className="truncate font-bold">{selected.contactName}</h3>
                     <p className="truncate text-xs text-stone-500">
-                      {selected.contactNickname || selected.contactRole}
+                      {selected.conversationType === 'group'
+                        ? `${selected.memberCount} participantes`
+                        : `${onlineUserIds.has(selected.contactId ?? '') ? 'Online' : 'Offline'} · ${selected.contactNickname || selected.contactRole}`}
                     </p>
-                  </div>
+                  </button>
+                  {selected.contactId && (
+                    <button
+                      type="button"
+                      onClick={() => void openProfile(selected.contactId!)}
+                      className="rounded-lg p-2 text-stone-500 hover:bg-stone-100"
+                      aria-label="Ver perfil"
+                    >
+                      <UserRound className="h-5 w-5" />
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={closeChat}
@@ -527,9 +741,12 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                             >
                               <p className="whitespace-pre-wrap break-words">{message.body}</p>
                               <p
-                                className={`mt-1 text-right text-[10px] ${mine ? 'text-emerald-100' : 'text-stone-400'}`}
+                                className={`mt-1 flex items-center justify-end gap-1 text-right text-[10px] ${mine ? 'text-emerald-100' : 'text-stone-400'}`}
                               >
                                 {formatChatTime(message.createdAt)}
+                                {mine && receipts[message.id]?.fullyRead && (
+                                  <CheckCheck className="h-3 w-3" aria-label="Visualizada" />
+                                )}
                               </p>
                             </div>
                           </div>
@@ -577,6 +794,55 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
               </div>
             )}
           </div>
+          {showProfile && profile && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center p-4">
+              <button
+                type="button"
+                className="absolute inset-0 cursor-default bg-black/30"
+                onClick={() => setShowProfile(false)}
+                aria-label="Fechar perfil"
+              />
+              <div className="relative w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-lg font-bold text-emerald-700">
+                      {profile.name.slice(0, 1).toUpperCase()}
+                    </span>
+                    <div>
+                      <h3 className="font-bold text-stone-900">{profile.name}</h3>
+                      <p className="text-xs text-stone-500">{profile.jobTitle || profile.role}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowProfile(false)}
+                    aria-label="Fechar perfil"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                <dl className="mt-5 space-y-3 text-sm">
+                  <div>
+                    <dt className="text-xs font-semibold uppercase text-stone-400">E-mail</dt>
+                    <dd>{profile.email}</dd>
+                  </div>
+                  {profile.phone && (
+                    <div>
+                      <dt className="text-xs font-semibold uppercase text-stone-400">Telefone</dt>
+                      <dd>{profile.phone}</dd>
+                    </div>
+                  )}
+                  <div>
+                    <dt className="text-xs font-semibold uppercase text-stone-400">Status</dt>
+                    <dd>
+                      {onlineUserIds.has(profile.id) ? 'Online' : 'Offline'} ·{' '}
+                      {profile.chatStatusMessage || profile.chatStatus}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            </div>
+          )}
         </section>
       )}
     </div>
