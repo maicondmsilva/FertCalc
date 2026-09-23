@@ -10,6 +10,7 @@ import {
 } from '../types';
 import type { LocalCarregamento } from '../types/carregamento';
 import { closeModalOnBackdrop } from '../utils/modalUtils';
+import { saveOrSharePdf } from '../utils/pdfDelivery';
 import {
   X,
   Edit3,
@@ -145,16 +146,15 @@ export default function PricingDetailModal({
   const [embalagens, setEmbalagens] = useState<Embalagem[]>([]);
   const [loadingEmbalagens, setLoadingEmbalagens] = useState(false);
   const [dbHistory, setDbHistory] = useState<DBPricingHistoryEntry[]>([]);
-  const [guaranteeAuthorizationAudit, setGuaranteeAuthorizationAudit] = useState<
-    AuditLogEntry[]
-  >([]);
+  const [guaranteeAuthorizationAudit, setGuaranteeAuthorizationAudit] = useState<AuditLogEntry[]>(
+    []
+  );
   const [loadingGuaranteeAuthorizationAudit, setLoadingGuaranteeAuthorizationAudit] =
     useState(false);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [priceLists, setPriceLists] = useState<PriceList[]>([]);
   const [loadingLocations, setLoadingLocations] = useState<LocalCarregamento[]>([]);
-  const canReadAdministrativeAudit =
-    currentUser.role === 'master' || currentUser.role === 'admin';
+  const canReadAdministrativeAudit = currentUser.role === 'master' || currentUser.role === 'admin';
   const hasGuaranteeAuthorization = Boolean(
     selectedPricing.calculations?.some(
       (calculation) => calculation.guaranteeDivergenceAuthorization
@@ -654,7 +654,7 @@ export default function PricingDetailModal({
         });
       }
 
-      doc.save(`proposta-completa-${cod}.pdf`);
+      await saveOrSharePdf(doc, `proposta-completa-${cod}.pdf`, `Proposta completa ${cod}`);
     } catch {
       showError('Não foi possível gerar a proposta completa.');
     } finally {
@@ -1633,9 +1633,7 @@ export default function PricingDetailModal({
                           {guarantee.target !== undefined && (
                             <p
                               className={`mt-1 text-[10px] font-bold ${
-                                guarantee.status === 'met'
-                                  ? 'text-emerald-300'
-                                  : 'text-amber-300'
+                                guarantee.status === 'met' ? 'text-emerald-300' : 'text-amber-300'
                               }`}
                             >
                               Alvo: {guarantee.target.toFixed(2)}% ·{' '}
@@ -1653,7 +1651,10 @@ export default function PricingDetailModal({
                         Garantias divergentes autorizadas
                       </h4>
                       <p className="mt-1 text-xs text-amber-900">
-                        Por <strong>{calc.guaranteeDivergenceAuthorization.authorizedByUserName}</strong>{' '}
+                        Por{' '}
+                        <strong>
+                          {calc.guaranteeDivergenceAuthorization.authorizedByUserName}
+                        </strong>{' '}
                         em{' '}
                         {new Date(
                           calc.guaranteeDivergenceAuthorization.authorizedAt
@@ -1982,8 +1983,8 @@ export default function PricingDetailModal({
                                     key={`${divergence.nutrient}-${index}`}
                                     className="rounded border border-violet-200 bg-white px-2 py-1 text-[10px] font-bold text-violet-800"
                                   >
-                                    {divergence.nutrient}: {Number(divergence.calculated || 0).toFixed(2)}%
-                                    {' · alvo '}
+                                    {divergence.nutrient}:{' '}
+                                    {Number(divergence.calculated || 0).toFixed(2)}%{' · alvo '}
                                     {Number(divergence.target || 0).toFixed(2)}%
                                   </span>
                                 ))}

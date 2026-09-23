@@ -8,6 +8,7 @@ import {
   getPricingExchangeRate,
 } from './pricingCurrency';
 import { buildGuaranteeComparisons } from './guaranteeComparison';
+import { saveOrSharePdf } from './pdfDelivery';
 
 const fmtN = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -108,11 +109,7 @@ export const generatePricingPDF = (
               ? ` / alvo ${fmtN(item.target)}% (${item.status === 'met' ? 'atendida' : 'divergente'})`
               : '';
           const color =
-            item.status === 'met'
-              ? '#047857'
-              : item.status === 'divergent'
-                ? '#b45309'
-                : '#334155';
+            item.status === 'met' ? '#047857' : item.status === 'divergent' ? '#b45309' : '#334155';
           return `<span style="display:inline-block;margin:2px 5px 2px 0;padding:3px 7px;border:1px solid ${color}40;border-radius:5px;color:${color};font-weight:700;">${item.label}: ${fmtN(item.calculated)}%${targetText}</span>`;
         })
         .join('');
@@ -257,46 +254,47 @@ export const generatePricingPDF = (
 
   document.body.appendChild(el);
 
-  html2canvas(el, { scale: 2, useCORS: true, allowTaint: true }).then((canvas) => {
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF('l', 'mm', 'a4'); // landscape
-    const pageW = pdf.internal.pageSize.getWidth();
-    const pageH = pdf.internal.pageSize.getHeight();
-    const ratio = canvas.width / canvas.height;
-    const imgH = pageW / ratio;
+  return html2canvas(el, { scale: 2, useCORS: true, allowTaint: true })
+    .then(async (canvas) => {
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('l', 'mm', 'a4'); // landscape
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const ratio = canvas.width / canvas.height;
+      const imgH = pageW / ratio;
 
-    if (imgH <= pageH) {
-      pdf.addImage(imgData, 'PNG', 0, 0, pageW, imgH);
-    } else {
-      // Multi-page
-      let yOffset = 0;
-      const pageImgH = pageH;
-      const srcH = (pageH / pageW) * canvas.width;
-      let page = 0;
-      while (yOffset < canvas.height) {
-        if (page > 0) pdf.addPage();
-        const sliceCanvas = document.createElement('canvas');
-        sliceCanvas.width = canvas.width;
-        sliceCanvas.height = Math.min(srcH, canvas.height - yOffset);
-        const ctx = sliceCanvas.getContext('2d')!;
-        ctx.drawImage(
-          canvas,
-          0,
-          yOffset,
-          canvas.width,
-          sliceCanvas.height,
-          0,
-          0,
-          canvas.width,
-          sliceCanvas.height
-        );
-        pdf.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', 0, 0, pageW, pageImgH);
-        yOffset += srcH;
-        page++;
+      if (imgH <= pageH) {
+        pdf.addImage(imgData, 'PNG', 0, 0, pageW, imgH);
+      } else {
+        // Multi-page
+        let yOffset = 0;
+        const pageImgH = pageH;
+        const srcH = (pageH / pageW) * canvas.width;
+        let page = 0;
+        while (yOffset < canvas.height) {
+          if (page > 0) pdf.addPage();
+          const sliceCanvas = document.createElement('canvas');
+          sliceCanvas.width = canvas.width;
+          sliceCanvas.height = Math.min(srcH, canvas.height - yOffset);
+          const ctx = sliceCanvas.getContext('2d')!;
+          ctx.drawImage(
+            canvas,
+            0,
+            yOffset,
+            canvas.width,
+            sliceCanvas.height,
+            0,
+            0,
+            canvas.width,
+            sliceCanvas.height
+          );
+          pdf.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', 0, 0, pageW, pageImgH);
+          yOffset += srcH;
+          page++;
+        }
       }
-    }
 
-    pdf.save(`proposta-comercial-${cod}.pdf`);
-    document.body.removeChild(el);
-  });
+      await saveOrSharePdf(pdf, `proposta-comercial-${cod}.pdf`, `Proposta comercial ${cod}`);
+    })
+    .finally(() => el.remove());
 };

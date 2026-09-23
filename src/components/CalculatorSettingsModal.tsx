@@ -3,6 +3,7 @@ import { X, Search, GripVertical, ChevronUp, ChevronDown, RotateCcw } from 'luci
 import { TargetFormula, RawMaterial } from '../types';
 import { microGuaranteePercentToKg } from '../utils/microGuarantee';
 import { closeModalOnBackdrop } from '../utils/modalUtils';
+import { useModalBackNavigation } from '../hooks/useModalBackNavigation';
 import {
   applyTemporaryMaterialPrice,
   restoreOfficialMaterialPrice,
@@ -33,6 +34,7 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
   currency = 'BRL',
   onConfirm,
 }) => {
+  useModalBackNavigation(isOpen, onClose);
   const [activeTab, setActiveTab] = useState<'macros' | 'micros'>('macros');
   const [localFormula, setLocalFormula] = useState<TargetFormula | null>(null);
   const [search, setSearch] = useState('');
@@ -580,12 +582,12 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4"
+      className="mobile-modal-backdrop fixed inset-0 z-[60] flex items-center justify-center bg-black/50"
       onMouseDown={(event) => closeModalOnBackdrop(event, onClose)}
     >
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+      <div className="mobile-modal-panel flex w-full max-w-4xl flex-col overflow-hidden rounded-xl bg-white shadow-xl">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-stone-100">
+        <div className="flex shrink-0 items-center justify-between border-b border-stone-100 p-4 sm:p-6">
           <h2 className="text-xl font-bold text-stone-800">Produtos da Fórmula</h2>
           <button
             onClick={onClose}
@@ -596,7 +598,7 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
         </div>
 
         {/* Filters/Tabs */}
-        <div className="p-4 border-b border-stone-100 flex gap-4">
+        <div className="flex shrink-0 flex-col gap-3 border-b border-stone-100 p-3 sm:flex-row sm:gap-4 sm:p-4">
           <button
             onClick={() => setActiveTab('macros')}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -618,20 +620,20 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
             Micronutrientes
           </button>
 
-          <div className="ml-auto relative">
+          <div className="relative sm:ml-auto">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={18} />
             <input
               type="text"
               placeholder="Buscar produto..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-10 pr-4 py-2 rounded-lg border border-stone-200 text-sm focus:outline-none focus:border-blue-500"
+              className="w-full rounded-lg border border-stone-200 py-2 pl-10 pr-4 text-sm focus:border-blue-500 focus:outline-none sm:w-auto"
             />
           </div>
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto flex-1 bg-stone-50/50">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-stone-50/50 p-3 sm:p-6">
           {!localFormula ? (
             <div className="text-center text-stone-500 py-8">Nenhuma fórmula selecionada.</div>
           ) : (
@@ -660,7 +662,7 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-stone-100 flex justify-end gap-3 bg-white rounded-b-xl">
+        <div className="app-safe-bottom flex shrink-0 justify-end gap-3 rounded-b-xl border-t border-stone-100 bg-white p-3 sm:p-6">
           <button
             onClick={onClose}
             className="px-5 py-2.5 rounded-lg text-sm font-medium text-stone-600 hover:bg-stone-100 border border-transparent transition-colors"
