@@ -2,11 +2,13 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeft,
   CheckCheck,
+  Eye,
   Loader2,
   MessageCircle,
   Plus,
   Search,
   Send,
+  Smile,
   UserRound,
   Users,
   X,
@@ -26,6 +28,7 @@ import {
   getChatProfile,
   getOrCreateDirectChat,
   listChatContacts,
+  listChatContactStatuses,
   listChatConversations,
   listChatMessages,
   listChatMessagesAfter,
@@ -76,6 +79,8 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
+  const [contactStatuses, setContactStatuses] = useState<Record<string, ChatPresenceStatus>>({});
+  const [showEmojis, setShowEmojis] = useState(false);
   const [receipts, setReceipts] = useState<Record<string, ChatMessageReceipt>>({});
   const [profile, setProfile] = useState<ChatProfile | null>(null);
   const [showProfile, setShowProfile] = useState(false);
@@ -100,6 +105,14 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
     () => conversations.reduce((total, item) => total + item.unreadCount, 0),
     [conversations]
   );
+
+  const avatarRing = (userId?: string | null) => {
+    const status = userId ? contactStatuses[userId] : undefined;
+    if (status === 'do_not_disturb' || status === 'busy') return 'ring-2 ring-red-500';
+    if (status === 'away') return 'ring-2 ring-amber-400';
+    if (userId && onlineUserIds.has(userId)) return 'ring-2 ring-emerald-500';
+    return 'ring-2 ring-stone-300';
+  };
 
   const refreshConversations = useCallback(async () => {
     try {
@@ -202,6 +215,12 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
     if (!currentUser.organizationId) return;
     return subscribeToChatPresence(currentUser.organizationId, currentUser.id, setOnlineUserIds);
   }, [currentUser.id, currentUser.organizationId]);
+
+  useEffect(() => {
+    void listChatContactStatuses()
+      .then(setContactStatuses)
+      .catch((error) => console.error('[Chat] Falha ao carregar status dos contatos:', error));
+  }, []);
 
   useEffect(() => {
     void getChatProfile(currentUser.id)
@@ -567,7 +586,9 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                       }}
                       className="flex w-full items-center gap-3 rounded-xl p-3 text-left hover:bg-stone-100"
                     >
-                      <span className="relative flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 font-bold text-emerald-700">
+                      <span
+                        className={`relative flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 font-bold text-emerald-700 ${avatarRing(contact.id)}`}
+                      >
                         {contact.name.slice(0, 1).toUpperCase()}
                         {onlineUserIds.has(contact.id) && (
                           <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" />
@@ -628,7 +649,9 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                       onClick={() => void openConversation(conversation)}
                       className={`flex w-full gap-3 rounded-xl p-3 text-left ${selected?.conversationId === conversation.conversationId ? 'bg-emerald-50' : 'hover:bg-stone-100'}`}
                     >
-                      <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-stone-200 font-bold text-stone-700">
+                      <span
+                        className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-stone-200 font-bold text-stone-700 ${avatarRing(conversation.contactId)}`}
+                      >
                         {conversation.conversationType === 'group' ? (
                           <Users className="h-5 w-5" />
                         ) : (
@@ -745,7 +768,7 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                               >
                                 {formatChatTime(message.createdAt)}
                                 {mine && receipts[message.id]?.fullyRead && (
-                                  <CheckCheck className="h-3 w-3" aria-label="Visualizada" />
+                                  <Eye className="h-3 w-3" aria-label="Visualizada" />
                                 )}
                               </p>
                             </div>
@@ -757,7 +780,35 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                   )}
                 </div>
                 <footer className="border-t border-stone-200 bg-white p-3">
+                  {showEmojis && (
+                    <div className="mb-2 flex flex-wrap gap-1 rounded-xl border border-stone-200 bg-white p-2 shadow-sm">
+                      {['😀', '😂', '😍', '👍', '👏', '🙏', '✅', '🎉', '🚚', '🌱', '📦', '💰'].map(
+                        (emoji) => (
+                          <button
+                            key={emoji}
+                            type="button"
+                            onClick={() => {
+                              setDraft((value) => `${value}${emoji}`);
+                              setShowEmojis(false);
+                            }}
+                            className="rounded-lg p-1.5 text-xl hover:bg-stone-100"
+                            aria-label={`Adicionar ${emoji}`}
+                          >
+                            {emoji}
+                          </button>
+                        )
+                      )}
+                    </div>
+                  )}
                   <div className="flex items-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowEmojis((value) => !value)}
+                      className="flex h-10 w-10 items-center justify-center rounded-xl text-stone-500 hover:bg-stone-100"
+                      aria-label="Escolher emoji"
+                    >
+                      <Smile className="h-5 w-5" />
+                    </button>
                     <textarea
                       aria-label="Mensagem do chat"
                       value={draft}
