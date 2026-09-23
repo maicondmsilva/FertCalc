@@ -1,15 +1,21 @@
 import { useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
+import { APP_VARIANT, isPricingApp, type AppVariant } from '../config/appVariant';
 import { getActiveModule } from '../navigation/appNavigation';
 
-export function getAppRoute(pathname: string, search: string) {
-  const activeTab = pathname.split('/').filter(Boolean)[0] ?? '';
+export function getAppRoute(pathname: string, search: string, variant: AppVariant = APP_VARIANT) {
+  const requestedTab = pathname.split('/').filter(Boolean)[0] ?? '';
   const searchParams = new URLSearchParams(search);
+  const isPasswordReset = pathname === '/reset-password';
+  const requestedModule = getActiveModule(requestedTab);
+  const restrictToPricing = isPricingApp(variant) && !isPasswordReset;
+  const activeTab =
+    restrictToPricing && requestedModule !== 'pricing' ? 'calculator' : requestedTab;
 
   return {
     activeTab,
     activeModule: getActiveModule(activeTab),
-    isPasswordReset: pathname === '/reset-password',
+    isPasswordReset,
     isStandalone: searchParams.get('standalone') === 'true',
   };
 }
