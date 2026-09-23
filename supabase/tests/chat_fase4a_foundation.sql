@@ -52,6 +52,13 @@ begin
     raise exception 'Paginação não retornou a mensagem esperada.';
   end if;
 
+  if (select count(*) from public.list_chat_contacts('Chat A2', 20)) <> 1 then
+    raise exception 'Busca segura de contatos retornou resultado incorreto.';
+  end if;
+  if (select count(*) from public.list_chat_conversations(50)) <> 1 then
+    raise exception 'Lista de conversas retornou resultado incorreto.';
+  end if;
+
   perform public.mark_chat_read(conversation_one, now());
 
   begin

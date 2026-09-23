@@ -122,6 +122,7 @@ export interface User {
     approvals: boolean;
     reports: boolean;
     managementReports: boolean;
+    chat_access?: boolean;
     savedFormulas?: boolean;
     savedFormulas_delete?: boolean;
     savedFormulas_report?: boolean;
@@ -765,4 +766,3 @@ export interface ComparisonHistory {
   };
   created_at?: string;
 }
-
