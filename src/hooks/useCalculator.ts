@@ -1533,86 +1533,127 @@ export function useCalculator({
       }
     }
 
-    // Record one contextual history point for each linked formulated product.
-    try {
-      const historyEntries = (
-        await Promise.all(
-          selectedCalculations.map(async (calculation) => {
-            const savedFormulaId =
-              calculation.savedFormulaId ||
-              (selectedCalculations.length === 1 ? initialFormulaToLoad?.id : undefined);
-            if (!savedFormulaId || !calculation.summary) return null;
+    // Histórico e notificações são independentes entre si. Executá-los em
+    // paralelo reduz o tempo em que o botão permanece bloqueado sem alterar a
+    // ordem nem as regras do cálculo gravado.
+    const historyTask = (async () => {
+      try {
+        const historyEntries = (
+          await Promise.all(
+            selectedCalculations.map(async (calculation) => {
+              const savedFormulaId =
+                calculation.savedFormulaId ||
+                (selectedCalculations.length === 1 ? initialFormulaToLoad?.id : undefined);
+              if (!savedFormulaId || !calculation.summary) return null;
 
-            const product = await getProdutoFormuladoBySavedFormulaId(savedFormulaId);
-            if (!product) return null;
+              const product = await getProdutoFormuladoBySavedFormulaId(savedFormulaId);
+              if (!product) return null;
 
-            const calculationFactors = calculation.factors || mergedFactors;
-            const loadingLocationId =
-              calculationFactors.local_carregamento_id || mergedFactors.local_carregamento_id;
-            const priceListId = calculationFactors.priceListId || mergedFactors.priceListId;
-            const loadingLocation = locaisCarregamento.find(
-              (location) => location.id === loadingLocationId
-            );
-            const priceList = priceLists.find((list) => list.id === priceListId);
+              const calculationFactors = calculation.factors || mergedFactors;
+              const loadingLocationId =
+                calculationFactors.local_carregamento_id || mergedFactors.local_carregamento_id;
+              const priceListId = calculationFactors.priceListId || mergedFactors.priceListId;
+              const loadingLocation = locaisCarregamento.find(
+                (location) => location.id === loadingLocationId
+              );
+              const priceList = priceLists.find((list) => list.id === priceListId);
 
-            return {
-              produto_formulado_id: product.id,
-              saved_formula_id: savedFormulaId,
-              organization_id: currentUser.organizationId,
-              pricing_id: savedRecord.id,
-              local_carregamento_id: loadingLocationId,
-              local_carregamento_nome: loadingLocation?.nome,
-              price_list_id: priceListId,
-              price_list_name: priceList?.name,
-              formula_nome: calculation.formula,
-              preco_base: calculation.summary.baseCost,
-              preco_final: calculation.summary.finalPrice,
-              moeda: calculationFactors.priceListCurrency || 'BRL',
-              taxa_cambio:
-                calculationFactors.appliedExchangeRate || calculationFactors.priceListExchangeRate,
-              preco_final_brl:
-                calculationFactors.priceListCurrency === 'USD'
-                  ? calculation.summary.finalPriceBRL
-                  : calculation.summary.finalPrice,
-              quantidade_tons: calculationFactors.totalTons,
-              valor_total: calculation.summary.totalSaleValue,
-              fatores_comerciais: {
-                factor: calculationFactors.factor,
-                discount: calculationFactors.discount,
-                freight: calculationFactors.freight,
-                tipoFrete: calculationFactors.tipoFrete,
-                taxRate: calculationFactors.taxRate,
-                commission: calculationFactors.commission,
-                monthlyInterestRate: calculationFactors.monthlyInterestRate,
-                dueDate: calculationFactors.dueDate,
-                interestStartDate: calculationFactors.interestStartDate,
-                exemptCurrentMonth: calculationFactors.exemptCurrentMonth,
-                paymentCondition: calculationFactors.paymentCondition,
-                dataCarregamento: calculationFactors.dataCarregamento,
-                ddfDias: calculationFactors.ddfDias,
-                embalagem_id: calculationFactors.embalagem_id,
-                embalagem_nome: calculationFactors.embalagem_nome,
-                embalagem_valor: calculationFactors.embalagem_valor,
-                embalagem_ajuste: calculationFactors.embalagem_ajuste,
-              },
-              origem: 'precificacao' as const,
-              registrado_por: currentUser.name,
-            };
-          })
-        )
-      ).filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+              return {
+                produto_formulado_id: product.id,
+                saved_formula_id: savedFormulaId,
+                organization_id: currentUser.organizationId,
+                pricing_id: savedRecord.id,
+                local_carregamento_id: loadingLocationId,
+                local_carregamento_nome: loadingLocation?.nome,
+                price_list_id: priceListId,
+                price_list_name: priceList?.name,
+                formula_nome: calculation.formula,
+                preco_base: calculation.summary.baseCost,
+                preco_final: calculation.summary.finalPrice,
+                moeda: calculationFactors.priceListCurrency || 'BRL',
+                taxa_cambio:
+                  calculationFactors.appliedExchangeRate ||
+                  calculationFactors.priceListExchangeRate,
+                preco_final_brl:
+                  calculationFactors.priceListCurrency === 'USD'
+                    ? calculation.summary.finalPriceBRL
+                    : calculation.summary.finalPrice,
+                quantidade_tons: calculationFactors.totalTons,
+                valor_total: calculation.summary.totalSaleValue,
+                fatores_comerciais: {
+                  factor: calculationFactors.factor,
+                  discount: calculationFactors.discount,
+                  freight: calculationFactors.freight,
+                  tipoFrete: calculationFactors.tipoFrete,
+                  taxRate: calculationFactors.taxRate,
+                  commission: calculationFactors.commission,
+                  monthlyInterestRate: calculationFactors.monthlyInterestRate,
+                  dueDate: calculationFactors.dueDate,
+                  interestStartDate: calculationFactors.interestStartDate,
+                  exemptCurrentMonth: calculationFactors.exemptCurrentMonth,
+                  paymentCondition: calculationFactors.paymentCondition,
+                  dataCarregamento: calculationFactors.dataCarregamento,
+                  ddfDias: calculationFactors.ddfDias,
+                  embalagem_id: calculationFactors.embalagem_id,
+                  embalagem_nome: calculationFactors.embalagem_nome,
+                  embalagem_valor: calculationFactors.embalagem_valor,
+                  embalagem_ajuste: calculationFactors.embalagem_ajuste,
+                },
+                origem: 'precificacao' as const,
+                registrado_por: currentUser.name,
+              };
+            })
+          )
+        ).filter((entry): entry is NonNullable<typeof entry> => entry !== null);
 
-      await addHistoricoPrecos(historyEntries);
-    } catch (historyError) {
-      console.warn('[savePricing] Failed to record formulated price history:', historyError);
-    }
+        await addHistoricoPrecos(historyEntries);
+      } catch (historyError) {
+        console.warn('[savePricing] Failed to record formulated price history:', historyError);
+      }
+    })();
 
     // === BLOCO 2: Notificações — falha silenciosa, não bloqueia o sucesso ===
-    try {
-      if (initialData) {
-        await notifyPricingEdited(savedRecord, currentUser);
+    const notificationTask = (async () => {
+      try {
+        if (initialData) {
+          await notifyPricingEdited(savedRecord, currentUser);
 
-        if (wasApproved || wasRejected) {
+          if (wasApproved || wasRejected) {
+            const managersList = await getManagersOfUser(currentUser.id);
+            const approversList = await getUsers();
+            const masterAdmins = approversList.filter(
+              (u) =>
+                u.role === 'master' ||
+                u.role === 'admin' ||
+                (u.permissions as any)?.approvals_canApprove === true
+            );
+
+            const notifyIds = new Set([
+              ...managersList.map((m) => m.id),
+              ...masterAdmins.map((a) => a.id),
+            ]);
+
+            await Promise.all(
+              [...notifyIds].map((targetId) =>
+                createNotification({
+                  userId: targetId,
+                  title: wasApproved
+                    ? 'Precificação Aprovada Alterada'
+                    : 'Reenvio de Precificação Reprovada',
+                  message: wasApproved
+                    ? `${currentUser.name} alterou a precificação aprovada para ${factors.client.name}. Revisão necessária para nova aprovação.`
+                    : `${currentUser.name} corrigiu e reenviou a precificação de ${factors.client.name} que havia sido reprovada.`,
+                  date: new Date().toISOString(),
+                  read: false,
+                  type: 'pricing_approval',
+                  dataId: initialData.id,
+                })
+              )
+            );
+          }
+        } else {
+          await notifyPricingCreated(savedRecord, currentUser);
+
           const managersList = await getManagersOfUser(currentUser.id);
           const approversList = await getUsers();
           const masterAdmins = approversList.filter(
@@ -1627,55 +1668,27 @@ export function useCalculator({
             ...masterAdmins.map((a) => a.id),
           ]);
 
-          for (const targetId of notifyIds) {
-            await createNotification({
-              userId: targetId,
-              title: wasApproved
-                ? 'Precificação Aprovada Alterada'
-                : 'Reenvio de Precificação Reprovada',
-              message: wasApproved
-                ? `${currentUser.name} alterou a precificação aprovada para ${factors.client.name}. Revisão necessária para nova aprovação.`
-                : `${currentUser.name} corrigiu e reenviou a precificação de ${factors.client.name} que havia sido reprovada.`,
-              date: new Date().toISOString(),
-              read: false,
-              type: 'pricing_approval',
-              dataId: initialData.id,
-            });
-          }
+          await Promise.all(
+            [...notifyIds].map((targetId) =>
+              createNotification({
+                userId: targetId,
+                title: 'Nova Precificação Pendente',
+                message: `${currentUser.name} gerou uma nova precificação para ${factors.client.name} que requer aprovação.`,
+                date: new Date().toISOString(),
+                read: false,
+                type: 'pricing_approval',
+                dataId: savedRecord.id,
+              })
+            )
+          );
         }
-      } else {
-        await notifyPricingCreated(savedRecord, currentUser);
-
-        const managersList = await getManagersOfUser(currentUser.id);
-        const approversList = await getUsers();
-        const masterAdmins = approversList.filter(
-          (u) =>
-            u.role === 'master' ||
-            u.role === 'admin' ||
-            (u.permissions as any)?.approvals_canApprove === true
-        );
-
-        const notifyIds = new Set([
-          ...managersList.map((m) => m.id),
-          ...masterAdmins.map((a) => a.id),
-        ]);
-
-        for (const targetId of notifyIds) {
-          await createNotification({
-            userId: targetId,
-            title: 'Nova Precificação Pendente',
-            message: `${currentUser.name} gerou uma nova precificação para ${factors.client.name} que requer aprovação.`,
-            date: new Date().toISOString(),
-            read: false,
-            type: 'pricing_approval',
-            dataId: savedRecord.id,
-          });
-        }
+      } catch (notifError) {
+        console.warn('[savePricing] Falha ao enviar notificações (não crítico):', notifError);
+        // Não propaga — save já foi bem-sucedido
       }
-    } catch (notifError) {
-      console.warn('[savePricing] Falha ao enviar notificações (não crítico):', notifError);
-      // Não propaga — save já foi bem-sucedido
-    }
+    })();
+
+    await Promise.all([historyTask, notificationTask]);
 
     // === BLOCO 3: Sucesso sempre chegará aqui ===
     showSuccess(
