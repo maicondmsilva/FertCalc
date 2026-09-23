@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   subscribeToChatPresence: vi.fn(),
   subscribeToChatReads: vi.fn(),
   updateOwnChatProfile: vi.fn(),
+  uploadOwnChatAvatar: vi.fn(),
   showError: vi.fn(),
 }));
 
@@ -40,6 +41,7 @@ vi.mock('../../services/chatService', () => ({
   subscribeToChatPresence: mocks.subscribeToChatPresence,
   subscribeToChatReads: mocks.subscribeToChatReads,
   updateOwnChatProfile: mocks.updateOwnChatProfile,
+  uploadOwnChatAvatar: mocks.uploadOwnChatAvatar,
 }));
 
 vi.mock('../Toast', () => ({
@@ -80,7 +82,7 @@ beforeEach(() => {
   mocks.listChatMessages.mockResolvedValue([message]);
   mocks.listChatMessagesAfter.mockResolvedValue([]);
   mocks.listChatContacts.mockResolvedValue([]);
-  mocks.listChatContactStatuses.mockResolvedValue({});
+  mocks.listChatContactStatuses.mockResolvedValue({ statuses: {}, avatarUrls: {} });
   mocks.markChatRead.mockResolvedValue(undefined);
   mocks.getChatMessageReceipts.mockResolvedValue([]);
   mocks.getChatProfile.mockResolvedValue(null);

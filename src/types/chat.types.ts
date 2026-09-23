@@ -32,6 +32,8 @@ export interface ChatProfile {
   role: string;
   chatStatus: ChatPresenceStatus;
   chatStatusMessage?: string | null;
+  avatarPath?: string | null;
+  avatarUrl?: string | null;
 }
 
 export interface ChatMessageReceipt {

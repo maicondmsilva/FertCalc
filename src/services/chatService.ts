@@ -49,15 +49,28 @@ export async function searchChatMessages(
   }));
 }
 
-export async function listChatContactStatuses(): Promise<Record<string, ChatPresenceStatus>> {
+export async function listChatContactStatuses(): Promise<{
+  statuses: Record<string, ChatPresenceStatus>;
+  avatarUrls: Record<string, string>;
+}> {
   const { data, error } = await supabase.rpc('list_chat_contact_statuses');
   if (error) throw error;
-  return Object.fromEntries(
-    ((data ?? []) as Record<string, unknown>[]).map((row) => [
-      row.user_id as string,
-      row.chat_status as ChatPresenceStatus,
-    ])
+  const rows = (data ?? []) as Record<string, unknown>[];
+  const statuses = Object.fromEntries(
+    rows.map((row) => [row.user_id as string, row.chat_status as ChatPresenceStatus])
   );
+  const avatarUrls: Record<string, string> = {};
+  await Promise.all(
+    rows.map(async (row) => {
+      const path = row.avatar_path as string | null;
+      if (!path) return;
+      const { data: signed } = await supabase.storage
+        .from('chat-avatars')
+        .createSignedUrl(path, 3600);
+      if (signed?.signedUrl) avatarUrls[row.user_id as string] = signed.signedUrl;
+    })
+  );
+  return { statuses, avatarUrls };
 }
 
 type ChatMessageRow = {
@@ -169,6 +182,11 @@ export async function getChatProfile(userId: string): Promise<ChatProfile | null
   if (error) throw error;
   const row = (data?.[0] ?? null) as Record<string, unknown> | null;
   if (!row) return null;
+  const avatarPath = row.avatar_path as string | null;
+  const avatarUrl = avatarPath
+    ? (await supabase.storage.from('chat-avatars').createSignedUrl(avatarPath, 3600)).data
+        ?.signedUrl
+    : null;
   return {
     id: row.id as string,
     name: row.name as string,
@@ -179,7 +197,28 @@ export async function getChatProfile(userId: string): Promise<ChatProfile | null
     role: row.role as string,
     chatStatus: row.chat_status as ChatPresenceStatus,
     chatStatusMessage: row.chat_status_message as string | null,
+    avatarPath,
+    avatarUrl,
   };
+}
+
+export async function uploadOwnChatAvatar(userId: string, file: File): Promise<string> {
+  if (file.size > 2 * 1024 * 1024) throw new Error('A foto deve possuir no máximo 2 MB.');
+  const extension = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
+  if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+    throw new Error('Use uma imagem PNG, JPG ou WEBP.');
+  }
+  const path = `${userId}/avatar.${extension}`;
+  const { error: uploadError } = await supabase.storage.from('chat-avatars').upload(path, file, {
+    upsert: true,
+    contentType: file.type,
+  });
+  if (uploadError) throw uploadError;
+  const { error } = await supabase.rpc('set_own_chat_avatar', { p_avatar_path: path });
+  if (error) throw error;
+  const { data } = await supabase.storage.from('chat-avatars').createSignedUrl(path, 3600);
+  if (!data?.signedUrl) throw new Error('Não foi possível carregar a foto enviada.');
+  return data.signedUrl;
 }
 
 export async function updateOwnChatProfile(input: {

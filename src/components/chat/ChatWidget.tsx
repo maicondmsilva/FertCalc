@@ -39,6 +39,7 @@ import {
   subscribeToChatReads,
   subscribeToChatMessages,
   updateOwnChatProfile,
+  uploadOwnChatAvatar,
 } from '../../services/chatService';
 import { useToast } from '../Toast';
 
@@ -80,6 +81,7 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
   const [draft, setDraft] = useState('');
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
   const [contactStatuses, setContactStatuses] = useState<Record<string, ChatPresenceStatus>>({});
+  const [avatarUrls, setAvatarUrls] = useState<Record<string, string>>({});
   const [showEmojis, setShowEmojis] = useState(false);
   const [receipts, setReceipts] = useState<Record<string, ChatMessageReceipt>>({});
   const [profile, setProfile] = useState<ChatProfile | null>(null);
@@ -218,7 +220,10 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
 
   useEffect(() => {
     void listChatContactStatuses()
-      .then(setContactStatuses)
+      .then(({ statuses, avatarUrls: urls }) => {
+        setContactStatuses(statuses);
+        setAvatarUrls(urls);
+      })
       .catch((error) => console.error('[Chat] Falha ao carregar status dos contatos:', error));
   }, []);
 
@@ -410,6 +415,17 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
     }
   };
 
+  const changeAvatar = async (file?: File) => {
+    if (!file) return;
+    try {
+      const url = await uploadOwnChatAvatar(currentUser.id, file);
+      setAvatarUrls((current) => ({ ...current, [currentUser.id]: url }));
+      setProfile((current) => (current ? { ...current, avatarUrl: url } : current));
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Não foi possível atualizar a foto.');
+    }
+  };
+
   const loadOlder = async () => {
     const oldest = messages[0];
     if (!selected || !oldest || loadingOlder) return;
@@ -485,27 +501,48 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
             className={`${selected && !showContacts ? 'hidden sm:flex' : 'flex'} w-full flex-col border-r border-stone-200 sm:w-80`}
           >
             <div className="flex h-16 items-center justify-between border-b border-stone-200 px-4">
-              <div>
-                <h2 className="font-bold text-stone-900">Chat interno</h2>
-                <p className="flex items-center gap-1.5 text-xs text-stone-500" aria-live="polite">
-                  <span
-                    className={`h-2 w-2 rounded-full ${realtimeStatus === 'connected' ? 'bg-emerald-500' : 'animate-pulse bg-amber-500'}`}
-                  />
-                  {realtimeStatus === 'connected' ? 'Em tempo real' : 'Reconectando...'}
-                </p>
-                <select
-                  aria-label="Meu status no chat"
-                  value={ownStatus}
-                  onChange={(event) =>
-                    void changeOwnStatus(event.target.value as ChatPresenceStatus)
-                  }
-                  className="mt-1 max-w-32 bg-transparent text-xs font-medium text-stone-600 outline-none"
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void openProfile(currentUser.id)}
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-emerald-100 font-bold text-emerald-700 ${avatarRing(currentUser.id)}`}
+                  aria-label="Abrir meu perfil"
                 >
-                  <option value="available">Disponível</option>
-                  <option value="busy">Ocupado</option>
-                  <option value="away">Ausente</option>
-                  <option value="do_not_disturb">Não perturbe</option>
-                </select>
+                  {avatarUrls[currentUser.id] ? (
+                    <img
+                      src={avatarUrls[currentUser.id]}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    currentUser.name.slice(0, 1).toUpperCase()
+                  )}
+                </button>
+                <div>
+                  <h2 className="font-bold text-stone-900">Chat interno</h2>
+                  <p
+                    className="flex items-center gap-1.5 text-xs text-stone-500"
+                    aria-live="polite"
+                  >
+                    <span
+                      className={`h-2 w-2 rounded-full ${realtimeStatus === 'connected' ? 'bg-emerald-500' : 'animate-pulse bg-amber-500'}`}
+                    />
+                    {realtimeStatus === 'connected' ? 'Em tempo real' : 'Reconectando...'}
+                  </p>
+                  <select
+                    aria-label="Meu status no chat"
+                    value={ownStatus}
+                    onChange={(event) =>
+                      void changeOwnStatus(event.target.value as ChatPresenceStatus)
+                    }
+                    className="mt-1 max-w-32 bg-transparent text-xs font-medium text-stone-600 outline-none"
+                  >
+                    <option value="available">Disponível</option>
+                    <option value="busy">Ocupado</option>
+                    <option value="away">Ausente</option>
+                    <option value="do_not_disturb">Não perturbe</option>
+                  </select>
+                </div>
               </div>
               <div className="flex gap-1">
                 <button
@@ -589,7 +626,15 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                       <span
                         className={`relative flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 font-bold text-emerald-700 ${avatarRing(contact.id)}`}
                       >
-                        {contact.name.slice(0, 1).toUpperCase()}
+                        {avatarUrls[contact.id] ? (
+                          <img
+                            src={avatarUrls[contact.id]}
+                            alt=""
+                            className="h-full w-full rounded-full object-cover"
+                          />
+                        ) : (
+                          contact.name.slice(0, 1).toUpperCase()
+                        )}
                         {onlineUserIds.has(contact.id) && (
                           <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" />
                         )}
@@ -654,6 +699,12 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                       >
                         {conversation.conversationType === 'group' ? (
                           <Users className="h-5 w-5" />
+                        ) : conversation.contactId && avatarUrls[conversation.contactId] ? (
+                          <img
+                            src={avatarUrls[conversation.contactId]}
+                            alt=""
+                            className="h-full w-full rounded-full object-cover"
+                          />
                         ) : (
                           conversation.contactName.slice(0, 1).toUpperCase()
                         )}
@@ -857,7 +908,15 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <span className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-lg font-bold text-emerald-700">
-                      {profile.name.slice(0, 1).toUpperCase()}
+                      {profile.avatarUrl ? (
+                        <img
+                          src={profile.avatarUrl}
+                          alt=""
+                          className="h-full w-full rounded-full object-cover"
+                        />
+                      ) : (
+                        profile.name.slice(0, 1).toUpperCase()
+                      )}
                     </span>
                     <div>
                       <h3 className="font-bold text-stone-900">{profile.name}</h3>
@@ -891,6 +950,17 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                     </dd>
                   </div>
                 </dl>
+                {profile.id === currentUser.id && (
+                  <label className="mt-5 block cursor-pointer rounded-xl bg-emerald-600 px-4 py-2 text-center text-sm font-bold text-white hover:bg-emerald-700">
+                    Escolher foto
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      className="sr-only"
+                      onChange={(event) => void changeAvatar(event.target.files?.[0])}
+                    />
+                  </label>
+                )}
               </div>
             </div>
           )}
