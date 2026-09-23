@@ -185,7 +185,7 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
 
   useEffect(() => {
     if (!isOpen) return;
-    const closeOnOutsideClick = (event: PointerEvent) => {
+    const closeOnOutsideClick = (event: Event) => {
       if (window.innerWidth < 640) return;
       const target = event.target as Node;
       if (!panelRef.current?.contains(target) && !triggerRef.current?.contains(target)) closeChat();
@@ -795,14 +795,14 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
             )}
           </div>
           {showProfile && profile && (
-            <div
-              className="absolute inset-0 z-10 flex items-center justify-center bg-black/30 p-4"
-              onClick={() => setShowProfile(false)}
-            >
-              <div
-                className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl"
-                onClick={(event) => event.stopPropagation()}
-              >
+            <div className="absolute inset-0 z-10 flex items-center justify-center p-4">
+              <button
+                type="button"
+                className="absolute inset-0 cursor-default bg-black/30"
+                onClick={() => setShowProfile(false)}
+                aria-label="Fechar perfil"
+              />
+              <div className="relative w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <span className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-lg font-bold text-emerald-700">
