@@ -41,6 +41,14 @@ export interface ChatMessageReceipt {
   fullyRead: boolean;
 }
 
+export interface ChatMessageSearchResult {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  body: string;
+  createdAt: string;
+}
+
 export interface ChatMessage {
   id: string;
   conversationId: string;

@@ -3,10 +3,51 @@ import type {
   ChatContact,
   ChatConversation,
   ChatMessage,
+  ChatMessageSearchResult,
   ChatMessageReceipt,
   ChatPresenceStatus,
   ChatProfile,
 } from '../types/chat.types';
+
+export async function updateChatPreferences(
+  conversationId: string,
+  options: { archived?: boolean; mutedUntil?: string | null }
+): Promise<void> {
+  const { error } = await supabase.rpc('update_chat_preferences', {
+    p_conversation_id: conversationId,
+    p_archived: options.archived ?? false,
+    p_muted_until: options.mutedUntil ?? null,
+  });
+  if (error) throw error;
+}
+
+export async function renameGroupChat(conversationId: string, name: string): Promise<void> {
+  const { error } = await supabase.rpc('rename_group_chat', {
+    p_conversation_id: conversationId,
+    p_name: name,
+  });
+  if (error) throw error;
+}
+
+export async function searchChatMessages(
+  search: string,
+  conversationId?: string,
+  limit = 50
+): Promise<ChatMessageSearchResult[]> {
+  const { data, error } = await supabase.rpc('search_chat_messages', {
+    p_search: search,
+    p_conversation_id: conversationId ?? null,
+    p_limit: limit,
+  });
+  if (error) throw error;
+  return ((data ?? []) as Record<string, unknown>[]).map((row) => ({
+    id: row.id as string,
+    conversationId: row.conversation_id as string,
+    senderId: row.sender_id as string,
+    body: row.body as string,
+    createdAt: row.created_at as string,
+  }));
+}
 
 type ChatMessageRow = {
   id: string;
