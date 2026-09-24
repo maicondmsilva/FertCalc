@@ -5,6 +5,11 @@ export interface ChatContact {
   role: string;
 }
 
+export interface ChatGroupMember extends ChatContact {
+  participantRole: 'owner' | 'admin' | 'member';
+  canManage: boolean;
+}
+
 export interface ChatConversation {
   conversationId: string;
   conversationType: 'direct' | 'group';
