@@ -1,12 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { rpc, channel, removeChannel, on, subscribe } = vi.hoisted(() => ({
-  rpc: vi.fn(),
-  channel: vi.fn(),
-  removeChannel: vi.fn(),
-  on: vi.fn(),
-  subscribe: vi.fn(),
-}));
+const { rpc, channel, removeChannel, on, subscribe, track, untrack, presenceState } = vi.hoisted(
+  () => ({
+    rpc: vi.fn(),
+    channel: vi.fn(),
+    removeChannel: vi.fn(),
+    on: vi.fn(),
+    subscribe: vi.fn(),
+    track: vi.fn(),
+    untrack: vi.fn(),
+    presenceState: vi.fn(),
+  })
+);
 
 vi.mock('./supabase', () => ({
   supabase: { rpc, channel, removeChannel },
@@ -14,11 +19,13 @@ vi.mock('./supabase', () => ({
 
 import {
   deleteChatMessage,
+  deleteChatConversation,
   editChatMessage,
   listChatMessageReactions,
   listChatConversations,
   listChatMessagesAfter,
   sendChatMessage,
+  subscribeToChatPresence,
   subscribeToChatMessages,
   toggleChatMessageReaction,
   validateChatAttachmentFiles,
@@ -27,8 +34,11 @@ import {
 beforeEach(() => {
   vi.clearAllMocks();
   on.mockReturnValue({ on, subscribe });
-  channel.mockReturnValue({ on });
+  channel.mockReturnValue({ on, subscribe, track, untrack, presenceState });
   subscribe.mockReturnValue({ topic: 'chat' });
+  track.mockResolvedValue('ok');
+  untrack.mockResolvedValue('ok');
+  presenceState.mockReturnValue({});
   removeChannel.mockResolvedValue('ok');
 });
 
@@ -188,6 +198,44 @@ describe('chatService', () => {
     expect(rpc).toHaveBeenNthCalledWith(2, 'delete_chat_message', {
       p_message_id: 'message-1',
     });
+  });
+
+  it('exclui a conversa somente para o usuário atual', async () => {
+    rpc.mockResolvedValue({ data: null, error: null });
+
+    await expect(deleteChatConversation('conversation-1')).resolves.toBeUndefined();
+    expect(rpc).toHaveBeenCalledWith('delete_chat_conversation', {
+      p_conversation_id: 'conversation-1',
+    });
+  });
+
+  it('identifica presença pelo usuário publicado e pela chave do canal', async () => {
+    const callback = vi.fn();
+    const statusCallback = vi.fn();
+    presenceState.mockReturnValue({
+      'socket-key': [{ user_id: 'user-2', online_at: '2026-09-23T10:00:00.000Z' }],
+    });
+
+    const unsubscribe = subscribeToChatPresence(
+      'organization-1',
+      'user-1',
+      callback,
+      statusCallback
+    );
+    const syncCallback = on.mock.calls[0][2];
+    const subscriptionCallback = subscribe.mock.calls[0][0];
+
+    syncCallback();
+    expect(callback).toHaveBeenCalledWith(new Set(['socket-key', 'user-2']));
+
+    await subscriptionCallback('SUBSCRIBED');
+    expect(track).toHaveBeenCalledWith(
+      expect.objectContaining({ user_id: 'user-1', online_at: expect.any(String) })
+    );
+    expect(statusCallback).toHaveBeenCalledWith('SUBSCRIBED');
+
+    unsubscribe();
+    expect(untrack).toHaveBeenCalled();
   });
 
   it('normaliza mensagens recebidas em tempo real e remove o canal ao sair', () => {

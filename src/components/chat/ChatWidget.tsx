@@ -32,6 +32,7 @@ import type {
 } from '../../types/chat.types';
 import {
   createGroupChat,
+  deleteChatConversation,
   deleteChatMessage,
   editChatMessage,
   getChatMessageReceipts,
@@ -151,6 +152,8 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [draggingFile, setDraggingFile] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState(false);
+  const [confirmConversationDeletion, setConfirmConversationDeletion] = useState(false);
+  const [deletingConversation, setDeletingConversation] = useState(false);
   const [receipts, setReceipts] = useState<Record<string, ChatMessageReceipt>>({});
   const [profile, setProfile] = useState<ChatProfile | null>(null);
   const [showProfile, setShowProfile] = useState(false);
@@ -285,7 +288,16 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
 
   useEffect(() => {
     if (!currentUser.organizationId) return;
-    return subscribeToChatPresence(currentUser.organizationId, currentUser.id, setOnlineUserIds);
+    return subscribeToChatPresence(
+      currentUser.organizationId,
+      currentUser.id,
+      setOnlineUserIds,
+      (status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'TRACK_ERROR') {
+          setOnlineUserIds(new Set());
+        }
+      }
+    );
   }, [currentUser.id, currentUser.organizationId]);
 
   useEffect(() => {
@@ -673,6 +685,28 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
     }
   };
 
+  const handleDeleteConversation = async () => {
+    if (!selected || deletingConversation) return;
+    setDeletingConversation(true);
+    try {
+      await deleteChatConversation(selected.conversationId);
+      setConfirmConversationDeletion(false);
+      setSelected(null);
+      selectedRef.current = null;
+      setMessages([]);
+      messagesRef.current = [];
+      setAttachments({});
+      setReactions({});
+      setReceipts({});
+      await refreshConversations();
+    } catch (error) {
+      console.error('[Chat] Falha ao excluir conversa:', error);
+      showError('Não foi possível excluir a conversa.');
+    } finally {
+      setDeletingConversation(false);
+    }
+  };
+
   const rememberEmoji = (emoji: string) => {
     setRecentEmojis((current) => {
       const next = [emoji, ...current.filter((item) => item !== emoji)].slice(0, 18);
@@ -1010,6 +1044,15 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                       <UserRound className="h-5 w-5" />
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => setConfirmConversationDeletion(true)}
+                    className="rounded-lg p-2 text-stone-500 hover:bg-red-50 hover:text-red-600"
+                    aria-label="Excluir conversa"
+                    title="Excluir conversa"
+                  >
+                    <Trash2 className="h-5 w-5" />
+                  </button>
                   <button
                     type="button"
                     onClick={closeChat}
@@ -1380,6 +1423,56 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
               </div>
             )}
           </div>
+          {confirmConversationDeletion && selected && (
+            <div className="absolute inset-0 z-20 flex items-center justify-center p-4">
+              <button
+                type="button"
+                className="absolute inset-0 cursor-default bg-black/40"
+                onClick={() => !deletingConversation && setConfirmConversationDeletion(false)}
+                aria-label="Cancelar exclusão da conversa"
+              />
+              <div
+                role="alertdialog"
+                aria-modal="true"
+                aria-labelledby="delete-conversation-title"
+                className="relative w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl"
+              >
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-red-100 text-red-600">
+                  <Trash2 className="h-5 w-5" />
+                </div>
+                <h3
+                  id="delete-conversation-title"
+                  className="mt-4 text-lg font-bold text-stone-900"
+                >
+                  Excluir esta conversa?
+                </h3>
+                <p className="mt-2 text-sm leading-5 text-stone-600">
+                  Ela será removida somente para você. Os outros participantes continuarão com o
+                  histórico. Se chegar uma nova mensagem, a conversa reaparecerá sem as mensagens
+                  anteriores.
+                </p>
+                <div className="mt-5 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmConversationDeletion(false)}
+                    disabled={deletingConversation}
+                    className="rounded-xl px-4 py-2 text-sm font-semibold text-stone-600 hover:bg-stone-100 disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleDeleteConversation()}
+                    disabled={deletingConversation}
+                    className="flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700 disabled:bg-red-300"
+                  >
+                    {deletingConversation && <Loader2 className="h-4 w-4 animate-spin" />}
+                    Excluir conversa
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           {showProfile && profile && (
             <div className="absolute inset-0 z-10 flex items-center justify-center p-4">
               <button
