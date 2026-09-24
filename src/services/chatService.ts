@@ -40,6 +40,13 @@ export async function updateChatPreferences(
   if (error) throw error;
 }
 
+export async function deleteChatConversation(conversationId: string): Promise<void> {
+  const { error } = await supabase.rpc('delete_chat_conversation', {
+    p_conversation_id: conversationId,
+  });
+  if (error) throw error;
+}
+
 export async function renameGroupChat(conversationId: string, name: string): Promise<void> {
   const { error } = await supabase.rpc('rename_group_chat', {
     p_conversation_id: conversationId,
@@ -369,17 +376,32 @@ export async function updateOwnChatProfile(input: {
 export function subscribeToChatPresence(
   organizationId: string,
   userId: string,
-  callback: (onlineUserIds: Set<string>) => void
+  callback: (onlineUserIds: Set<string>) => void,
+  onStatus?: (status: string) => void
 ) {
   const channel = supabase.channel(`chat-presence:${organizationId}`, {
     config: { private: true, presence: { key: userId } },
   });
   channel.on('presence', { event: 'sync' }, () => {
-    callback(new Set(Object.keys(channel.presenceState())));
+    const onlineIds = new Set<string>();
+    Object.entries(channel.presenceState()).forEach(([presenceKey, presences]) => {
+      presences.forEach((presence) => {
+        const publishedUserId = (presence as { user_id?: unknown }).user_id;
+        if (typeof publishedUserId === 'string' && publishedUserId) onlineIds.add(publishedUserId);
+      });
+      if (presenceKey) onlineIds.add(presenceKey);
+    });
+    callback(onlineIds);
   });
   channel.subscribe(async (status) => {
-    if (status === 'SUBSCRIBED')
-      await channel.track({ user_id: userId, online_at: new Date().toISOString() });
+    onStatus?.(status);
+    if (status === 'SUBSCRIBED') {
+      const trackStatus = await channel.track({
+        user_id: userId,
+        online_at: new Date().toISOString(),
+      });
+      if (trackStatus !== 'ok') onStatus?.('TRACK_ERROR');
+    }
   });
   return () => {
     void channel.untrack();
