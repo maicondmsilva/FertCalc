@@ -50,6 +50,16 @@ export interface ChatReactionSummary {
   reactedByMe: boolean;
 }
 
+export interface ChatAttachment {
+  id: string;
+  messageId: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  storagePath: string;
+  signedUrl?: string | null;
+}
+
 export interface ChatMessageSearchResult {
   id: string;
   conversationId: string;

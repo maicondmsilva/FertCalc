@@ -21,6 +21,7 @@ import {
   sendChatMessage,
   subscribeToChatMessages,
   toggleChatMessageReaction,
+  validateChatAttachmentFiles,
 } from './chatService';
 
 beforeEach(() => {
@@ -140,6 +141,20 @@ describe('chatService', () => {
       p_message_id: 'message-1',
       p_emoji: '👍',
     });
+  });
+
+  it('valida quantidade, tamanho e tipo dos anexos', () => {
+    expect(() => validateChatAttachmentFiles([])).toThrow('Selecione de 1 a 5 arquivos.');
+    expect(() =>
+      validateChatAttachmentFiles([
+        new File(['conteúdo'], 'arquivo.exe', { type: 'application/x-msdownload' }),
+      ])
+    ).toThrow('tipo de arquivo não permitido');
+    expect(() =>
+      validateChatAttachmentFiles([
+        new File(['conteúdo'], 'arquivo.pdf', { type: 'application/pdf' }),
+      ])
+    ).not.toThrow();
   });
 
   it('edita e exclui mensagens pelas operações protegidas', async () => {
