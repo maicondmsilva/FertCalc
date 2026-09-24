@@ -9,6 +9,7 @@ import type {
   ChatPresenceStatus,
   ChatProfile,
   ChatReactionSummary,
+  ChatTypingEvent,
 } from '../types/chat.types';
 
 const CHAT_ATTACHMENT_BUCKET = 'chat-attachments';
@@ -406,6 +407,44 @@ export function subscribeToChatPresence(
   return () => {
     void channel.untrack();
     void supabase.removeChannel(channel);
+  };
+}
+
+export function subscribeToChatTyping(
+  organizationId: string,
+  currentUserId: string,
+  callback: (event: ChatTypingEvent) => void
+) {
+  let subscribed = false;
+  const channel = supabase.channel(`chat-typing:${organizationId}`, {
+    config: { private: true },
+  });
+  channel
+    .on('broadcast', { event: 'typing' }, ({ payload }) => {
+      const event = payload as Partial<ChatTypingEvent>;
+      if (
+        typeof event.conversationId === 'string' &&
+        typeof event.userId === 'string' &&
+        event.userId !== currentUserId &&
+        typeof event.isTyping === 'boolean'
+      ) {
+        callback(event as ChatTypingEvent);
+      }
+    })
+    .subscribe((status) => {
+      subscribed = status === 'SUBSCRIBED';
+    });
+
+  return {
+    sendTyping: async (conversationId: string, isTyping: boolean) => {
+      if (!subscribed) return 'not_subscribed';
+      return channel.send({
+        type: 'broadcast',
+        event: 'typing',
+        payload: { conversationId, userId: currentUserId, isTyping },
+      });
+    },
+    unsubscribe: () => void supabase.removeChannel(channel),
   };
 }
 

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { rpc, channel, removeChannel, on, subscribe, track, untrack, presenceState } = vi.hoisted(
-  () => ({
+const { rpc, channel, removeChannel, on, subscribe, track, untrack, presenceState, send } =
+  vi.hoisted(() => ({
     rpc: vi.fn(),
     channel: vi.fn(),
     removeChannel: vi.fn(),
@@ -10,8 +10,8 @@ const { rpc, channel, removeChannel, on, subscribe, track, untrack, presenceStat
     track: vi.fn(),
     untrack: vi.fn(),
     presenceState: vi.fn(),
-  })
-);
+    send: vi.fn(),
+  }));
 
 vi.mock('./supabase', () => ({
   supabase: { rpc, channel, removeChannel },
@@ -27,6 +27,7 @@ import {
   sendChatMessage,
   subscribeToChatPresence,
   subscribeToChatMessages,
+  subscribeToChatTyping,
   toggleChatMessageReaction,
   validateChatAttachmentFiles,
 } from './chatService';
@@ -34,12 +35,13 @@ import {
 beforeEach(() => {
   vi.clearAllMocks();
   on.mockReturnValue({ on, subscribe });
-  channel.mockReturnValue({ on, subscribe, track, untrack, presenceState });
+  channel.mockReturnValue({ on, subscribe, track, untrack, presenceState, send });
   subscribe.mockReturnValue({ topic: 'chat' });
   track.mockResolvedValue('ok');
   untrack.mockResolvedValue('ok');
   presenceState.mockReturnValue({});
   removeChannel.mockResolvedValue('ok');
+  send.mockResolvedValue('ok');
 });
 
 describe('chatService', () => {
@@ -236,6 +238,32 @@ describe('chatService', () => {
 
     unsubscribe();
     expect(untrack).toHaveBeenCalled();
+  });
+
+  it('publica e recebe indicador de digitação no canal privado da empresa', async () => {
+    const callback = vi.fn();
+    const controller = subscribeToChatTyping('organization-1', 'user-1', callback);
+    const broadcastCallback = on.mock.calls[0][2];
+    const subscriptionCallback = subscribe.mock.calls[0][0];
+
+    subscriptionCallback('SUBSCRIBED');
+    broadcastCallback({
+      payload: { conversationId: 'conversation-1', userId: 'user-2', isTyping: true },
+    });
+    expect(callback).toHaveBeenCalledWith({
+      conversationId: 'conversation-1',
+      userId: 'user-2',
+      isTyping: true,
+    });
+
+    await controller.sendTyping('conversation-1', true);
+    expect(send).toHaveBeenCalledWith({
+      type: 'broadcast',
+      event: 'typing',
+      payload: { conversationId: 'conversation-1', userId: 'user-1', isTyping: true },
+    });
+    controller.unsubscribe();
+    expect(removeChannel).toHaveBeenCalled();
   });
 
   it('normaliza mensagens recebidas em tempo real e remove o canal ao sair', () => {
