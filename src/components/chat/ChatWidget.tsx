@@ -2,9 +2,12 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeft,
   CheckCheck,
+  Download,
   Eye,
+  FileText,
   Loader2,
   MessageCircle,
+  Paperclip,
   Pencil,
   Plus,
   Search,
@@ -19,6 +22,7 @@ import {
 import type { User } from '../../types';
 import type {
   ChatContact,
+  ChatAttachment,
   ChatConversation,
   ChatMessage,
   ChatMessageReceipt,
@@ -39,9 +43,12 @@ import {
   listChatMessages,
   listChatMessagesAfter,
   listChatMessageReactions,
+  listChatMessageAttachments,
   markChatRead,
   recordChatOperationMetric,
   sendChatMessage,
+  sendChatMessageWithAttachments,
+  subscribeToChatAttachments,
   subscribeToChatPresence,
   subscribeToChatReads,
   subscribeToChatMessages,
@@ -49,6 +56,7 @@ import {
   toggleChatMessageReaction,
   updateOwnChatProfile,
   uploadOwnChatAvatar,
+  validateChatAttachmentFiles,
 } from '../../services/chatService';
 import { useToast } from '../Toast';
 
@@ -65,6 +73,11 @@ const formatChatTime = (value?: string | null) =>
         minute: '2-digit',
       }).format(new Date(value))
     : '';
+
+const formatFileSize = (bytes: number) =>
+  bytes >= 1024 * 1024
+    ? `${(bytes / 1024 / 1024).toFixed(1)} MB`
+    : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 
 const mergeMessages = (current: ChatMessage[], incoming: ChatMessage[]) => {
   const byId = new Map(current.map((message) => [message.id, message]));
@@ -134,6 +147,10 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
   });
   const [reactionPickerMessageId, setReactionPickerMessageId] = useState<string | null>(null);
   const [reactions, setReactions] = useState<Record<string, ChatReactionSummary[]>>({});
+  const [attachments, setAttachments] = useState<Record<string, ChatAttachment[]>>({});
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [draggingFile, setDraggingFile] = useState(false);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
   const [receipts, setReceipts] = useState<Record<string, ChatMessageReceipt>>({});
   const [profile, setProfile] = useState<ChatProfile | null>(null);
   const [showProfile, setShowProfile] = useState(false);
@@ -154,6 +171,7 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const unreadCount = useMemo(
     () => conversations.reduce((total, item) => total + item.unreadCount, 0),
@@ -310,6 +328,20 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
     }
   }, []);
 
+  const refreshAttachments = useCallback(async (conversationId: string) => {
+    try {
+      const rows = await listChatMessageAttachments(conversationId);
+      setAttachments(
+        rows.reduce<Record<string, ChatAttachment[]>>((grouped, attachment) => {
+          (grouped[attachment.messageId] ??= []).push(attachment);
+          return grouped;
+        }, {})
+      );
+    } catch (error) {
+      console.error('[Chat] Falha ao atualizar anexos:', error);
+    }
+  }, []);
+
   useEffect(
     () =>
       subscribeToChatReads(() => {
@@ -317,6 +349,15 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
         if (conversationId) void refreshReceipts(conversationId);
       }),
     [refreshReceipts]
+  );
+
+  useEffect(
+    () =>
+      subscribeToChatAttachments(() => {
+        const conversationId = selectedRef.current?.conversationId;
+        if (conversationId) void refreshAttachments(conversationId);
+      }),
+    [refreshAttachments]
   );
 
   useEffect(
@@ -422,6 +463,7 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
       await markChatRead(conversation.conversationId);
       await refreshReceipts(conversation.conversationId);
       await refreshReactions(conversation.conversationId);
+      await refreshAttachments(conversation.conversationId);
       await refreshConversations();
     } catch (error) {
       console.error('[Chat] Falha ao abrir conversa:', error);
@@ -531,14 +573,30 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
 
   const handleSend = async () => {
     const body = draft.trim();
-    if (!selected || !body || sendingRef.current) return;
+    if (!selected || (!body && pendingFiles.length === 0) || sendingRef.current) return;
+    if (pendingFiles.length > 0 && !currentUser.organizationId) {
+      showError('Não foi possível identificar a empresa para enviar os anexos.');
+      return;
+    }
     sendingRef.current = true;
+    setUploadingFiles(pendingFiles.length > 0);
     setDraft('');
     try {
-      const saved = await sendChatMessage(selected.conversationId, body, crypto.randomUUID());
+      const saved = pendingFiles.length
+        ? await sendChatMessageWithAttachments({
+            conversationId: selected.conversationId,
+            organizationId: currentUser.organizationId!,
+            userId: currentUser.id,
+            body,
+            clientMessageId: crypto.randomUUID(),
+            files: pendingFiles,
+          })
+        : await sendChatMessage(selected.conversationId, body, crypto.randomUUID());
       setMessages((current) =>
         current.some((item) => item.id === saved.id) ? current : [...current, saved]
       );
+      setPendingFiles([]);
+      await refreshAttachments(selected.conversationId);
       await refreshConversations();
     } catch (error) {
       console.error('[Chat] Falha ao enviar mensagem:', error);
@@ -552,6 +610,20 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
       );
     } finally {
       sendingRef.current = false;
+      setUploadingFiles(false);
+    }
+  };
+
+  const addPendingFiles = (files: File[]) => {
+    if (files.length === 0) return;
+    const next = [...pendingFiles, ...files].slice(0, 5);
+    try {
+      validateChatAttachmentFiles(next);
+      if (pendingFiles.length + files.length > 5)
+        showError('Você pode enviar até 5 arquivos por mensagem.');
+      setPendingFiles(next);
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Arquivo inválido.');
     }
   };
 
@@ -1014,11 +1086,59 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                                   </div>
                                 </div>
                               ) : (
-                                <p
-                                  className={`whitespace-pre-wrap break-words ${deleted ? 'italic' : ''}`}
-                                >
-                                  {deleted ? 'Mensagem excluída' : message.body}
-                                </p>
+                                <>
+                                  {(deleted || message.body !== '📎 Anexo') && (
+                                    <p
+                                      className={`whitespace-pre-wrap break-words ${deleted ? 'italic' : ''}`}
+                                    >
+                                      {deleted ? 'Mensagem excluída' : message.body}
+                                    </p>
+                                  )}
+                                  {!deleted && (attachments[message.id]?.length ?? 0) > 0 && (
+                                    <div className="mt-2 space-y-1.5">
+                                      {attachments[message.id].map((attachment) =>
+                                        attachment.mimeType.startsWith('image/') &&
+                                        attachment.signedUrl ? (
+                                          <a
+                                            key={attachment.id}
+                                            href={attachment.signedUrl}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="block overflow-hidden rounded-lg border border-white/30 bg-white/10"
+                                          >
+                                            <img
+                                              src={attachment.signedUrl}
+                                              alt={attachment.fileName}
+                                              className="max-h-48 w-full object-cover"
+                                            />
+                                            <span className="block truncate px-2 py-1 text-xs">
+                                              {attachment.fileName}
+                                            </span>
+                                          </a>
+                                        ) : (
+                                          <a
+                                            key={attachment.id}
+                                            href={attachment.signedUrl ?? '#'}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="flex items-center gap-2 rounded-lg border border-white/30 bg-white/10 p-2"
+                                          >
+                                            <FileText className="h-5 w-5 shrink-0" />
+                                            <span className="min-w-0 flex-1">
+                                              <span className="block truncate text-xs font-semibold">
+                                                {attachment.fileName}
+                                              </span>
+                                              <span className="block text-[10px] opacity-75">
+                                                {formatFileSize(attachment.sizeBytes)}
+                                              </span>
+                                            </span>
+                                            <Download className="h-4 w-4 shrink-0" />
+                                          </a>
+                                        )
+                                      )}
+                                    </div>
+                                  )}
+                                </>
                               )}
                               {mine && !deleted && editingMessageId !== message.id && (
                                 <div className="absolute -top-3 right-2 flex gap-1 rounded-lg border border-stone-200 bg-white p-1 text-stone-600 opacity-80 shadow-md sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
@@ -1108,7 +1228,52 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                     </div>
                   )}
                 </div>
-                <footer className="border-t border-stone-200 bg-white p-3">
+                <footer
+                  className={`relative border-t bg-white p-3 ${draggingFile ? 'border-emerald-500 ring-2 ring-inset ring-emerald-400' : 'border-stone-200'}`}
+                  onDragEnter={(event) => {
+                    event.preventDefault();
+                    setDraggingFile(true);
+                  }}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDragLeave={(event) => {
+                    if (!event.currentTarget.contains(event.relatedTarget as Node))
+                      setDraggingFile(false);
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    setDraggingFile(false);
+                    addPendingFiles(Array.from(event.dataTransfer.files));
+                  }}
+                >
+                  {draggingFile && (
+                    <div className="absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-emerald-50/95 text-sm font-bold text-emerald-800">
+                      Solte os arquivos para anexar
+                    </div>
+                  )}
+                  {pendingFiles.length > 0 && (
+                    <div className="mb-2 flex gap-2 overflow-x-auto pb-1">
+                      {pendingFiles.map((file, index) => (
+                        <div
+                          key={`${file.name}-${file.size}-${index}`}
+                          className="flex max-w-48 shrink-0 items-center gap-2 rounded-lg border border-stone-200 bg-stone-50 px-2 py-1.5 text-xs"
+                        >
+                          <Paperclip className="h-4 w-4 shrink-0 text-emerald-700" />
+                          <span className="min-w-0 flex-1 truncate">{file.name}</span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPendingFiles((current) =>
+                                current.filter((_, itemIndex) => itemIndex !== index)
+                              )
+                            }
+                            aria-label={`Remover ${file.name}`}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {showEmojis && (
                     <div className="mb-2 rounded-xl border border-stone-200 bg-white p-2 shadow-sm">
                       <div className="mb-2 flex gap-1 overflow-x-auto border-b border-stone-100 pb-2">
@@ -1143,6 +1308,25 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                     </div>
                   )}
                   <div className="flex items-end gap-2">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      className="sr-only"
+                      accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,text/plain,text/csv,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
+                      onChange={(event) => {
+                        addPendingFiles(Array.from(event.target.files ?? []));
+                        event.target.value = '';
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex h-10 w-10 items-center justify-center rounded-xl text-stone-500 hover:bg-stone-100"
+                      aria-label="Anexar arquivos"
+                    >
+                      <Paperclip className="h-5 w-5" />
+                    </button>
                     <button
                       type="button"
                       onClick={() => setShowEmojis((value) => !value)}
@@ -1169,14 +1353,22 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                     <button
                       type="button"
                       onClick={() => void handleSend()}
-                      disabled={!draft.trim()}
+                      disabled={(!draft.trim() && pendingFiles.length === 0) || uploadingFiles}
                       className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white disabled:bg-stone-300"
                       aria-label="Enviar mensagem"
                     >
-                      <Send className="h-4 w-4" />
+                      {uploadingFiles ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Send className="h-4 w-4" />
+                      )}
                     </button>
                   </div>
-                  <p className="mt-1 text-right text-[10px] text-stone-400">{draft.length}/4000</p>
+                  <p className="mt-1 text-right text-[10px] text-stone-400">
+                    {uploadingFiles
+                      ? `Enviando ${pendingFiles.length} arquivo(s)...`
+                      : `${draft.length}/4000`}
+                  </p>
                 </footer>
               </>
             ) : (

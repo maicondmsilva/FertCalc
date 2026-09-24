@@ -16,15 +16,19 @@ const mocks = vi.hoisted(() => ({
   listChatMessages: vi.fn(),
   listChatMessagesAfter: vi.fn(),
   listChatMessageReactions: vi.fn(),
+  listChatMessageAttachments: vi.fn(),
   markChatRead: vi.fn(),
   recordChatOperationMetric: vi.fn(),
   sendChatMessage: vi.fn(),
   subscribeToChatMessages: vi.fn(),
   subscribeToChatReactions: vi.fn(),
+  subscribeToChatAttachments: vi.fn(),
   subscribeToChatPresence: vi.fn(),
   subscribeToChatReads: vi.fn(),
   updateOwnChatProfile: vi.fn(),
   toggleChatMessageReaction: vi.fn(),
+  sendChatMessageWithAttachments: vi.fn(),
+  validateChatAttachmentFiles: vi.fn(),
   uploadOwnChatAvatar: vi.fn(),
   showError: vi.fn(),
 }));
@@ -42,15 +46,19 @@ vi.mock('../../services/chatService', () => ({
   listChatMessages: mocks.listChatMessages,
   listChatMessagesAfter: mocks.listChatMessagesAfter,
   listChatMessageReactions: mocks.listChatMessageReactions,
+  listChatMessageAttachments: mocks.listChatMessageAttachments,
   markChatRead: mocks.markChatRead,
   recordChatOperationMetric: mocks.recordChatOperationMetric,
   sendChatMessage: mocks.sendChatMessage,
   subscribeToChatMessages: mocks.subscribeToChatMessages,
   subscribeToChatReactions: mocks.subscribeToChatReactions,
+  subscribeToChatAttachments: mocks.subscribeToChatAttachments,
   subscribeToChatPresence: mocks.subscribeToChatPresence,
   subscribeToChatReads: mocks.subscribeToChatReads,
   updateOwnChatProfile: mocks.updateOwnChatProfile,
   toggleChatMessageReaction: mocks.toggleChatMessageReaction,
+  sendChatMessageWithAttachments: mocks.sendChatMessageWithAttachments,
+  validateChatAttachmentFiles: mocks.validateChatAttachmentFiles,
   uploadOwnChatAvatar: mocks.uploadOwnChatAvatar,
 }));
 
@@ -92,6 +100,7 @@ beforeEach(() => {
   mocks.listChatMessages.mockResolvedValue([message]);
   mocks.listChatMessagesAfter.mockResolvedValue([]);
   mocks.listChatMessageReactions.mockResolvedValue([]);
+  mocks.listChatMessageAttachments.mockResolvedValue([]);
   mocks.listChatContacts.mockResolvedValue([]);
   mocks.listChatContactStatuses.mockResolvedValue({ statuses: {}, avatarUrls: {} });
   mocks.markChatRead.mockResolvedValue(undefined);
@@ -101,6 +110,7 @@ beforeEach(() => {
   mocks.getChatProfile.mockResolvedValue(null);
   mocks.subscribeToChatReads.mockReturnValue(vi.fn());
   mocks.subscribeToChatReactions.mockReturnValue(vi.fn());
+  mocks.subscribeToChatAttachments.mockReturnValue(vi.fn());
   mocks.subscribeToChatPresence.mockReturnValue(vi.fn());
   mocks.updateOwnChatProfile.mockResolvedValue(undefined);
   mocks.toggleChatMessageReaction.mockResolvedValue(true);
@@ -245,5 +255,16 @@ describe('ChatWidget resiliente', () => {
       expect(mocks.toggleChatMessageReaction).toHaveBeenCalledWith('message-1', '👍')
     );
     expect(await screen.findByText('👍 1')).toBeDefined();
+  });
+
+  it('permite selecionar e remover um arquivo antes do envio', async () => {
+    await openConversation();
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(['relatório'], 'relatorio.pdf', { type: 'application/pdf' });
+
+    fireEvent.change(input, { target: { files: [file] } });
+    expect(await screen.findByText('relatorio.pdf')).toBeDefined();
+    fireEvent.click(screen.getByLabelText('Remover relatorio.pdf'));
+    expect(screen.queryByText('relatorio.pdf')).toBeNull();
   });
 });

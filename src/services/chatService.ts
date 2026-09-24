@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import type {
   ChatContact,
+  ChatAttachment,
   ChatConversation,
   ChatMessage,
   ChatMessageSearchResult,
@@ -9,6 +10,23 @@ import type {
   ChatProfile,
   ChatReactionSummary,
 } from '../types/chat.types';
+
+const CHAT_ATTACHMENT_BUCKET = 'chat-attachments';
+const CHAT_ATTACHMENT_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'application/pdf',
+  'text/plain',
+  'text/csv',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+]);
 
 export async function updateChatPreferences(
   conversationId: string,
@@ -193,6 +211,90 @@ export async function listChatMessageReactions(
   }));
 }
 
+export async function listChatMessageAttachments(
+  conversationId: string
+): Promise<ChatAttachment[]> {
+  const { data, error } = await supabase.rpc('list_chat_message_attachments', {
+    p_conversation_id: conversationId,
+  });
+  if (error) throw error;
+  return Promise.all(
+    ((data ?? []) as Record<string, unknown>[]).map(async (row) => {
+      const storagePath = row.storage_path as string;
+      const { data: signed } = await supabase.storage
+        .from(CHAT_ATTACHMENT_BUCKET)
+        .createSignedUrl(storagePath, 3600);
+      return {
+        id: row.id as string,
+        messageId: row.message_id as string,
+        fileName: row.file_name as string,
+        mimeType: row.mime_type as string,
+        sizeBytes: Number(row.size_bytes),
+        storagePath,
+        signedUrl: signed?.signedUrl ?? null,
+      };
+    })
+  );
+}
+
+export function validateChatAttachmentFiles(files: File[]): void {
+  if (files.length < 1 || files.length > 5) throw new Error('Selecione de 1 a 5 arquivos.');
+  for (const file of files) {
+    if (file.size < 1 || file.size > 20 * 1024 * 1024)
+      throw new Error(`${file.name}: o limite é 20 MB.`);
+    if (!CHAT_ATTACHMENT_TYPES.has(file.type))
+      throw new Error(`${file.name}: tipo de arquivo não permitido.`);
+  }
+}
+
+export async function sendChatMessageWithAttachments(input: {
+  conversationId: string;
+  organizationId: string;
+  userId: string;
+  body: string;
+  clientMessageId: string;
+  files: File[];
+}): Promise<ChatMessage> {
+  validateChatAttachmentFiles(input.files);
+  const uploadedPaths: string[] = [];
+  try {
+    const attachments = [];
+    for (const file of input.files) {
+      const extension = file.name.includes('.')
+        ? `.${file.name.split('.').pop()!.toLowerCase()}`
+        : '';
+      const storagePath = `${input.organizationId}/${input.conversationId}/${input.userId}/${crypto.randomUUID()}${extension}`;
+      const { error } = await supabase.storage
+        .from(CHAT_ATTACHMENT_BUCKET)
+        .upload(storagePath, file, {
+          upsert: false,
+          contentType: file.type,
+        });
+      if (error) throw error;
+      uploadedPaths.push(storagePath);
+      attachments.push({
+        storage_path: storagePath,
+        file_name: file.name.slice(0, 255),
+        mime_type: file.type,
+        size_bytes: file.size,
+      });
+    }
+    const { data, error } = await supabase.rpc('send_chat_message_with_attachments', {
+      p_conversation_id: input.conversationId,
+      p_body: input.body,
+      p_client_message_id: input.clientMessageId,
+      p_attachments: attachments,
+    });
+    if (error) throw error;
+    return mapMessage(data as ChatMessageRow);
+  } catch (error) {
+    if (uploadedPaths.length) {
+      await supabase.storage.from(CHAT_ATTACHMENT_BUCKET).remove(uploadedPaths);
+    }
+    throw error;
+  }
+}
+
 export async function toggleChatMessageReaction(
   messageId: string,
   emoji: string
@@ -303,6 +405,18 @@ export function subscribeToChatReactions(callback: () => void) {
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'chat_message_reactions' },
+      callback
+    )
+    .subscribe();
+  return () => void supabase.removeChannel(channel);
+}
+
+export function subscribeToChatAttachments(callback: () => void) {
+  const channel = supabase
+    .channel('chat-message-attachments')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'chat_message_attachments' },
       callback
     )
     .subscribe();
