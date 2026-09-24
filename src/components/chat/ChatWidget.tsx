@@ -10,6 +10,7 @@ import {
   Paperclip,
   Pencil,
   Plus,
+  Reply,
   Search,
   Send,
   Settings,
@@ -153,6 +154,7 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState('');
   const [messageActionId, setMessageActionId] = useState<string | null>(null);
+  const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
   const [typingUserIds, setTypingUserIds] = useState<Set<string>>(new Set());
   const [contactStatuses, setContactStatuses] = useState<Record<string, ChatPresenceStatus>>({});
@@ -540,7 +542,9 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
   }, [isOpen, search, showContacts, showError]);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (typeof endRef.current?.scrollIntoView === 'function') {
+      endRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages.length]);
 
   useEffect(() => {
@@ -555,6 +559,7 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
     setSelected(conversation);
     selectedRef.current = conversation;
     setMessages([]);
+    setReplyingTo(null);
     setTypingUserIds(new Set());
     setShowMessageSearch(false);
     setMessageSearch('');
@@ -756,12 +761,14 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
             body,
             clientMessageId: crypto.randomUUID(),
             files: pendingFiles,
+            replyToMessageId: replyingTo?.id,
           })
-        : await sendChatMessage(selected.conversationId, body, crypto.randomUUID());
+        : await sendChatMessage(selected.conversationId, body, crypto.randomUUID(), replyingTo?.id);
       setMessages((current) =>
         current.some((item) => item.id === saved.id) ? current : [...current, saved]
       );
       setPendingFiles([]);
+      setReplyingTo(null);
       await refreshAttachments(selected.conversationId);
       await refreshConversations();
     } catch (error) {
@@ -1395,11 +1402,38 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                               ) : (
                                 <>
                                   {(deleted || message.body !== '📎 Anexo') && (
-                                    <p
-                                      className={`whitespace-pre-wrap break-words ${deleted ? 'italic' : ''}`}
-                                    >
-                                      {deleted ? 'Mensagem excluída' : message.body}
-                                    </p>
+                                    <>
+                                      {!deleted && message.replyPreviewBody && (
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            message.replyToMessageId &&
+                                            document
+                                              .getElementById(
+                                                `chat-message-${message.replyToMessageId}`
+                                              )
+                                              ?.scrollIntoView({
+                                                behavior: 'smooth',
+                                                block: 'center',
+                                              })
+                                          }
+                                          className={`mb-2 block w-full rounded-lg border-l-4 p-2 text-left text-xs ${mine ? 'border-emerald-200 bg-emerald-700/40 text-emerald-50' : 'border-emerald-500 bg-stone-100 text-stone-600'}`}
+                                          aria-label="Abrir mensagem citada"
+                                        >
+                                          <span className="block font-semibold">
+                                            {message.replyPreviewSenderName ?? 'Mensagem citada'}
+                                          </span>
+                                          <span className="block truncate">
+                                            {message.replyPreviewBody}
+                                          </span>
+                                        </button>
+                                      )}
+                                      <p
+                                        className={`whitespace-pre-wrap break-words ${deleted ? 'italic' : ''}`}
+                                      >
+                                        {deleted ? 'Mensagem excluída' : message.body}
+                                      </p>
+                                    </>
                                   )}
                                   {!deleted && (attachments[message.id]?.length ?? 0) > 0 && (
                                     <div className="mt-2 space-y-1.5">
@@ -1447,8 +1481,19 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                                   )}
                                 </>
                               )}
-                              {mine && !deleted && editingMessageId !== message.id && (
+                              {!deleted && editingMessageId !== message.id && (
                                 <div className="absolute -top-3 right-2 flex gap-1 rounded-lg border border-stone-200 bg-white p-1 text-stone-600 opacity-80 shadow-md sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setReplyingTo(message);
+                                      window.setTimeout(() => composerRef.current?.focus(), 0);
+                                    }}
+                                    className="rounded p-1 hover:bg-stone-100"
+                                    aria-label="Responder mensagem"
+                                  >
+                                    <Reply className="h-3.5 w-3.5" />
+                                  </button>
                                   {canEdit && (
                                     <button
                                       type="button"
@@ -1459,15 +1504,17 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                                       <Pencil className="h-3.5 w-3.5" />
                                     </button>
                                   )}
-                                  <button
-                                    type="button"
-                                    onClick={() => void handleDeleteMessage(message.id)}
-                                    disabled={messageActionId === message.id}
-                                    className="rounded p-1 text-red-600 hover:bg-red-50 disabled:opacity-50"
-                                    aria-label="Excluir mensagem"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </button>
+                                  {mine && (
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleDeleteMessage(message.id)}
+                                      disabled={messageActionId === message.id}
+                                      className="rounded p-1 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                                      aria-label="Excluir mensagem"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </button>
+                                  )}
                                 </div>
                               )}
                               {!deleted && editingMessageId !== message.id && (
@@ -1619,6 +1666,25 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                           </button>
                         ))}
                       </div>
+                    </div>
+                  )}
+                  {replyingTo && (
+                    <div className="mb-2 flex items-start gap-2 rounded-xl border-l-4 border-emerald-500 bg-stone-100 px-3 py-2 text-xs text-stone-600">
+                      <Reply className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                      <div className="min-w-0 flex-1">
+                        <span className="block font-semibold text-emerald-700">
+                          Respondendo à mensagem
+                        </span>
+                        <span className="block truncate">{replyingTo.body}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setReplyingTo(null)}
+                        className="rounded p-1 hover:bg-stone-200"
+                        aria-label="Cancelar resposta"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
                     </div>
                   )}
                   <div className="flex items-end gap-2">

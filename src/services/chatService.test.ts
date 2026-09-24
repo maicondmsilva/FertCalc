@@ -99,6 +99,40 @@ describe('chatService', () => {
     expect(result).toEqual(expect.objectContaining({ id: 'message-1', body: 'Mensagem' }));
   });
 
+  it('envia uma resposta vinculada e normaliza a prévia citada', async () => {
+    rpc.mockResolvedValue({
+      data: {
+        id: 'message-2',
+        conversation_id: 'conversation-1',
+        organization_id: 'organization-1',
+        sender_id: 'user-1',
+        client_message_id: 'client-2',
+        body: 'Resposta',
+        created_at: '2026-09-23T10:01:00.000Z',
+        reply_to_message_id: 'message-1',
+        reply_preview_body: 'Mensagem original',
+        reply_preview_sender_name: 'Maria',
+      },
+      error: null,
+    });
+
+    const result = await sendChatMessage('conversation-1', 'Resposta', 'client-2', 'message-1');
+
+    expect(rpc).toHaveBeenCalledWith('send_chat_reply', {
+      p_conversation_id: 'conversation-1',
+      p_body: 'Resposta',
+      p_client_message_id: 'client-2',
+      p_reply_to_message_id: 'message-1',
+    });
+    expect(result).toEqual(
+      expect.objectContaining({
+        replyToMessageId: 'message-1',
+        replyPreviewBody: 'Mensagem original',
+        replyPreviewSenderName: 'Maria',
+      })
+    );
+  });
+
   it('recupera mensagens posteriores ao último cursor conhecido', async () => {
     rpc.mockResolvedValue({
       data: [

@@ -89,4 +89,7 @@ export interface ChatMessage {
   createdAt: string;
   editedAt?: string | null;
   deletedAt?: string | null;
+  replyToMessageId?: string | null;
+  replyPreviewBody?: string | null;
+  replyPreviewSenderName?: string | null;
 }
