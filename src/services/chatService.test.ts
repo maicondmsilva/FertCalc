@@ -22,6 +22,7 @@ import {
   deleteChatConversation,
   editChatMessage,
   listChatMessageReactions,
+  listChatGroupMembers,
   listChatConversations,
   listChatMessagesAfter,
   sendChatMessage,
@@ -29,6 +30,7 @@ import {
   subscribeToChatMessages,
   subscribeToChatTyping,
   toggleChatMessageReaction,
+  updateChatGroupMembers,
   validateChatAttachmentFiles,
 } from './chatService';
 
@@ -152,6 +154,35 @@ describe('chatService', () => {
     expect(rpc).toHaveBeenNthCalledWith(2, 'toggle_chat_message_reaction', {
       p_message_id: 'message-1',
       p_emoji: '👍',
+    });
+  });
+
+  it('lista e atualiza os participantes do grupo', async () => {
+    rpc
+      .mockResolvedValueOnce({
+        data: [
+          {
+            user_id: 'user-1',
+            name: 'Maria',
+            nickname: 'maria',
+            role: 'user',
+            participant_role: 'owner',
+            can_manage: true,
+          },
+        ],
+        error: null,
+      })
+      .mockResolvedValueOnce({ data: null, error: null });
+
+    await expect(listChatGroupMembers('conversation-1')).resolves.toEqual([
+      expect.objectContaining({ id: 'user-1', participantRole: 'owner', canManage: true }),
+    ]);
+    await expect(
+      updateChatGroupMembers('conversation-1', ['user-2', 'user-3'])
+    ).resolves.toBeUndefined();
+    expect(rpc).toHaveBeenNthCalledWith(2, 'update_chat_group_members', {
+      p_conversation_id: 'conversation-1',
+      p_member_ids: ['user-2', 'user-3'],
     });
   });
 

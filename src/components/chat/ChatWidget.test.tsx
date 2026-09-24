@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   listChatContacts: vi.fn(),
   listChatContactStatuses: vi.fn(),
   listChatConversations: vi.fn(),
+  listChatGroupMembers: vi.fn(),
   listChatMessages: vi.fn(),
   listChatMessagesAfter: vi.fn(),
   listChatMessageReactions: vi.fn(),
@@ -21,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   markChatRead: vi.fn(),
   recordChatOperationMetric: vi.fn(),
   sendChatMessage: vi.fn(),
+  renameGroupChat: vi.fn(),
   subscribeToChatMessages: vi.fn(),
   subscribeToChatReactions: vi.fn(),
   subscribeToChatAttachments: vi.fn(),
@@ -28,6 +30,7 @@ const mocks = vi.hoisted(() => ({
   subscribeToChatTyping: vi.fn(),
   subscribeToChatReads: vi.fn(),
   updateOwnChatProfile: vi.fn(),
+  updateChatGroupMembers: vi.fn(),
   toggleChatMessageReaction: vi.fn(),
   sendChatMessageWithAttachments: vi.fn(),
   validateChatAttachmentFiles: vi.fn(),
@@ -45,6 +48,7 @@ vi.mock('../../services/chatService', () => ({
   listChatContacts: mocks.listChatContacts,
   listChatContactStatuses: mocks.listChatContactStatuses,
   listChatConversations: mocks.listChatConversations,
+  listChatGroupMembers: mocks.listChatGroupMembers,
   listChatMessages: mocks.listChatMessages,
   listChatMessagesAfter: mocks.listChatMessagesAfter,
   listChatMessageReactions: mocks.listChatMessageReactions,
@@ -53,6 +57,7 @@ vi.mock('../../services/chatService', () => ({
   markChatRead: mocks.markChatRead,
   recordChatOperationMetric: mocks.recordChatOperationMetric,
   sendChatMessage: mocks.sendChatMessage,
+  renameGroupChat: mocks.renameGroupChat,
   subscribeToChatMessages: mocks.subscribeToChatMessages,
   subscribeToChatReactions: mocks.subscribeToChatReactions,
   subscribeToChatAttachments: mocks.subscribeToChatAttachments,
@@ -60,6 +65,7 @@ vi.mock('../../services/chatService', () => ({
   subscribeToChatTyping: mocks.subscribeToChatTyping,
   subscribeToChatReads: mocks.subscribeToChatReads,
   updateOwnChatProfile: mocks.updateOwnChatProfile,
+  updateChatGroupMembers: mocks.updateChatGroupMembers,
   toggleChatMessageReaction: mocks.toggleChatMessageReaction,
   sendChatMessageWithAttachments: mocks.sendChatMessageWithAttachments,
   validateChatAttachmentFiles: mocks.validateChatAttachmentFiles,
@@ -109,6 +115,7 @@ beforeEach(() => {
   onMessage = undefined;
   onStatus = undefined;
   mocks.listChatConversations.mockResolvedValue([conversation]);
+  mocks.listChatGroupMembers.mockResolvedValue([]);
   mocks.listChatMessages.mockResolvedValue([message]);
   mocks.listChatMessagesAfter.mockResolvedValue([]);
   mocks.listChatMessageReactions.mockResolvedValue([]);
@@ -127,6 +134,8 @@ beforeEach(() => {
   mocks.subscribeToChatPresence.mockReturnValue(vi.fn());
   mocks.subscribeToChatTyping.mockReturnValue({ sendTyping: vi.fn(), unsubscribe: vi.fn() });
   mocks.updateOwnChatProfile.mockResolvedValue(undefined);
+  mocks.renameGroupChat.mockResolvedValue(undefined);
+  mocks.updateChatGroupMembers.mockResolvedValue(undefined);
   mocks.toggleChatMessageReaction.mockResolvedValue(true);
   mocks.recordChatOperationMetric.mockResolvedValue(undefined);
   mocks.subscribeToChatMessages.mockImplementation(
@@ -208,6 +217,58 @@ describe('ChatWidget resiliente', () => {
     );
 
     expect(screen.getByText('Maria está digitando…')).toBeDefined();
+  });
+
+  it('permite ao proprietário renomear o grupo e atualizar participantes', async () => {
+    const groupConversation = {
+      ...conversation,
+      conversationType: 'group' as const,
+      conversationTitle: 'Equipe antiga',
+      contactId: null,
+      contactName: 'Equipe antiga',
+      contactRole: 'group',
+      memberCount: 2,
+    };
+    mocks.listChatConversations.mockResolvedValue([groupConversation]);
+    mocks.listChatGroupMembers.mockResolvedValue([
+      {
+        id: 'user-1',
+        name: 'Usuário',
+        nickname: null,
+        role: 'user',
+        participantRole: 'owner',
+        canManage: true,
+      },
+      {
+        id: 'user-2',
+        name: 'Maria',
+        nickname: 'maria',
+        role: 'user',
+        participantRole: 'member',
+        canManage: true,
+      },
+    ]);
+    mocks.listChatContacts.mockResolvedValue([
+      { id: 'user-2', name: 'Maria', nickname: 'maria', role: 'user' },
+      { id: 'user-3', name: 'João', nickname: 'joao', role: 'user' },
+    ]);
+
+    render(<ChatWidget currentUser={currentUser} />);
+    fireEvent.click(screen.getByLabelText('Abrir chat interno'));
+    fireEvent.click(await screen.findByText('Equipe antiga'));
+    fireEvent.click(await screen.findByLabelText('Gerenciar grupo'));
+    const nameInput = await screen.findByDisplayValue('Equipe antiga');
+    fireEvent.change(nameInput, { target: { value: 'Equipe nova' } });
+    fireEvent.click(screen.getByText('João'));
+    fireEvent.click(screen.getByText('Salvar grupo'));
+
+    await waitFor(() =>
+      expect(mocks.renameGroupChat).toHaveBeenCalledWith('conversation-1', 'Equipe nova')
+    );
+    expect(mocks.updateChatGroupMembers).toHaveBeenCalledWith('conversation-1', [
+      'user-2',
+      'user-3',
+    ]);
   });
 
   it('não marca mensagem como lida quando o painel está fechado', async () => {

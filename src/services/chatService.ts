@@ -3,6 +3,7 @@ import type {
   ChatContact,
   ChatAttachment,
   ChatConversation,
+  ChatGroupMember,
   ChatMessage,
   ChatMessageSearchResult,
   ChatMessageReceipt,
@@ -52,6 +53,32 @@ export async function renameGroupChat(conversationId: string, name: string): Pro
   const { error } = await supabase.rpc('rename_group_chat', {
     p_conversation_id: conversationId,
     p_name: name,
+  });
+  if (error) throw error;
+}
+
+export async function listChatGroupMembers(conversationId: string): Promise<ChatGroupMember[]> {
+  const { data, error } = await supabase.rpc('list_chat_group_members', {
+    p_conversation_id: conversationId,
+  });
+  if (error) throw error;
+  return ((data ?? []) as Record<string, unknown>[]).map((row) => ({
+    id: row.user_id as string,
+    name: row.name as string,
+    nickname: row.nickname as string | null,
+    role: row.role as string,
+    participantRole: row.participant_role as ChatGroupMember['participantRole'],
+    canManage: Boolean(row.can_manage),
+  }));
+}
+
+export async function updateChatGroupMembers(
+  conversationId: string,
+  memberIds: string[]
+): Promise<void> {
+  const { error } = await supabase.rpc('update_chat_group_members', {
+    p_conversation_id: conversationId,
+    p_member_ids: memberIds,
   });
   if (error) throw error;
 }

@@ -12,6 +12,7 @@ import {
   Plus,
   Search,
   Send,
+  Settings,
   Smile,
   SmilePlus,
   Trash2,
@@ -24,6 +25,7 @@ import type {
   ChatContact,
   ChatAttachment,
   ChatConversation,
+  ChatGroupMember,
   ChatMessage,
   ChatMessageReceipt,
   ChatMessageSearchResult,
@@ -42,6 +44,7 @@ import {
   listChatContacts,
   listChatContactStatuses,
   listChatConversations,
+  listChatGroupMembers,
   listChatMessages,
   listChatMessagesAfter,
   listChatMessageReactions,
@@ -49,6 +52,7 @@ import {
   searchChatMessages,
   markChatRead,
   recordChatOperationMetric,
+  renameGroupChat,
   sendChatMessage,
   sendChatMessageWithAttachments,
   subscribeToChatAttachments,
@@ -59,6 +63,7 @@ import {
   subscribeToChatTyping,
   toggleChatMessageReaction,
   updateOwnChatProfile,
+  updateChatGroupMembers,
   uploadOwnChatAvatar,
   validateChatAttachmentFiles,
 } from '../../services/chatService';
@@ -128,6 +133,13 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [groupMembers, setGroupMembers] = useState<string[]>([]);
+  const [showGroupSettings, setShowGroupSettings] = useState(false);
+  const [groupSettingsName, setGroupSettingsName] = useState('');
+  const [groupSettingsMembers, setGroupSettingsMembers] = useState<ChatGroupMember[]>([]);
+  const [groupSettingsContacts, setGroupSettingsContacts] = useState<ChatContact[]>([]);
+  const [groupSettingsSelectedIds, setGroupSettingsSelectedIds] = useState<string[]>([]);
+  const [loadingGroupSettings, setLoadingGroupSettings] = useState(false);
+  const [savingGroupSettings, setSavingGroupSettings] = useState(false);
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
   const [contacts, setContacts] = useState<ChatContact[]>([]);
   const [search, setSearch] = useState('');
@@ -610,6 +622,65 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
     } catch (error) {
       console.error('[Chat] Falha ao criar grupo:', error);
       showError('Não foi possível criar o grupo. Confira os participantes.');
+    }
+  };
+
+  const openGroupSettings = async () => {
+    if (!selected || selected.conversationType !== 'group') return;
+    setShowGroupSettings(true);
+    setLoadingGroupSettings(true);
+    setGroupSettingsName(selected.contactName);
+    try {
+      const [members, availableContacts] = await Promise.all([
+        listChatGroupMembers(selected.conversationId),
+        listChatContacts('', 50),
+      ]);
+      setGroupSettingsMembers(members);
+      setGroupSettingsContacts(availableContacts);
+      setGroupSettingsSelectedIds(
+        members.filter((member) => member.participantRole === 'member').map((member) => member.id)
+      );
+    } catch (error) {
+      console.error('[Chat] Falha ao carregar configurações do grupo:', error);
+      setShowGroupSettings(false);
+      showError('Não foi possível carregar os participantes do grupo.');
+    } finally {
+      setLoadingGroupSettings(false);
+    }
+  };
+
+  const saveGroupSettings = async () => {
+    if (!selected || selected.conversationType !== 'group' || savingGroupSettings) return;
+    const canManage = groupSettingsMembers.some((member) => member.canManage);
+    if (!canManage) return;
+    const normalizedName = groupSettingsName.trim();
+    if (normalizedName.length < 2) {
+      showError('Informe um nome com pelo menos 2 caracteres.');
+      return;
+    }
+    setSavingGroupSettings(true);
+    try {
+      await renameGroupChat(selected.conversationId, normalizedName);
+      await updateChatGroupMembers(selected.conversationId, groupSettingsSelectedIds);
+      setSelected((current) =>
+        current
+          ? { ...current, conversationTitle: normalizedName, contactName: normalizedName }
+          : current
+      );
+      selectedRef.current = selectedRef.current
+        ? {
+            ...selectedRef.current,
+            conversationTitle: normalizedName,
+            contactName: normalizedName,
+          }
+        : null;
+      setShowGroupSettings(false);
+      await refreshConversations();
+    } catch (error) {
+      console.error('[Chat] Falha ao salvar configurações do grupo:', error);
+      showError('Não foi possível atualizar o grupo.');
+    } finally {
+      setSavingGroupSettings(false);
     }
   };
 
@@ -1173,6 +1244,17 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                       <UserRound className="h-5 w-5" />
                     </button>
                   )}
+                  {selected.conversationType === 'group' && (
+                    <button
+                      type="button"
+                      onClick={() => void openGroupSettings()}
+                      className="rounded-lg p-2 text-stone-500 hover:bg-stone-100"
+                      aria-label="Gerenciar grupo"
+                      title="Gerenciar grupo"
+                    >
+                      <Settings className="h-5 w-5" />
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setShowMessageSearch((value) => !value)}
@@ -1612,6 +1694,152 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
               </div>
             )}
           </div>
+          {showGroupSettings && selected?.conversationType === 'group' && (
+            <div className="absolute inset-0 z-20 flex items-center justify-center p-4">
+              <button
+                type="button"
+                className="absolute inset-0 cursor-default bg-black/40"
+                onClick={() => !savingGroupSettings && setShowGroupSettings(false)}
+                aria-label="Fechar configurações do grupo"
+              />
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="group-settings-title"
+                className="relative flex max-h-[85vh] w-full max-w-md flex-col rounded-2xl bg-white shadow-2xl"
+              >
+                <div className="flex items-center justify-between border-b border-stone-200 p-4">
+                  <div>
+                    <h3 id="group-settings-title" className="font-bold text-stone-900">
+                      Gerenciar grupo
+                    </h3>
+                    <p className="text-xs text-stone-500">Nome e participantes da conversa</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowGroupSettings(false)}
+                    disabled={savingGroupSettings}
+                    aria-label="Fechar configurações do grupo"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                {loadingGroupSettings ? (
+                  <div className="flex justify-center p-10">
+                    <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+                  </div>
+                ) : (
+                  <>
+                    <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+                      <label className="block text-sm font-semibold text-stone-700">
+                        Nome do grupo
+                        <input
+                          value={groupSettingsName}
+                          maxLength={80}
+                          disabled={!groupSettingsMembers.some((member) => member.canManage)}
+                          onChange={(event) => setGroupSettingsName(event.target.value)}
+                          className="mt-1 w-full rounded-xl border border-stone-300 px-3 py-2 font-normal outline-none focus:border-emerald-500 disabled:bg-stone-100"
+                        />
+                      </label>
+                      <div>
+                        <p className="mb-2 text-sm font-semibold text-stone-700">Participantes</p>
+                        <div className="space-y-1">
+                          {groupSettingsMembers
+                            .filter((member) => member.participantRole !== 'member')
+                            .map((member) => (
+                              <div
+                                key={member.id}
+                                className="flex items-center gap-3 rounded-xl bg-stone-50 p-3"
+                              >
+                                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-100 font-bold text-emerald-700">
+                                  {member.name.slice(0, 1).toUpperCase()}
+                                </span>
+                                <span className="min-w-0 flex-1">
+                                  <span className="block truncate text-sm font-semibold">
+                                    {member.name}
+                                  </span>
+                                  <span className="text-xs text-stone-500">
+                                    {member.participantRole === 'owner'
+                                      ? 'Proprietário'
+                                      : 'Administrador'}
+                                  </span>
+                                </span>
+                                <span className="text-xs font-semibold text-stone-400">
+                                  Protegido
+                                </span>
+                              </div>
+                            ))}
+                          {groupSettingsContacts
+                            .filter(
+                              (contact) =>
+                                !groupSettingsMembers.some(
+                                  (member) =>
+                                    member.id === contact.id && member.participantRole !== 'member'
+                                )
+                            )
+                            .map((contact) => {
+                              const checked = groupSettingsSelectedIds.includes(contact.id);
+                              const canManage = groupSettingsMembers.some(
+                                (member) => member.canManage
+                              );
+                              return (
+                                <label
+                                  key={contact.id}
+                                  className="flex cursor-pointer items-center gap-3 rounded-xl p-3 hover:bg-stone-50"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    disabled={!canManage}
+                                    onChange={() =>
+                                      setGroupSettingsSelectedIds((current) =>
+                                        checked
+                                          ? current.filter((id) => id !== contact.id)
+                                          : [...current, contact.id]
+                                      )
+                                    }
+                                    className="h-4 w-4 accent-emerald-600"
+                                  />
+                                  <span className="min-w-0 flex-1">
+                                    <span className="block truncate text-sm font-semibold">
+                                      {contact.name}
+                                    </span>
+                                    <span className="block truncate text-xs text-stone-500">
+                                      {contact.nickname || contact.role}
+                                    </span>
+                                  </span>
+                                </label>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2 border-t border-stone-200 p-4">
+                      <button
+                        type="button"
+                        onClick={() => setShowGroupSettings(false)}
+                        disabled={savingGroupSettings}
+                        className="rounded-xl px-4 py-2 text-sm font-semibold text-stone-600 hover:bg-stone-100"
+                      >
+                        Cancelar
+                      </button>
+                      {groupSettingsMembers.some((member) => member.canManage) && (
+                        <button
+                          type="button"
+                          onClick={() => void saveGroupSettings()}
+                          disabled={savingGroupSettings || groupSettingsName.trim().length < 2}
+                          className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white disabled:bg-stone-300"
+                        >
+                          {savingGroupSettings && <Loader2 className="h-4 w-4 animate-spin" />}
+                          Salvar grupo
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
           {confirmConversationDeletion && selected && (
             <div className="absolute inset-0 z-20 flex items-center justify-center p-4">
               <button
