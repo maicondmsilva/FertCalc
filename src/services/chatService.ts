@@ -137,6 +137,9 @@ type ChatMessageRow = {
   created_at: string;
   edited_at?: string | null;
   deleted_at?: string | null;
+  reply_to_message_id?: string | null;
+  reply_preview_body?: string | null;
+  reply_preview_sender_name?: string | null;
 };
 
 const mapMessage = (row: ChatMessageRow): ChatMessage => ({
@@ -149,6 +152,9 @@ const mapMessage = (row: ChatMessageRow): ChatMessage => ({
   createdAt: row.created_at,
   editedAt: row.edited_at,
   deletedAt: row.deleted_at,
+  replyToMessageId: row.reply_to_message_id,
+  replyPreviewBody: row.reply_preview_body,
+  replyPreviewSenderName: row.reply_preview_sender_name,
 });
 
 export type ChatMetricOperation = 'message_send' | 'message_recovery' | 'realtime_connection';
@@ -289,6 +295,7 @@ export async function sendChatMessageWithAttachments(input: {
   body: string;
   clientMessageId: string;
   files: File[];
+  replyToMessageId?: string | null;
 }): Promise<ChatMessage> {
   validateChatAttachmentFiles(input.files);
   const uploadedPaths: string[] = [];
@@ -314,12 +321,18 @@ export async function sendChatMessageWithAttachments(input: {
         size_bytes: file.size,
       });
     }
-    const { data, error } = await supabase.rpc('send_chat_message_with_attachments', {
-      p_conversation_id: input.conversationId,
-      p_body: input.body,
-      p_client_message_id: input.clientMessageId,
-      p_attachments: attachments,
-    });
+    const { data, error } = await supabase.rpc(
+      input.replyToMessageId
+        ? 'send_chat_reply_with_attachments'
+        : 'send_chat_message_with_attachments',
+      {
+        p_conversation_id: input.conversationId,
+        p_body: input.body,
+        p_client_message_id: input.clientMessageId,
+        p_attachments: attachments,
+        ...(input.replyToMessageId ? { p_reply_to_message_id: input.replyToMessageId } : {}),
+      }
+    );
     if (error) throw error;
     return mapMessage(data as ChatMessageRow);
   } catch (error) {
@@ -552,15 +565,20 @@ export async function listChatMessagesAfter(
 export async function sendChatMessage(
   conversationId: string,
   body: string,
-  clientMessageId: string
+  clientMessageId: string,
+  replyToMessageId?: string | null
 ): Promise<ChatMessage> {
   const startedAt = Date.now();
   try {
-    const { data, error } = await supabase.rpc('send_chat_message', {
-      p_conversation_id: conversationId,
-      p_body: body,
-      p_client_message_id: clientMessageId,
-    });
+    const { data, error } = await supabase.rpc(
+      replyToMessageId ? 'send_chat_reply' : 'send_chat_message',
+      {
+        p_conversation_id: conversationId,
+        p_body: body,
+        p_client_message_id: clientMessageId,
+        ...(replyToMessageId ? { p_reply_to_message_id: replyToMessageId } : {}),
+      }
+    );
     if (error) throw error;
     observeChatOperation('message_send', 'success', startedAt);
     return mapMessage(data as ChatMessageRow);

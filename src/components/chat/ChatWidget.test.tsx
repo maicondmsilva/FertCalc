@@ -334,6 +334,39 @@ describe('ChatWidget resiliente', () => {
     expect(await screen.findByText('Mensagem excluída')).toBeDefined();
   });
 
+  it('permite responder uma mensagem e exibe a citação salva', async () => {
+    mocks.sendChatMessage.mockResolvedValue({
+      ...message,
+      id: 'message-2',
+      senderId: currentUser.id,
+      clientMessageId: 'client-2',
+      body: 'Resposta contextual',
+      replyToMessageId: 'message-1',
+      replyPreviewBody: 'Mensagem anterior',
+      replyPreviewSenderName: 'Maria',
+    });
+    await openConversation();
+
+    fireEvent.click(screen.getByLabelText('Responder mensagem'));
+    expect(screen.getByText('Respondendo à mensagem')).toBeDefined();
+    fireEvent.change(screen.getByLabelText('Mensagem do chat'), {
+      target: { value: 'Resposta contextual' },
+    });
+    fireEvent.click(screen.getByLabelText('Enviar mensagem'));
+
+    await waitFor(() =>
+      expect(mocks.sendChatMessage).toHaveBeenCalledWith(
+        'conversation-1',
+        'Resposta contextual',
+        expect.any(String),
+        'message-1'
+      )
+    );
+    const quote = await screen.findByLabelText('Abrir mensagem citada');
+    expect(quote.textContent).toContain('Maria');
+    expect(quote.textContent).toContain('Mensagem anterior');
+  });
+
   it('expande o campo de digitação e oferece emojis por categoria', async () => {
     await openConversation();
     const composer = screen.getByLabelText('Mensagem do chat') as HTMLTextAreaElement;
