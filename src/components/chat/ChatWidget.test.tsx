@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   listChatMessagesAfter: vi.fn(),
   listChatMessageReactions: vi.fn(),
   listChatMessageAttachments: vi.fn(),
+  searchChatMessages: vi.fn(),
   markChatRead: vi.fn(),
   recordChatOperationMetric: vi.fn(),
   sendChatMessage: vi.fn(),
@@ -24,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   subscribeToChatReactions: vi.fn(),
   subscribeToChatAttachments: vi.fn(),
   subscribeToChatPresence: vi.fn(),
+  subscribeToChatTyping: vi.fn(),
   subscribeToChatReads: vi.fn(),
   updateOwnChatProfile: vi.fn(),
   toggleChatMessageReaction: vi.fn(),
@@ -47,6 +49,7 @@ vi.mock('../../services/chatService', () => ({
   listChatMessagesAfter: mocks.listChatMessagesAfter,
   listChatMessageReactions: mocks.listChatMessageReactions,
   listChatMessageAttachments: mocks.listChatMessageAttachments,
+  searchChatMessages: mocks.searchChatMessages,
   markChatRead: mocks.markChatRead,
   recordChatOperationMetric: mocks.recordChatOperationMetric,
   sendChatMessage: mocks.sendChatMessage,
@@ -54,6 +57,7 @@ vi.mock('../../services/chatService', () => ({
   subscribeToChatReactions: mocks.subscribeToChatReactions,
   subscribeToChatAttachments: mocks.subscribeToChatAttachments,
   subscribeToChatPresence: mocks.subscribeToChatPresence,
+  subscribeToChatTyping: mocks.subscribeToChatTyping,
   subscribeToChatReads: mocks.subscribeToChatReads,
   updateOwnChatProfile: mocks.updateOwnChatProfile,
   toggleChatMessageReaction: mocks.toggleChatMessageReaction,
@@ -68,13 +72,21 @@ vi.mock('../Toast', () => ({
 
 import ChatWidget from './ChatWidget';
 
-const currentUser = { id: 'user-1', name: 'Usuário', role: 'user' } as User;
+const currentUser = {
+  id: 'user-1',
+  name: 'Usuário',
+  role: 'user',
+  organizationId: 'organization-1',
+} as User;
 const conversation = {
   conversationId: 'conversation-1',
+  conversationType: 'direct' as const,
+  conversationTitle: null,
   contactId: 'user-2',
   contactName: 'Maria',
   contactNickname: 'maria',
   contactRole: 'user',
+  memberCount: 2,
   lastMessageBody: 'Mensagem anterior',
   lastMessageAt: '2026-09-23T10:00:00.000Z',
   unreadCount: 1,
@@ -101,6 +113,7 @@ beforeEach(() => {
   mocks.listChatMessagesAfter.mockResolvedValue([]);
   mocks.listChatMessageReactions.mockResolvedValue([]);
   mocks.listChatMessageAttachments.mockResolvedValue([]);
+  mocks.searchChatMessages.mockResolvedValue([]);
   mocks.listChatContacts.mockResolvedValue([]);
   mocks.listChatContactStatuses.mockResolvedValue({ statuses: {}, avatarUrls: {} });
   mocks.markChatRead.mockResolvedValue(undefined);
@@ -112,6 +125,7 @@ beforeEach(() => {
   mocks.subscribeToChatReactions.mockReturnValue(vi.fn());
   mocks.subscribeToChatAttachments.mockReturnValue(vi.fn());
   mocks.subscribeToChatPresence.mockReturnValue(vi.fn());
+  mocks.subscribeToChatTyping.mockReturnValue({ sendTyping: vi.fn(), unsubscribe: vi.fn() });
   mocks.updateOwnChatProfile.mockResolvedValue(undefined);
   mocks.toggleChatMessageReaction.mockResolvedValue(true);
   mocks.recordChatOperationMetric.mockResolvedValue(undefined);
@@ -162,6 +176,38 @@ describe('ChatWidget resiliente', () => {
       )
     );
     expect(screen.getByText('Em tempo real')).toBeDefined();
+  });
+
+  it('pesquisa mensagens dentro da conversa selecionada', async () => {
+    mocks.searchChatMessages.mockResolvedValue([
+      {
+        id: 'message-1',
+        conversationId: 'conversation-1',
+        senderId: 'user-2',
+        body: 'Mensagem encontrada',
+        createdAt: message.createdAt,
+      },
+    ]);
+    await openConversation();
+
+    fireEvent.click(screen.getByLabelText('Pesquisar mensagens'));
+    fireEvent.change(screen.getByLabelText('Pesquisar nesta conversa'), {
+      target: { value: 'encontrada' },
+    });
+
+    expect(await screen.findByText('Mensagem encontrada')).toBeDefined();
+    expect(mocks.searchChatMessages).toHaveBeenCalledWith('encontrada', 'conversation-1', 20);
+  });
+
+  it('mostra quando outro participante está digitando', async () => {
+    await openConversation();
+    const typingCallback = mocks.subscribeToChatTyping.mock.calls[0][2];
+
+    act(() =>
+      typingCallback({ conversationId: 'conversation-1', userId: 'user-2', isTyping: true })
+    );
+
+    expect(screen.getByText('Maria está digitando…')).toBeDefined();
   });
 
   it('não marca mensagem como lida quando o painel está fechado', async () => {

@@ -26,6 +26,7 @@ import type {
   ChatConversation,
   ChatMessage,
   ChatMessageReceipt,
+  ChatMessageSearchResult,
   ChatPresenceStatus,
   ChatProfile,
   ChatReactionSummary,
@@ -45,6 +46,7 @@ import {
   listChatMessagesAfter,
   listChatMessageReactions,
   listChatMessageAttachments,
+  searchChatMessages,
   markChatRead,
   recordChatOperationMetric,
   sendChatMessage,
@@ -54,6 +56,7 @@ import {
   subscribeToChatReads,
   subscribeToChatMessages,
   subscribeToChatReactions,
+  subscribeToChatTyping,
   toggleChatMessageReaction,
   updateOwnChatProfile,
   uploadOwnChatAvatar,
@@ -128,6 +131,10 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
   const [contacts, setContacts] = useState<ChatContact[]>([]);
   const [search, setSearch] = useState('');
+  const [showMessageSearch, setShowMessageSearch] = useState(false);
+  const [messageSearch, setMessageSearch] = useState('');
+  const [messageSearchResults, setMessageSearchResults] = useState<ChatMessageSearchResult[]>([]);
+  const [searchingMessages, setSearchingMessages] = useState(false);
   const [selected, setSelected] = useState<ChatConversation | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState('');
@@ -135,6 +142,7 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
   const [editDraft, setEditDraft] = useState('');
   const [messageActionId, setMessageActionId] = useState<string | null>(null);
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
+  const [typingUserIds, setTypingUserIds] = useState<Set<string>>(new Set());
   const [contactStatuses, setContactStatuses] = useState<Record<string, ChatPresenceStatus>>({});
   const [avatarUrls, setAvatarUrls] = useState<Record<string, string>>({});
   const [showEmojis, setShowEmojis] = useState(false);
@@ -175,6 +183,10 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
   const panelRef = useRef<HTMLElement | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const typingControllerRef = useRef<ReturnType<typeof subscribeToChatTyping> | null>(null);
+  const typingStopTimerRef = useRef<number | null>(null);
+  const lastTypingBroadcastRef = useRef(0);
+  const remoteTypingTimersRef = useRef<Map<string, number>>(new Map());
 
   const unreadCount = useMemo(
     () => conversations.reduce((total, item) => total + item.unreadCount, 0),
@@ -299,6 +311,72 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
       }
     );
   }, [currentUser.id, currentUser.organizationId]);
+
+  useEffect(() => {
+    if (!currentUser.organizationId) return;
+    const controller = subscribeToChatTyping(
+      currentUser.organizationId,
+      currentUser.id,
+      (event) => {
+        if (event.conversationId !== selectedRef.current?.conversationId) return;
+        const existingTimer = remoteTypingTimersRef.current.get(event.userId);
+        if (existingTimer) window.clearTimeout(existingTimer);
+        setTypingUserIds((current) => {
+          const next = new Set(current);
+          if (event.isTyping) next.add(event.userId);
+          else next.delete(event.userId);
+          return next;
+        });
+        if (event.isTyping) {
+          const timer = window.setTimeout(() => {
+            setTypingUserIds((current) => {
+              const next = new Set(current);
+              next.delete(event.userId);
+              return next;
+            });
+            remoteTypingTimersRef.current.delete(event.userId);
+          }, 3000);
+          remoteTypingTimersRef.current.set(event.userId, timer);
+        }
+      }
+    );
+    typingControllerRef.current = controller;
+    return () => {
+      controller.unsubscribe();
+      typingControllerRef.current = null;
+      remoteTypingTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+      remoteTypingTimersRef.current.clear();
+    };
+  }, [currentUser.id, currentUser.organizationId]);
+
+  useEffect(() => {
+    if (!showMessageSearch || !selected || messageSearch.trim().length < 2) {
+      setMessageSearchResults([]);
+      setSearchingMessages(false);
+      return;
+    }
+    setSearchingMessages(true);
+    let active = true;
+    const conversationId = selected.conversationId;
+    const timeout = window.setTimeout(() => {
+      void searchChatMessages(messageSearch.trim(), conversationId, 20)
+        .then((results) => {
+          if (active) setMessageSearchResults(results);
+        })
+        .catch((error) => {
+          if (!active) return;
+          console.error('[Chat] Falha ao pesquisar mensagens:', error);
+          showError('Não foi possível pesquisar as mensagens.');
+        })
+        .finally(() => {
+          if (active) setSearchingMessages(false);
+        });
+    }, 300);
+    return () => {
+      active = false;
+      window.clearTimeout(timeout);
+    };
+  }, [messageSearch, selected, showError, showMessageSearch]);
 
   useEffect(() => {
     void listChatContactStatuses()
@@ -465,6 +543,9 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
     setSelected(conversation);
     selectedRef.current = conversation;
     setMessages([]);
+    setTypingUserIds(new Set());
+    setShowMessageSearch(false);
+    setMessageSearch('');
     messagesRef.current = [];
     setShowContacts(false);
     setLoadingMessages(true);
@@ -591,6 +672,8 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
       return;
     }
     sendingRef.current = true;
+    if (typingStopTimerRef.current) window.clearTimeout(typingStopTimerRef.current);
+    void typingControllerRef.current?.sendTyping(selected.conversationId, false);
     setUploadingFiles(pendingFiles.length > 0);
     setDraft('');
     try {
@@ -623,6 +706,52 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
     } finally {
       sendingRef.current = false;
       setUploadingFiles(false);
+    }
+  };
+
+  const handleDraftChange = (value: string) => {
+    const nextValue = value.slice(0, 4000);
+    setDraft(nextValue);
+    if (!selected) return;
+    const now = Date.now();
+    if (nextValue && now - lastTypingBroadcastRef.current > 800) {
+      lastTypingBroadcastRef.current = now;
+      void typingControllerRef.current?.sendTyping(selected.conversationId, true);
+    }
+    if (typingStopTimerRef.current) window.clearTimeout(typingStopTimerRef.current);
+    typingStopTimerRef.current = window.setTimeout(() => {
+      void typingControllerRef.current?.sendTyping(selected.conversationId, false);
+    }, 1200);
+  };
+
+  const revealSearchResult = async (result: ChatMessageSearchResult) => {
+    if (!selected || result.conversationId !== selected.conversationId) return;
+    try {
+      let combined = messagesRef.current;
+      let attempts = 0;
+      while (!combined.some((message) => message.id === result.id) && attempts < 10) {
+        const oldest = combined[0];
+        const page = await listChatMessages(
+          selected.conversationId,
+          oldest ? { createdAt: oldest.createdAt, id: oldest.id } : undefined,
+          50
+        );
+        if (page.length === 0) break;
+        combined = mergeMessages([...page].reverse(), combined);
+        attempts += 1;
+        if (page.length < 50) break;
+      }
+      setMessages(combined);
+      messagesRef.current = combined;
+      setShowMessageSearch(false);
+      window.requestAnimationFrame(() => {
+        document
+          .getElementById(`chat-message-${result.id}`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    } catch (error) {
+      console.error('[Chat] Falha ao localizar mensagem:', error);
+      showError('Não foi possível abrir a mensagem encontrada.');
     }
   };
 
@@ -1046,6 +1175,15 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                   )}
                   <button
                     type="button"
+                    onClick={() => setShowMessageSearch((value) => !value)}
+                    className={`rounded-lg p-2 hover:bg-stone-100 ${showMessageSearch ? 'bg-emerald-50 text-emerald-700' : 'text-stone-500'}`}
+                    aria-label="Pesquisar mensagens"
+                    title="Pesquisar mensagens"
+                  >
+                    <Search className="h-5 w-5" />
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setConfirmConversationDeletion(true)}
                     className="rounded-lg p-2 text-stone-500 hover:bg-red-50 hover:text-red-600"
                     aria-label="Excluir conversa"
@@ -1062,6 +1200,49 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                     <X className="h-5 w-5" />
                   </button>
                 </header>
+                {showMessageSearch && (
+                  <div className="relative border-b border-stone-200 bg-white p-3">
+                    <label className="flex items-center gap-2 rounded-xl border border-stone-300 px-3 py-2">
+                      <Search className="h-4 w-4 text-stone-400" />
+                      <input
+                        autoFocus
+                        value={messageSearch}
+                        onChange={(event) => setMessageSearch(event.target.value)}
+                        className="min-w-0 flex-1 border-0 bg-transparent text-sm outline-none"
+                        placeholder="Pesquisar nesta conversa"
+                        aria-label="Pesquisar nesta conversa"
+                      />
+                      {searchingMessages && (
+                        <Loader2 className="h-4 w-4 animate-spin text-stone-400" />
+                      )}
+                    </label>
+                    {messageSearch.trim().length >= 2 && (
+                      <div className="absolute left-3 right-3 top-full z-20 mt-1 max-h-64 overflow-y-auto rounded-xl border border-stone-200 bg-white p-1 shadow-xl">
+                        {!searchingMessages && messageSearchResults.length === 0 ? (
+                          <p className="p-4 text-center text-sm text-stone-500">
+                            Nenhuma mensagem encontrada.
+                          </p>
+                        ) : (
+                          messageSearchResults.map((result) => (
+                            <button
+                              key={result.id}
+                              type="button"
+                              onClick={() => void revealSearchResult(result)}
+                              className="w-full rounded-lg px-3 py-2 text-left hover:bg-stone-100"
+                            >
+                              <span className="block truncate text-sm text-stone-800">
+                                {result.body}
+                              </span>
+                              <span className="text-[10px] text-stone-400">
+                                {formatChatTime(result.createdAt)}
+                              </span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div className="flex-1 overflow-y-auto bg-stone-50 p-4">
                   {hasOlder && (
                     <button
@@ -1089,6 +1270,7 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                         return (
                           <div
                             key={message.id}
+                            id={`chat-message-${message.id}`}
                             className={`flex ${mine ? 'justify-end' : 'justify-start'}`}
                           >
                             <div
@@ -1288,6 +1470,13 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                     addPendingFiles(Array.from(event.dataTransfer.files));
                   }}
                 >
+                  {typingUserIds.size > 0 && (
+                    <p className="mb-2 text-xs font-medium text-emerald-700" aria-live="polite">
+                      {selected.conversationType === 'direct'
+                        ? `${selected.contactName} está digitando…`
+                        : `${typingUserIds.size === 1 ? 'Uma pessoa está' : `${typingUserIds.size} pessoas estão`} digitando…`}
+                    </p>
+                  )}
                   {draggingFile && (
                     <div className="absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-emerald-50/95 text-sm font-bold text-emerald-800">
                       Solte os arquivos para anexar
@@ -1382,7 +1571,7 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                       ref={composerRef}
                       aria-label="Mensagem do chat"
                       value={draft}
-                      onChange={(event) => setDraft(event.target.value.slice(0, 4000))}
+                      onChange={(event) => handleDraftChange(event.target.value)}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter' && !event.shiftKey) {
                           event.preventDefault();

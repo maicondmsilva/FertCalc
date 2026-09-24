@@ -68,6 +68,12 @@ export interface ChatMessageSearchResult {
   createdAt: string;
 }
 
+export interface ChatTypingEvent {
+  conversationId: string;
+  userId: string;
+  isTyping: boolean;
+}
+
 export interface ChatMessage {
   id: string;
   conversationId: string;
