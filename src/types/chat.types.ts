@@ -43,6 +43,13 @@ export interface ChatMessageReceipt {
   fullyRead: boolean;
 }
 
+export interface ChatReactionSummary {
+  messageId: string;
+  emoji: string;
+  count: number;
+  reactedByMe: boolean;
+}
+
 export interface ChatMessageSearchResult {
   id: string;
   conversationId: string;

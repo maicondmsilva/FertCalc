@@ -15,13 +15,16 @@ const mocks = vi.hoisted(() => ({
   listChatConversations: vi.fn(),
   listChatMessages: vi.fn(),
   listChatMessagesAfter: vi.fn(),
+  listChatMessageReactions: vi.fn(),
   markChatRead: vi.fn(),
   recordChatOperationMetric: vi.fn(),
   sendChatMessage: vi.fn(),
   subscribeToChatMessages: vi.fn(),
+  subscribeToChatReactions: vi.fn(),
   subscribeToChatPresence: vi.fn(),
   subscribeToChatReads: vi.fn(),
   updateOwnChatProfile: vi.fn(),
+  toggleChatMessageReaction: vi.fn(),
   uploadOwnChatAvatar: vi.fn(),
   showError: vi.fn(),
 }));
@@ -38,13 +41,16 @@ vi.mock('../../services/chatService', () => ({
   listChatConversations: mocks.listChatConversations,
   listChatMessages: mocks.listChatMessages,
   listChatMessagesAfter: mocks.listChatMessagesAfter,
+  listChatMessageReactions: mocks.listChatMessageReactions,
   markChatRead: mocks.markChatRead,
   recordChatOperationMetric: mocks.recordChatOperationMetric,
   sendChatMessage: mocks.sendChatMessage,
   subscribeToChatMessages: mocks.subscribeToChatMessages,
+  subscribeToChatReactions: mocks.subscribeToChatReactions,
   subscribeToChatPresence: mocks.subscribeToChatPresence,
   subscribeToChatReads: mocks.subscribeToChatReads,
   updateOwnChatProfile: mocks.updateOwnChatProfile,
+  toggleChatMessageReaction: mocks.toggleChatMessageReaction,
   uploadOwnChatAvatar: mocks.uploadOwnChatAvatar,
 }));
 
@@ -85,6 +91,7 @@ beforeEach(() => {
   mocks.listChatConversations.mockResolvedValue([conversation]);
   mocks.listChatMessages.mockResolvedValue([message]);
   mocks.listChatMessagesAfter.mockResolvedValue([]);
+  mocks.listChatMessageReactions.mockResolvedValue([]);
   mocks.listChatContacts.mockResolvedValue([]);
   mocks.listChatContactStatuses.mockResolvedValue({ statuses: {}, avatarUrls: {} });
   mocks.markChatRead.mockResolvedValue(undefined);
@@ -93,8 +100,10 @@ beforeEach(() => {
   mocks.getChatMessageReceipts.mockResolvedValue([]);
   mocks.getChatProfile.mockResolvedValue(null);
   mocks.subscribeToChatReads.mockReturnValue(vi.fn());
+  mocks.subscribeToChatReactions.mockReturnValue(vi.fn());
   mocks.subscribeToChatPresence.mockReturnValue(vi.fn());
   mocks.updateOwnChatProfile.mockResolvedValue(undefined);
+  mocks.toggleChatMessageReaction.mockResolvedValue(true);
   mocks.recordChatOperationMetric.mockResolvedValue(undefined);
   mocks.subscribeToChatMessages.mockImplementation(
     (_userId: string, messageCallback: typeof onMessage, statusCallback: typeof onStatus) => {
@@ -206,5 +215,35 @@ describe('ChatWidget resiliente', () => {
 
     await waitFor(() => expect(mocks.deleteChatMessage).toHaveBeenCalledWith('message-1'));
     expect(await screen.findByText('Mensagem excluída')).toBeDefined();
+  });
+
+  it('expande o campo de digitação e oferece emojis por categoria', async () => {
+    await openConversation();
+    const composer = screen.getByLabelText('Mensagem do chat') as HTMLTextAreaElement;
+    Object.defineProperty(composer, 'scrollHeight', { configurable: true, value: 120 });
+
+    fireEvent.change(composer, { target: { value: 'Linha 1\nLinha 2\nLinha 3' } });
+    await waitFor(() => expect(composer.style.height).toBe('120px'));
+
+    fireEvent.click(screen.getByLabelText('Escolher emoji'));
+    fireEvent.click(screen.getByLabelText('Adicionar 😃'));
+    expect(composer.value).toContain('😃');
+  });
+
+  it('permite reagir e atualiza os totais da conversa', async () => {
+    mocks.listChatMessageReactions
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { messageId: 'message-1', emoji: '👍', count: 1, reactedByMe: true },
+      ]);
+    await openConversation();
+
+    fireEvent.click(screen.getByLabelText('Reagir à mensagem'));
+    fireEvent.click(screen.getByLabelText('Reagir com 👍'));
+
+    await waitFor(() =>
+      expect(mocks.toggleChatMessageReaction).toHaveBeenCalledWith('message-1', '👍')
+    );
+    expect(await screen.findByText('👍 1')).toBeDefined();
   });
 });
