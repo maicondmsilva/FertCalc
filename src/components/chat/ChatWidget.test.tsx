@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => ({
   subscribeToChatReads: vi.fn(),
   updateOwnChatProfile: vi.fn(),
   updateChatGroupMembers: vi.fn(),
+  updateChatPreferences: vi.fn(),
   toggleChatMessageReaction: vi.fn(),
   sendChatMessageWithAttachments: vi.fn(),
   validateChatAttachmentFiles: vi.fn(),
@@ -66,6 +67,7 @@ vi.mock('../../services/chatService', () => ({
   subscribeToChatReads: mocks.subscribeToChatReads,
   updateOwnChatProfile: mocks.updateOwnChatProfile,
   updateChatGroupMembers: mocks.updateChatGroupMembers,
+  updateChatPreferences: mocks.updateChatPreferences,
   toggleChatMessageReaction: mocks.toggleChatMessageReaction,
   sendChatMessageWithAttachments: mocks.sendChatMessageWithAttachments,
   validateChatAttachmentFiles: mocks.validateChatAttachmentFiles,
@@ -136,6 +138,7 @@ beforeEach(() => {
   mocks.updateOwnChatProfile.mockResolvedValue(undefined);
   mocks.renameGroupChat.mockResolvedValue(undefined);
   mocks.updateChatGroupMembers.mockResolvedValue(undefined);
+  mocks.updateChatPreferences.mockResolvedValue(undefined);
   mocks.toggleChatMessageReaction.mockResolvedValue(true);
   mocks.recordChatOperationMetric.mockResolvedValue(undefined);
   mocks.subscribeToChatMessages.mockImplementation(
@@ -365,6 +368,49 @@ describe('ChatWidget resiliente', () => {
     const quote = await screen.findByLabelText('Abrir mensagem citada');
     expect(quote.textContent).toContain('Maria');
     expect(quote.textContent).toContain('Mensagem anterior');
+  });
+
+  it('silencia e arquiva uma conversa individualmente', async () => {
+    await openConversation();
+
+    fireEvent.click(screen.getByLabelText('Silenciar por 8 horas'));
+    await waitFor(() =>
+      expect(mocks.updateChatPreferences).toHaveBeenCalledWith(
+        'conversation-1',
+        expect.objectContaining({ archived: false, mutedUntil: expect.any(String) })
+      )
+    );
+
+    fireEvent.click(screen.getByLabelText('Arquivar conversa'));
+    await waitFor(() =>
+      expect(mocks.updateChatPreferences).toHaveBeenCalledWith(
+        'conversation-1',
+        expect.objectContaining({ archived: true })
+      )
+    );
+  });
+
+  it('lista e restaura conversas arquivadas', async () => {
+    const archivedConversation = {
+      ...conversation,
+      archivedAt: '2026-09-25T10:00:00.000Z',
+    };
+    mocks.listChatConversations.mockImplementation((_limit: number, archived: boolean) =>
+      Promise.resolve(archived ? [archivedConversation] : [conversation])
+    );
+
+    render(<ChatWidget currentUser={currentUser} />);
+    fireEvent.click(screen.getByLabelText('Abrir chat interno'));
+    fireEvent.click(await screen.findByLabelText('Ver conversas arquivadas'));
+    expect(await screen.findByText('Maria')).toBeDefined();
+    fireEvent.click(screen.getByLabelText('Restaurar conversa').closest('button')!);
+
+    await waitFor(() =>
+      expect(mocks.updateChatPreferences).toHaveBeenCalledWith('conversation-1', {
+        archived: false,
+        mutedUntil: undefined,
+      })
+    );
   });
 
   it('expande o campo de digitação e oferece emojis por categoria', async () => {

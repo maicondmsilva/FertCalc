@@ -23,6 +23,8 @@ export interface ChatConversation {
   lastMessageSenderId?: string | null;
   lastMessageAt?: string | null;
   unreadCount: number;
+  mutedUntil?: string | null;
+  archivedAt?: string | null;
 }
 
 export type ChatPresenceStatus = 'available' | 'busy' | 'away' | 'do_not_disturb';
