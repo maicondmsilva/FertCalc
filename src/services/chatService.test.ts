@@ -94,6 +94,23 @@ describe('chatService', () => {
     });
   });
 
+  it('envia a preferência de fixação sem alterar os demais campos', async () => {
+    rpc.mockResolvedValue({ data: null, error: null });
+
+    await updateChatPreferences('conversation-1', {
+      archived: false,
+      mutedUntil: null,
+      pinned: true,
+    });
+
+    expect(rpc).toHaveBeenCalledWith('update_chat_preferences', {
+      p_conversation_id: 'conversation-1',
+      p_archived: false,
+      p_muted_until: null,
+      p_pinned: true,
+    });
+  });
+
   it('envia a chave idempotente e normaliza a mensagem salva', async () => {
     rpc.mockResolvedValue({
       data: {

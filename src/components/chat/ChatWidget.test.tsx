@@ -390,6 +390,30 @@ describe('ChatWidget resiliente', () => {
     );
   });
 
+  it('permite fixar e desafixar uma conversa', async () => {
+    await openConversation();
+    mocks.listChatConversations.mockResolvedValue([
+      { ...conversation, pinnedAt: '2026-09-25T12:00:00.000Z' },
+    ]);
+
+    fireEvent.click(screen.getByLabelText('Fixar conversa'));
+    await waitFor(() =>
+      expect(mocks.updateChatPreferences).toHaveBeenCalledWith(
+        'conversation-1',
+        expect.objectContaining({ pinned: true })
+      )
+    );
+
+    mocks.listChatConversations.mockResolvedValue([conversation]);
+    fireEvent.click(screen.getByLabelText('Desafixar conversa'));
+    await waitFor(() =>
+      expect(mocks.updateChatPreferences).toHaveBeenCalledWith(
+        'conversation-1',
+        expect.objectContaining({ pinned: false })
+      )
+    );
+  });
+
   it('lista e restaura conversas arquivadas', async () => {
     const archivedConversation = {
       ...conversation,
