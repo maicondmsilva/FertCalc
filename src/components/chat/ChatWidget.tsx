@@ -13,6 +13,7 @@ import {
   MessageCircle,
   Paperclip,
   Pencil,
+  Pin,
   Plus,
   Reply,
   Search,
@@ -264,6 +265,25 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
       await refreshConversations();
     } catch {
       showError('Não foi possível atualizar o silenciamento desta conversa.');
+    }
+  };
+
+  const handleTogglePin = async (conversation: ChatConversation) => {
+    try {
+      const pinned = !conversation.pinnedAt;
+      await updateChatPreferences(conversation.conversationId, {
+        archived: Boolean(conversation.archivedAt),
+        mutedUntil: conversation.mutedUntil,
+        pinned,
+      });
+      setSelected((current) =>
+        current?.conversationId === conversation.conversationId
+          ? { ...current, pinnedAt: pinned ? new Date().toISOString() : null }
+          : current
+      );
+      await refreshConversations();
+    } catch {
+      showError('Não foi possível atualizar a fixação desta conversa.');
     }
   };
 
@@ -1277,6 +1297,12 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                             {conversation.contactName}
                           </span>
                           <span className="flex shrink-0 items-center gap-1 text-[10px] text-stone-400">
+                            {conversation.pinnedAt && (
+                              <Pin
+                                className="h-3 w-3 text-emerald-600"
+                                aria-label="Conversa fixada"
+                              />
+                            )}
                             {isMuted(conversation) && (
                               <BellOff className="h-3 w-3" aria-label="Conversa silenciada" />
                             )}
@@ -1353,6 +1379,15 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                       <Settings className="h-5 w-5" />
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => void handleTogglePin(selected)}
+                    className={`rounded-lg p-2 hover:bg-stone-100 ${selected.pinnedAt ? 'bg-emerald-50 text-emerald-700' : 'text-stone-500'}`}
+                    aria-label={selected.pinnedAt ? 'Desafixar conversa' : 'Fixar conversa'}
+                    title={selected.pinnedAt ? 'Desafixar conversa' : 'Fixar conversa'}
+                  >
+                    <Pin className="h-5 w-5" />
+                  </button>
                   <button
                     type="button"
                     onClick={() => void handleToggleMute(selected)}

@@ -32,12 +32,13 @@ const CHAT_ATTACHMENT_TYPES = new Set([
 
 export async function updateChatPreferences(
   conversationId: string,
-  options: { archived?: boolean; mutedUntil?: string | null }
+  options: { archived?: boolean; mutedUntil?: string | null; pinned?: boolean }
 ): Promise<void> {
   const { error } = await supabase.rpc('update_chat_preferences', {
     p_conversation_id: conversationId,
     p_archived: options.archived ?? false,
     p_muted_until: options.mutedUntil ?? null,
+    ...(options.pinned == null ? {} : { p_pinned: options.pinned }),
   });
   if (error) throw error;
 }
@@ -218,6 +219,7 @@ export async function listChatConversations(
     unreadCount: Number(row.unread_count ?? 0),
     mutedUntil: row.muted_until as string | null,
     archivedAt: row.archived_at as string | null,
+    pinnedAt: row.pinned_at as string | null,
   }));
 }
 

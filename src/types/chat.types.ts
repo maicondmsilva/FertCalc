@@ -25,6 +25,7 @@ export interface ChatConversation {
   unreadCount: number;
   mutedUntil?: string | null;
   archivedAt?: string | null;
+  pinnedAt?: string | null;
 }
 
 export type ChatPresenceStatus = 'available' | 'busy' | 'away' | 'do_not_disturb';
