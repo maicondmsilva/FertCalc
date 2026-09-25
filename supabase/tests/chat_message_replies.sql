@@ -4,8 +4,8 @@ insert into public.organizations (id, name, slug) values
   ('48000000-0000-4000-8000-000000000001', 'Chat Replies Organização', 'chat-replies-org');
 
 insert into public.app_users (
-  id, organization_id, email, name, phone, role, permissions, assigned_manager_ids,
-  settings, ativo
+  id, organization_id, email, name, password, role, permissions,
+  managed_user_ids, filiais_permitidas, ativo
 ) values
   ('48000000-0000-4000-8000-000000000001', '48000000-0000-4000-8000-000000000001',
    'chat-reply-a@example.test', 'Chat Reply A', '', 'user', '{"chat_access":true}', '{}', '{}', true),
@@ -49,3 +49,4 @@ end;
 $$;
 
 rollback;
+

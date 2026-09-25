@@ -1,9 +1,23 @@
 begin;
 
+insert into public.organizations (id, name, slug) values
+  ('4c000000-0000-4000-8000-000000000001', 'Chat Group Management Organização', 'chat-group-management-org');
+
+insert into public.app_users (
+  id, organization_id, email, name, password, role, permissions,
+  managed_user_ids, filiais_permitidas, ativo
+) values
+  ('4c000000-0000-4000-8000-000000000001', '4c000000-0000-4000-8000-000000000001',
+   'chat-group-owner@example.test', 'Chat Group Owner', '', 'user', '{"chat_access":true}', '{}', '{}', true),
+  ('4c000000-0000-4000-8000-000000000002', '4c000000-0000-4000-8000-000000000001',
+   'chat-group-member@example.test', 'Chat Group Member', '', 'user', '{"chat_access":true}', '{}', '{}', true);
+
+set local role authenticated;
+
 do $$
 declare
-  owner_id uuid := '43000000-0000-4000-8000-000000000001';
-  member_one uuid := '43000000-0000-4000-8000-000000000002';
+  owner_id uuid := '4c000000-0000-4000-8000-000000000001';
+  member_one uuid := '4c000000-0000-4000-8000-000000000002';
   conversation_id uuid;
 begin
   perform set_config('request.jwt.claim.sub', owner_id::text, true);
@@ -51,3 +65,4 @@ end;
 $$;
 
 rollback;
+

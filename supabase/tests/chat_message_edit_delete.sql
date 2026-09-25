@@ -40,7 +40,7 @@ begin
   end if;
 
   changed_message := public.delete_chat_message(own_message.id);
-  if changed_message.body <> '' or changed_message.deleted_at is null then
+  if changed_message.body <> '[Mensagem excluída]' or changed_message.deleted_at is null then
     raise exception 'A exclusão lógica da mensagem não foi persistida.';
   end if;
   if not exists (
@@ -83,3 +83,4 @@ end;
 $$;
 
 rollback;
+

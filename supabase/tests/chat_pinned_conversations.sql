@@ -4,8 +4,8 @@ insert into public.organizations (id, name, slug) values
   ('4a000000-0000-4000-8000-000000000001', 'Chat Pinned Organização', 'chat-pinned-org');
 
 insert into public.app_users (
-  id, organization_id, email, name, phone, role, permissions, assigned_manager_ids,
-  settings, ativo
+  id, organization_id, email, name, password, role, permissions,
+  managed_user_ids, filiais_permitidas, ativo
 ) values
   ('4a000000-0000-4000-8000-000000000001', '4a000000-0000-4000-8000-000000000001',
    'chat-pin-a@example.test', 'Chat Pin A', '', 'user', '{"chat_access":true}', '{}', '{}', true),
@@ -49,3 +49,4 @@ end;
 $$;
 
 rollback;
+
