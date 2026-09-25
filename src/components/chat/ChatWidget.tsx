@@ -1,6 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Archive,
+  ArchiveRestore,
   ArrowLeft,
+  Bell,
+  BellOff,
   CheckCheck,
   Download,
   Eye,
@@ -65,6 +69,7 @@ import {
   toggleChatMessageReaction,
   updateOwnChatProfile,
   updateChatGroupMembers,
+  updateChatPreferences,
   uploadOwnChatAvatar,
   validateChatAttachmentFiles,
 } from '../../services/chatService';
@@ -142,6 +147,7 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
   const [loadingGroupSettings, setLoadingGroupSettings] = useState(false);
   const [savingGroupSettings, setSavingGroupSettings] = useState(false);
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
+  const [showArchived, setShowArchived] = useState(false);
   const [contacts, setContacts] = useState<ChatContact[]>([]);
   const [search, setSearch] = useState('');
   const [showMessageSearch, setShowMessageSearch] = useState(false);
@@ -203,9 +209,20 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
   const remoteTypingTimersRef = useRef<Map<string, number>>(new Map());
 
   const unreadCount = useMemo(
-    () => conversations.reduce((total, item) => total + item.unreadCount, 0),
+    () =>
+      conversations.reduce(
+        (total, item) =>
+          total +
+          (item.mutedUntil && new Date(item.mutedUntil).getTime() > Date.now()
+            ? 0
+            : item.unreadCount),
+        0
+      ),
     [conversations]
   );
+
+  const isMuted = (conversation: ChatConversation) =>
+    Boolean(conversation.mutedUntil && new Date(conversation.mutedUntil).getTime() > Date.now());
 
   const avatarRing = (userId?: string | null) => {
     const status = userId ? contactStatuses[userId] : undefined;
@@ -217,7 +234,7 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
 
   const refreshConversations = useCallback(async () => {
     try {
-      const rows = await listChatConversations();
+      const rows = await listChatConversations(50, showArchived);
       setConversations(rows);
       setSelected((current) => {
         if (!current) return current;
@@ -228,7 +245,53 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
     } finally {
       setLoadingList(false);
     }
-  }, []);
+  }, [showArchived]);
+
+  const handleToggleMute = async (conversation: ChatConversation) => {
+    try {
+      const mutedUntil = isMuted(conversation)
+        ? null
+        : new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString();
+      await updateChatPreferences(conversation.conversationId, {
+        archived: Boolean(conversation.archivedAt),
+        mutedUntil,
+      });
+      setSelected((current) =>
+        current?.conversationId === conversation.conversationId
+          ? { ...current, mutedUntil }
+          : current
+      );
+      await refreshConversations();
+    } catch {
+      showError('Não foi possível atualizar o silenciamento desta conversa.');
+    }
+  };
+
+  const handleArchiveConversation = async (conversation: ChatConversation) => {
+    try {
+      await updateChatPreferences(conversation.conversationId, {
+        archived: true,
+        mutedUntil: conversation.mutedUntil,
+      });
+      setSelected(null);
+      selectedRef.current = null;
+      await refreshConversations();
+    } catch {
+      showError('Não foi possível arquivar esta conversa.');
+    }
+  };
+
+  const handleRestoreConversation = async (conversation: ChatConversation) => {
+    try {
+      await updateChatPreferences(conversation.conversationId, {
+        archived: false,
+        mutedUntil: conversation.mutedUntil,
+      });
+      await refreshConversations();
+    } catch {
+      showError('Não foi possível restaurar esta conversa.');
+    }
+  };
 
   const closeChat = useCallback(() => {
     setIsOpen(false);
@@ -1151,6 +1214,24 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
               </>
             ) : (
               <div className="flex-1 overflow-y-auto p-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowArchived((value) => !value);
+                    setSelected(null);
+                    selectedRef.current = null;
+                    setLoadingList(true);
+                  }}
+                  className="mb-2 flex w-full items-center gap-2 rounded-xl border border-stone-200 px-3 py-2 text-sm font-semibold text-stone-600 hover:bg-stone-50"
+                  aria-label={showArchived ? 'Ver conversas ativas' : 'Ver conversas arquivadas'}
+                >
+                  {showArchived ? (
+                    <ArrowLeft className="h-4 w-4" />
+                  ) : (
+                    <Archive className="h-4 w-4" />
+                  )}
+                  {showArchived ? 'Voltar às conversas' : 'Conversas arquivadas'}
+                </button>
                 {loadingList ? (
                   <div className="flex justify-center p-8">
                     <Loader2 className="h-5 w-5 animate-spin" />
@@ -1158,14 +1239,18 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                 ) : conversations.length === 0 ? (
                   <div className="p-8 text-center text-sm text-stone-500">
                     <Users className="mx-auto mb-3 h-8 w-8 text-stone-300" />
-                    Nenhuma conversa ainda.
+                    {showArchived ? 'Nenhuma conversa arquivada.' : 'Nenhuma conversa ainda.'}
                   </div>
                 ) : (
                   conversations.map((conversation) => (
                     <button
                       key={conversation.conversationId}
                       type="button"
-                      onClick={() => void openConversation(conversation)}
+                      onClick={() =>
+                        showArchived
+                          ? void handleRestoreConversation(conversation)
+                          : void openConversation(conversation)
+                      }
                       className={`flex w-full gap-3 rounded-xl p-3 text-left ${selected?.conversationId === conversation.conversationId ? 'bg-emerald-50' : 'hover:bg-stone-100'}`}
                     >
                       <span
@@ -1191,7 +1276,13 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                           <span className="truncate text-sm font-semibold">
                             {conversation.contactName}
                           </span>
-                          <span className="shrink-0 text-[10px] text-stone-400">
+                          <span className="flex shrink-0 items-center gap-1 text-[10px] text-stone-400">
+                            {isMuted(conversation) && (
+                              <BellOff className="h-3 w-3" aria-label="Conversa silenciada" />
+                            )}
+                            {showArchived && (
+                              <ArchiveRestore className="h-3 w-3" aria-label="Restaurar conversa" />
+                            )}
                             {formatChatTime(conversation.lastMessageAt)}
                           </span>
                         </span>
@@ -1262,6 +1353,28 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
                       <Settings className="h-5 w-5" />
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => void handleToggleMute(selected)}
+                    className={`rounded-lg p-2 hover:bg-stone-100 ${isMuted(selected) ? 'bg-amber-50 text-amber-700' : 'text-stone-500'}`}
+                    aria-label={isMuted(selected) ? 'Ativar notificações' : 'Silenciar por 8 horas'}
+                    title={isMuted(selected) ? 'Ativar notificações' : 'Silenciar por 8 horas'}
+                  >
+                    {isMuted(selected) ? (
+                      <BellOff className="h-5 w-5" />
+                    ) : (
+                      <Bell className="h-5 w-5" />
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleArchiveConversation(selected)}
+                    className="rounded-lg p-2 text-stone-500 hover:bg-stone-100"
+                    aria-label="Arquivar conversa"
+                    title="Arquivar conversa"
+                  >
+                    <Archive className="h-5 w-5" />
+                  </button>
                   <button
                     type="button"
                     onClick={() => setShowMessageSearch((value) => !value)}

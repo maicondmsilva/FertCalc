@@ -31,6 +31,7 @@ import {
   subscribeToChatTyping,
   toggleChatMessageReaction,
   updateChatGroupMembers,
+  updateChatPreferences,
   validateChatAttachmentFiles,
 } from './chatService';
 
@@ -72,7 +73,25 @@ describe('chatService', () => {
         unreadCount: 2,
       }),
     ]);
-    expect(rpc).toHaveBeenCalledWith('list_chat_conversations', { p_limit: 50 });
+    expect(rpc).toHaveBeenCalledWith('list_chat_conversations', {
+      p_limit: 50,
+      p_archived: false,
+    });
+  });
+
+  it('atualiza preferências individuais da conversa', async () => {
+    rpc.mockResolvedValue({ data: null, error: null });
+
+    await updateChatPreferences('conversation-1', {
+      archived: true,
+      mutedUntil: '2026-09-25T18:00:00.000Z',
+    });
+
+    expect(rpc).toHaveBeenCalledWith('update_chat_preferences', {
+      p_conversation_id: 'conversation-1',
+      p_archived: true,
+      p_muted_until: '2026-09-25T18:00:00.000Z',
+    });
   });
 
   it('envia a chave idempotente e normaliza a mensagem salva', async () => {

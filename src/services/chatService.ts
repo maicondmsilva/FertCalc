@@ -194,8 +194,14 @@ export async function listChatContacts(search = '', limit = 20): Promise<ChatCon
   return (data ?? []) as ChatContact[];
 }
 
-export async function listChatConversations(limit = 50): Promise<ChatConversation[]> {
-  const { data, error } = await supabase.rpc('list_chat_conversations', { p_limit: limit });
+export async function listChatConversations(
+  limit = 50,
+  archived = false
+): Promise<ChatConversation[]> {
+  const { data, error } = await supabase.rpc('list_chat_conversations', {
+    p_limit: limit,
+    p_archived: archived,
+  });
   if (error) throw error;
   return ((data ?? []) as Record<string, unknown>[]).map((row) => ({
     conversationId: row.conversation_id as string,
@@ -210,6 +216,8 @@ export async function listChatConversations(limit = 50): Promise<ChatConversatio
     lastMessageSenderId: row.last_message_sender_id as string | null,
     lastMessageAt: row.last_message_at as string | null,
     unreadCount: Number(row.unread_count ?? 0),
+    mutedUntil: row.muted_until as string | null,
+    archivedAt: row.archived_at as string | null,
   }));
 }
 
