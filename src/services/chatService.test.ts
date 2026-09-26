@@ -369,9 +369,14 @@ describe('chatService', () => {
 
   it('normaliza mensagens recebidas em tempo real e remove o canal ao sair', () => {
     const callback = vi.fn();
-    const unsubscribe = subscribeToChatMessages('user-1', callback);
+    const statusCallback = vi.fn();
+    const unsubscribe = subscribeToChatMessages('user-1', callback, statusCallback);
     const insertCallback = on.mock.calls[0][2];
     const updateCallback = on.mock.calls[1][2];
+    const subscriptionCallback = subscribe.mock.calls[0][0];
+
+    subscriptionCallback('SUBSCRIBED');
+    expect(statusCallback).toHaveBeenCalledWith('SUBSCRIBED');
 
     insertCallback({
       new: {
@@ -405,5 +410,8 @@ describe('chatService', () => {
     );
     unsubscribe();
     expect(removeChannel).toHaveBeenCalledWith({ topic: 'chat' });
+    subscriptionCallback('CLOSED');
+    expect(statusCallback).not.toHaveBeenCalledWith('CLOSED');
   });
 });
+

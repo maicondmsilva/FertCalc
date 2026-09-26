@@ -558,6 +558,7 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
 
   useEffect(() => {
     void refreshConversations();
+    let previousStatus: string | null = null;
     return subscribeToChatMessages(
       currentUser.id,
       (message) => {
@@ -573,6 +574,8 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
         }
       },
       (status) => {
+        if (status === previousStatus) return;
+        previousStatus = status;
         if (status === 'SUBSCRIBED') {
           setRealtimeStatus('connected');
           void recordChatOperationMetric('realtime_connection', 'success').catch((metricError) =>
@@ -2177,3 +2180,4 @@ export default function ChatWidget({ currentUser }: ChatWidgetProps) {
     </div>
   );
 }
+
