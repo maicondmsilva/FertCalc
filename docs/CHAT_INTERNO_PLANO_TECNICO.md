@@ -133,6 +133,16 @@ leitura e testes com múltiplas sessões.
 Adicionar métricas de falha e latência, limites de uso, política de retenção,
 acessibilidade, testes em celular/tablet e liberação gradual por permissão.
 
+Situação implementada:
+
+- métricas de envio, recuperação e conexão em tabela privada;
+- limite transacional de mensagens por usuário;
+- retenção automática limitada às métricas operacionais, executada em lotes;
+- prévia de retenção antes da execução;
+- mensagens excluídas da limpeza automática até aprovação formal;
+- diálogo responsivo, navegação por teclado e retorno de foco ao acionador;
+- testes de reconexão, acessibilidade e isolamento das rotinas operacionais.
+
 ## Fora do primeiro lançamento
 
 - anexos, fotos, áudio e vídeo
@@ -163,3 +173,4 @@ Prosseguir com o MVP em quatro entregas pequenas. Não incluir anexos nem grupos
 primeira versão. Essa abordagem aproveita o que o FertCalc já possui, reduz risco de
 vazamento entre usuários e permite validar se o chat realmente melhora o fluxo antes
 de ampliar o produto.
+
