@@ -629,6 +629,7 @@ export function subscribeToChatMessages(
   callback: (message: ChatMessage) => void,
   onStatus?: (status: string) => void
 ) {
+  let intentionallyClosed = false;
   const channel = supabase
     .channel(`chat-messages:${userId}`)
     .on(
@@ -641,9 +642,14 @@ export function subscribeToChatMessages(
       { event: 'UPDATE', schema: 'public', table: 'chat_messages' },
       (payload) => callback(mapMessage(payload.new as ChatMessageRow))
     )
-    .subscribe((status) => onStatus?.(status));
+    .subscribe((status) => {
+      if (status === 'CLOSED' && intentionallyClosed) return;
+      onStatus?.(status);
+    });
 
   return () => {
+    intentionallyClosed = true;
     void supabase.removeChannel(channel);
   };
 }
+

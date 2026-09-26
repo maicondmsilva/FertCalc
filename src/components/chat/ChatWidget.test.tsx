@@ -179,6 +179,7 @@ describe('ChatWidget resiliente', () => {
     await openConversation();
 
     act(() => onStatus?.('SUBSCRIBED'));
+    act(() => onStatus?.('SUBSCRIBED'));
 
     await waitFor(() =>
       expect(mocks.listChatMessagesAfter).toHaveBeenCalledWith(
@@ -188,6 +189,15 @@ describe('ChatWidget resiliente', () => {
       )
     );
     expect(screen.getByText('Em tempo real')).toBeDefined();
+    expect(mocks.recordChatOperationMetric).toHaveBeenCalledWith(
+      'realtime_connection',
+      'success'
+    );
+    expect(
+      mocks.recordChatOperationMetric.mock.calls.filter(
+        ([operation]) => operation === 'realtime_connection'
+      )
+    ).toHaveLength(1);
   });
 
   it('pesquisa mensagens dentro da conversa selecionada', async () => {
@@ -478,3 +488,4 @@ describe('ChatWidget resiliente', () => {
     expect(screen.queryByText('relatorio.pdf')).toBeNull();
   });
 });
+
