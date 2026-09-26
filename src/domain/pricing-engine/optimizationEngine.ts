@@ -50,8 +50,7 @@ export function buildFormulaOptimizationModel({
   const microTargets = Object.entries(targetMicros)
     .map(([name, value]) => ({ name: name.trim(), value: numeric(value) }))
     .filter(
-      ({ name, value }) =>
-        name.length > 0 && value > 0 && !isSecondaryNutrientGuarantee(name)
+      ({ name, value }) => name.length > 0 && value > 0 && !isSecondaryNutrientGuarantee(name)
     )
     .map((target, index) => ({ ...target, constraint: `micro_target_${index}` }));
   const model: OptimizationModel = {
@@ -64,7 +63,10 @@ export function buildFormulaOptimizationModel({
       ...(targetS > 0 ? { s_eq: { min: targetS * 10, max: targetS * 10 + 9 } } : {}),
       ...(targetCa > 0 ? { ca_eq: { min: targetCa * 10, max: targetCa * 10 + 9 } } : {}),
       ...Object.fromEntries(
-        microTargets.map(({ constraint, value }) => [constraint, { equal: value * 10 }])
+        // Micronutrient guarantees are minimum declared guarantees. Requiring an exact
+        // equality makes a valid blend infeasible whenever one selected source carries
+        // more than one micro (for example, the B source also contributes Zn).
+        microTargets.map(({ constraint, value }) => [constraint, { min: value * 10 }])
       ),
       weight: { equal: 1000 },
     },
@@ -83,7 +85,9 @@ export function buildFormulaOptimizationModel({
     const microContributions = Object.fromEntries(
       microTargets.flatMap(({ name, constraint }) => {
         const guarantee = (material.microGuarantees || [])
-          .filter((item) => item.name.trim().localeCompare(name, 'pt-BR', { sensitivity: 'base' }) === 0)
+          .filter(
+            (item) => item.name.trim().localeCompare(name, 'pt-BR', { sensitivity: 'base' }) === 0
+          )
           .reduce((total, item) => total + numeric(item.value), 0);
         return guarantee > 0 ? [[constraint, guarantee / 100]] : [];
       })
@@ -137,7 +141,9 @@ export function optimizeFormula(input: FormulaOptimizationInput): FormulaOptimiz
   ) as unknown as Record<string, number | boolean>;
   const feasible = Boolean(rawResult.feasible);
   const values = Object.fromEntries(
-    Object.entries(rawResult).filter((entry): entry is [string, number] => typeof entry[1] === 'number')
+    Object.entries(rawResult).filter(
+      (entry): entry is [string, number] => typeof entry[1] === 'number'
+    )
   );
   const apply = (materials: RawMaterial[]) =>
     materials.map((material) => ({

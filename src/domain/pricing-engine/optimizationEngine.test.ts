@@ -3,20 +3,38 @@ import type { IncompatibilityRule, RawMaterial } from '../../types';
 import { buildFormulaOptimizationModel, optimizeFormula } from '.';
 
 const material = (overrides: Partial<RawMaterial> = {}): RawMaterial => ({
-  id: 'ureia', type: 'macro', name: 'Ureia', price: 2000,
-  n: 45, p: 0, k: 0, s: 0, ca: 0, microGuarantees: [],
-  minQty: 0, maxQty: 1000, selected: true, quantity: 0, ...overrides,
+  id: 'ureia',
+  type: 'macro',
+  name: 'Ureia',
+  price: 2000,
+  n: 45,
+  p: 0,
+  k: 0,
+  s: 0,
+  ca: 0,
+  microGuarantees: [],
+  minQty: 0,
+  maxQty: 1000,
+  selected: true,
+  quantity: 0,
+  ...overrides,
 });
 
 const incompatibility: IncompatibilityRule = {
-  id: 'r1', materialAId: 'ureia', materialBId: 'kcl',
-  materialAName: 'Ureia', materialBName: 'KCl',
+  id: 'r1',
+  materialAId: 'ureia',
+  materialBId: 'kcl',
+  materialAName: 'Ureia',
+  materialBName: 'KCl',
 };
 
 describe('LP optimization engine', () => {
   it('constrói metas NPK, peso e limites de material', () => {
     const model = buildFormulaOptimizationModel({
-      target: { n: 45, p: 0, k: 0 }, macros: [material()], micros: [], incompatibilityRules: [],
+      target: { n: 45, p: 0, k: 0 },
+      macros: [material()],
+      micros: [],
+      incompatibilityRules: [],
     });
     expect(model.constraints.n_eq).toEqual({ min: 450, max: 459 });
     expect(model.constraints.weight).toEqual({ equal: 1000 });
@@ -28,7 +46,8 @@ describe('LP optimization engine', () => {
     const model = buildFormulaOptimizationModel({
       target: { n: 0, p: 0, k: 0 },
       macros: [material(), material({ id: 'kcl', name: 'KCl', n: 0, k: 60 })],
-      micros: [], incompatibilityRules: [incompatibility],
+      micros: [],
+      incompatibilityRules: [incompatibility],
     });
     expect(model.constraints.incomp_0).toEqual({ max: 1 });
     expect(model.variables.use_ureia.incomp_0).toBe(1);
@@ -38,7 +57,10 @@ describe('LP optimization engine', () => {
   it('resolve uma fórmula viável e devolve quantidades sem mutar a entrada', () => {
     const ureia = material();
     const result = optimizeFormula({
-      target: { n: 45, p: 0, k: 0 }, macros: [ureia], micros: [], incompatibilityRules: [],
+      target: { n: 45, p: 0, k: 0 },
+      macros: [ureia],
+      micros: [],
+      incompatibilityRules: [],
     });
     expect(result.feasible).toBe(true);
     expect(result.macros[0].quantity).toBeCloseTo(1000);
@@ -126,9 +148,41 @@ describe('LP optimization engine', () => {
     expect(result.composition.resultingMicros.B).toBeCloseTo(0.3);
   });
 
+  it('fecha 00-13-17 com B e Zn mesmo quando uma fonte ultrapassa outra garantia-alvo', () => {
+    const fosforo = material({ id: 'fosforo', name: 'Fonte P', n: 0, p: 100, price: 10 });
+    const potassio = material({ id: 'potassio', name: 'Fonte K', n: 0, k: 100, price: 10 });
+    const enchimento = material({ id: 'enchimento', name: 'Enchimento', n: 0, price: 1 });
+    const boroComZinco = material({
+      id: 'boro-zinco',
+      type: 'micro',
+      name: 'Boro com Zinco',
+      n: 0,
+      price: 20,
+      microGuarantees: [
+        { name: 'B', value: 10 },
+        { name: 'Zn', value: 20 },
+      ],
+    });
+
+    const result = optimizeFormula({
+      target: { n: 0, p: 13, k: 17 },
+      targetMicros: { B: 0.21, Zn: 0.33 },
+      macros: [fosforo, potassio, enchimento],
+      micros: [boroComZinco],
+      incompatibilityRules: [],
+    });
+
+    expect(result.feasible).toBe(true);
+    expect(result.composition.resultingMicros.B).toBeGreaterThanOrEqual(0.21);
+    expect(result.composition.resultingMicros.Zn).toBeGreaterThanOrEqual(0.33);
+  });
+
   it('informa quando os materiais não conseguem fechar a fórmula', () => {
     const result = optimizeFormula({
-      target: { n: 0, p: 0, k: 60 }, macros: [material()], micros: [], incompatibilityRules: [],
+      target: { n: 0, p: 0, k: 60 },
+      macros: [material()],
+      micros: [],
+      incompatibilityRules: [],
     });
     expect(result.feasible).toBe(false);
   });
