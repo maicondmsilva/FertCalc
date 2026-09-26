@@ -134,6 +134,37 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
     }
   };
 
+  const handleSelectAllProducts = (type: 'macro' | 'micro', selectAll: boolean) => {
+    if (!localFormula) return;
+    const arrKey = type === 'macro' ? 'macros' : 'micros';
+    const globalSource = type === 'macro' ? globalMacros : globalMicros;
+    const savedProducts = localFormula[arrKey] || [];
+    const isProtected = (productId: string) =>
+      protectedMaterialIds.includes(productId) ||
+      (type === 'micro' && protectedMaterialIds.length > 0);
+
+    const nextProducts = selectAll
+      ? globalSource.map((product) => {
+          const savedProduct = savedProducts.find((saved) => saved.id === product.id);
+          return (
+            (savedProduct && { ...savedProduct, selected: true }) || {
+              ...product,
+              selected: true,
+              minQty: product.minQuantity || 0,
+              maxQty: 0,
+              quantity: 0,
+              microInputMode: type === 'micro' ? ('kg' as const) : undefined,
+              selectedMicroGuarantee:
+                type === 'micro' ? product.microGuarantees?.[0]?.name : undefined,
+              materialOrder: productOrder[type].indexOf(product.id),
+            }
+          );
+        })
+      : savedProducts.filter((product) => isProtected(product.id));
+
+    setLocalFormula({ ...localFormula, [arrKey]: nextProducts });
+  };
+
   const handleConfirm = () => {
     if (localFormula) {
       onConfirm({
@@ -196,6 +227,14 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
     const filtered = currentProducts.filter((p) =>
       p.name.toLowerCase().includes(search.toLowerCase())
     );
+    const selectableProducts = currentProducts.filter(
+      (product) =>
+        !protectedMaterialIds.includes(product.id) &&
+        !(type === 'micro' && protectedMaterialIds.length > 0)
+    );
+    const selectedSelectableCount = selectableProducts.filter((product) => product.selected).length;
+    const areAllSelectableProductsSelected =
+      selectableProducts.length > 0 && selectedSelectableCount === selectableProducts.length;
 
     if (isMaterialsLoading) {
       return (
@@ -223,6 +262,21 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
 
     return (
       <div className="mt-4 space-y-3">
+        <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-900">
+          <input
+            type="checkbox"
+            checked={areAllSelectableProductsSelected}
+            onChange={(event) => handleSelectAllProducts(type, event.target.checked)}
+            disabled={selectableProducts.length === 0}
+            className="h-4 w-4 rounded text-blue-600 focus:ring-blue-500 disabled:cursor-not-allowed"
+          />
+          <span>
+            {type === 'macro' ? 'Selecionar todos os macros' : 'Selecionar todos os micros'}
+          </span>
+          <span className="ml-auto text-xs font-medium text-blue-700">
+            {selectedSelectableCount}/{selectableProducts.length}
+          </span>
+        </label>
         {filtered.map((p) =>
           (() => {
             const isProtected =
