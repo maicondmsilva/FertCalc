@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">FertCalc</title>
+  <rect width="512" height="512" rx="112" fill="#047857"/>
+  <path d="M116 328c74-9 132-48 174-126 31 35 42 81 23 122-27 60-101 88-197 70 11-19 23-41 34-66h-34z" fill="#d1fae5"/>
+  <path d="M164 357c54-88 116-142 230-169-16 105-80 180-181 188" fill="none" stroke="#ffffff" stroke-width="30" stroke-linecap="round"/>
+  <circle cx="370" cy="142" r="40" fill="#fbbf24"/>
+</svg>

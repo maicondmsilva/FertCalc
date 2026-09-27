@@ -42,6 +42,8 @@ export default [
         FormData: 'readonly',
         Blob: 'readonly',
         Event: 'readonly',
+        CustomEvent: 'readonly',
+        PopStateEvent: 'readonly',
         MouseEvent: 'readonly',
         KeyboardEvent: 'readonly',
         StorageEvent: 'readonly',

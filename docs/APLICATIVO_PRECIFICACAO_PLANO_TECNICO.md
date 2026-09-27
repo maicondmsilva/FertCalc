@@ -60,6 +60,15 @@ aplicada pela variante do aplicativo, além das permissões normais do usuário.
 - validar login, cálculo, salvamento, PDF, notificações e chat em aparelho real;
 - gerar pacote interno assinado para homologação, sem publicar ainda.
 
+Implementação adotada:
+
+- identificador inicial: `br.com.fertigran.fertcalc`;
+- deep link de recuperação: `fertcalc://auth/reset-password`;
+- o deep link precisa ser autorizado nas Redirect URLs do Supabase;
+- o build embarcado sempre usa a variante `pricing`;
+- nenhum segredo de assinatura ou chave privilegiada pode ser versionado;
+- `npm run android:sync` recompila a variante e sincroniza os arquivos nativos.
+
 ### Fase 5D — Contêiner iOS
 
 - gerar o projeto iOS em ambiente macOS com Xcode;
