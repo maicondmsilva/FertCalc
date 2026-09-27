@@ -5,6 +5,7 @@
  */
 
 import { supabase } from './supabase';
+import { Capacitor } from '@capacitor/core';
 import { getUserByEmail } from './db';
 import type { User } from '../types';
 import { logger } from '../utils/logger';
@@ -183,7 +184,9 @@ export async function signOut(): Promise<void> {
 export async function resetPassword(email: string): Promise<{ success: boolean; message: string }> {
   try {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: Capacitor.isNativePlatform()
+        ? 'fertcalc://auth/reset-password'
+        : `${window.location.origin}/reset-password`,
     });
 
     if (error) {

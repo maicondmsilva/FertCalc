@@ -4,7 +4,7 @@ import { persistRuntimeError } from '../services/runtimeErrorService';
 export interface RuntimeErrorContext {
   incidentId: string;
   componentStack?: string;
-  source: 'react-error-boundary' | 'window-error' | 'unhandled-rejection';
+  source: 'react-error-boundary' | 'window-error' | 'unhandled-rejection' | 'native-runtime';
 }
 
 export function createIncidentId(): string {

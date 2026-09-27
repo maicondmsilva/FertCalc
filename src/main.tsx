@@ -6,6 +6,14 @@ import AppProviders from './app/AppProviders.tsx';
 import AppErrorBoundary from './components/AppErrorBoundary.tsx';
 import { createIncidentId, reportRuntimeError } from './utils/errorReporter.ts';
 import { clearVersionRecoveryMarker, recoverOnceFromStaleDeployment } from './utils/appRecovery.ts';
+import { initializeNativeRuntime } from './mobile/nativeRuntime.ts';
+
+void initializeNativeRuntime().catch((error) => {
+  reportRuntimeError(error, {
+    incidentId: createIncidentId(),
+    source: 'native-runtime',
+  });
+});
 
 window.addEventListener('vite:preloadError', (event) => {
   event.preventDefault();

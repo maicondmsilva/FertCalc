@@ -7,6 +7,11 @@
     "dev": "vite",
     "build": "NODE_OPTIONS='--max-old-space-size=4096' vite build --logLevel info",
     "build:pricing-app": "NODE_OPTIONS='--max-old-space-size=4096' vite build --mode pricing-app --logLevel info",
+    "mobile:build": "vite build --mode pricing-app --logLevel info",
+    "android:add": "cap add android",
+    "android:sync": "npm run mobile:build && cap sync android",
+    "android:open": "cap open android",
+    "android:run": "npm run android:sync && cap run android",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
@@ -31,6 +36,13 @@
     ]
   },
   "dependencies": {
+    "@capacitor/android": "8.5.2",
+    "@capacitor/app": "8.1.1",
+    "@capacitor/core": "8.5.2",
+    "@capacitor/keyboard": "8.0.5",
+    "@capacitor/network": "8.0.1",
+    "@capacitor/splash-screen": "8.0.2",
+    "@capacitor/status-bar": "8.0.3",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
@@ -58,6 +70,8 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@capacitor/assets": "3.0.5",
+    "@capacitor/cli": "8.5.2",
     "@eslint/js": "^9.17.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
