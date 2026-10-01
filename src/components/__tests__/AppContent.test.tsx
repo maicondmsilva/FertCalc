@@ -92,8 +92,22 @@ describe('AppContent', () => {
   });
 
   it('distingue as duas apresentações da calculadora', async () => {
-    renderContent('pricing', 'simplified_calculator', ['calculator']);
+    renderContent('pricing', 'simplified_calculator', ['simplified_calculator']);
     expect(await screen.findByText('Calculadora simplificada')).toBeDefined();
+  });
+
+  it('protege as calculadoras com permissões independentes', async () => {
+    const completeOnly = renderContent('pricing', 'simplified_calculator', ['calculator']);
+    expect(completeOnly.container.firstChild).toBeNull();
+
+    cleanup();
+    const simplifiedOnly = renderContent('pricing', 'calculator', ['simplified_calculator']);
+    expect(simplifiedOnly.container.firstChild).toBeNull();
+  });
+
+  it('usa a permissão própria de batidas salvas', () => {
+    const calculatorOnly = renderContent('pricing', 'saved_formulas', ['calculator']);
+    expect(calculatorOnly.container.firstChild).toBeNull();
   });
 
   it('mapeia a rota logística para a visualização correta', async () => {

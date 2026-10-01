@@ -50,6 +50,7 @@ const PERMISSION_GROUPS: PermissionGroup[] = [
     headerClass: 'bg-blue-700 text-white',
     items: [
       { id: 'calculator', label: 'Calculadora' },
+      { id: 'simplified_calculator', label: 'Calculadora Simplificada' },
       { id: 'history', label: 'Situação / Precificações' },
       { id: 'savedFormulas', label: 'Fórmulas Salvas' },
       { id: 'produtosFormulados', label: 'Produtos Formulados' },

@@ -8,6 +8,7 @@ import {
   removeProdutoLivre,
   updateProdutoLivre,
 } from '../utils/calculationMode';
+import { setCalculationBatchSelection } from '../utils/calculationSelection';
 
 const createMaterial = (overrides: Partial<RawMaterial>): RawMaterial => ({
   id: overrides.id || 'material-1',
@@ -27,6 +28,32 @@ const createMaterial = (overrides: Partial<RawMaterial>): RawMaterial => ({
 });
 
 describe('useCalculator helpers', () => {
+  it('preserves the complete formula snapshot when changing batch selection', () => {
+    const formula = {
+      id: 'formula-1',
+      formula: '10-20-20',
+      selected: true,
+      factors: {
+        branchId: 'branch-1',
+        local_carregamento_id: 'location-1',
+        priceListId: 'list-1',
+      },
+      macros: [createMaterial({ id: 'macro-1', selected: true, quantity: 750 })],
+      micros: [createMaterial({ id: 'micro-1', type: 'micro', selected: true, quantity: 25 })],
+      summary: { finalPrice: 4321.98 },
+    } as TargetFormula;
+
+    const [deselected] = setCalculationBatchSelection([formula], formula.id, false);
+
+    expect(deselected.selected).toBe(false);
+    expect({ ...deselected, selected: true }).toEqual(formula);
+    expect(deselected).not.toBe(formula);
+    expect(deselected.macros).toBe(formula.macros);
+    expect(deselected.micros).toBe(formula.micros);
+    expect(deselected.summary).toBe(formula.summary);
+    expect(deselected.factors).toBe(formula.factors);
+  });
+
   it('returns Formulação NPK as default mode', () => {
     const calc = { id: '1', formula: '', selected: true } as TargetFormula;
     expect(getCalculationMode(calc)).toBe('formulacao');

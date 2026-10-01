@@ -35,17 +35,22 @@ describe('app navigation', () => {
     expect(hasUserPermission(user({ role: 'master' }), 'qualquer_permissao')).toBe(true);
     expect(hasUserPermission(user(), 'dashboard')).toBe(false);
     expect(
-      hasUserPermission(user({ permissions: { dashboard: true } as User['permissions'] }), 'dashboard')
+      hasUserPermission(
+        user({ permissions: { dashboard: true } as User['permissions'] }),
+        'dashboard'
+      )
     ).toBe(true);
   });
 
   it('filtra os itens principais pelas permissões do usuário', () => {
     const items = getNavigationItems('pricing', (permission) => permission === 'calculator');
-    expect(items.map(({ id }) => id)).toEqual([
-      'calculator',
-      'simplified_calculator',
-      'saved_formulas',
-    ]);
+    expect(items.map(({ id }) => id)).toEqual(['calculator']);
+  });
+
+  it('expõe calculadoras e batidas salvas com permissões independentes', () => {
+    const granted = new Set(['simplified_calculator', 'savedFormulas']);
+    const items = getNavigationItems('pricing', (permission) => granted.has(permission));
+    expect(items.map(({ id }) => id)).toEqual(['simplified_calculator', 'saved_formulas']);
   });
 
   it('injeta as contagens do workflow de despesas nos badges corretos', () => {

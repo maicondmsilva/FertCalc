@@ -18,7 +18,14 @@ import { User } from '../types';
 interface HomeProps {
   currentUser: User;
   onSelectModule: (
-    moduleId: 'pricing' | 'config' | 'prd' | 'managementReports' | 'expenses' | 'carregamento' | 'relatorios'
+    moduleId:
+      | 'pricing'
+      | 'config'
+      | 'prd'
+      | 'managementReports'
+      | 'expenses'
+      | 'carregamento'
+      | 'relatorios'
   ) => void;
 }
 
@@ -38,6 +45,8 @@ export default function Home({ currentUser, onSelectModule }: HomeProps) {
         currentUser.role === 'manager' ||
         !!(currentUser.permissions as any)?.dashboard ||
         !!(currentUser.permissions as any)?.calculator ||
+        !!(currentUser.permissions as any)?.simplified_calculator ||
+        !!(currentUser.permissions as any)?.savedFormulas ||
         !!(currentUser.permissions as any)?.history,
     },
     {

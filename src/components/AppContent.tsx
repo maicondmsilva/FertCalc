@@ -77,8 +77,8 @@ function AppContentRoute({
       return <Dashboard currentUser={currentUser} />;
     }
     if (
-      (activeTab === 'calculator' || activeTab === 'simplified_calculator') &&
-      hasPermission('calculator')
+      (activeTab === 'calculator' && hasPermission('calculator')) ||
+      (activeTab === 'simplified_calculator' && hasPermission('simplified_calculator'))
     ) {
       return (
         <React.Fragment key={activeTab}>
@@ -95,7 +95,7 @@ function AppContentRoute({
         </React.Fragment>
       );
     }
-    if (activeTab === 'saved_formulas' && hasPermission('calculator')) {
+    if (activeTab === 'saved_formulas' && hasPermission('savedFormulas')) {
       return <SavedFormulas currentUser={currentUser} />;
     }
     if (activeTab === 'produtos_formulados' && hasPermission('produtosFormulados')) {
