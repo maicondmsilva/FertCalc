@@ -85,6 +85,7 @@ import {
 } from '../services/guaranteeAuthorizationRequestService';
 import { saveFormulaWithProduct } from '../services/savedFormulaService';
 import { getSavedFormulaCompositionKey } from '../utils/savedFormulaWorkflow';
+import { setCalculationBatchSelection } from '../utils/calculationSelection';
 
 interface UseCalculatorProps {
   initialData?: PricingRecord | null;
@@ -850,6 +851,11 @@ export function useCalculator({
     field: keyof TargetFormula,
     value: TargetFormula[keyof TargetFormula]
   ) => {
+    if (field === 'selected' && typeof value === 'boolean') {
+      setCalculations((previous) => setCalculationBatchSelection(previous, id, value));
+      return;
+    }
+
     setCalculations(
       calculations.map((c) => {
         if (c.id === id) {

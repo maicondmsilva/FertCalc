@@ -103,7 +103,8 @@ registerRoutes('carregamento', [
 ]);
 registerRoutes('relatorios', ['relatorios']);
 
-export const getActiveModule = (activeTab: string): ActiveModule => moduleByRoute[activeTab] ?? null;
+export const getActiveModule = (activeTab: string): ActiveModule =>
+  moduleByRoute[activeTab] ?? null;
 
 export const hasUserPermission = (user: User, permission: string): boolean => {
   if (user.role === 'master' || user.role === 'admin') return true;
@@ -131,9 +132,14 @@ export function getNavigationItems(
         id: 'simplified_calculator',
         label: 'Calculadora Simplificada',
         icon: CalcIcon,
-        permission: 'calculator',
+        permission: 'simplified_calculator',
       },
-      { id: 'saved_formulas', label: 'Batidas Salvas', icon: Beaker, permission: 'calculator' },
+      {
+        id: 'saved_formulas',
+        label: 'Batidas Salvas',
+        icon: Beaker,
+        permission: 'savedFormulas',
+      },
       {
         id: 'produtos_formulados',
         label: 'Produtos Formulados',
@@ -357,7 +363,9 @@ export function getNavigationItems(
       },
     ];
   } else if (activeModule === 'relatorios') {
-    return [{ id: 'relatorios', label: '📊 Relatórios', icon: BarChart3, permission: 'relatorios' }];
+    return [
+      { id: 'relatorios', label: '📊 Relatórios', icon: BarChart3, permission: 'relatorios' },
+    ];
   }
 
   return items.filter((item) => hasPermission(item.permission));

@@ -56,6 +56,27 @@ function InternalAuthenticatedApp({
       }),
     [activeModule, checkedExpenseCount, hasPermission, pendingExpenseCount]
   );
+  const handleSelectModule = useCallback(
+    (moduleId: string) => {
+      if (moduleId === 'pricing') {
+        const firstAllowedRoute = [
+          ['dashboard', 'dashboard'],
+          ['calculator', 'calculator'],
+          ['simplified_calculator', 'simplified_calculator'],
+          ['savedFormulas', 'saved_formulas'],
+          ['history', 'history'],
+        ].find(([permission]) => hasPermission(permission))?.[1];
+
+        if (firstAllowedRoute) {
+          navigate(`/${firstAllowedRoute}`);
+          return;
+        }
+      }
+
+      pricingWorkspace.selectModule(moduleId);
+    },
+    [hasPermission, navigate, pricingWorkspace]
+  );
 
   return (
     <AppShell
@@ -86,7 +107,7 @@ function InternalAuthenticatedApp({
         editingPricing={pricingWorkspace.editingPricing}
         initialFormulaContext={pricingWorkspace.initialFormulaContext}
         hasPermission={hasPermission}
-        onSelectModule={pricingWorkspace.selectModule}
+        onSelectModule={handleSelectModule}
         onEditPricing={pricingWorkspace.editPricing}
         onCalculatorSaved={pricingWorkspace.calculatorSaved}
         onClearCalculator={pricingWorkspace.clearCalculator}

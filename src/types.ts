@@ -109,6 +109,7 @@ export interface User {
     // Módulos (acesso à página)
     dashboard: boolean;
     calculator: boolean;
+    simplified_calculator?: boolean;
     history: boolean;
     clients: boolean;
     agents: boolean;
