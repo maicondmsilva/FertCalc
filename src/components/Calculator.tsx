@@ -209,6 +209,7 @@ export default function Calculator({
   const [comparisonCategorySelections, setComparisonCategorySelections] = useState<
     Record<string, string[]>
   >({});
+  const [comparisonOptionsOpen, setComparisonOptionsOpen] = useState<Record<string, boolean>>({});
   const [exchangeRateInput, setExchangeRateInput] = useState('');
   const [showGuaranteeRequests, setShowGuaranteeRequests] = useState(false);
   const protectedMaterialIds = initialFormulaToLoad?.protectedMaterialIds || [];
@@ -1243,36 +1244,73 @@ export default function Calculator({
                               ))}
                             </select>
                             {!isProdutosLivresMode && canCompareFormulas && (
-                              <div className="flex max-w-full flex-wrap items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-2 py-1.5">
-                                <span className="mr-1 text-[10px] font-black uppercase text-violet-700">
+                              <div className="relative">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setComparisonOptionsOpen((current) => ({
+                                      ...current,
+                                      [calc.id]: !current[calc.id],
+                                    }))
+                                  }
+                                  className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-bold transition-colors ${
+                                    comparisonOptionsOpen[calc.id]
+                                      ? 'border-violet-400 bg-violet-100 text-violet-800'
+                                      : 'border-violet-200 text-violet-700 hover:bg-violet-50'
+                                  }`}
+                                  aria-expanded={Boolean(comparisonOptionsOpen[calc.id])}
+                                  title="Selecionar categorias para comparação"
+                                >
+                                  <ChevronDown
+                                    className={`h-3.5 w-3.5 transition-transform ${
+                                      comparisonOptionsOpen[calc.id] ? 'rotate-180' : ''
+                                    }`}
+                                  />
                                   Comparar
-                                </span>
-                                {compCategories.map((category) => {
-                                  const checked = (
-                                    comparisonCategorySelections[calc.id] || []
-                                  ).includes(category.id);
-                                  return (
-                                    <label
-                                      key={category.id}
-                                      className={`inline-flex cursor-pointer items-center gap-1 rounded-md border px-1.5 py-1 text-[10px] font-bold transition-colors ${
-                                        checked
-                                          ? 'border-violet-600 bg-violet-600 text-white'
-                                          : 'border-violet-200 bg-white text-violet-700 hover:bg-violet-100'
-                                      }`}
-                                      title={`Comparar a fórmula usando a categoria ${category.nome}`}
-                                    >
-                                      <input
-                                        type="checkbox"
-                                        checked={checked}
-                                        onChange={() =>
-                                          toggleComparisonCategory(calc.id, category.id)
-                                        }
-                                        className="h-3 w-3 rounded border-violet-300"
-                                      />
-                                      {category.nome}
-                                    </label>
-                                  );
-                                })}
+                                  {(comparisonCategorySelections[calc.id] || []).length > 0 && (
+                                    <span className="rounded-full bg-violet-700 px-1.5 py-0.5 text-[9px] text-white">
+                                      {(comparisonCategorySelections[calc.id] || []).length}
+                                    </span>
+                                  )}
+                                </button>
+                                {comparisonOptionsOpen[calc.id] && (
+                                  <div className="absolute left-0 top-full z-30 mt-2 flex min-w-64 max-w-[min(90vw,36rem)] flex-wrap gap-1.5 rounded-xl border border-violet-200 bg-white p-3 shadow-xl">
+                                    <p className="mb-1 w-full text-[10px] font-black uppercase text-violet-700">
+                                      Categorias para comparar
+                                    </p>
+                                    {compCategories.map((category) => {
+                                      const checked = (
+                                        comparisonCategorySelections[calc.id] || []
+                                      ).includes(category.id);
+                                      return (
+                                        <label
+                                          key={category.id}
+                                          className={`inline-flex cursor-pointer items-center gap-1 rounded-md border px-2 py-1.5 text-[10px] font-bold transition-colors ${
+                                            checked
+                                              ? 'border-violet-600 bg-violet-600 text-white'
+                                              : 'border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100'
+                                          }`}
+                                          title={`Comparar a fórmula usando a categoria ${category.nome}`}
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={checked}
+                                            onChange={() =>
+                                              toggleComparisonCategory(calc.id, category.id)
+                                            }
+                                            className="h-3 w-3 rounded border-violet-300"
+                                          />
+                                          {category.nome}
+                                        </label>
+                                      );
+                                    })}
+                                    {compCategories.length === 0 && (
+                                      <p className="text-xs text-stone-500">
+                                        Nenhuma categoria cadastrada.
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             )}
                             <button
