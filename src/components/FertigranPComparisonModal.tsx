@@ -8,20 +8,14 @@ import {
   Save,
   Info,
   TriangleAlert as AlertTriangle,
-  ArrowUpDown,
 } from 'lucide-react';
-import {
-  getFertigranPFormulas,
-  saveComparisonHistory,
-  getCompatibilityCategories,
-} from '../services/db';
+import { getFertigranPFormulas, saveComparisonHistory } from '../services/db';
 import { closeModalOnBackdrop } from '../utils/modalUtils';
 import {
   FertigranPFormula,
   User as AppUser,
   RawMaterial,
   TargetFormula,
-  CompatibilityCategory,
   IncompatibilityRule,
 } from '../types';
 import { useToast } from './Toast';
@@ -29,8 +23,6 @@ import { calculateTargetFormula } from '../domain/pricing-engine';
 import { formatNPK } from '../utils/formatters';
 import {
   buildComparisonMaterials,
-  buildAppliedComparisonCalculation,
-  buildFormulaComparisonAlternatives,
   buildReducedComparisonFormula,
   calculateComparisonDose,
   isFixedComparisonMaterial,
@@ -62,7 +54,6 @@ export function FertigranPComparisonModal({
   const originalN = sourceCalculation.summary?.resultingN || sourceCalculation.targetN || 0;
   const originalP = sourceCalculation.summary?.resultingP || sourceCalculation.targetP || 0;
   const originalK = sourceCalculation.summary?.resultingK || sourceCalculation.targetK || 0;
-  const comparisonCurrency = sourceCalculation.factors.priceListCurrency === 'USD' ? 'US$' : 'R$';
   const [hectares, setHectares] = useState<number>(0);
   const [dose, setDose] = useState<number>(0);
 
@@ -88,13 +79,9 @@ export function FertigranPComparisonModal({
   const [formulas, setFormulas] = useState<FertigranPFormula[]>([]);
   const [selectedFormulaId, setSelectedFormulaId] = useState<string>('');
 
-  const [compCategories, setCompCategories] = useState<CompatibilityCategory[]>([]);
-  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [comparisonIssue, setComparisonIssue] = useState<string>('');
-  const [alternativeSort, setAlternativeSort] = useState<'cost' | 'deviation' | 'category'>('cost');
 
   const [isSaving, setIsSaving] = useState(false);
-  const [applyingAlternativeId, setApplyingAlternativeId] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
   const [optimizedDose, setOptimizedDose] = useState<number>(0);
@@ -111,9 +98,7 @@ export function FertigranPComparisonModal({
   useEffect(() => {
     if (isOpen) {
       loadFormulas();
-      loadCategories();
       setSaveSuccess(false);
-      setSelectedCategoryIds([]);
       setComparisonIssue('');
       setLocalMacros(
         buildComparisonMaterials({ available: macros, source: sourceCalculation.macros })
@@ -130,30 +115,6 @@ export function FertigranPComparisonModal({
       });
     }
   }, [isOpen, macros, micros, sourceCalculation]);
-
-  const toggleCategory = (categoryId: string) => {
-    const nextCategoryIds = selectedCategoryIds.includes(categoryId)
-      ? selectedCategoryIds.filter((id) => id !== categoryId)
-      : [...selectedCategoryIds, categoryId];
-    setSelectedCategoryIds(nextCategoryIds);
-    setLocalMacros(
-      buildComparisonMaterials({
-        available: macros,
-        source: sourceCalculation.macros,
-        categoryIds: nextCategoryIds,
-        includeCategoryCandidates: true,
-      })
-    );
-  };
-
-  const loadCategories = async () => {
-    try {
-      const data = await getCompatibilityCategories();
-      setCompCategories(data);
-    } catch (err) {
-      console.error('Error loading categories:', err);
-    }
-  };
 
   const loadFormulas = async () => {
     try {
@@ -197,40 +158,6 @@ export function FertigranPComparisonModal({
     idealNewP = (targetP / dose) * 100;
     idealNewK = (targetK / dose) * 100;
   }
-
-  const comparisonAlternatives = useMemo(() => {
-    const alternatives = buildFormulaComparisonAlternatives({
-      sourceCalculation,
-      availableMacros: macros,
-      availableMicros: micros,
-      categories: compCategories,
-      selectedCategoryIds,
-      reductions: { n: reductionN, p: reductionP, k: reductionK },
-      incompatibilityRules,
-    });
-    return alternatives.sort((left, right) => {
-      if (left.feasible !== right.feasible) return left.feasible ? -1 : 1;
-      if (alternativeSort === 'category') {
-        return left.categoryName.localeCompare(right.categoryName, 'pt-BR');
-      }
-      if (alternativeSort === 'deviation') return left.deviationScore - right.deviationScore;
-      return (
-        (left.calculation.summary?.baseCost ?? Number.POSITIVE_INFINITY) -
-        (right.calculation.summary?.baseCost ?? Number.POSITIVE_INFINITY)
-      );
-    });
-  }, [
-    alternativeSort,
-    compCategories,
-    incompatibilityRules,
-    macros,
-    micros,
-    reductionK,
-    reductionN,
-    reductionP,
-    selectedCategoryIds,
-    sourceCalculation,
-  ]);
 
   // The comparison uses the same orchestration/optimization engine as the calculator.
   useEffect(() => {
@@ -380,65 +307,6 @@ export function FertigranPComparisonModal({
     }
   };
 
-  const handleApplyAlternative = async (alternative: (typeof comparisonAlternatives)[number]) => {
-    if (applyingAlternativeId) return;
-    const appliedCalculation = buildAppliedComparisonCalculation({
-      alternative,
-      hectares,
-      sourceDose: dose,
-      targetNutrientsPerHectare: { n: targetN, p: targetP, k: targetK },
-    });
-    if (!appliedCalculation) {
-      showError(alternative.issueMessage || 'Esta alternativa não possui uma composição viável.');
-      return;
-    }
-
-    setApplyingAlternativeId(alternative.categoryId);
-    try {
-      const summary = alternative.calculation.summary!;
-      const alternativeDose = calculateComparisonDose(
-        dose,
-        { n: targetN, p: targetP, k: targetK },
-        { n: summary.resultingN, p: summary.resultingP, k: summary.resultingK }
-      );
-      await saveComparisonHistory({
-        usuario_id: currentUser.id,
-        usuario_nome: currentUser.name,
-        formula_original: originalFormulaName || `${originalN}-${originalP}-${originalK}`,
-        formula_nova: alternative.calculation.formula,
-        hectares,
-        dose_original: dose,
-        dose_nova: alternativeDose > 0 ? alternativeDose : dose,
-        reducoes_aplicadas: {
-          n: reductionN,
-          p: reductionP,
-          k: reductionK,
-          categoria: alternative.categoryName,
-          fatores_comerciais: alternative.calculation.factors,
-          incluir_pdf: true,
-          composicao: [...alternative.calculation.macros, ...alternative.calculation.micros]
-            .filter((material) => material.quantity > 0)
-            .map((material) => ({ material: material.name, qtd: material.quantity })),
-          garantias_finais: {
-            s: summary.resultingS,
-            ca: summary.resultingCa,
-            micros: Object.entries(summary.resultingMicros).map(([name, value]) => ({
-              name,
-              value,
-            })),
-          },
-        },
-      });
-      onApplyFertigranP(appliedCalculation);
-      onClose();
-    } catch (error) {
-      console.error('Erro ao aplicar alternativa comparada:', error);
-      showError('Não foi possível registrar e aplicar a alternativa. Tente novamente.');
-    } finally {
-      setApplyingAlternativeId(null);
-    }
-  };
-
   const handleSendToPricing = async () => {
     if (isSaving) return;
 
@@ -559,7 +427,7 @@ export function FertigranPComparisonModal({
         <div className="flex items-center justify-between p-4 border-b border-stone-200 bg-stone-50">
           <div className="flex items-center gap-2">
             <Calculator className="w-5 h-5 text-emerald-600" />
-            <h2 className="text-lg font-bold text-stone-800">Comparador de Fórmulas</h2>
+            <h2 className="text-lg font-bold text-stone-800">Simular redução de fórmula</h2>
           </div>
           <button
             onClick={onClose}
@@ -946,38 +814,6 @@ export function FertigranPComparisonModal({
                   </select>
                 </div>
 
-                <div className="flex-1 min-w-[300px]">
-                  <label className="block text-xs text-indigo-700 font-bold mb-2">
-                    Categorias candidatas para comparação:
-                  </label>
-                  <div className="flex min-h-10 flex-wrap gap-2 rounded-lg border border-indigo-200 bg-white p-2">
-                    {compCategories.map((cat) => {
-                      const active = selectedCategoryIds.includes(cat.id);
-                      return (
-                        <button
-                          key={cat.id}
-                          type="button"
-                          aria-pressed={active}
-                          onClick={() => toggleCategory(cat.id)}
-                          className={`rounded-full border px-3 py-1 text-xs font-bold transition-colors ${
-                            active
-                              ? 'border-indigo-600 bg-indigo-600 text-white'
-                              : 'border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
-                          }`}
-                        >
-                          {cat.nome}
-                        </button>
-                      );
-                    })}
-                    {compCategories.length === 0 && (
-                      <span className="text-xs text-stone-400">Nenhuma categoria cadastrada.</span>
-                    )}
-                  </div>
-                  <p className="mt-1 text-[10px] text-stone-500">
-                    Produtos já selecionados, micros e quantidades fixas permanecem incluídos.
-                  </p>
-                </div>
-
                 <div className="flex items-center gap-2 pt-6">
                   <input
                     type="checkbox"
@@ -994,152 +830,6 @@ export function FertigranPComparisonModal({
                   </label>
                 </div>
               </div>
-
-              {!selectedFormulaId && selectedCategoryIds.length > 0 && (
-                <div className="space-y-3 rounded-xl border border-indigo-200 bg-white p-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <h4 className="text-xs font-black uppercase text-indigo-800">
-                        Alternativas por categoria
-                      </h4>
-                      <p className="text-[10px] text-stone-500">
-                        Cada categoria é calculada separadamente com os mesmos micros e produtos
-                        fixos.
-                      </p>
-                    </div>
-                    <label className="flex items-center gap-2 text-[10px] font-bold text-stone-600">
-                      <ArrowUpDown className="h-3.5 w-3.5" /> Ordenar
-                      <select
-                        value={alternativeSort}
-                        onChange={(event) =>
-                          setAlternativeSort(
-                            event.target.value as 'cost' | 'deviation' | 'category'
-                          )
-                        }
-                        className="rounded-lg border border-stone-200 bg-white px-2 py-1 text-xs"
-                      >
-                        <option value="cost">Menor custo</option>
-                        <option value="deviation">Menor desvio</option>
-                        <option value="category">Categoria</option>
-                      </select>
-                    </label>
-                  </div>
-
-                  <div className="grid gap-3 lg:grid-cols-2">
-                    {comparisonAlternatives.map((alternative) => {
-                      const summary = alternative.calculation.summary;
-                      const composition = [
-                        ...alternative.calculation.macros,
-                        ...alternative.calculation.micros,
-                      ].filter((material) => material.quantity > 0);
-                      const costDifference =
-                        summary && sourceCalculation.summary
-                          ? summary.baseCost - sourceCalculation.summary.baseCost
-                          : 0;
-                      return (
-                        <article
-                          key={alternative.categoryId}
-                          className={`rounded-xl border p-3 ${
-                            alternative.feasible
-                              ? 'border-emerald-200 bg-emerald-50/40'
-                              : 'border-amber-300 bg-amber-50'
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <h5 className="text-sm font-black text-stone-800">
-                                {alternative.categoryName}
-                              </h5>
-                              <span
-                                className={`text-[9px] font-black uppercase ${
-                                  alternative.feasible ? 'text-emerald-700' : 'text-amber-700'
-                                }`}
-                              >
-                                {alternative.feasible ? 'Alternativa viável' : 'Inviável'}
-                              </span>
-                            </div>
-                            {summary && (
-                              <div className="text-right">
-                                <div className="text-sm font-black text-stone-900">
-                                  {comparisonCurrency} {summary.baseCost.toFixed(2)}/t
-                                </div>
-                                <div
-                                  className={`text-[9px] font-bold ${
-                                    costDifference <= 0 ? 'text-emerald-700' : 'text-red-600'
-                                  }`}
-                                >
-                                  {costDifference >= 0 ? '+' : ''}
-                                  {comparisonCurrency} {costDifference.toFixed(2)} vs. original
-                                </div>
-                              </div>
-                            )}
-                          </div>
-
-                          {alternative.feasible && summary ? (
-                            <>
-                              <div className="mt-3 grid grid-cols-3 gap-1 text-center text-[10px]">
-                                <div className="rounded bg-white p-1">
-                                  N <strong>{summary.resultingN.toFixed(2)}%</strong>
-                                </div>
-                                <div className="rounded bg-white p-1">
-                                  P <strong>{summary.resultingP.toFixed(2)}%</strong>
-                                </div>
-                                <div className="rounded bg-white p-1">
-                                  K <strong>{summary.resultingK.toFixed(2)}%</strong>
-                                </div>
-                              </div>
-                              <div className="mt-2 flex flex-wrap gap-1">
-                                {Object.entries(summary.resultingMicros).map(([name, value]) => (
-                                  <span
-                                    key={name}
-                                    className="rounded-full bg-blue-100 px-2 py-0.5 text-[9px] font-bold text-blue-800"
-                                  >
-                                    {name}: {value.toFixed(2)}%
-                                  </span>
-                                ))}
-                                <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[9px] font-bold text-stone-600">
-                                  Desvio: {alternative.deviationScore.toFixed(3)}
-                                </span>
-                              </div>
-                              <div className="mt-2 space-y-1 border-t border-emerald-100 pt-2">
-                                {composition.slice(0, 5).map((material) => (
-                                  <div
-                                    key={material.id}
-                                    className="flex justify-between text-[10px] text-stone-600"
-                                  >
-                                    <span className="truncate pr-2">{material.name}</span>
-                                    <strong>{material.quantity.toFixed(2)} kg</strong>
-                                  </div>
-                                ))}
-                                {composition.length > 5 && (
-                                  <div className="text-[9px] text-stone-400">
-                                    + {composition.length - 5} produto(s)
-                                  </div>
-                                )}
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => void handleApplyAlternative(alternative)}
-                                disabled={Boolean(applyingAlternativeId)}
-                                className="mt-3 w-full rounded-lg bg-emerald-700 px-3 py-2 text-xs font-black text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
-                              >
-                                {applyingAlternativeId === alternative.categoryId
-                                  ? 'Criando cartão…'
-                                  : 'Criar novo cartão com esta alternativa'}
-                              </button>
-                            </>
-                          ) : (
-                            <div className="mt-3 flex items-start gap-2 rounded-lg bg-white/70 p-2 text-[10px] font-semibold text-amber-900">
-                              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                              {alternative.issueMessage || 'Não foi possível calcular.'}
-                            </div>
-                          )}
-                        </article>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Result Block */}

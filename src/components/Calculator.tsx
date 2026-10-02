@@ -48,6 +48,11 @@ import {
   isSecondaryNutrientGuarantee,
   normalizeMicronutrientKey,
 } from '../utils/micronutrients';
+import {
+  buildAppliedComparisonCalculation,
+  buildFormulaComparisonAlternatives,
+  type FormulaComparisonAlternative,
+} from '../utils/formulaComparison';
 
 const formatPricingMoney = (value: number | undefined, currency: 'BRL' | 'USD' = 'BRL') =>
   Number(value || 0).toLocaleString('pt-BR', {
@@ -91,7 +96,7 @@ export default function Calculator({
   isSimplified,
   disableConditions = false,
 }: CalculatorProps) {
-  const { showSuccess } = useToast();
+  const { showSuccess, showError } = useToast();
 
   const {
     confirmState,
@@ -201,6 +206,9 @@ export default function Calculator({
   const [formulaSearchTerm, setFormulaSearchTerm] = useState<Record<string, string>>({});
   const [microTargetsOpen, setMicroTargetsOpen] = useState<Record<string, boolean>>({});
   const [microTargetInputs, setMicroTargetInputs] = useState<Record<string, string>>({});
+  const [comparisonCategorySelections, setComparisonCategorySelections] = useState<
+    Record<string, string[]>
+  >({});
   const [exchangeRateInput, setExchangeRateInput] = useState('');
   const [showGuaranteeRequests, setShowGuaranteeRequests] = useState(false);
   const protectedMaterialIds = initialFormulaToLoad?.protectedMaterialIds || [];
@@ -316,6 +324,86 @@ export default function Calculator({
     if (status === 'met') return 'border-emerald-700/70 bg-emerald-950 text-emerald-300';
     if (status === 'divergent') return 'border-amber-700/70 bg-amber-950 text-amber-300';
     return 'border-blue-900 bg-blue-950 text-blue-300';
+  };
+
+  const canCompareFormulas =
+    currentUser.role === 'master' ||
+    currentUser.role === 'admin' ||
+    currentUser.role === 'manager' ||
+    (currentUser.permissions as any)?.calculator_fertigranP !== false;
+
+  const comparisonAlternativesByCalculation = React.useMemo(() => {
+    const alternatives: Record<string, FormulaComparisonAlternative[]> = {};
+    calculations.forEach((calculation) => {
+      const selectedCategoryIds = comparisonCategorySelections[calculation.id] || [];
+      if (!calculation.summary || selectedCategoryIds.length === 0) return;
+      alternatives[calculation.id] = buildFormulaComparisonAlternatives({
+        sourceCalculation: calculation,
+        availableMacros: macros,
+        availableMicros: micros,
+        categories: compCategories,
+        selectedCategoryIds,
+        reductions: { n: 0, p: 0, k: 0 },
+        incompatibilityRules,
+      }).sort((left, right) => {
+        if (left.feasible !== right.feasible) return left.feasible ? -1 : 1;
+        return (
+          (left.calculation.summary?.baseCost ?? Number.POSITIVE_INFINITY) -
+          (right.calculation.summary?.baseCost ?? Number.POSITIVE_INFINITY)
+        );
+      });
+    });
+    return alternatives;
+  }, [
+    calculations,
+    compCategories,
+    comparisonCategorySelections,
+    incompatibilityRules,
+    macros,
+    micros,
+  ]);
+
+  const toggleComparisonCategory = (calculationId: string, categoryId: string) => {
+    setComparisonCategorySelections((current) => {
+      const selected = current[calculationId] || [];
+      return {
+        ...current,
+        [calculationId]: selected.includes(categoryId)
+          ? selected.filter((id) => id !== categoryId)
+          : [...selected, categoryId],
+      };
+    });
+  };
+
+  const applyComparisonAlternative = (
+    sourceCalculationId: string,
+    alternative: FormulaComparisonAlternative
+  ) => {
+    const comparisonCalculation = buildAppliedComparisonCalculation({
+      alternative,
+      hectares: 0,
+      sourceDose: 0,
+      targetNutrientsPerHectare: { n: 0, p: 0, k: 0 },
+    });
+    if (!comparisonCalculation) {
+      showError('Esta categoria não possui uma composição viável para ser aplicada.');
+      return;
+    }
+    const sourceCalculation = calculations.find(({ id }) => id === sourceCalculationId);
+    setCalculations((current) => [
+      ...current,
+      {
+        ...comparisonCalculation,
+        id: `f_${Date.now()}`,
+        selected: true,
+        factors: {
+          ...comparisonCalculation.factors,
+          totalTons:
+            sourceCalculation?.factors.totalTons ?? comparisonCalculation.factors.totalTons,
+        },
+      },
+    ]);
+    showSuccess(`Alternativa ${alternative.categoryName} adicionada à precificação.`);
   };
 
   const formatFormulaProductDetails = (
@@ -1154,6 +1242,39 @@ export default function Calculator({
                                 </option>
                               ))}
                             </select>
+                            {!isProdutosLivresMode && canCompareFormulas && (
+                              <div className="flex max-w-full flex-wrap items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-2 py-1.5">
+                                <span className="mr-1 text-[10px] font-black uppercase text-violet-700">
+                                  Comparar
+                                </span>
+                                {compCategories.map((category) => {
+                                  const checked = (
+                                    comparisonCategorySelections[calc.id] || []
+                                  ).includes(category.id);
+                                  return (
+                                    <label
+                                      key={category.id}
+                                      className={`inline-flex cursor-pointer items-center gap-1 rounded-md border px-1.5 py-1 text-[10px] font-bold transition-colors ${
+                                        checked
+                                          ? 'border-violet-600 bg-violet-600 text-white'
+                                          : 'border-violet-200 bg-white text-violet-700 hover:bg-violet-100'
+                                      }`}
+                                      title={`Comparar a fórmula usando a categoria ${category.nome}`}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={checked}
+                                        onChange={() =>
+                                          toggleComparisonCategory(calc.id, category.id)
+                                        }
+                                        className="h-3 w-3 rounded border-violet-300"
+                                      />
+                                      {category.nome}
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            )}
                             <button
                               onClick={() => openSettings(calc.id)}
                               className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 px-2.5 py-2 text-xs font-bold text-blue-700 hover:bg-blue-50"
@@ -1572,7 +1693,7 @@ export default function Calculator({
                                   }}
                                   className="text-[10px] font-bold bg-indigo-50 text-indigo-700 px-2 py-1 rounded hover:bg-indigo-100 transition-colors flex items-center"
                                 >
-                                  Comparar fórmula
+                                  Simular redução
                                 </button>
                               )}
                           </div>
@@ -2383,6 +2504,11 @@ export default function Calculator({
                   const manualPriceProducts = [...calc.macros, ...calc.micros].filter(
                     (material) => material.quantity > 0 && material.isManualPrice
                   );
+                  const comparisonAlternatives = comparisonAlternativesByCalculation[calc.id] || [];
+                  const feasibleAlternatives = comparisonAlternatives.filter(
+                    (alternative) => alternative.feasible && alternative.calculation.summary
+                  );
+                  const lowestCostAlternative = feasibleAlternatives[0];
 
                   return (
                     <div
@@ -2573,6 +2699,154 @@ export default function Calculator({
                             ))}
                         </div>
                       </div>
+
+                      {comparisonAlternatives.length > 0 && (
+                        <div className="mt-3 space-y-3 border-t border-violet-800/70 pt-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              <p className="text-xs font-black uppercase text-violet-300">
+                                Comparativo por categorias
+                              </p>
+                              <p className="text-[10px] text-stone-400">
+                                {feasibleAlternatives.length} de {comparisonAlternatives.length}{' '}
+                                alternativa(s) viável(is)
+                              </p>
+                            </div>
+                            {lowestCostAlternative?.calculation.summary && (
+                              <span className="rounded-full border border-emerald-700 bg-emerald-950 px-2 py-1 text-[9px] font-black uppercase text-emerald-300">
+                                Melhor custo: {lowestCostAlternative.categoryName}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="space-y-2">
+                            {comparisonAlternatives.map((alternative) => {
+                              const alternativeSummary = alternative.calculation.summary;
+                              const costDifference =
+                                alternativeSummary && calc.summary
+                                  ? alternativeSummary.baseCost - calc.summary.baseCost
+                                  : 0;
+                              const composition = [
+                                ...alternative.calculation.macros,
+                                ...alternative.calculation.micros,
+                              ].filter((material) => material.quantity > 0);
+                              return (
+                                <div
+                                  key={alternative.categoryId}
+                                  className={`rounded-lg border p-2.5 ${
+                                    alternative.feasible && alternativeSummary
+                                      ? 'border-violet-700/70 bg-violet-950/40'
+                                      : 'border-amber-800/70 bg-amber-950/40'
+                                  }`}
+                                >
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div>
+                                      <p className="text-xs font-black text-white">
+                                        {alternative.categoryName}
+                                      </p>
+                                      <p
+                                        className={`text-[9px] font-black uppercase ${
+                                          alternative.feasible
+                                            ? 'text-emerald-400'
+                                            : 'text-amber-400'
+                                        }`}
+                                      >
+                                        {alternative.feasible ? 'Viável' : 'Inviável'}
+                                      </p>
+                                    </div>
+                                    {alternativeSummary && (
+                                      <div className="text-right">
+                                        <p className="text-xs font-black text-white">
+                                          {formatPricingMoney(
+                                            alternativeSummary.baseCost,
+                                            alternativeSummary.currency
+                                          )}
+                                          /t
+                                        </p>
+                                        <p
+                                          className={`text-[9px] font-bold ${
+                                            costDifference <= 0
+                                              ? 'text-emerald-400'
+                                              : 'text-red-400'
+                                          }`}
+                                        >
+                                          {costDifference >= 0 ? '+' : ''}
+                                          {formatPricingMoney(
+                                            costDifference,
+                                            alternativeSummary.currency
+                                          )}{' '}
+                                          vs. original
+                                        </p>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {alternative.feasible && alternativeSummary ? (
+                                    <>
+                                      <div className="mt-2 grid grid-cols-3 gap-1 text-center text-[9px] text-stone-300">
+                                        <span className="rounded bg-stone-900 px-1 py-1">
+                                          N {alternativeSummary.resultingN.toFixed(2)}%
+                                        </span>
+                                        <span className="rounded bg-stone-900 px-1 py-1">
+                                          P {alternativeSummary.resultingP.toFixed(2)}%
+                                        </span>
+                                        <span className="rounded bg-stone-900 px-1 py-1">
+                                          K {alternativeSummary.resultingK.toFixed(2)}%
+                                        </span>
+                                      </div>
+                                      <div className="mt-2 flex flex-wrap gap-1">
+                                        {Object.entries(alternativeSummary.resultingMicros).map(
+                                          ([name, value]) => (
+                                            <span
+                                              key={name}
+                                              className="rounded-full bg-blue-950 px-2 py-0.5 text-[9px] font-bold text-blue-300"
+                                            >
+                                              {name}: {value.toFixed(2)}%
+                                            </span>
+                                          )
+                                        )}
+                                        <span className="rounded-full bg-stone-900 px-2 py-0.5 text-[9px] text-stone-400">
+                                          Desvio {alternative.deviationScore.toFixed(3)}
+                                        </span>
+                                      </div>
+                                      <p
+                                        className="mt-2 truncate text-[9px] text-stone-400"
+                                        title={composition
+                                          .map(
+                                            (material) =>
+                                              `${material.name}: ${material.quantity.toFixed(2)} kg`
+                                          )
+                                          .join(' · ')}
+                                      >
+                                        {composition
+                                          .map(
+                                            (material) =>
+                                              `${material.name} ${material.quantity.toFixed(2)} kg`
+                                          )
+                                          .join(' · ')}
+                                      </p>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          applyComparisonAlternative(calc.id, alternative)
+                                        }
+                                        className="mt-2 w-full rounded-md bg-violet-600 px-2 py-1.5 text-[10px] font-black text-white hover:bg-violet-500"
+                                      >
+                                        Usar esta alternativa
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <p className="mt-2 text-[10px] text-amber-200">
+                                      {alternative.issueMessage ||
+                                        'Não foi possível fechar esta composição.'}
+                                    </p>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
