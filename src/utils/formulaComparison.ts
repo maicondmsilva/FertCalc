@@ -148,6 +148,9 @@ export function buildFormulaComparisonAlternatives({
         ...sourceCalculation,
         id: `${sourceCalculation.id}-comparison-${categoryId}`,
         formula,
+        targetN: nutrientTarget?.n ?? sourceCalculation.targetN,
+        targetP: nutrientTarget?.p ?? sourceCalculation.targetP,
+        targetK: nutrientTarget?.k ?? sourceCalculation.targetK,
         selected: true,
         modo_calculo: 'formulacao',
         produtos_livres: [],
@@ -186,4 +189,46 @@ export function buildFormulaComparisonAlternatives({
           : 0),
     };
   });
+}
+
+interface BuildAppliedComparisonCalculationInput {
+  alternative: FormulaComparisonAlternative;
+  hectares: number;
+  sourceDose: number;
+  targetNutrientsPerHectare: { n: number; p: number; k: number };
+}
+
+/**
+ * Converts a comparison result into a new calculator card without mutating the
+ * source snapshot. The resulting card keeps the commercial context calculated
+ * by the comparison engine and receives only the tonnage derived from the
+ * simulation area/dose.
+ */
+export function buildAppliedComparisonCalculation({
+  alternative,
+  hectares,
+  sourceDose,
+  targetNutrientsPerHectare,
+}: BuildAppliedComparisonCalculationInput): Omit<TargetFormula, 'id'> | null {
+  const summary = alternative.calculation.summary;
+  if (!alternative.feasible || !summary) return null;
+
+  const dose = calculateComparisonDose(sourceDose, targetNutrientsPerHectare, {
+    n: summary.resultingN,
+    p: summary.resultingP,
+    k: summary.resultingK,
+  });
+  const { id: _comparisonId, ...calculation } = alternative.calculation;
+
+  return {
+    ...calculation,
+    selected: true,
+    factors: {
+      ...calculation.factors,
+      totalTons:
+        Number(hectares) > 0 && dose > 0
+          ? (Number(hectares) * dose) / 1000
+          : calculation.factors.totalTons,
+    },
+  };
 }

@@ -760,7 +760,8 @@ export interface ComparisonHistory {
     n: number;
     p: number;
     k: number;
-    fatores_comerciais?: Record<string, unknown>;
+    categoria?: string;
+    fatores_comerciais?: Partial<PricingFactors>;
     incluir_pdf?: boolean;
     composicao?: Array<{ material: string; qtd: number }>;
     garantias_finais?: Record<string, unknown>;
