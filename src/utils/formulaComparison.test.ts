@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { RawMaterial, TargetFormula } from '../types';
 import {
   buildComparisonMaterials,
+  buildFormulaComparisonAlternatives,
   buildReducedComparisonFormula,
   calculateComparisonDose,
   isFixedComparisonMaterial,
@@ -62,5 +63,91 @@ describe('formula comparison preparation', () => {
 
   it('calcula a nova dose pela garantia de referência disponível', () => {
     expect(calculateComparisonDose(200, { n: 18, p: 30, k: 0 }, { n: 9, p: 15, k: 0 })).toBe(200);
+  });
+
+  it('gera uma alternativa independente para cada categoria selecionada', () => {
+    const filler = material({
+      id: 'filler',
+      selected: true,
+      minQty: 500,
+      maxQty: 500,
+      price: 1,
+    });
+    const source = {
+      id: 'source',
+      formula: '00-10-00',
+      selected: true,
+      factors: {
+        factor: 1,
+        discount: 0,
+        margin: 0,
+        freight: 0,
+        taxRate: 0,
+        commission: 0,
+      },
+      macros: [filler],
+      micros: [],
+      summary: { resultingN: 0, resultingP: 10, resultingK: 0 },
+    } as TargetFormula;
+    const phosphateA = material({
+      id: 'phosphate-a',
+      p: 20,
+      price: 100,
+      categories: ['a'],
+    });
+    const phosphateB = material({
+      id: 'phosphate-b',
+      p: 20,
+      price: 120,
+      categories: ['b'],
+    });
+    const alternatives = buildFormulaComparisonAlternatives({
+      sourceCalculation: source,
+      availableMacros: [filler, phosphateA, phosphateB],
+      availableMicros: [],
+      categories: [
+        { id: 'a', nome: 'Categoria A', ordem: 1, ativo: true },
+        { id: 'b', nome: 'Categoria B', ordem: 2, ativo: true },
+      ],
+      selectedCategoryIds: ['a', 'b'],
+      reductions: { n: 0, p: 0, k: 0 },
+      incompatibilityRules: [],
+    });
+
+    expect(alternatives).toHaveLength(2);
+    expect(alternatives.every(({ feasible }) => feasible)).toBe(true);
+    expect(
+      alternatives[0].calculation.macros.find(({ id }) => id === 'phosphate-a')?.quantity
+    ).toBe(500);
+    expect(
+      alternatives[0].calculation.macros.find(({ id }) => id === 'phosphate-b')?.quantity
+    ).toBe(0);
+    expect(alternatives[1].calculation.summary?.baseCost).toBeGreaterThan(
+      alternatives[0].calculation.summary?.baseCost || 0
+    );
+  });
+
+  it('mantém a categoria inviável no resultado com uma explicação', () => {
+    const filler = material({ id: 'filler', selected: true, minQty: 500, maxQty: 500 });
+    const alternatives = buildFormulaComparisonAlternatives({
+      sourceCalculation: {
+        id: 'source',
+        formula: '00-10-00',
+        selected: true,
+        factors: {} as TargetFormula['factors'],
+        macros: [filler],
+        micros: [],
+        summary: { resultingN: 0, resultingP: 10, resultingK: 0 },
+      } as TargetFormula,
+      availableMacros: [filler],
+      availableMicros: [],
+      categories: [{ id: 'empty', nome: 'Sem fonte de P', ordem: 1, ativo: true }],
+      selectedCategoryIds: ['empty'],
+      reductions: { n: 0, p: 0, k: 0 },
+      incompatibilityRules: [],
+    });
+
+    expect(alternatives[0].feasible).toBe(false);
+    expect(alternatives[0].issueMessage).toContain('Não fecha');
   });
 });

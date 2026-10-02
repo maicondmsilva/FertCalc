@@ -1,4 +1,15 @@
-import type { RawMaterial, TargetFormula } from '../types';
+import type {
+  CompatibilityCategory,
+  IncompatibilityRule,
+  RawMaterial,
+  TargetFormula,
+} from '../types';
+import {
+  calculateTargetFormula,
+  parseFormulaTarget,
+  type CalculationIssue,
+} from '../domain/pricing-engine';
+import { buildGuaranteeComparisons } from './guaranteeComparison';
 
 const numeric = (value: unknown): number => Number(value) || 0;
 
@@ -73,4 +84,106 @@ export function calculateComparisonDose(
   const reference = candidates.find(([target, guarantee]) => target > 0 && guarantee > 0);
   if (!reference) return Math.max(0, numeric(sourceDose));
   return reference[0] / (reference[1] / 100);
+}
+
+export interface FormulaComparisonAlternative {
+  categoryId: string;
+  categoryName: string;
+  feasible: boolean;
+  calculation: TargetFormula;
+  issue?: CalculationIssue;
+  issueMessage?: string;
+  deviationScore: number;
+}
+
+interface BuildFormulaComparisonAlternativesInput {
+  sourceCalculation: TargetFormula;
+  availableMacros: RawMaterial[];
+  availableMicros: RawMaterial[];
+  categories: CompatibilityCategory[];
+  selectedCategoryIds: string[];
+  reductions: { n: number; p: number; k: number };
+  incompatibilityRules: IncompatibilityRule[];
+}
+
+const describeIssue = (issue?: CalculationIssue): string | undefined => {
+  if (!issue) return undefined;
+  if (issue.code === 'MISSING_MICRO_TARGET_SOURCE') {
+    return `Sem fonte selecionada para ${issue.micronutrients.join(', ')}.`;
+  }
+  if (issue.code === 'INFEASIBLE_FORMULA') {
+    return 'Não fecha com os mínimos, máximos, fixos e incompatibilidades desta categoria.';
+  }
+  if (issue.code === 'EMPTY_FREE_PRODUCTS') return 'Nenhum produto livre foi informado.';
+  return `Produto ${issue.productId} não está disponível para esta comparação.`;
+};
+
+export function buildFormulaComparisonAlternatives({
+  sourceCalculation,
+  availableMacros,
+  availableMicros,
+  categories,
+  selectedCategoryIds,
+  reductions,
+  incompatibilityRules,
+}: BuildFormulaComparisonAlternativesInput): FormulaComparisonAlternative[] {
+  const formula = buildReducedComparisonFormula(sourceCalculation, reductions);
+  const nutrientTarget = parseFormulaTarget(formula);
+  const categoryById = new Map(categories.map((category) => [category.id, category]));
+
+  return selectedCategoryIds.map((categoryId) => {
+    const category = categoryById.get(categoryId);
+    const macros = buildComparisonMaterials({
+      available: availableMacros,
+      source: sourceCalculation.macros,
+      categoryIds: [categoryId],
+      includeCategoryCandidates: true,
+    });
+    const micros = buildComparisonMaterials({
+      available: availableMicros,
+      source: sourceCalculation.micros,
+    });
+    const result = calculateTargetFormula({
+      calculation: {
+        ...sourceCalculation,
+        id: `${sourceCalculation.id}-comparison-${categoryId}`,
+        formula,
+        selected: true,
+        modo_calculo: 'formulacao',
+        produtos_livres: [],
+        macros,
+        micros,
+      },
+      defaultMacros: macros,
+      defaultMicros: micros,
+      microsInGear: true,
+      incompatibilityRules,
+    });
+    const comparisons = result.calculation.summary
+      ? buildGuaranteeComparisons(result.calculation.summary, {
+          targetCa: sourceCalculation.targetCa,
+          targetS: sourceCalculation.targetS,
+          targetMicros: sourceCalculation.targetMicros,
+        })
+      : [];
+
+    return {
+      categoryId,
+      categoryName: category?.nome || 'Categoria não identificada',
+      feasible: !result.issue && Boolean(result.calculation.summary),
+      calculation: result.calculation,
+      issue: result.issue,
+      issueMessage: describeIssue(result.issue),
+      deviationScore:
+        comparisons.reduce(
+          (total, comparison) => total + Math.abs(comparison.calculated - comparison.target),
+          0
+        ) +
+        (result.calculation.summary && nutrientTarget
+          ? Math.abs(result.calculation.summary.resultingN - nutrientTarget.n) +
+            Math.abs(result.calculation.summary.resultingP - nutrientTarget.p) +
+            Math.abs(result.calculation.summary.resultingK - nutrientTarget.k)
+          : 0),
+    };
+  });
 }
