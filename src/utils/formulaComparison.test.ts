@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { RawMaterial, TargetFormula } from '../types';
 import {
+  buildAppliedComparisonCalculation,
   buildComparisonMaterials,
   buildFormulaComparisonAlternatives,
   buildReducedComparisonFormula,
@@ -116,6 +117,12 @@ describe('formula comparison preparation', () => {
 
     expect(alternatives).toHaveLength(2);
     expect(alternatives.every(({ feasible }) => feasible)).toBe(true);
+    expect(alternatives[0].calculation).toMatchObject({
+      formula: '0.00-10.00-0.00',
+      targetN: 0,
+      targetP: 10,
+      targetK: 0,
+    });
     expect(
       alternatives[0].calculation.macros.find(({ id }) => id === 'phosphate-a')?.quantity
     ).toBe(500);
@@ -149,5 +156,84 @@ describe('formula comparison preparation', () => {
 
     expect(alternatives[0].feasible).toBe(false);
     expect(alternatives[0].issueMessage).toContain('Não fecha');
+  });
+
+  it('cria um novo cartão selecionado com a tonelagem da alternativa sem alterar a origem', () => {
+    const sourceFactors = {
+      targetFormula: '00-10-00',
+      factor: 0.8,
+      discount: 10,
+      margin: 0,
+      freight: 100,
+      tipoFrete: 'CIF' as const,
+      taxRate: 0,
+      commission: 0,
+      monthlyInterestRate: 0,
+      dueDate: '',
+      exemptCurrentMonth: false,
+      client: { id: 'client-1', code: '1', name: 'Cliente', document: '' },
+      agent: { id: 'agent-1', code: '1', name: 'Agente', document: '' },
+      branchId: 'branch-1',
+      totalTons: 25,
+      priceListId: 'list-1',
+      local_carregamento_id: 'location-1',
+      priceListCurrency: 'BRL' as const,
+    } satisfies TargetFormula['factors'];
+    const calculation = {
+      id: 'source-comparison-a',
+      formula: '00-10-00',
+      selected: false,
+      targetN: 0,
+      targetP: 10,
+      targetK: 0,
+      factors: sourceFactors,
+      macros: [],
+      micros: [],
+      summary: { resultingN: 0, resultingP: 10, resultingK: 0 },
+    } as TargetFormula;
+    const alternative = {
+      categoryId: 'a',
+      categoryName: 'Categoria A',
+      feasible: true,
+      calculation,
+      deviationScore: 0,
+    };
+
+    const applied = buildAppliedComparisonCalculation({
+      alternative,
+      hectares: 100,
+      sourceDose: 200,
+      targetNutrientsPerHectare: { n: 0, p: 20, k: 0 },
+    });
+
+    expect(applied).toMatchObject({
+      formula: '00-10-00',
+      selected: true,
+      factors: {
+        totalTons: 20,
+        priceListId: 'list-1',
+        local_carregamento_id: 'location-1',
+        priceListCurrency: 'BRL',
+      },
+    });
+    expect(calculation.selected).toBe(false);
+    expect(calculation.factors.totalTons).toBe(25);
+  });
+
+  it('não cria cartão para uma alternativa inviável', () => {
+    const applied = buildAppliedComparisonCalculation({
+      alternative: {
+        categoryId: 'invalid',
+        categoryName: 'Inválida',
+        feasible: false,
+        calculation: { summary: undefined } as TargetFormula,
+        deviationScore: 0,
+      },
+      hectares: 100,
+      sourceDose: 200,
+      targetNutrientsPerHectare: { n: 0, p: 20, k: 0 },
+    });
+
+    expect(applied).toBeNull();
   });
 });

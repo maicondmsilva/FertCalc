@@ -29,6 +29,7 @@ import { calculateTargetFormula } from '../domain/pricing-engine';
 import { formatNPK } from '../utils/formatters';
 import {
   buildComparisonMaterials,
+  buildAppliedComparisonCalculation,
   buildFormulaComparisonAlternatives,
   buildReducedComparisonFormula,
   calculateComparisonDose,
@@ -93,6 +94,7 @@ export function FertigranPComparisonModal({
   const [alternativeSort, setAlternativeSort] = useState<'cost' | 'deviation' | 'category'>('cost');
 
   const [isSaving, setIsSaving] = useState(false);
+  const [applyingAlternativeId, setApplyingAlternativeId] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
   const [optimizedDose, setOptimizedDose] = useState<number>(0);
@@ -378,30 +380,63 @@ export function FertigranPComparisonModal({
     }
   };
 
-  const handleApplyAlternative = (alternative: (typeof comparisonAlternatives)[number]) => {
-    const summary = alternative.calculation.summary;
-    if (!alternative.feasible || !summary) {
+  const handleApplyAlternative = async (alternative: (typeof comparisonAlternatives)[number]) => {
+    if (applyingAlternativeId) return;
+    const appliedCalculation = buildAppliedComparisonCalculation({
+      alternative,
+      hectares,
+      sourceDose: dose,
+      targetNutrientsPerHectare: { n: targetN, p: targetP, k: targetK },
+    });
+    if (!appliedCalculation) {
       showError(alternative.issueMessage || 'Esta alternativa não possui uma composição viável.');
       return;
     }
-    const alternativeDose = calculateComparisonDose(
-      dose,
-      { n: targetN, p: targetP, k: targetK },
-      { n: summary.resultingN, p: summary.resultingP, k: summary.resultingK }
-    );
-    const { id: _comparisonId, ...calculation } = alternative.calculation;
-    onApplyFertigranP({
-      ...calculation,
-      selected: true,
-      factors: {
-        ...calculation.factors,
-        totalTons:
-          hectares > 0 && alternativeDose > 0
-            ? (hectares * alternativeDose) / 1000
-            : calculation.factors.totalTons,
-      },
-    });
-    onClose();
+
+    setApplyingAlternativeId(alternative.categoryId);
+    try {
+      const summary = alternative.calculation.summary!;
+      const alternativeDose = calculateComparisonDose(
+        dose,
+        { n: targetN, p: targetP, k: targetK },
+        { n: summary.resultingN, p: summary.resultingP, k: summary.resultingK }
+      );
+      await saveComparisonHistory({
+        usuario_id: currentUser.id,
+        usuario_nome: currentUser.name,
+        formula_original: originalFormulaName || `${originalN}-${originalP}-${originalK}`,
+        formula_nova: alternative.calculation.formula,
+        hectares,
+        dose_original: dose,
+        dose_nova: alternativeDose > 0 ? alternativeDose : dose,
+        reducoes_aplicadas: {
+          n: reductionN,
+          p: reductionP,
+          k: reductionK,
+          categoria: alternative.categoryName,
+          fatores_comerciais: alternative.calculation.factors,
+          incluir_pdf: true,
+          composicao: [...alternative.calculation.macros, ...alternative.calculation.micros]
+            .filter((material) => material.quantity > 0)
+            .map((material) => ({ material: material.name, qtd: material.quantity })),
+          garantias_finais: {
+            s: summary.resultingS,
+            ca: summary.resultingCa,
+            micros: Object.entries(summary.resultingMicros).map(([name, value]) => ({
+              name,
+              value,
+            })),
+          },
+        },
+      });
+      onApplyFertigranP(appliedCalculation);
+      onClose();
+    } catch (error) {
+      console.error('Erro ao aplicar alternativa comparada:', error);
+      showError('Não foi possível registrar e aplicar a alternativa. Tente novamente.');
+    } finally {
+      setApplyingAlternativeId(null);
+    }
   };
 
   const handleSendToPricing = async () => {
@@ -1084,10 +1119,13 @@ export function FertigranPComparisonModal({
                               </div>
                               <button
                                 type="button"
-                                onClick={() => handleApplyAlternative(alternative)}
-                                className="mt-3 w-full rounded-lg bg-emerald-700 px-3 py-2 text-xs font-black text-white hover:bg-emerald-800"
+                                onClick={() => void handleApplyAlternative(alternative)}
+                                disabled={Boolean(applyingAlternativeId)}
+                                className="mt-3 w-full rounded-lg bg-emerald-700 px-3 py-2 text-xs font-black text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
                               >
-                                Criar novo cartão com esta alternativa
+                                {applyingAlternativeId === alternative.categoryId
+                                  ? 'Criando cartão…'
+                                  : 'Criar novo cartão com esta alternativa'}
                               </button>
                             </>
                           ) : (
