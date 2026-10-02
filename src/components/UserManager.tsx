@@ -81,7 +81,7 @@ const PERMISSION_GROUPS: PermissionGroup[] = [
       { id: 'calculator_savePricing', label: 'Salvar Precificação' },
       { id: 'calculator_generatePDF', label: 'Gerar PDF' },
       { id: 'calculator_saveFormula', label: 'Salvar Fórmula' },
-      { id: 'calculator_fertigranP', label: 'Comparador Fertigran P' },
+      { id: 'calculator_fertigranP', label: 'Comparador de Fórmulas' },
       { id: 'calculator_profitabilityCheck', label: 'Análise de Rentabilidade' },
       { id: 'calculator_extraProducts', label: 'Ver produtos extras fora da lista de preços' },
       { id: 'calculator_overrideGuaranteeDivergence', label: 'Autorizar garantia divergente' },

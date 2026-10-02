@@ -132,12 +132,9 @@ export function useCalculator({
   const [status, setStatus] = useState<'Em Andamento' | 'Fechada' | 'Perdida'>('Em Andamento');
 
   const [isFertigranPModalOpen, setIsFertigranPModalOpen] = useState(false);
-  const [currentComparisonFormula, setCurrentComparisonFormula] = useState<{
-    formulaName: string;
-    n: number;
-    p: number;
-    k: number;
-  } | null>(null);
+  const [currentComparisonFormula, setCurrentComparisonFormula] = useState<TargetFormula | null>(
+    null
+  );
 
   const [isProfitabilityModalOpen, setIsProfitabilityModalOpen] = useState(false);
   const [profitabilityTargetCalc, setProfitabilityTargetCalc] = useState<TargetFormula | null>(

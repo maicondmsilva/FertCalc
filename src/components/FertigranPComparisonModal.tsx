@@ -21,36 +21,44 @@ import {
   RawMaterial,
   TargetFormula,
   CompatibilityCategory,
+  IncompatibilityRule,
 } from '../types';
-import solver from 'javascript-lp-solver';
 import { useToast } from './Toast';
+import { calculateTargetFormula } from '../domain/pricing-engine';
+import { formatNPK } from '../utils/formatters';
+import {
+  buildComparisonMaterials,
+  buildReducedComparisonFormula,
+  calculateComparisonDose,
+  isFixedComparisonMaterial,
+} from '../utils/formulaComparison';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  originalFormulaName: string;
-  originalN: number;
-  originalP: number;
-  originalK: number;
+  sourceCalculation: TargetFormula;
   currentUser: AppUser;
   macros: RawMaterial[];
   micros: RawMaterial[];
+  incompatibilityRules: IncompatibilityRule[];
   onApplyFertigranP: (calculation: Omit<TargetFormula, 'id'>) => void;
 }
 
 export function FertigranPComparisonModal({
   isOpen,
   onClose,
-  originalFormulaName,
-  originalN,
-  originalP,
-  originalK,
+  sourceCalculation,
   currentUser,
   macros,
   micros,
+  incompatibilityRules,
   onApplyFertigranP,
 }: Props) {
   const { showError } = useToast();
+  const originalFormulaName = sourceCalculation.formula;
+  const originalN = sourceCalculation.summary?.resultingN || sourceCalculation.targetN || 0;
+  const originalP = sourceCalculation.summary?.resultingP || sourceCalculation.targetP || 0;
+  const originalK = sourceCalculation.summary?.resultingK || sourceCalculation.targetK || 0;
   const [hectares, setHectares] = useState<number>(0);
   const [dose, setDose] = useState<number>(0);
 
@@ -77,7 +85,8 @@ export function FertigranPComparisonModal({
   const [selectedFormulaId, setSelectedFormulaId] = useState<string>('');
 
   const [compCategories, setCompCategories] = useState<CompatibilityCategory[]>([]);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
+  const [comparisonIssue, setComparisonIssue] = useState<string>('');
 
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -98,28 +107,38 @@ export function FertigranPComparisonModal({
       loadFormulas();
       loadCategories();
       setSaveSuccess(false);
-      setLocalMacros(macros.map((m) => ({ ...m, selected: false })));
-      setLocalMicros(micros.map((m) => ({ ...m, selected: false })));
+      setSelectedCategoryIds([]);
+      setComparisonIssue('');
+      setLocalMacros(
+        buildComparisonMaterials({ available: macros, source: sourceCalculation.macros })
+      );
+      setLocalMicros(
+        buildComparisonMaterials({ available: micros, source: sourceCalculation.micros })
+      );
+      setCommercialFactors({
+        factor: sourceCalculation.factors.factor,
+        margin: sourceCalculation.factors.margin,
+        discount: sourceCalculation.factors.discount,
+        freight: sourceCalculation.factors.freight,
+        commission: sourceCalculation.factors.commission,
+      });
     }
-  }, [isOpen, macros, micros]);
+  }, [isOpen, macros, micros, sourceCalculation]);
 
-  // Auto-selection based on category
-  useEffect(() => {
-    if (selectedCategoryId !== 'all') {
-      setLocalMacros((prev) =>
-        prev.map((m) => ({
-          ...m,
-          selected: m.categories?.includes(selectedCategoryId) || false,
-        }))
-      );
-      setLocalMicros((prev) =>
-        prev.map((m) => ({
-          ...m,
-          selected: m.categories?.includes(selectedCategoryId) || false,
-        }))
-      );
-    }
-  }, [selectedCategoryId]);
+  const toggleCategory = (categoryId: string) => {
+    const nextCategoryIds = selectedCategoryIds.includes(categoryId)
+      ? selectedCategoryIds.filter((id) => id !== categoryId)
+      : [...selectedCategoryIds, categoryId];
+    setSelectedCategoryIds(nextCategoryIds);
+    setLocalMacros(
+      buildComparisonMaterials({
+        available: macros,
+        source: sourceCalculation.macros,
+        categoryIds: nextCategoryIds,
+        includeCategoryCandidates: true,
+      })
+    );
+  };
 
   const loadCategories = async () => {
     try {
@@ -173,92 +192,61 @@ export function FertigranPComparisonModal({
     idealNewK = (targetK / dose) * 100;
   }
 
-  // LP Optimization when formula or targets change
+  // The comparison uses the same orchestration/optimization engine as the calculator.
   useEffect(() => {
     if (!selectedFormulaId && dose > 0 && (targetN > 0 || targetP > 0 || targetK > 0)) {
-      // Find optimal dose and mix for theoretical target using LP
-      const model: Record<string, unknown> = {
-        optimize: 'cost',
-        opType: 'min',
-        constraints: {
-          n_eq: { min: targetN * 10, max: targetN * 10 + 1 }, // precision to 1 decimal place (multiply by 10)
-          p_eq: { min: targetP * 10, max: targetP * 10 + 1 },
-          k_eq: { min: targetK * 10, max: targetK * 10 + 1 },
+      const targetFormula = buildReducedComparisonFormula(sourceCalculation, {
+        n: reductionN,
+        p: reductionP,
+        k: reductionK,
+      });
+      const result = calculateTargetFormula({
+        calculation: {
+          ...sourceCalculation,
+          id: `${sourceCalculation.id}-comparison`,
+          formula: targetFormula,
+          selected: true,
+          macros: localMacros,
+          micros: localMicros,
         },
-        variables: {},
-        ints: {},
-      };
-
-      const availableMaterials = [...localMacros, ...localMicros].filter((m) => m.selected);
-
-      // Filtro adicional pelo ID da categoria selecionada (se não for "all")
-      const filteredByCategoryId =
-        selectedCategoryId === 'all'
-          ? availableMaterials
-          : availableMaterials.filter((m) => m.categories?.includes(selectedCategoryId));
-
-      filteredByCategoryId.forEach((m) => {
-        model.variables[m.id] = {
-          cost: m.price / 1000,
-          n_eq: m.n / 10, // adjusting scale
-          p_eq: m.p / 10,
-          k_eq: m.k / 10,
-          weight: 1,
-        };
-
-        const forcedQty = Number(m.quantity) || 0;
-        if (forcedQty > 0) {
-          model.constraints[`forced_${m.id}`] = { equal: forcedQty };
-          model.variables[m.id][`forced_${m.id}`] = 1;
-        }
+        defaultMacros: localMacros,
+        defaultMicros: localMicros,
+        microsInGear: true,
+        incompatibilityRules,
       });
 
-      const result = solver.Solve(model as unknown as Parameters<typeof solver.Solve>[0]) as Record<
-        string,
-        number
-      >;
+      if (!result.issue && result.calculation.summary) {
+        const summary = result.calculation.summary;
+        const comparisonDose = calculateComparisonDose(
+          dose,
+          { n: targetN, p: targetP, k: targetK },
+          { n: summary.resultingN, p: summary.resultingP, k: summary.resultingK }
+        );
+        const composition = [...result.calculation.macros, ...result.calculation.micros]
+          .filter((material) => material.quantity > 0)
+          .map((material) => ({ material, qtd: material.quantity }));
 
-      if (result.feasible) {
-        let totalWeight = 0;
-        const comp: { material: RawMaterial; qtd: number }[] = [];
-        let resS = 0;
-        let resCa = 0;
-        const microSums: { [key: string]: number } = {};
-
-        filteredByCategoryId.forEach((m) => {
-          if (result[m.id] && result[m.id] > 0) {
-            const qtd = result[m.id];
-            totalWeight += qtd;
-            comp.push({ material: m, qtd });
-
-            // Calculate resulting secondary/micros based on quantities per hectare
-            resS += qtd * (m.s / 100);
-            resCa += qtd * (m.ca / 100);
-            m.microGuarantees?.forEach((micro) => {
-              microSums[micro.name] = (microSums[micro.name] || 0) + qtd * (micro.value / 100);
-            });
-          }
+        setComparisonIssue('');
+        setOptimizedDose(comparisonDose);
+        setOptimizedComposition(composition);
+        setOptimizedFormulaTarget(
+          formatNPK(targetFormula, summary.resultingN, summary.resultingP, summary.resultingK)
+        );
+        setResultingGuarantees({
+          s: summary.resultingS,
+          ca: summary.resultingCa,
+          micros: Object.entries(summary.resultingMicros).map(([name, value]) => ({
+            name,
+            value,
+          })),
         });
-
-        setOptimizedDose(totalWeight);
-        setOptimizedComposition(comp);
-
-        if (totalWeight > 0) {
-          const fn = (targetN / totalWeight) * 100;
-          const fp = (targetP / totalWeight) * 100;
-          const fk = (targetK / totalWeight) * 100;
-          setOptimizedFormulaTarget(`${fn.toFixed(1)}-${fp.toFixed(1)}-${fk.toFixed(1)}`);
-
-          setResultingGuarantees({
-            s: (resS / totalWeight) * 100,
-            ca: (resCa / totalWeight) * 100,
-            micros: Object.entries(microSums).map(([name, val]) => ({
-              name,
-              value: (val / totalWeight) * 100,
-            })),
-          });
-        }
       } else {
+        const issue = result.issue;
+        setComparisonIssue(
+          issue?.code === 'MISSING_MICRO_TARGET_SOURCE'
+            ? `Não há fonte selecionada para: ${issue.micronutrients.join(', ')}.`
+            : 'A fórmula não fecha com as categorias, mínimos, máximos e produtos fixos selecionados.'
+        );
         setOptimizedDose(0);
         setOptimizedComposition([]);
         setResultingGuarantees({ s: 0, ca: 0, micros: [] });
@@ -266,6 +254,7 @@ export function FertigranPComparisonModal({
     } else {
       // If a pre-defined formula is selected, we just adjust the dose based on P
       if (selectedFormula && targetP > 0 && selectedFormula.npk_p > 0) {
+        setComparisonIssue('');
         const fixedNewDose = targetP / (selectedFormula.npk_p / 100);
         setOptimizedDose(fixedNewDose);
         setOptimizedFormulaTarget(selectedFormula.nome);
@@ -275,12 +264,27 @@ export function FertigranPComparisonModal({
           micros: [],
         });
       } else {
+        setComparisonIssue('');
         setOptimizedDose(0);
         setOptimizedComposition([]);
         setResultingGuarantees({ s: 0, ca: 0, micros: [] });
       }
     }
-  }, [selectedFormulaId, targetN, targetP, targetK, localMacros, localMicros, selectedCategoryId]);
+  }, [
+    dose,
+    incompatibilityRules,
+    localMacros,
+    localMicros,
+    reductionK,
+    reductionN,
+    reductionP,
+    selectedFormula,
+    selectedFormulaId,
+    sourceCalculation,
+    targetK,
+    targetN,
+    targetP,
+  ]);
 
   if (optimizedDose > 0) {
     newDoseValue = optimizedDose;
@@ -368,14 +372,16 @@ export function FertigranPComparisonModal({
           kNum = parseFloat(matchedFormula[3].replace(',', '.'));
         }
 
-        const mappedMacros = localMacros.map((m) => ({
-          ...m,
-          selected: optimizedComposition.some((c) => c.material.id === m.id),
-        }));
-        const mappedMicros = localMicros.map((m) => ({
-          ...m,
-          selected: optimizedComposition.some((c) => c.material.id === m.id),
-        }));
+        const optimizedById = new Map(
+          optimizedComposition.map(({ material, qtd }) => [material.id, qtd])
+        );
+        const applyOptimizedQuantity = (material: RawMaterial): RawMaterial => ({
+          ...material,
+          selected: optimizedById.has(material.id),
+          quantity: optimizedById.get(material.id) || 0,
+        });
+        const mappedMacros = localMacros.map(applyOptimizedQuantity);
+        const mappedMicros = localMicros.map(applyOptimizedQuantity);
 
         onApplyFertigranP({
           formula: optimizedFormulaTarget,
@@ -385,24 +391,18 @@ export function FertigranPComparisonModal({
           targetK: kNum,
           targetS: resultingGuarantees.s,
           targetCa: resultingGuarantees.ca,
+          targetMicros: sourceCalculation.targetMicros,
+          category: sourceCalculation.category,
           macros: mappedMacros,
           micros: mappedMicros,
           factors: {
+            ...sourceCalculation.factors,
             targetFormula: optimizedFormulaTarget,
             factor: commercialFactors.factor,
             discount: commercialFactors.discount,
             margin: commercialFactors.margin,
             freight: commercialFactors.freight,
-            tipoFrete: (commercialFactors as any).tipoFrete ?? 'CIF',
-            taxRate: 0,
             commission: commercialFactors.commission,
-            monthlyInterestRate: 0,
-            dueDate: '',
-            exemptCurrentMonth: false,
-            client: { id: '', code: '', name: '', document: '' },
-            agent: { id: '', code: '', name: '', document: '' },
-            branchId: '',
-            priceListId: '',
             totalTons: newQuantityTons > 0 ? newQuantityTons : 1000,
           },
         });
@@ -415,24 +415,18 @@ export function FertigranPComparisonModal({
           targetK: selectedFormula.npk_k,
           targetCa: selectedFormula.ca,
           targetS: selectedFormula.s,
+          targetMicros: sourceCalculation.targetMicros,
+          category: sourceCalculation.category,
           macros: localMacros,
           micros: localMicros,
           factors: {
+            ...sourceCalculation.factors,
             targetFormula: selectedFormula.nome,
             factor: commercialFactors.factor,
             discount: commercialFactors.discount,
             margin: commercialFactors.margin,
             freight: commercialFactors.freight,
-            tipoFrete: (commercialFactors as any).tipoFrete ?? 'CIF',
-            taxRate: 0,
             commission: commercialFactors.commission,
-            monthlyInterestRate: 0,
-            dueDate: '',
-            exemptCurrentMonth: false,
-            client: { id: '', code: '', name: '', document: '' },
-            agent: { id: '', code: '', name: '', document: '' },
-            branchId: '',
-            priceListId: '',
             totalTons: newQuantityTons > 0 ? newQuantityTons : 1000,
           },
         });
@@ -464,7 +458,7 @@ export function FertigranPComparisonModal({
         <div className="flex items-center justify-between p-4 border-b border-stone-200 bg-stone-50">
           <div className="flex items-center gap-2">
             <Calculator className="w-5 h-5 text-emerald-600" />
-            <h2 className="text-lg font-bold text-stone-800">Comparação Fertigran P</h2>
+            <h2 className="text-lg font-bold text-stone-800">Comparador de Fórmulas</h2>
           </div>
           <button
             onClick={onClose}
@@ -628,6 +622,7 @@ export function FertigranPComparisonModal({
                       <input
                         type="checkbox"
                         checked={m.selected}
+                        disabled={isFixedComparisonMaterial(m)}
                         onChange={(e) => {
                           setLocalMacros((prev) =>
                             prev.map((p) =>
@@ -635,19 +630,40 @@ export function FertigranPComparisonModal({
                             )
                           );
                         }}
-                        className="rounded text-indigo-600 focus:ring-indigo-500"
+                        className="rounded text-indigo-600 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
                       />
-                      <span className="text-xs font-bold text-stone-700 truncate">{m.name}</span>
+                      <span className="min-w-0 flex-1 truncate text-xs font-bold text-stone-700">
+                        {m.name}
+                      </span>
+                      {isFixedComparisonMaterial(m) && (
+                        <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[8px] font-black text-indigo-700">
+                          FIXO
+                        </span>
+                      )}
                     </label>
                     <div className="flex items-center gap-1">
                       <input
                         type="number"
-                        placeholder="Qtd (kg)"
-                        value={m.quantity || 0}
+                        placeholder="Qtd. fixa (kg/t)"
+                        value={isFixedComparisonMaterial(m) ? m.minQty : ''}
                         onChange={(e) => {
+                          const fixedQuantity = Number(e.target.value) || 0;
+                          const baseline =
+                            sourceCalculation.macros.find(({ id }) => id === m.id) ||
+                            macros.find(({ id }) => id === m.id);
                           setLocalMacros((prev) =>
                             prev.map((mm) =>
-                              mm.id === m.id ? { ...mm, quantity: Number(e.target.value) || 0 } : mm
+                              mm.id === m.id
+                                ? {
+                                    ...mm,
+                                    selected: fixedQuantity > 0 || mm.selected,
+                                    quantity: fixedQuantity,
+                                    minQty:
+                                      fixedQuantity > 0 ? fixedQuantity : baseline?.minQty || 0,
+                                    maxQty:
+                                      fixedQuantity > 0 ? fixedQuantity : baseline?.maxQty || 1000,
+                                  }
+                                : mm
                             )
                           );
                         }}
@@ -668,6 +684,7 @@ export function FertigranPComparisonModal({
                       <input
                         type="checkbox"
                         checked={m.selected}
+                        disabled={isFixedComparisonMaterial(m)}
                         onChange={() => {
                           setLocalMicros((prev) =>
                             prev.map((mm) =>
@@ -675,18 +692,38 @@ export function FertigranPComparisonModal({
                             )
                           );
                         }}
-                        className="rounded text-amber-600 focus:ring-amber-500"
+                        className="rounded text-amber-600 focus:ring-amber-500 disabled:cursor-not-allowed disabled:opacity-60"
                       />
-                      <span className="text-xs font-bold text-stone-700 truncate">{m.name}</span>
+                      <span className="min-w-0 flex-1 truncate text-xs font-bold text-stone-700">
+                        {m.name}
+                      </span>
+                      {isFixedComparisonMaterial(m) && (
+                        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[8px] font-black text-amber-700">
+                          FIXO
+                        </span>
+                      )}
                     </label>
                     <input
                       type="number"
-                      placeholder="Qtd (kg)"
-                      value={m.quantity || 0}
+                      placeholder="Qtd. fixa (kg/t)"
+                      value={isFixedComparisonMaterial(m) ? m.minQty : ''}
                       onChange={(e) => {
+                        const fixedQuantity = Number(e.target.value) || 0;
+                        const baseline =
+                          sourceCalculation.micros.find(({ id }) => id === m.id) ||
+                          micros.find(({ id }) => id === m.id);
                         setLocalMicros((prev) =>
                           prev.map((mm) =>
-                            mm.id === m.id ? { ...mm, quantity: Number(e.target.value) || 0 } : mm
+                            mm.id === m.id
+                              ? {
+                                  ...mm,
+                                  selected: fixedQuantity > 0 || mm.selected,
+                                  quantity: fixedQuantity,
+                                  minQty: fixedQuantity > 0 ? fixedQuantity : baseline?.minQty || 0,
+                                  maxQty:
+                                    fixedQuantity > 0 ? fixedQuantity : baseline?.maxQty || 1000,
+                                }
+                              : mm
                           )
                         );
                       }}
@@ -783,6 +820,12 @@ export function FertigranPComparisonModal({
             </h3>
 
             <div className="p-4 bg-indigo-50/30 rounded-lg border border-indigo-100 space-y-4">
+              {comparisonIssue && (
+                <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs font-semibold text-amber-900">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{comparisonIssue}</span>
+                </div>
+              )}
               <div className="flex flex-wrap items-center gap-4">
                 <div className="flex-1 min-w-[300px]">
                   <label className="block text-xs text-indigo-700 font-bold mb-2">
@@ -804,20 +847,34 @@ export function FertigranPComparisonModal({
 
                 <div className="flex-1 min-w-[300px]">
                   <label className="block text-xs text-indigo-700 font-bold mb-2">
-                    Filtrar Matérias-Primas por Categoria:
+                    Categorias candidatas para comparação:
                   </label>
-                  <select
-                    value={selectedCategoryId}
-                    onChange={(e) => setSelectedCategoryId(e.target.value)}
-                    className="w-full px-3 py-2 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white"
-                  >
-                    <option value="all">Todas as Matérias-Primas Selecionadas</option>
-                    {compCategories.map((cat) => (
-                      <option key={cat.id} value={cat.id}>
-                        {cat.nome}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex min-h-10 flex-wrap gap-2 rounded-lg border border-indigo-200 bg-white p-2">
+                    {compCategories.map((cat) => {
+                      const active = selectedCategoryIds.includes(cat.id);
+                      return (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          aria-pressed={active}
+                          onClick={() => toggleCategory(cat.id)}
+                          className={`rounded-full border px-3 py-1 text-xs font-bold transition-colors ${
+                            active
+                              ? 'border-indigo-600 bg-indigo-600 text-white'
+                              : 'border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                          }`}
+                        >
+                          {cat.nome}
+                        </button>
+                      );
+                    })}
+                    {compCategories.length === 0 && (
+                      <span className="text-xs text-stone-400">Nenhuma categoria cadastrada.</span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-[10px] text-stone-500">
+                    Produtos já selecionados, micros e quantidades fixas permanecem incluídos.
+                  </p>
                 </div>
 
                 <div className="flex items-center gap-2 pt-6">
@@ -898,7 +955,7 @@ export function FertigranPComparisonModal({
                           {dose > 0 ? optimizedFormulaTarget : '0-0-0'}
                         </span>
                         <p className="text-[10px] text-stone-500 mt-1">
-                          Fórmula Otimizada (Dose Mínima Fertigran)
+                          Fórmula otimizada pelas categorias selecionadas
                         </p>
                       </div>
 
@@ -934,7 +991,7 @@ export function FertigranPComparisonModal({
                                 >
                                   <span>{item.material.name}</span>
                                   <span className="font-mono text-emerald-600 font-bold">
-                                    {((item.qtd / optimizedDose) * 1000).toFixed(1)} kg
+                                    {item.qtd.toFixed(2)} kg
                                   </span>
                                 </div>
                               ))}

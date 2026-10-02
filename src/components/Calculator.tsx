@@ -135,6 +135,7 @@ export default function Calculator({
     catalogMacros,
     catalogMicros,
     compCategories,
+    incompatibilityRules,
     isMaterialsLoading,
     hasNoMaterialsInDatabase,
     isLocked,
@@ -1566,17 +1567,12 @@ export default function Calculator({
                                   false) && (
                                 <button
                                   onClick={() => {
-                                    setCurrentComparisonFormula({
-                                      formulaName: calc.formula,
-                                      n: calc.summary!.resultingN,
-                                      p: calc.summary!.resultingP,
-                                      k: calc.summary!.resultingK,
-                                    });
+                                    setCurrentComparisonFormula(calc);
                                     setIsFertigranPModalOpen(true);
                                   }}
                                   className="text-[10px] font-bold bg-indigo-50 text-indigo-700 px-2 py-1 rounded hover:bg-indigo-100 transition-colors flex items-center"
                                 >
-                                  Comparar com Fertigran P
+                                  Comparar fórmula
                                 </button>
                               )}
                           </div>
@@ -1860,7 +1856,9 @@ export default function Calculator({
                                           value={ajusteAtual}
                                           onChange={(e) => {
                                             const ajuste = e.target.value as
-                                              'nenhum' | 'cobrar' | 'descontar';
+                                              | 'nenhum'
+                                              | 'cobrar'
+                                              | 'descontar';
                                             updateCalculationFactors(
                                               calc.id,
                                               'embalagem_ajuste',
@@ -2631,13 +2629,11 @@ export default function Calculator({
         <FertigranPComparisonModal
           isOpen={isFertigranPModalOpen}
           onClose={() => setIsFertigranPModalOpen(false)}
-          originalFormulaName={currentComparisonFormula.formulaName}
-          originalN={currentComparisonFormula.n}
-          originalP={currentComparisonFormula.p}
-          originalK={currentComparisonFormula.k}
+          sourceCalculation={currentComparisonFormula}
           currentUser={currentUser}
           macros={macros}
           micros={micros}
+          incompatibilityRules={incompatibilityRules}
           onApplyFertigranP={(newFormula) => {
             setCalculations([
               ...calculations,
@@ -2646,7 +2642,7 @@ export default function Calculator({
                 id: `f_${Date.now()}`,
               },
             ]);
-            showSuccess('Receita Fertigran adicionada na Precificação!');
+            showSuccess('Alternativa comparada adicionada à precificação!');
           }}
         />
       )}
