@@ -49,6 +49,35 @@ describe('formula comparison preparation', () => {
     expect(result.find(({ id }) => id === 'fixed')).toMatchObject({ minQty: 25, maxQty: 25 });
   });
 
+  it('usa somente os candidatos da categoria e produtos fixos na comparação', () => {
+    const selectedOutsideCategory = material({
+      id: 'selected-outside',
+      selected: true,
+      categories: ['original'],
+    });
+    const fixedOutsideCategory = material({
+      id: 'fixed-outside',
+      selected: true,
+      minQty: 50,
+      maxQty: 50,
+      categories: ['original'],
+    });
+    const categoryCandidate = material({ id: 'candidate', categories: ['comparison'] });
+
+    const result = buildComparisonMaterials({
+      available: [selectedOutsideCategory, fixedOutsideCategory, categoryCandidate],
+      source: [selectedOutsideCategory, fixedOutsideCategory],
+      categoryIds: ['comparison'],
+      includeCategoryCandidates: true,
+      preserveSourceSelection: false,
+    });
+
+    expect(result.filter(({ selected }) => selected).map(({ id }) => id)).toEqual([
+      'fixed-outside',
+      'candidate',
+    ]);
+  });
+
   it('identifica fixo somente quando mínimo e máximo positivos são iguais', () => {
     expect(isFixedComparisonMaterial(material({ minQty: 20, maxQty: 20 }))).toBe(true);
     expect(isFixedComparisonMaterial(material({ minQty: 0, maxQty: 0 }))).toBe(false);
@@ -117,6 +146,7 @@ describe('formula comparison preparation', () => {
 
     expect(alternatives).toHaveLength(2);
     expect(alternatives.every(({ feasible }) => feasible)).toBe(true);
+    expect(alternatives.every(({ deviationScore }) => Number.isFinite(deviationScore))).toBe(true);
     expect(alternatives[0].calculation).toMatchObject({
       formula: '0.00-10.00-0.00',
       targetN: 0,

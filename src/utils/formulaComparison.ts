@@ -21,18 +21,21 @@ interface BuildComparisonMaterialsInput {
   source: RawMaterial[];
   categoryIds?: string[];
   includeCategoryCandidates?: boolean;
+  preserveSourceSelection?: boolean;
 }
 
 /**
  * Builds a candidate list from the current price-list products while keeping
- * the exact constraints configured in the source formula. Selected and fixed
- * products from the source are never removed by a category filter.
+ * the exact constraints configured in the source formula. Fixed products are
+ * never removed. Source selection can be discarded when a category must form
+ * an independent candidate pool.
  */
 export function buildComparisonMaterials({
   available,
   source,
   categoryIds = [],
   includeCategoryCandidates = false,
+  preserveSourceSelection = true,
 }: BuildComparisonMaterialsInput): RawMaterial[] {
   const sourceById = new Map(source.map((material) => [material.id, material]));
   const availableIds = new Set(available.map((material) => material.id));
@@ -44,7 +47,9 @@ export function buildComparisonMaterials({
       selectedCategories.size > 0 &&
       (material.categories || []).some((categoryId) => selectedCategories.has(categoryId));
     const mustRemainSelected = Boolean(
-      sourceMaterial?.selected || (sourceMaterial && isFixedComparisonMaterial(sourceMaterial))
+      sourceMaterial &&
+      (isFixedComparisonMaterial(sourceMaterial) ||
+        (preserveSourceSelection && sourceMaterial.selected))
     );
 
     return {
@@ -138,6 +143,7 @@ export function buildFormulaComparisonAlternatives({
       source: sourceCalculation.macros,
       categoryIds: [categoryId],
       includeCategoryCandidates: true,
+      preserveSourceSelection: false,
     });
     const micros = buildComparisonMaterials({
       available: availableMicros,
@@ -179,13 +185,14 @@ export function buildFormulaComparisonAlternatives({
       issueMessage: describeIssue(result.issue),
       deviationScore:
         comparisons.reduce(
-          (total, comparison) => total + Math.abs(comparison.calculated - comparison.target),
+          (total, comparison) =>
+            total + Math.abs(numeric(comparison.calculated) - numeric(comparison.target)),
           0
         ) +
         (result.calculation.summary && nutrientTarget
-          ? Math.abs(result.calculation.summary.resultingN - nutrientTarget.n) +
-            Math.abs(result.calculation.summary.resultingP - nutrientTarget.p) +
-            Math.abs(result.calculation.summary.resultingK - nutrientTarget.k)
+          ? Math.abs(numeric(result.calculation.summary.resultingN) - numeric(nutrientTarget.n)) +
+            Math.abs(numeric(result.calculation.summary.resultingP) - numeric(nutrientTarget.p)) +
+            Math.abs(numeric(result.calculation.summary.resultingK) - numeric(nutrientTarget.k))
           : 0),
     };
   });
