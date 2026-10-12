@@ -15,6 +15,7 @@ import {
   getGoals,
   getPricingRecords,
   normalizeCalculationsForDb,
+  saveUnifiedProduct,
   saveProfitabilityToCalc,
   updatePricingRecord,
 } from './db';
@@ -209,5 +210,34 @@ describe('pricing record persistence', () => {
     );
     expect(update.mock.calls[0][0]).not.toHaveProperty('organization_id');
     expect(eq).toHaveBeenCalledWith('id', 'pricing-1');
+  });
+});
+
+describe('catalog material persistence', () => {
+  it('envia os limites padrão mínimo e máximo no salvamento atômico', async () => {
+    rpcMock.mockResolvedValue({ data: 'macro-1', error: null });
+
+    const result = await saveUnifiedProduct({
+      type: 'macro',
+      name: 'MAP Granulado',
+      code: '10',
+      minQuantity: 50,
+      maxQuantity: 350,
+      categories: [],
+      n: 11,
+      p: 52,
+      k: 0,
+    });
+
+    expect(result).toBe('macro-1');
+    expect(rpcMock).toHaveBeenCalledWith(
+      'save_catalog_material',
+      expect.objectContaining({
+        p_payload: expect.objectContaining({
+          min_quantity: 50,
+          max_quantity: 350,
+        }),
+      })
+    );
   });
 });

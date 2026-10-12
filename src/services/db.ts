@@ -471,6 +471,7 @@ function macroToDb(m: Partial<MacroMaterial>) {
   if (m.formulaSuffix !== undefined) d.formula_suffix = m.formulaSuffix;
   if (m.isPremiumLine !== undefined) d.is_premium_line = m.isPremiumLine;
   if (m.minQuantity !== undefined) d.min_quantity = m.minQuantity;
+  if (m.maxQuantity !== undefined) d.max_quantity = m.maxQuantity;
   if (m.ativo !== undefined) d.ativo = m.ativo;
   if (m.availableInCalculatorWithoutPriceList !== undefined)
     d.available_in_calculator_without_price_list = m.availableInCalculatorWithoutPriceList;
@@ -494,6 +495,7 @@ function mapMacro(data: Record<string, unknown>): MacroMaterial {
     formulaSuffix: data.formula_suffix,
     isPremiumLine: data.is_premium_line || false,
     minQuantity: data.min_quantity ? Number(data.min_quantity) : 0,
+    maxQuantity: data.max_quantity ? Number(data.max_quantity) : 0,
     ativo: data.ativo !== false,
     availableInCalculatorWithoutPriceList: data.available_in_calculator_without_price_list || false,
   } as MacroMaterial;
@@ -641,6 +643,7 @@ function microToDb(m: Partial<MicroMaterial>) {
   if (m.categories !== undefined) d.categories = m.categories;
   if (m.formulaSuffix !== undefined) d.formula_suffix = m.formulaSuffix;
   if (m.minQuantity !== undefined) d.min_quantity = m.minQuantity;
+  if (m.maxQuantity !== undefined) d.max_quantity = m.maxQuantity;
   if (m.isPremiumLine !== undefined) d.is_premium_line = m.isPremiumLine;
   if (m.ativo !== undefined) d.ativo = m.ativo;
   if (m.availableInCalculatorWithoutPriceList !== undefined)
@@ -658,6 +661,7 @@ function mapMicro(data: Record<string, unknown>): MicroMaterial {
     categories: data.categories || [],
     formulaSuffix: data.formula_suffix,
     minQuantity: data.min_quantity ? Number(data.min_quantity) : 0,
+    maxQuantity: data.max_quantity ? Number(data.max_quantity) : 0,
     isPremiumLine: data.is_premium_line || false,
     ativo: data.ativo !== false,
     availableInCalculatorWithoutPriceList: data.available_in_calculator_without_price_list || false,
@@ -745,6 +749,7 @@ export async function getUnifiedProducts(): Promise<UnifiedProduct[]> {
       name: m.name,
       code: m.code || '',
       minQuantity: m.minQuantity || 0,
+      maxQuantity: m.maxQuantity || 0,
       categories: m.categories || [],
       n: m.n,
       p: m.p,
@@ -765,6 +770,7 @@ export async function getUnifiedProducts(): Promise<UnifiedProduct[]> {
       name: m.name,
       code: m.code || '',
       minQuantity: m.minQuantity || 0,
+      maxQuantity: m.maxQuantity || 0,
       categories: m.categories || [],
       microGuarantees: m.microGuarantees,
       formulaSuffix: m.formulaSuffix,
@@ -793,6 +799,7 @@ export async function saveUnifiedProduct(p: Partial<UnifiedProduct>, id?: string
       name: p.name!,
       code: p.code,
       minQuantity: p.minQuantity,
+      maxQuantity: p.maxQuantity,
       categories: p.categories || [],
       n: p.n || 0,
       p: p.p || 0,
@@ -811,6 +818,7 @@ export async function saveUnifiedProduct(p: Partial<UnifiedProduct>, id?: string
         code: macroData.code,
         name: macroData.name,
         min_quantity: macroData.minQuantity,
+        max_quantity: macroData.maxQuantity,
         categories: macroData.categories,
         n: macroData.n,
         p: macroData.p,
@@ -832,6 +840,7 @@ export async function saveUnifiedProduct(p: Partial<UnifiedProduct>, id?: string
       name: p.name!,
       code: p.code,
       minQuantity: p.minQuantity,
+      maxQuantity: p.maxQuantity,
       categories: p.categories || [],
       microGuarantees: p.microGuarantees || [],
       formulaSuffix: p.formulaSuffix,
@@ -844,6 +853,7 @@ export async function saveUnifiedProduct(p: Partial<UnifiedProduct>, id?: string
         code: microData.code,
         name: microData.name,
         min_quantity: microData.minQuantity,
+        max_quantity: microData.maxQuantity,
         categories: microData.categories,
         micro_guarantees: microData.microGuarantees,
         formula_suffix: microData.formulaSuffix || null,
@@ -1176,7 +1186,9 @@ const EMPTY_PRICING_SUMMARY: PricingRecord['summary'] = {
 };
 const FREE_PRODUCTS_FORMULA_LABEL = 'Produtos Livres';
 type CalculationDbInput =
-  Partial<NonNullable<PricingRecord['calculations']>[number]> | null | undefined;
+  | Partial<NonNullable<PricingRecord['calculations']>[number]>
+  | null
+  | undefined;
 
 const parseFiniteNumber = (value: unknown, fallback = 0) => {
   const parsed = Number(value);

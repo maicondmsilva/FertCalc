@@ -17,6 +17,7 @@ export interface UnifiedProduct {
   code: string;
   type: NutrientType;
   minQuantity: number;
+  maxQuantity?: number;
   categories: string[];
 
   // Specific fields mapped from macro/micro/finished
@@ -73,6 +74,7 @@ export interface RawMaterial {
   isPremiumLine?: boolean;
   isFertigranP?: boolean;
   minQuantity?: number;
+  maxQuantity?: number;
   microInputMode?: 'kg' | 'percent';
   selectedMicroGuarantee?: string;
   desiredGuaranteePercent?: number;
@@ -373,6 +375,7 @@ export interface MacroMaterial {
   formulaSuffix?: string;
   isPremiumLine?: boolean;
   minQuantity?: number;
+  maxQuantity?: number;
   availableInCalculatorWithoutPriceList?: boolean;
   extraLoadingLocationIds?: string[];
   ativo?: boolean;
@@ -387,6 +390,7 @@ export interface MicroMaterial {
   categories?: string[];
   formulaSuffix?: string;
   minQuantity?: number;
+  maxQuantity?: number;
   isPremiumLine?: boolean;
   availableInCalculatorWithoutPriceList?: boolean;
   extraLoadingLocationIds?: string[];

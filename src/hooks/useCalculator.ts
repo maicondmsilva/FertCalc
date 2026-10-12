@@ -479,12 +479,28 @@ export function useCalculator({
               isOutsidePriceList: false,
               selected: !material.isPremiumLine,
               quantity: 0,
+              minQuantity:
+                catalogMacros.find((item) => item.id === material.id)?.minQuantity ??
+                material.minQuantity ??
+                0,
+              maxQuantity:
+                catalogMacros.find((item) => item.id === material.id)?.maxQuantity ??
+                material.maxQuantity ??
+                0,
               minQty:
-                material.minQuantity !== undefined
-                  ? material.minQuantity
-                  : material.type === 'macro' && !material.name.toLowerCase().includes('enchimento')
-                    ? 50
-                    : material.minQty || 0,
+                catalogMacros.find((item) => item.id === material.id)?.minQuantity !== undefined
+                  ? catalogMacros.find((item) => item.id === material.id)?.minQuantity || 0
+                  : material.minQuantity !== undefined
+                    ? material.minQuantity
+                    : material.type === 'macro' &&
+                        !material.name.toLowerCase().includes('enchimento')
+                      ? 50
+                      : material.minQty || 0,
+              maxQty:
+                catalogMacros.find((item) => item.id === material.id)?.maxQuantity ??
+                material.maxQuantity ??
+                material.maxQty ??
+                0,
             })),
           ...extraMacros.map((m) => ({
             ...m,
@@ -493,7 +509,7 @@ export function useCalculator({
             selected: false,
             quantity: 0,
             minQty: m.minQuantity || 0,
-            maxQty: 0,
+            maxQty: m.maxQuantity || 0,
             isOutsidePriceList: true,
           })),
         ];
@@ -509,8 +525,25 @@ export function useCalculator({
               isOutsidePriceList: false,
               selected: false,
               quantity: 0,
+              minQuantity:
+                catalogMicros.find((item) => item.id === material.id)?.minQuantity ??
+                material.minQuantity ??
+                0,
+              maxQuantity:
+                catalogMicros.find((item) => item.id === material.id)?.maxQuantity ??
+                material.maxQuantity ??
+                0,
               minQty:
-                material.minQuantity !== undefined ? material.minQuantity : material.minQty || 0,
+                catalogMicros.find((item) => item.id === material.id)?.minQuantity !== undefined
+                  ? catalogMicros.find((item) => item.id === material.id)?.minQuantity || 0
+                  : material.minQuantity !== undefined
+                    ? material.minQuantity
+                    : material.minQty || 0,
+              maxQty:
+                catalogMicros.find((item) => item.id === material.id)?.maxQuantity ??
+                material.maxQuantity ??
+                material.maxQty ??
+                0,
             })),
           ...extraMicros.map((m) => ({
             ...m,
@@ -524,7 +557,7 @@ export function useCalculator({
             selected: false,
             quantity: 0,
             minQty: m.minQuantity || 0,
-            maxQty: 0,
+            maxQty: m.maxQuantity || 0,
             isOutsidePriceList: true,
           })),
         ];
