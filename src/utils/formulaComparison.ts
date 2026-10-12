@@ -6,6 +6,7 @@ import type {
 } from '../types';
 import {
   calculateTargetFormula,
+  formatOptimizationDiagnostics,
   parseFormulaTarget,
   type CalculationIssue,
 } from '../domain/pricing-engine';
@@ -117,7 +118,7 @@ const describeIssue = (issue?: CalculationIssue): string | undefined => {
     return `Sem fonte selecionada para ${issue.micronutrients.join(', ')}.`;
   }
   if (issue.code === 'INFEASIBLE_FORMULA') {
-    return 'Não fecha com os mínimos, máximos, fixos e incompatibilidades desta categoria.';
+    return formatOptimizationDiagnostics(issue.diagnostics);
   }
   if (issue.code === 'EMPTY_FREE_PRODUCTS') return 'Nenhum produto livre foi informado.';
   return `Produto ${issue.productId} não está disponível para esta comparação.`;

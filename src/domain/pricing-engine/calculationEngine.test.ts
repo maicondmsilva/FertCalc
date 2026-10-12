@@ -100,7 +100,16 @@ describe('calculation orchestration engine', () => {
     const target = calculation({ formula: '00-00-60' });
     const result = execute(target);
 
-    expect(result.issue).toEqual({ code: 'INFEASIBLE_FORMULA', formula: '00-00-60' });
+    expect(result.issue).toMatchObject({
+      code: 'INFEASIBLE_FORMULA',
+      formula: '00-00-60',
+      diagnostics: [
+        {
+          code: 'NUTRIENT_SOURCE_MISSING',
+          nutrient: 'K',
+        },
+      ],
+    });
     expect(result.calculation.macros[0].quantity).toBe(0);
     expect(result.calculation.summary?.totalWeight).toBe(0);
   });

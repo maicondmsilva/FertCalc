@@ -8,13 +8,17 @@ import {
 } from '../../utils/micronutrients';
 import { hasFormulaTarget, parseFormulaTarget } from './formulaEngine';
 import { optimizeFormula } from './optimizationEngine';
+import {
+  diagnoseFormulaInfeasibility,
+  type OptimizationDiagnostic,
+} from './optimizationDiagnostics';
 import { calculatePricingSummary } from './pricingEngine';
 
 export type CalculationIssue =
   | { code: 'EMPTY_FREE_PRODUCTS' }
   | { code: 'UNKNOWN_FREE_PRODUCT'; productId: string }
   | { code: 'MISSING_MICRO_TARGET_SOURCE'; micronutrients: string[] }
-  | { code: 'INFEASIBLE_FORMULA'; formula: string };
+  | { code: 'INFEASIBLE_FORMULA'; formula: string; diagnostics: OptimizationDiagnostic[] };
 
 export interface CalculateTargetFormulaInput {
   calculation: TargetFormula;
@@ -117,10 +121,10 @@ export function calculateTargetFormula({
       ([name]) => !isSecondaryNutrientGuarantee(name)
     )
   );
-  const missingMicronutrientSources = getMissingSelectedMicronutrientSources(
-    micronutrientTargets,
-    [...currentMacros, ...currentMicros]
-  );
+  const missingMicronutrientSources = getMissingSelectedMicronutrientSources(micronutrientTargets, [
+    ...currentMacros,
+    ...currentMicros,
+  ]);
   if (missingMicronutrientSources.length > 0) {
     return {
       calculation,
@@ -131,7 +135,7 @@ export function calculateTargetFormula({
     };
   }
 
-  const optimization = optimizeFormula({
+  const optimizationInput = {
     target,
     targetS: calculation.targetS || getSecondaryNutrientTarget(calculation.targetMicros, 's'),
     targetCa: calculation.targetCa || getSecondaryNutrientTarget(calculation.targetMicros, 'ca'),
@@ -139,7 +143,8 @@ export function calculateTargetFormula({
     macros: currentMacros,
     micros: currentMicros,
     incompatibilityRules,
-  });
+  };
+  const optimization = optimizeFormula(optimizationInput);
   if (!optimization.feasible) {
     return {
       calculation: {
@@ -150,7 +155,11 @@ export function calculateTargetFormula({
           calculation.factors
         ),
       },
-      issue: { code: 'INFEASIBLE_FORMULA', formula: calculation.formula },
+      issue: {
+        code: 'INFEASIBLE_FORMULA',
+        formula: calculation.formula,
+        diagnostics: diagnoseFormulaInfeasibility(optimizationInput),
+      },
     };
   }
 

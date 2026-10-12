@@ -55,6 +55,7 @@ import {
   applyFreeCompositionSummary,
   calculateTargetFormula,
   calculatePricingSummary,
+  formatOptimizationDiagnostics,
   hasFormulaTarget,
 } from '../domain/pricing-engine';
 import { validatePricingForSave } from '../utils/pricingValidation';
@@ -850,7 +851,7 @@ export function useCalculator({
         );
       } else if (result.issue?.code === 'INFEASIBLE_FORMULA') {
         showError(
-          `A formulação ${result.issue.formula} não fecha com os produtos selecionados. Verifique as restrições ou adicione enchimento.`
+          `A formulação ${result.issue.formula} não fecha. ${formatOptimizationDiagnostics(result.issue.diagnostics)}`
         );
       }
     });
