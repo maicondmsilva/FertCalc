@@ -19,7 +19,7 @@ import {
   IncompatibilityRule,
 } from '../types';
 import { useToast } from './Toast';
-import { calculateTargetFormula } from '../domain/pricing-engine';
+import { calculateTargetFormula, formatOptimizationDiagnostics } from '../domain/pricing-engine';
 import { formatNPK } from '../utils/formatters';
 import {
   buildComparisonMaterials,
@@ -214,7 +214,9 @@ export function FertigranPComparisonModal({
         setComparisonIssue(
           issue?.code === 'MISSING_MICRO_TARGET_SOURCE'
             ? `Não há fonte selecionada para: ${issue.micronutrients.join(', ')}.`
-            : 'A fórmula não fecha com as categorias, mínimos, máximos e produtos fixos selecionados.'
+            : issue?.code === 'INFEASIBLE_FORMULA'
+              ? formatOptimizationDiagnostics(issue.diagnostics)
+              : 'A fórmula não fecha com os produtos selecionados.'
         );
         setOptimizedDose(0);
         setOptimizedComposition([]);

@@ -1,5 +1,6 @@
 export * from './formulaEngine';
 export * from './optimizationEngine';
+export * from './optimizationDiagnostics';
 export * from './pricingEngine';
 export * from './commercialWaterfall';
 export * from './profitabilityEngine';

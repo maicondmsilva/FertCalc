@@ -185,7 +185,7 @@ describe('formula comparison preparation', () => {
     });
 
     expect(alternatives[0].feasible).toBe(false);
-    expect(alternatives[0].issueMessage).toContain('Não fecha');
+    expect(alternatives[0].issueMessage).toContain('Nenhum produto selecionado fornece P');
   });
 
   it('cria um novo cartão selecionado com a tonelagem da alternativa sem alterar a origem', () => {
