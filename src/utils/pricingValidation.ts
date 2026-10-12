@@ -19,6 +19,16 @@ export function validatePricingForSave(
     };
   }
 
+  const formulaWithPendingApproximation = selectedCalculations.find(
+    (calculation) => calculation.approximation
+  );
+  if (formulaWithPendingApproximation) {
+    return {
+      valid: false,
+      message: `A fórmula "${formulaWithPendingApproximation.formula || 'sem nome'}" possui uma sugestão pendente. Use a sugestão ou ajuste os produtos antes de salvar.`,
+    };
+  }
+
   const formulaWithoutExchangeRate = selectedCalculations.find(
     (calculation) => !hasValidPricingExchangeRate(calculation.factors)
   );

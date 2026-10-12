@@ -590,6 +590,7 @@ export function useCalculator({
                       ...(!initialData ? { factor: defaultFactor } : {}),
                     },
                     summary: undefined,
+                    approximation: undefined,
                   }
                 : calc;
             }
@@ -633,6 +634,7 @@ export function useCalculator({
                 : calc.factors,
               macros: updatedCalcMacros,
               micros: updatedCalcMicros,
+              approximation: undefined,
             };
           })
         );
@@ -1143,6 +1145,7 @@ export function useCalculator({
         if (c.id === calcId) {
           const updated = {
             ...c,
+            approximation: undefined,
             micros: c.micros.map((m) => (m.id === microId ? { ...m, [field]: value } : m)),
           };
           if (!hasFormulaTarget(updated.formula)) {
@@ -1168,6 +1171,16 @@ export function useCalculator({
             ...c,
             factors: newFactors,
             summary: calculateSummary(c.macros, c.micros, newFactors),
+            approximation: c.approximation
+              ? {
+                  ...c.approximation,
+                  summary: calculateSummary(
+                    c.approximation.macros,
+                    c.approximation.micros,
+                    newFactors
+                  ),
+                }
+              : undefined,
           };
         }
         return c;
@@ -1473,6 +1486,7 @@ export function useCalculator({
       const divergences = guaranteeDivergences.filter((item) => item.formulaId === calculation.id);
       return {
         ...calculation,
+        approximation: undefined,
         guaranteeDivergenceAuthorization:
           divergences.length > 0 && overrideJustification?.trim()
             ? {
@@ -1791,6 +1805,10 @@ export function useCalculator({
     const selectedCalc = calculations.find((c) => c.selected);
     if (!selectedCalc) {
       showError('Calcule e selecione uma fórmula para salvar a batida.');
+      return;
+    }
+    if (selectedCalc.approximation) {
+      showError('Use a sugestão aproximada ou ajuste a fórmula antes de salvar a batida.');
       return;
     }
 
