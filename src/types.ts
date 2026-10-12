@@ -456,6 +456,7 @@ export interface TargetFormula {
   targetCa?: number;
   targetS?: number;
   targetMicros?: Record<string, number>;
+  approximation?: FormulaApproximation;
   guaranteeDivergenceAuthorization?: {
     authorizedByUserId: string;
     authorizedByUserName: string;
@@ -468,6 +469,15 @@ export interface TargetFormula {
     }>;
   };
   profitabilityAnalysis?: ProfitabilityAnalysis;
+}
+
+export interface FormulaApproximation {
+  suggestedFormula: string;
+  macros: RawMaterial[];
+  micros: RawMaterial[];
+  summary: PricingSummary;
+  deviationScore: number;
+  targetMicros: Record<string, number>;
 }
 
 export interface SavedFormula {

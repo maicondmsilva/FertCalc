@@ -112,6 +112,8 @@ describe('calculation orchestration engine', () => {
     });
     expect(result.calculation.macros[0].quantity).toBe(0);
     expect(result.calculation.summary?.totalWeight).toBe(0);
+    expect(result.calculation.approximation?.suggestedFormula).toBe('45-0-0');
+    expect(result.calculation.approximation?.macros[0].quantity).toBeCloseTo(1000);
   });
 
   it('encaminha metas de micronutrientes para o solver', () => {

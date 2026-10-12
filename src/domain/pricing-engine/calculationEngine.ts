@@ -7,6 +7,7 @@ import {
   isSecondaryNutrientGuarantee,
 } from '../../utils/micronutrients';
 import { hasFormulaTarget, parseFormulaTarget } from './formulaEngine';
+import { approximateFormula } from './formulaApproximationEngine';
 import { optimizeFormula } from './optimizationEngine';
 import {
   diagnoseFormulaInfeasibility,
@@ -125,16 +126,6 @@ export function calculateTargetFormula({
     ...currentMacros,
     ...currentMicros,
   ]);
-  if (missingMicronutrientSources.length > 0) {
-    return {
-      calculation,
-      issue: {
-        code: 'MISSING_MICRO_TARGET_SOURCE',
-        micronutrients: missingMicronutrientSources,
-      },
-    };
-  }
-
   const optimizationInput = {
     target,
     targetS: calculation.targetS || getSecondaryNutrientTarget(calculation.targetMicros, 's'),
@@ -144,11 +135,42 @@ export function calculateTargetFormula({
     micros: currentMicros,
     incompatibilityRules,
   };
+  const buildApproximation = () => {
+    const approximation = approximateFormula(optimizationInput);
+    if (!approximation.feasible) return undefined;
+    return {
+      suggestedFormula: approximation.suggestedFormula,
+      macros: approximation.macros,
+      micros: approximation.micros,
+      summary: calculatePricingSummary(
+        approximation.macros,
+        approximation.micros,
+        calculation.factors
+      ),
+      deviationScore: approximation.deviationScore,
+      targetMicros: approximation.achievedMicroTargets,
+    };
+  };
+  if (missingMicronutrientSources.length > 0) {
+    return {
+      calculation: {
+        ...calculation,
+        approximation: buildApproximation(),
+        summary: calculatePricingSummary(currentMacros, currentMicros, calculation.factors),
+      },
+      issue: {
+        code: 'MISSING_MICRO_TARGET_SOURCE',
+        micronutrients: missingMicronutrientSources,
+      },
+    };
+  }
+
   const optimization = optimizeFormula(optimizationInput);
   if (!optimization.feasible) {
     return {
       calculation: {
         ...calculation,
+        approximation: buildApproximation(),
         summary: calculatePricingSummary(
           calculation.macros,
           calculation.micros,
@@ -166,6 +188,7 @@ export function calculateTargetFormula({
   return {
     calculation: {
       ...calculation,
+      approximation: undefined,
       macros: optimization.macros,
       micros: optimization.micros,
       summary: calculatePricingSummary(

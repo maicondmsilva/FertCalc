@@ -890,7 +890,7 @@ export function useCalculator({
     setCalculations(
       calculations.map((c) => {
         if (c.id === id) {
-          let updatedFormula = { ...c, [field]: value };
+          let updatedFormula = { ...c, [field]: value, approximation: undefined };
 
           // Se a mudança for na categoria, vamos auto-selecionar os produtos
           if (field === 'category') {
@@ -927,11 +927,45 @@ export function useCalculator({
             );
           }
 
-          return { ...updatedFormula, summary: undefined };
+          return { ...updatedFormula, summary: undefined, approximation: undefined };
         }
         return c;
       })
     );
+  };
+
+  const applyFormulaApproximation = (id: string) => {
+    const selectedApproximation = calculations.find(
+      (calculation) => calculation.id === id
+    )?.approximation;
+    if (!selectedApproximation) return;
+    setCalculations((previous) =>
+      previous.map((calculation) => {
+        if (calculation.id !== id || !calculation.approximation) return calculation;
+        const approximation = calculation.approximation;
+        return {
+          ...calculation,
+          formula: approximation.suggestedFormula,
+          macros: approximation.macros,
+          micros: approximation.micros,
+          summary: approximation.summary,
+          targetCa:
+            Number(calculation.targetCa) > 0
+              ? approximation.summary.resultingCa
+              : calculation.targetCa,
+          targetS:
+            Number(calculation.targetS) > 0
+              ? approximation.summary.resultingS
+              : calculation.targetS,
+          targetMicros: {
+            ...(calculation.targetMicros || {}),
+            ...approximation.targetMicros,
+          },
+          approximation: undefined,
+        };
+      })
+    );
+    showSuccess(`Sugestão ${selectedApproximation.suggestedFormula} aplicada à fórmula.`);
   };
 
   const setCalculationProduct = (calcId: string, productId?: string) => {
@@ -1964,6 +1998,7 @@ export function useCalculator({
     removeMacro,
     removeMicro,
     calculateFormula,
+    applyFormulaApproximation,
     calculateSummary,
     addTargetFormula,
     removeTargetFormula,
