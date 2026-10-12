@@ -7,9 +7,19 @@ import {
   getMissingSelectedMicronutrientSources,
   getMicronutrientTargetStatus,
   isSecondaryNutrientGuarantee,
+  normalizeMicronutrientKey,
 } from './micronutrients';
 
 describe('micronutrient catalog helpers', () => {
+  it('normaliza símbolos e nomes completos para a mesma identidade nutricional', () => {
+    expect(normalizeMicronutrientKey('Boro')).toBe('B');
+    expect(normalizeMicronutrientKey('b')).toBe('B');
+    expect(normalizeMicronutrientKey('Zinco')).toBe('ZN');
+    expect(normalizeMicronutrientKey('zn')).toBe('ZN');
+    expect(normalizeMicronutrientKey('Manganês')).toBe('MN');
+    expect(normalizeMicronutrientKey('Molibdênio')).toBe('MO');
+  });
+
   it('lista garantias de todos os produtos ativos mesmo sem seleção e elimina duplicidades', () => {
     const result = getCatalogMicronutrientNames([
       { selected: false, ativo: true, microGuarantees: [{ name: 'ZN', value: 10 }] },
@@ -31,6 +41,18 @@ describe('micronutrient catalog helpers', () => {
     );
 
     expect(result).toEqual(['Zn']);
+  });
+
+  it('encontra fontes selecionadas mesmo com nome completo na meta e símbolo na garantia', () => {
+    const result = getMissingSelectedMicronutrientSources(
+      { Boro: 0.3, Zinco: 1.25 },
+      [
+        { selected: true, microGuarantees: [{ name: 'B', value: 10 }] },
+        { selected: true, microGuarantees: [{ name: 'Zn', value: 10 }] },
+      ]
+    );
+
+    expect(result).toEqual([]);
   });
 
   it('compara meta e resultado ignorando diferenças na grafia do nutriente', () => {

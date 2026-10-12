@@ -5,6 +5,7 @@ import { calculateMaterialComposition } from './pricingEngine';
 import {
   getMaterialSecondaryNutrientPercentage,
   isSecondaryNutrientGuarantee,
+  normalizeMicronutrientKey,
 } from '../../utils/micronutrients';
 
 type Constraint = Record<string, number>;
@@ -47,12 +48,25 @@ export function buildFormulaOptimizationModel({
   micros,
   incompatibilityRules,
 }: FormulaOptimizationInput): OptimizationModel {
-  const microTargets = Object.entries(targetMicros)
+  const normalizedMicroTargets = new Map<string, { name: string; value: number }>();
+  Object.entries(targetMicros)
     .map(([name, value]) => ({ name: name.trim(), value: numeric(value) }))
     .filter(
       ({ name, value }) => name.length > 0 && value > 0 && !isSecondaryNutrientGuarantee(name)
     )
-    .map((target, index) => ({ ...target, constraint: `micro_target_${index}` }));
+    .forEach(({ name, value }) => {
+      const key = normalizeMicronutrientKey(name);
+      const current = normalizedMicroTargets.get(key);
+      normalizedMicroTargets.set(key, {
+        name,
+        // Dados antigos podem conter a mesma meta como "Zn" e "Zinco".
+        // Uma única restrição, com o maior alvo, evita contabilizar o nutriente duas vezes.
+        value: Math.max(current?.value || 0, value),
+      });
+    });
+  const microTargets = Array.from(normalizedMicroTargets.entries()).map(
+    ([key, target], index) => ({ ...target, key, constraint: `micro_target_${index}` })
+  );
   const model: OptimizationModel = {
     optimize: 'cost',
     opType: 'min',
@@ -77,17 +91,16 @@ export function buildFormulaOptimizationModel({
   const availableMaterials = [...macros, ...micros].filter((material) => material.selected);
   availableMaterials.forEach((material) => {
     const useVariable = `use_${material.id}`;
+    const useLimit = `use_limit_${material.id}`;
     const minimumLink = `link_min_${material.id}`;
     const maximumLink = `link_max_${material.id}`;
     const minimumQuantity = numeric(material.minQty);
     const sulfurPercentage = getMaterialSecondaryNutrientPercentage(material, 's');
     const calciumPercentage = getMaterialSecondaryNutrientPercentage(material, 'ca');
     const microContributions = Object.fromEntries(
-      microTargets.flatMap(({ name, constraint }) => {
+      microTargets.flatMap(({ key, constraint }) => {
         const guarantee = (material.microGuarantees || [])
-          .filter(
-            (item) => item.name.trim().localeCompare(name, 'pt-BR', { sensitivity: 'base' }) === 0
-          )
+          .filter((item) => normalizeMicronutrientKey(item.name) === key)
           .reduce((total, item) => total + numeric(item.value), 0);
         return guarantee > 0 ? [[constraint, guarantee / 100]] : [];
       })
@@ -106,10 +119,15 @@ export function buildFormulaOptimizationModel({
     };
     model.variables[useVariable] = {
       cost: 0.01,
+      [useLimit]: 1,
       ...(minimumQuantity > 0 ? { [minimumLink]: -minimumQuantity } : {}),
       [maximumLink]: -(numeric(material.maxQty) || 1000),
     };
     model.ints[useVariable] = 1;
+    // javascript-lp-solver distinguishes integer from binary variables. Without
+    // this upper bound, use_<id> could become 2, 3, ... and multiply maxQty,
+    // allowing the optimizer to exceed the product maximum.
+    model.constraints[useLimit] = { max: 1 };
     if (minimumQuantity > 0) model.constraints[minimumLink] = { min: 0 };
     model.constraints[maximumLink] = { max: 0 };
 
