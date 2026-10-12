@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ChevronDown, Home as HomeIcon, Leaf, LogOut, X } from 'lucide-react';
+import { ChevronDown, ExternalLink, Home as HomeIcon, Leaf, LogOut, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { AppSettings, NavItem, User } from '../types';
 import type { ActiveModule } from '../navigation/appNavigation';
@@ -85,6 +85,22 @@ export default function AppSidebar({
     onCloseMobile();
     onNavigate(routeId, clear);
   };
+
+  const canOpenStandalone = activeModule === 'pricing';
+
+  const standaloneLink = (routeId: string, label: string) =>
+    canOpenStandalone && isExpanded ? (
+      <a
+        href={`/${routeId}?standalone=true`}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={`Abrir ${label} em nova guia`}
+        title={`Abrir ${label} em nova guia`}
+        className="ml-1 rounded-md p-1.5 text-stone-400 transition-colors hover:bg-white hover:text-emerald-600"
+      >
+        <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+      </a>
+    ) : null;
 
   return (
     <>
@@ -193,22 +209,24 @@ export default function AppSidebar({
                           const ChildIcon = child.icon;
                           const isChildActive = activeTab === child.id;
                           return (
-                            <Link
-                              key={child.id}
-                              to={`/${child.id}?standalone=true`}
-                              onClick={(event) => navigate(event, child.id, true)}
-                              className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-colors ${isChildActive ? activeColors : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900'}`}
-                            >
-                              <ChildIcon
-                                className={`w-5 h-5 flex-shrink-0 ${isChildActive ? iconColors : 'text-stone-400'}`}
-                              />
-                              <span className="ml-3 truncate flex-1">{child.label}</span>
-                              {(child.badge || 0) > 0 && (
-                                <span className="ml-auto bg-amber-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
-                                  {child.badge}
-                                </span>
-                              )}
-                            </Link>
+                            <div key={child.id} className="flex items-center gap-1">
+                              <Link
+                                to={`/${child.id}`}
+                                onClick={(event) => navigate(event, child.id, true)}
+                                className={`min-w-0 flex-1 flex items-center px-3 py-2.5 rounded-lg transition-colors ${isChildActive ? activeColors : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900'}`}
+                              >
+                                <ChildIcon
+                                  className={`w-5 h-5 flex-shrink-0 ${isChildActive ? iconColors : 'text-stone-400'}`}
+                                />
+                                <span className="ml-3 truncate flex-1">{child.label}</span>
+                                {(child.badge || 0) > 0 && (
+                                  <span className="ml-auto bg-amber-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                                    {child.badge}
+                                  </span>
+                                )}
+                              </Link>
+                              {standaloneLink(child.id, child.label)}
+                            </div>
                           );
                         })}
                     </div>
@@ -218,24 +236,26 @@ export default function AppSidebar({
             }
 
             return (
-              <Link
-                key={item.id}
-                to={`/${item.id}?standalone=true`}
-                onClick={(event) =>
-                  navigate(
-                    event,
-                    item.id,
-                    item.id !== 'calculator' && item.id !== 'simplified_calculator'
-                  )
-                }
-                className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-emerald-50 text-emerald-700 font-medium' : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900'}`}
-                title={!isExpanded ? item.label : undefined}
-              >
-                <Icon
-                  className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-emerald-600' : 'text-stone-400'}`}
-                />
-                {isExpanded && <span className="ml-3 truncate">{item.label}</span>}
-              </Link>
+              <div key={item.id} className="flex items-center gap-1">
+                <Link
+                  to={`/${item.id}`}
+                  onClick={(event) =>
+                    navigate(
+                      event,
+                      item.id,
+                      item.id !== 'calculator' && item.id !== 'simplified_calculator'
+                    )
+                  }
+                  className={`min-w-0 flex-1 flex items-center px-3 py-2.5 rounded-lg transition-colors ${isActive ? 'bg-emerald-50 text-emerald-700 font-medium' : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900'}`}
+                  title={!isExpanded ? item.label : undefined}
+                >
+                  <Icon
+                    className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-emerald-600' : 'text-stone-400'}`}
+                  />
+                  {isExpanded && <span className="ml-3 truncate">{item.label}</span>}
+                </Link>
+                {standaloneLink(item.id, item.label)}
+              </div>
             );
           })}
         </nav>
