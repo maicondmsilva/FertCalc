@@ -16,12 +16,43 @@ const SECONDARY_NUTRIENT_KEYS: Record<SecondaryNutrient, Set<string>> = {
   s: new Set(['S', 'ENXOFRE']),
 };
 
-export const normalizeMicronutrientKey = (name: string) =>
-  name
+const MICRONUTRIENT_ALIASES: Record<string, string> = {
+  B: 'B',
+  BORO: 'B',
+  ZN: 'ZN',
+  ZINCO: 'ZN',
+  MN: 'MN',
+  MANGANES: 'MN',
+  CU: 'CU',
+  COBRE: 'CU',
+  FE: 'FE',
+  FERRO: 'FE',
+  MO: 'MO',
+  MOLIBDENIO: 'MO',
+  CO: 'CO',
+  COBALTO: 'CO',
+  NI: 'NI',
+  NIQUEL: 'NI',
+  CL: 'CL',
+  CLORO: 'CL',
+  SE: 'SE',
+  SELENIO: 'SE',
+  SI: 'SI',
+  SILICIO: 'SI',
+  CA: 'CA',
+  CALCIO: 'CA',
+  S: 'S',
+  ENXOFRE: 'S',
+};
+
+export const normalizeMicronutrientKey = (name: string) => {
+  const normalized = name
     .trim()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLocaleUpperCase('pt-BR');
+  return MICRONUTRIENT_ALIASES[normalized] || normalized;
+};
 
 export const formatMicronutrientLabel = (name: string) => {
   const trimmedName = name.trim();

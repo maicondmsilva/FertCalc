@@ -40,6 +40,8 @@ describe('LP optimization engine', () => {
     expect(model.constraints.weight).toEqual({ equal: 1000 });
     expect(model.variables.ureia.weight).toBe(1);
     expect(model.ints.use_ureia).toBe(1);
+    expect(model.constraints.use_limit_ureia).toEqual({ max: 1 });
+    expect(model.variables.use_ureia.use_limit_ureia).toBe(1);
   });
 
   it('cria restrição binária para materiais incompatíveis selecionados', () => {
@@ -175,6 +177,85 @@ describe('LP optimization engine', () => {
     expect(result.feasible).toBe(true);
     expect(result.composition.resultingMicros.B).toBeGreaterThanOrEqual(0.21);
     expect(result.composition.resultingMicros.Zn).toBeGreaterThanOrEqual(0.33);
+  });
+
+  it('fecha 09-45-00 escolhendo múltiplas fontes para metas informadas como Boro e Zinco', () => {
+    const fosforo = material({ id: 'map', name: 'MAP', n: 0, p: 100, price: 100 });
+    const enchimento = material({ id: 'enchimento', name: 'Enchimento', n: 0, price: 0.01 });
+    const microI = material({
+      id: 'micro-i',
+      type: 'micro',
+      name: 'Micro I',
+      n: 0,
+      price: 1,
+      maxQty: 70,
+      microGuarantees: [{ name: 'B', value: 30 / 7 }],
+    });
+    const zinco10 = material({
+      id: 'zinco-10',
+      type: 'micro',
+      name: 'Zinco 10%',
+      n: 0,
+      price: 1,
+      maxQty: 50,
+      microGuarantees: [{ name: 'Zn', value: 10 }],
+    });
+    const mastergranZinco = material({
+      id: 'mastergran-zinco',
+      type: 'micro',
+      name: 'Mastergran Zinco',
+      n: 0,
+      price: 10,
+      microGuarantees: [{ name: 'Zinco', value: 625 / 12 }],
+    });
+
+    const result = optimizeFormula({
+      target: { n: 9, p: 45, k: 0 },
+      targetMicros: { Boro: 0.3, Zinco: 1.25 },
+      macros: [
+        material({ id: 'ureia-45', name: 'Ureia', n: 45, price: 100 }),
+        fosforo,
+        enchimento,
+      ],
+      micros: [microI, zinco10, mastergranZinco],
+      incompatibilityRules: [],
+    });
+
+    expect(result.feasible).toBe(true);
+    expect(result.composition.resultingN).toBeGreaterThanOrEqual(9);
+    expect(result.composition.resultingP).toBeGreaterThanOrEqual(45);
+    expect(result.composition.resultingMicros.B).toBeGreaterThanOrEqual(0.3);
+    expect(result.composition.resultingMicros.Zn).toBeGreaterThanOrEqual(1.25);
+    expect(result.micros.find((item) => item.id === 'micro-i')?.quantity).toBeCloseTo(70, 2);
+    expect(result.micros.find((item) => item.id === 'zinco-10')?.quantity).toBeCloseTo(50, 2);
+    expect(result.micros.find((item) => item.id === 'mastergran-zinco')?.quantity).toBeCloseTo(
+      14.4,
+      2
+    );
+  });
+
+  it('consolida aliases duplicados em uma única restrição de micronutriente', () => {
+    const model = buildFormulaOptimizationModel({
+      target: { n: 0, p: 0, k: 0 },
+      targetMicros: { Zn: 1, Zinco: 1.25 },
+      macros: [material({ id: 'enchimento', n: 0 })],
+      micros: [
+        material({
+          id: 'zinco',
+          type: 'micro',
+          n: 0,
+          microGuarantees: [{ name: 'ZN', value: 10 }],
+        }),
+      ],
+      incompatibilityRules: [],
+    });
+
+    const microConstraints = Object.keys(model.constraints).filter((key) =>
+      key.startsWith('micro_target_')
+    );
+    expect(microConstraints).toHaveLength(1);
+    expect(model.constraints[microConstraints[0]]).toEqual({ min: 12.5 });
+    expect(model.variables.zinco[microConstraints[0]]).toBe(0.1);
   });
 
   it('informa quando os materiais não conseguem fechar a fórmula', () => {
