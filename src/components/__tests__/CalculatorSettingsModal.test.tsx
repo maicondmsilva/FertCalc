@@ -224,4 +224,98 @@ describe('CalculatorSettingsModal', () => {
     fireEvent.click(screen.getByText('Confirmar Seleção'));
     expect(handleConfirm.mock.calls[0][0].macros.map((item: any) => item.id)).toEqual(['2', '1']);
   });
+
+  it('aplica mínimo e máximo do cadastro ao selecionar um produto', () => {
+    const handleConfirm = vi.fn();
+    const product = {
+      ...mockGlobalMacros[0],
+      minQuantity: 10,
+      maxQuantity: 80,
+      minQty: 0,
+      maxQty: 0,
+    };
+    render(
+      <CalculatorSettingsModal
+        isOpen={true}
+        onClose={vi.fn()}
+        formula={mockFormula}
+        globalMacros={[product]}
+        globalMicros={[]}
+        onConfirm={handleConfirm}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Ureia'));
+    fireEvent.click(screen.getByText('Confirmar Seleção'));
+
+    expect(handleConfirm.mock.calls[0][0].macros[0]).toMatchObject({
+      minQty: 10,
+      maxQty: 80,
+    });
+  });
+
+  it('faz a quantidade fixa prevalecer e restaura os padrões ao limpá-la', () => {
+    const handleConfirm = vi.fn();
+    const product = {
+      ...mockGlobalMacros[0],
+      minQuantity: 10,
+      maxQuantity: 80,
+      minQty: 0,
+      maxQty: 0,
+    };
+    render(
+      <CalculatorSettingsModal
+        isOpen={true}
+        onClose={vi.fn()}
+        formula={mockFormula}
+        globalMacros={[product]}
+        globalMicros={[]}
+        onConfirm={handleConfirm}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Ureia'));
+    const fixedInput = screen.getByPlaceholderText('Auto');
+    fireEvent.change(fixedInput, { target: { value: '25' } });
+    expect(fixedInput).toHaveProperty('value', '25');
+    fireEvent.change(fixedInput, { target: { value: '' } });
+    fireEvent.click(screen.getByText('Confirmar Seleção'));
+
+    expect(handleConfirm.mock.calls[0][0].macros[0]).toMatchObject({
+      minQty: 10,
+      maxQty: 80,
+    });
+  });
+
+  it('impede confirmar quando o mínimo supera o máximo', () => {
+    const handleConfirm = vi.fn();
+    const product = {
+      ...mockGlobalMacros[0],
+      minQuantity: 10,
+      maxQuantity: 80,
+      minQty: 0,
+      maxQty: 0,
+    };
+    render(
+      <CalculatorSettingsModal
+        isOpen={true}
+        onClose={vi.fn()}
+        formula={mockFormula}
+        globalMacros={[product]}
+        globalMicros={[]}
+        onConfirm={handleConfirm}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Ureia'));
+    fireEvent.change(screen.getByPlaceholderText('Ex: 10'), { target: { value: '90' } });
+
+    expect(
+      screen.getByText('Revise os limites: o mínimo não pode superar o máximo.')
+    ).toBeDefined();
+    const confirmButton = screen.getByText('Confirmar Seleção');
+    expect(confirmButton).toHaveProperty('disabled', true);
+    fireEvent.click(confirmButton);
+    expect(handleConfirm).not.toHaveBeenCalled();
+  });
 });

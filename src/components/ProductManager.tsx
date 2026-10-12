@@ -73,6 +73,7 @@ const emptyProduct = (type: NutrientType): Partial<UnifiedProduct> => ({
   name: '',
   code: '',
   minQuantity: 0,
+  maxQuantity: 0,
   categories: [],
   n: 0,
   p: 0,
@@ -271,6 +272,18 @@ export default function ProductManager() {
         showError('Nome é obrigatório.');
         return;
       }
+      if (Number(form.minQuantity) < 0 || Number(form.maxQuantity) < 0) {
+        showError('As quantidades mínima e máxima não podem ser negativas.');
+        return;
+      }
+      if (
+        form.type !== 'finished' &&
+        Number(form.maxQuantity) > 0 &&
+        Number(form.minQuantity) > Number(form.maxQuantity)
+      ) {
+        showError('A quantidade mínima não pode ser maior que a quantidade máxima.');
+        return;
+      }
       if (
         form.availableInCalculatorWithoutPriceList &&
         (form.extraLoadingLocationIds || []).length === 0
@@ -327,7 +340,9 @@ export default function ProductManager() {
       );
       showSuccess(`Produto ${item.ativo === false ? 'ativado' : 'desativado'} com sucesso!`);
     } catch (error) {
-      showError(`Erro ao alterar status: ${error instanceof Error ? error.message : 'Tente novamente.'}`);
+      showError(
+        `Erro ao alterar status: ${error instanceof Error ? error.message : 'Tente novamente.'}`
+      );
     }
   };
 
@@ -400,11 +415,11 @@ export default function ProductManager() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
           <input
-          type="text"
-          placeholder="Buscar por nome ou código..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-10 pr-4 py-2 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+            type="text"
+            placeholder="Buscar por nome ou código..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
           />
         </div>
         {(tab === 'macro' || tab === 'micro') && (
@@ -456,7 +471,10 @@ export default function ProductManager() {
               )}
               {!tableLoading &&
                 filtered.map((item) => (
-                  <tr key={item.id} className={`hover:bg-stone-50 transition-colors ${item.ativo === false ? 'opacity-60' : ''}`}>
+                  <tr
+                    key={item.id}
+                    className={`hover:bg-stone-50 transition-colors ${item.ativo === false ? 'opacity-60' : ''}`}
+                  >
                     <td className="px-5 py-3 font-mono font-bold text-emerald-600">{item.code}</td>
                     <td className="px-5 py-3 font-medium text-stone-800">
                       <div className="flex items-center gap-1.5">
@@ -473,7 +491,9 @@ export default function ProductManager() {
                           </span>
                         )}
                         {(item.type === 'macro' || item.type === 'micro') && (
-                          <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${item.ativo === false ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-700'}`}>
+                          <span
+                            className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${item.ativo === false ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-700'}`}
+                          >
                             {item.ativo === false ? 'Inativo' : 'Ativo'}
                           </span>
                         )}
@@ -531,7 +551,11 @@ export default function ProductManager() {
                             className="p-1.5 text-stone-400 hover:text-amber-600 hover:bg-amber-50 rounded"
                             title={item.ativo === false ? 'Ativar' : 'Desativar'}
                           >
-                            {item.ativo === false ? <ToggleLeft className="w-4 h-4" /> : <ToggleRight className="w-4 h-4" />}
+                            {item.ativo === false ? (
+                              <ToggleLeft className="w-4 h-4" />
+                            ) : (
+                              <ToggleRight className="w-4 h-4" />
+                            )}
                           </button>
                         )}
                         <button
@@ -742,6 +766,25 @@ export default function ProductManager() {
                     className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 disabled:bg-stone-50"
                   />
                 </div>
+
+                {(tab === 'macro' || tab === 'micro') && (
+                  <div>
+                    <label className="block text-sm font-medium text-stone-600 mb-1">
+                      Quantidade Máxima (kg)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      disabled={viewMode}
+                      value={form.maxQuantity || 0}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, maxQuantity: Number(e.target.value) }))
+                      }
+                      className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 disabled:bg-stone-50"
+                    />
+                    <p className="mt-1 text-xs text-stone-500">Use zero para deixar sem limite.</p>
+                  </div>
+                )}
 
                 {(tab === 'macro' || tab === 'micro') && (
                   <div className="space-y-3 pt-6">

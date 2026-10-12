@@ -121,7 +121,7 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
               ...globalP,
               selected: true,
               minQty: globalP.minQuantity || 0,
-              maxQty: 0,
+              maxQty: globalP.maxQuantity || 0,
               quantity: 0,
               microInputMode: type === 'micro' ? 'kg' : undefined,
               selectedMicroGuarantee:
@@ -151,7 +151,7 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
               ...product,
               selected: true,
               minQty: product.minQuantity || 0,
-              maxQty: 0,
+              maxQty: product.maxQuantity || 0,
               quantity: 0,
               microInputMode: type === 'micro' ? ('kg' as const) : undefined,
               selectedMicroGuarantee:
@@ -166,6 +166,15 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
   };
 
   const handleConfirm = () => {
+    const invalidMaterial = localFormula
+      ? [...localFormula.macros, ...localFormula.micros].find(
+          (material) =>
+            Number(material.minQty) < 0 ||
+            Number(material.maxQty) < 0 ||
+            (Number(material.maxQty) > 0 && Number(material.minQty) > Number(material.maxQty))
+        )
+      : undefined;
+    if (invalidMaterial) return;
     if (localFormula) {
       onConfirm({
         ...localFormula,
@@ -220,7 +229,15 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
     const currentProducts = globalSource
       .map((globalP) => {
         const savedP = savedProducts.find((s) => s.id === globalP.id);
-        return savedP ? savedP : { ...globalP, selected: false, minQty: 0, maxQty: 0, quantity: 0 };
+        return savedP
+          ? savedP
+          : {
+              ...globalP,
+              selected: false,
+              minQty: globalP.minQuantity || 0,
+              maxQty: globalP.maxQuantity || 0,
+              quantity: 0,
+            };
       })
       .sort((a, b) => productOrder[type].indexOf(a.id) - productOrder[type].indexOf(b.id));
 
@@ -589,7 +606,7 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
                               ),
                             });
                           }}
-                          placeholder="Sem Limite"
+                          placeholder={`Sem limite${p.maxQuantity ? ` · padrão ${p.maxQuantity}` : ''}`}
                           min={0}
                           disabled={isProtected}
                           className="w-full px-2 py-1.5 border border-blue-300 rounded focus:outline-none focus:border-blue-500 bg-white text-stone-800"
@@ -603,11 +620,11 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
                           value={p.minQty === p.maxQty && p.minQty > 0 ? p.minQty : ''}
                           onChange={(e) => {
                             if (!localFormula) return;
-                            const val = Number(e.target.value);
-                            const arrKey = type === 'macro' ? 'macros' : 'micros';
+                            const rawValue = e.target.value;
+                            const val = Number(rawValue);
                             updateLocalProduct(type, p.id, {
-                              minQty: val,
-                              maxQty: val,
+                              minQty: rawValue === '' ? Number(p.minQuantity) || 0 : val,
+                              maxQty: rawValue === '' ? Number(p.maxQuantity) || 0 : val,
                               ...(type === 'micro'
                                 ? {
                                     microInputMode: 'kg' as const,
@@ -716,7 +733,18 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
         </div>
 
         {/* Footer */}
-        <div className="app-safe-bottom flex shrink-0 justify-end gap-3 rounded-b-xl border-t border-stone-100 bg-white p-3 sm:p-6">
+        <div className="app-safe-bottom flex shrink-0 flex-wrap items-center justify-end gap-3 rounded-b-xl border-t border-stone-100 bg-white p-3 sm:p-6">
+          {localFormula &&
+            [...localFormula.macros, ...localFormula.micros].some(
+              (material) =>
+                Number(material.minQty) < 0 ||
+                Number(material.maxQty) < 0 ||
+                (Number(material.maxQty) > 0 && Number(material.minQty) > Number(material.maxQty))
+            ) && (
+              <p className="mr-auto text-sm font-semibold text-red-600">
+                Revise os limites: o mínimo não pode superar o máximo.
+              </p>
+            )}
           <button
             onClick={onClose}
             className="px-5 py-2.5 rounded-lg text-sm font-medium text-stone-600 hover:bg-stone-100 border border-transparent transition-colors"
@@ -725,7 +753,16 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
           </button>
           <button
             onClick={handleConfirm}
-            className="px-5 py-2.5 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-colors"
+            disabled={
+              !!localFormula &&
+              [...localFormula.macros, ...localFormula.micros].some(
+                (material) =>
+                  Number(material.minQty) < 0 ||
+                  Number(material.maxQty) < 0 ||
+                  (Number(material.maxQty) > 0 && Number(material.minQty) > Number(material.maxQty))
+              )
+            }
+            className="px-5 py-2.5 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-stone-300 shadow-sm transition-colors"
           >
             Confirmar Seleção
           </button>
