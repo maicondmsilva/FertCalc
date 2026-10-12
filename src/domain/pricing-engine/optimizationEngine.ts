@@ -12,7 +12,7 @@ type Constraint = Record<string, number>;
 type Variable = Record<string, number>;
 
 export interface OptimizationModel {
-  optimize: 'cost';
+  optimize: string;
   opType: 'min';
   constraints: Record<string, Constraint>;
   variables: Record<string, Variable>;
@@ -64,9 +64,11 @@ export function buildFormulaOptimizationModel({
         value: Math.max(current?.value || 0, value),
       });
     });
-  const microTargets = Array.from(normalizedMicroTargets.entries()).map(
-    ([key, target], index) => ({ ...target, key, constraint: `micro_target_${index}` })
-  );
+  const microTargets = Array.from(normalizedMicroTargets.entries()).map(([key, target], index) => ({
+    ...target,
+    key,
+    constraint: `micro_target_${index}`,
+  }));
   const model: OptimizationModel = {
     optimize: 'cost',
     opType: 'min',

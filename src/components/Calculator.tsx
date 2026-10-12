@@ -53,6 +53,7 @@ import {
   buildFormulaComparisonAlternatives,
   type FormulaComparisonAlternative,
 } from '../utils/formulaComparison';
+import { parseFormulaTarget } from '../domain/pricing-engine';
 
 const formatPricingMoney = (value: number | undefined, currency: 'BRL' | 'USD' = 'BRL') =>
   Number(value || 0).toLocaleString('pt-BR', {
@@ -152,6 +153,7 @@ export default function Calculator({
     setExpandedCalc,
     handleFactorChange,
     calculateFormula,
+    applyFormulaApproximation,
     addTargetFormula,
     removeTargetFormula,
     updateCalculation,
@@ -2547,6 +2549,7 @@ export default function Calculator({
                     (alternative) => alternative.feasible && alternative.calculation.summary
                   );
                   const lowestCostAlternative = feasibleAlternatives[0];
+                  const requestedTarget = parseFormulaTarget(calc.formula);
 
                   return (
                     <div
@@ -2737,6 +2740,82 @@ export default function Calculator({
                             ))}
                         </div>
                       </div>
+
+                      {calc.approximation && (
+                        <div className="rounded-xl border border-sky-700/70 bg-sky-950/40 p-3">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <p className="text-xs font-black uppercase text-sky-300">
+                                Sugestão mais próxima
+                              </p>
+                              <p className="mt-1 text-[10px] text-sky-100">
+                                O alvo exato não fechou. Esta opção respeita limites, fixos e
+                                incompatibilidades.
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-mono text-sm font-black text-white">
+                                {calc.approximation.suggestedFormula}
+                              </p>
+                              <p className="text-[9px] text-sky-300">
+                                desvio total {calc.approximation.deviationScore.toFixed(3)}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="mt-3 grid grid-cols-3 gap-1 text-center text-[9px]">
+                            <span className="rounded bg-stone-900 px-1 py-1 text-stone-200">
+                              N {requestedTarget?.n.toFixed(2)} →{' '}
+                              {calc.approximation.summary.resultingN.toFixed(2)}%
+                            </span>
+                            <span className="rounded bg-stone-900 px-1 py-1 text-stone-200">
+                              P {requestedTarget?.p.toFixed(2)} →{' '}
+                              {calc.approximation.summary.resultingP.toFixed(2)}%
+                            </span>
+                            <span className="rounded bg-stone-900 px-1 py-1 text-stone-200">
+                              K {requestedTarget?.k.toFixed(2)} →{' '}
+                              {calc.approximation.summary.resultingK.toFixed(2)}%
+                            </span>
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {Object.entries(calc.approximation.targetMicros).map(
+                              ([name, value]) => (
+                                <span
+                                  key={name}
+                                  className="rounded-full bg-blue-950 px-2 py-0.5 text-[9px] font-bold text-blue-300"
+                                >
+                                  {name}: {Number(getMicroTargetValue(calc, name) || 0).toFixed(2)}{' '}
+                                  → {Number(value).toFixed(2)}%
+                                </span>
+                              )
+                            )}
+                          </div>
+                          <p className="mt-2 text-[9px] text-stone-400">
+                            {[...calc.approximation.macros, ...calc.approximation.micros]
+                              .filter((material) => material.quantity > 0)
+                              .map(
+                                (material) => `${material.name} ${material.quantity.toFixed(2)} kg`
+                              )
+                              .join(' · ')}
+                          </p>
+                          <div className="mt-3 flex items-center justify-between gap-3">
+                            <span className="text-xs font-bold text-stone-200">
+                              {formatPricingMoney(
+                                calc.approximation.summary.baseCost,
+                                calc.approximation.summary.currency
+                              )}
+                              /t
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => applyFormulaApproximation(calc.id)}
+                              className="rounded-md bg-sky-600 px-3 py-2 text-[10px] font-black text-white hover:bg-sky-500"
+                            >
+                              Usar sugestão
+                            </button>
+                          </div>
+                        </div>
+                      )}
 
                       {comparisonAlternatives.length > 0 && (
                         <div className="mt-3 space-y-3 border-t border-violet-800/70 pt-3">
