@@ -462,6 +462,7 @@ export default function Calculator({
           exchangeRateSource: appliedExchangeRate ? source : undefined,
         },
         summary: undefined,
+        approximation: undefined,
       }))
     );
   };
@@ -486,6 +487,9 @@ export default function Calculator({
     )
       ? 'Selecione um agente para usar comissão'
       : '',
+    calculations.some((calc) => calc.selected && calc.approximation)
+      ? 'Aceite a sugestão aproximada ou ajuste a fórmula antes de salvar'
+      : '',
   ].filter(Boolean);
 
   const duplicateCalculation = (calc: (typeof calculations)[number]) => {
@@ -497,6 +501,7 @@ export default function Calculator({
         formula: calc.formula,
         selected: true,
         summary: undefined,
+        approximation: undefined,
         profitabilityAnalysis: undefined,
         macros: calc.macros.map((material) => ({ ...material, quantity: 0 })),
         micros: calc.micros.map((material) => ({ ...material, quantity: 0 })),
@@ -2982,7 +2987,12 @@ export default function Calculator({
                 (currentUser.permissions as any)?.calculator_saveFormula !== false) && (
                 <button
                   onClick={saveToFormulasList}
-                  disabled={Boolean(isLocked) || isSavingFormula || promptState.isOpen}
+                  disabled={
+                    Boolean(isLocked) ||
+                    isSavingFormula ||
+                    promptState.isOpen ||
+                    calculations.some((calc) => calc.selected && calc.approximation)
+                  }
                   className={`w-full py-3 rounded-xl flex items-center justify-center font-bold text-sm transition-colors
                   ${isLocked ? 'hidden' : 'bg-stone-800 hover:bg-stone-700 border border-stone-600 text-stone-200 shadow-lg shadow-black/20 disabled:cursor-not-allowed disabled:opacity-60'}`}
                 >
@@ -2998,7 +3008,12 @@ export default function Calculator({
                 <button
                   type="button"
                   onClick={() => void savePricing()}
-                  disabled={Boolean(isLocked) || !hasValidExchangeRate || isSavingPricing}
+                  disabled={
+                    Boolean(isLocked) ||
+                    !hasValidExchangeRate ||
+                    isSavingPricing ||
+                    calculations.some((calc) => calc.selected && calc.approximation)
+                  }
                   className="mt-3 inline-flex w-full min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-emerald-950/30 hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-stone-600"
                 >
                   <Save className="h-4 w-4" />{' '}

@@ -31,6 +31,14 @@ describe('resetCalculationForPriceList', () => {
       macros: [material('antigo', 'macro')],
       micros: [],
       summary: { finalPrice: 1000 },
+      approximation: {
+        suggestedFormula: '18-04-18',
+        macros: [],
+        micros: [],
+        summary: { finalPrice: 900 },
+        deviationScore: 1,
+        targetMicros: {},
+      },
     } as TargetFormula;
 
     const updated = resetCalculationForPriceList(
@@ -53,5 +61,6 @@ describe('resetCalculationForPriceList', () => {
       factor: 0,
     });
     expect(updated.summary).toBeUndefined();
+    expect(updated.approximation).toBeUndefined();
   });
 });

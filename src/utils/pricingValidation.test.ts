@@ -27,6 +27,24 @@ describe('pricing save validation', () => {
     expect(result.message).toContain('toneladas');
   });
 
+  it('bloqueia fórmula com sugestão aproximada ainda não aceita', () => {
+    const result = validatePricingForSave([
+      calculation({
+        approximation: {
+          suggestedFormula: '18-04-18',
+          macros: [],
+          micros: [],
+          summary: {} as TargetFormula['summary'],
+          deviationScore: 1,
+          targetMicros: {},
+        },
+      }),
+    ]);
+
+    expect(result.valid).toBe(false);
+    expect(result.message).toContain('sugestão pendente');
+  });
+
   it('blocks commission without an agent', () => {
     const result = validatePricingForSave([
       calculation({ factors: { totalTons: 10, commission: 2 } as TargetFormula['factors'] }),

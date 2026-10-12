@@ -22,6 +22,7 @@ export function resetCalculationForPriceList(
     macros: macros.map((material) => ({ ...material })),
     micros: micros.map((material) => ({ ...material })),
     summary: undefined,
+    approximation: undefined,
     profitabilityAnalysis: undefined,
   };
 }
