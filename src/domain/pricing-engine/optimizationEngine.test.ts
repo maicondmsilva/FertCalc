@@ -36,7 +36,7 @@ describe('LP optimization engine', () => {
       micros: [],
       incompatibilityRules: [],
     });
-    expect(model.constraints.n_eq).toEqual({ min: 450, max: 459 });
+    expect(model.constraints.n_eq).toEqual({ min: 450, max: 459.8 });
     expect(model.constraints.weight).toEqual({ equal: 1000 });
     expect(model.variables.ureia.weight).toBe(1);
     expect(model.ints.use_ureia).toBe(1);
@@ -212,11 +212,7 @@ describe('LP optimization engine', () => {
     const result = optimizeFormula({
       target: { n: 9, p: 45, k: 0 },
       targetMicros: { Boro: 0.3, Zinco: 1.25 },
-      macros: [
-        material({ id: 'ureia-45', name: 'Ureia', n: 45, price: 100 }),
-        fosforo,
-        enchimento,
-      ],
+      macros: [material({ id: 'ureia-45', name: 'Ureia', n: 45, price: 100 }), fosforo, enchimento],
       micros: [microI, zinco10, mastergranZinco],
       incompatibilityRules: [],
     });
@@ -266,5 +262,29 @@ describe('LP optimization engine', () => {
       incompatibilityRules: [],
     });
     expect(result.feasible).toBe(false);
+  });
+});
+
+describe('folga do N-P-K', () => {
+  it('aceita até 0,98 acima do alvo e joga o excedente onde fica mais barato', () => {
+    // N barato (ureia) e P caro: com 05-25-15 o otimizador pode subir o N,
+    // mas mantém P e K no mínimo, porque subir esses custaria mais.
+    const result = optimizeFormula({
+      target: { n: 5, p: 25, k: 15 },
+      macros: [
+        material({ id: 'ureia', name: 'Ureia', price: 100, n: 45 }),
+        material({ id: 'map', name: 'MAP', price: 4000, n: 11, p: 52 }),
+        material({ id: 'kcl', name: 'KCl', price: 3000, n: 0, k: 60 }),
+        material({ id: 'ench', name: 'Enchimento', price: 500, n: 0 }),
+      ],
+      micros: [],
+      incompatibilityRules: [],
+    });
+    expect(result.feasible).toBe(true);
+    const { resultingN, resultingP, resultingK } = result.composition;
+    expect(resultingN).toBeGreaterThanOrEqual(5 - 1e-6);
+    expect(resultingN).toBeLessThanOrEqual(5.98 + 1e-6);
+    expect(resultingP).toBeCloseTo(25, 4);
+    expect(resultingK).toBeCloseTo(15, 4);
   });
 });

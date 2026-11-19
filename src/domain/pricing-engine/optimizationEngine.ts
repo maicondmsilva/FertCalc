@@ -46,6 +46,36 @@ export interface FormulaOptimizationResult {
 
 const numeric = (value: unknown): number => Number(value) || 0;
 
+/**
+ * Quanto cada garantia N, P e K pode ficar acima do alvo (em pontos percentuais).
+ * Ex.: 5-25-15 aceita até 5,98-25,98-15,98. O otimizador minimiza o custo, então
+ * o excedente vai para onde a mistura fica mais barata.
+ */
+export const NPK_UPPER_TOLERANCE = 0.98;
+/** Faixa de Ca, S e Mg acima do alvo (pontos percentuais). */
+export const SECONDARY_UPPER_TOLERANCE = 0.9;
+
+/**
+ * A garantia obtida está dentro da faixa aceita? Abaixo do alvo, tolera só o
+ * arredondamento (0,05); acima, até a tolerância do nutriente.
+ */
+export function isWithinGuaranteeRange(
+  target: number,
+  obtained: number,
+  upperTolerance: number = NPK_UPPER_TOLERANCE
+): boolean {
+  return obtained >= target - 0.05 && obtained <= target + upperTolerance + 0.005;
+}
+
+const npkRange = (target: number) => ({
+  min: target * 10,
+  max: Math.round((target + NPK_UPPER_TOLERANCE) * 10 * 1000) / 1000,
+});
+const secondaryRange = (target: number) => ({
+  min: target * 10,
+  max: Math.round((target + SECONDARY_UPPER_TOLERANCE) * 10 * 1000) / 1000,
+});
+
 export function buildFormulaOptimizationModel({
   target,
   targetS = 0,
@@ -86,12 +116,12 @@ export function buildFormulaOptimizationModel({
     optimize: 'cost',
     opType: 'min',
     constraints: {
-      n_eq: { min: target.n * 10, max: target.n * 10 + 9 },
-      p_eq: { min: target.p * 10, max: target.p * 10 + 9 },
-      k_eq: { min: target.k * 10, max: target.k * 10 + 9 },
-      ...(targetS > 0 ? { s_eq: { min: targetS * 10, max: targetS * 10 + 9 } } : {}),
-      ...(targetCa > 0 ? { ca_eq: { min: targetCa * 10, max: targetCa * 10 + 9 } } : {}),
-      ...(usesMagnesiumRange ? { mg_eq: { min: targetMg * 10, max: targetMg * 10 + 9 } } : {}),
+      n_eq: npkRange(target.n),
+      p_eq: npkRange(target.p),
+      k_eq: npkRange(target.k),
+      ...(targetS > 0 ? { s_eq: secondaryRange(targetS) } : {}),
+      ...(targetCa > 0 ? { ca_eq: secondaryRange(targetCa) } : {}),
+      ...(usesMagnesiumRange ? { mg_eq: secondaryRange(targetMg) } : {}),
       ...Object.fromEntries(
         // Micronutrient guarantees are minimum declared guarantees. Requiring an exact
         // equality makes a valid blend infeasible whenever one selected source carries

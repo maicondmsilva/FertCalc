@@ -1,5 +1,9 @@
 import type { PricingSummary } from '../types';
 import {
+  isWithinGuaranteeRange,
+  SECONDARY_UPPER_TOLERANCE,
+} from '../domain/pricing-engine/optimizationEngine';
+import {
   formatMicronutrientLabel,
   getCalculatedMicronutrientValue,
   getMicronutrientTargetStatus,
@@ -33,7 +37,17 @@ export function buildGuaranteeComparisons(
       label,
       calculated: Number(calculated || 0),
       target: Number(target || 0) > 0 ? Number(target) : undefined,
-      status: getMicronutrientTargetStatus(target, calculated),
+      // Ca e S aceitam até +0,9 acima do alvo, a mesma faixa usada pelo otimizador.
+      status:
+        Number(target || 0) > 0
+          ? isWithinGuaranteeRange(
+              Number(target),
+              Number(calculated || 0),
+              SECONDARY_UPPER_TOLERANCE
+            )
+            ? 'met'
+            : 'divergent'
+          : getMicronutrientTargetStatus(target, calculated),
       kind: 'secondary',
     });
   };
@@ -60,7 +74,9 @@ export function buildGuaranteeComparisons(
       const targetEntry = Object.entries(targets.targetMicros || {}).find(
         ([name]) => normalizeMicronutrientKey(name) === key
       );
-      const calculated = Number(getCalculatedMicronutrientValue(summary.resultingMicros, label) || 0);
+      const calculated = Number(
+        getCalculatedMicronutrientValue(summary.resultingMicros, label) || 0
+      );
       const target = Number(targetEntry?.[1] || 0) > 0 ? Number(targetEntry?.[1]) : undefined;
       comparisons.push({
         key,
