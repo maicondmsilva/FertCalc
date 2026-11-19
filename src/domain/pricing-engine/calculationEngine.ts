@@ -4,6 +4,7 @@ import { formatNPK } from '../../utils/formatters';
 import {
   getMissingSelectedMicronutrientSources,
   getSecondaryNutrientTarget,
+  isMagnesiumGuarantee,
   isSecondaryNutrientGuarantee,
 } from '../../utils/micronutrients';
 import { hasFormulaTarget, parseFormulaTarget } from './formulaEngine';
@@ -117,9 +118,11 @@ export function calculateTargetFormula({
   const target = parseFormulaTarget(calculation.formula);
   if (!target) return { calculation };
 
+  const targetMg = Number(calculation.targetMg) || 0;
   const micronutrientTargets = Object.fromEntries(
     Object.entries(calculation.targetMicros || {}).filter(
-      ([name]) => !isSecondaryNutrientGuarantee(name)
+      ([name]) =>
+        !isSecondaryNutrientGuarantee(name) && !(targetMg > 0 && isMagnesiumGuarantee(name))
     )
   );
   const missingMicronutrientSources = getMissingSelectedMicronutrientSources(micronutrientTargets, [
@@ -130,6 +133,7 @@ export function calculateTargetFormula({
     target,
     targetS: calculation.targetS || getSecondaryNutrientTarget(calculation.targetMicros, 's'),
     targetCa: calculation.targetCa || getSecondaryNutrientTarget(calculation.targetMicros, 'ca'),
+    targetMg,
     targetMicros: micronutrientTargets,
     macros: currentMacros,
     micros: currentMicros,

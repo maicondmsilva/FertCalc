@@ -72,7 +72,9 @@ export function getMaterialSecondaryNutrientPercentage(
 ): number {
   const registeredPercentage = Number(material[nutrient]) || 0;
   const guaranteePercentage = (material.microGuarantees || [])
-    .filter((guarantee) => SECONDARY_NUTRIENT_KEYS[nutrient].has(normalizeMicronutrientKey(guarantee.name)))
+    .filter((guarantee) =>
+      SECONDARY_NUTRIENT_KEYS[nutrient].has(normalizeMicronutrientKey(guarantee.name))
+    )
     .reduce((total, guarantee) => total + (Number(guarantee.value) || 0), 0);
   return registeredPercentage + guaranteePercentage;
 }
@@ -148,4 +150,34 @@ export function getMicronutrientTargetStatus(
   if (!Number.isFinite(target) || Number(target) <= 0) return 'inactive';
   if (!Number.isFinite(calculated)) return 'pending';
   return Math.abs(Number(calculated) - Number(target)) <= tolerance ? 'met' : 'divergent';
+}
+
+const MAGNESIUM_KEYS = new Set(['MG', 'MAGNESIO']);
+
+/** Identifica garantias de magnésio, aceitando "Mg" e "Magnésio". */
+export const isMagnesiumGuarantee = (name: string) =>
+  MAGNESIUM_KEYS.has(normalizeMicronutrientKey(name));
+
+/** Percentual de magnésio informado nas garantias do produto. */
+export function getMaterialMagnesiumPercentage(material: MicronutrientCarrier): number {
+  return (material.microGuarantees || [])
+    .filter((guarantee) => isMagnesiumGuarantee(guarantee.name))
+    .reduce((total, guarantee) => total + (Number(guarantee.value) || 0), 0);
+}
+
+/** Lê a meta de magnésio gravada entre as metas de micronutrientes, se houver. */
+export function getMagnesiumTarget(
+  targets: Record<string, number> | undefined
+): number | undefined {
+  const entry = Object.entries(targets || {}).find(([name]) => isMagnesiumGuarantee(name));
+  return entry ? Number(entry[1]) || undefined : undefined;
+}
+
+/** Remove a meta de magnésio das metas de micronutrientes quando ele usa a regra de faixa. */
+export function withoutMagnesiumTarget(
+  targets: Record<string, number> | undefined
+): Record<string, number> {
+  return Object.fromEntries(
+    Object.entries(targets || {}).filter(([name]) => !isMagnesiumGuarantee(name))
+  );
 }

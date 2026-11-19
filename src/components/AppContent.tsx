@@ -35,6 +35,7 @@ const Relatorios = lazy(() => import('./Relatorios'));
 const Reports = lazy(() => import('./Reports'));
 const SavedFormulas = lazy(() => import('./SavedFormulas'));
 const SettingsManager = lazy(() => import('./SettingsManager'));
+const SimplifiedCalculatorBeta = lazy(() => import('./calculatorBeta/SimplifiedCalculatorBeta'));
 const UserManager = lazy(() => import('./UserManager'));
 
 interface FormulaContext {
@@ -94,6 +95,9 @@ function AppContentRoute({
           />
         </React.Fragment>
       );
+    }
+    if (activeTab === 'simplified_calculator_beta' && hasPermission('simplified_calculator_beta')) {
+      return <SimplifiedCalculatorBeta currentUser={currentUser} />;
     }
     if (activeTab === 'saved_formulas' && hasPermission('savedFormulas')) {
       return <SavedFormulas currentUser={currentUser} />;

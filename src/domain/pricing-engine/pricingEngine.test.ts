@@ -70,19 +70,22 @@ describe('pricing engine compatibility', () => {
   });
 
   it('consolida garantias de Ca e S dos micros nos campos principais sem duplicá-las', () => {
-    const result = calculateMaterialComposition([], [
-      {
-        ...material,
-        quantity: 1000,
-        ca: 1,
-        s: 2,
-        microGuarantees: [
-          { name: 'Cálcio', value: 4 },
-          { name: 'Enxofre', value: 3 },
-          { name: 'B', value: 0.5 },
-        ],
-      },
-    ]);
+    const result = calculateMaterialComposition(
+      [],
+      [
+        {
+          ...material,
+          quantity: 1000,
+          ca: 1,
+          s: 2,
+          microGuarantees: [
+            { name: 'Cálcio', value: 4 },
+            { name: 'Enxofre', value: 3 },
+            { name: 'B', value: 0.5 },
+          ],
+        },
+      ]
+    );
 
     expect(result.resultingCa).toBeCloseTo(5);
     expect(result.resultingS).toBeCloseTo(5);
@@ -335,6 +338,7 @@ describe('pricing engine compatibility', () => {
       resultingK: 0,
       resultingS: 0,
       resultingCa: 0,
+      resultingMg: 0,
       resultingMicros: {},
     });
   });

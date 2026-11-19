@@ -1,7 +1,9 @@
 import type { IncompatibilityRule, RawMaterial } from '../../types';
 import {
   formatMicronutrientLabel,
+  getMaterialMagnesiumPercentage,
   getMaterialSecondaryNutrientPercentage,
+  isMagnesiumGuarantee,
   isSecondaryNutrientGuarantee,
   normalizeMicronutrientKey,
 } from '../../utils/micronutrients';
@@ -45,8 +47,10 @@ const buildNutrientRequirements = ({
   target,
   targetCa = 0,
   targetS = 0,
+  targetMg = 0,
   targetMicros = {},
 }: FormulaOptimizationInput): NutrientRequirement[] => {
+  const usesMagnesiumRange = numeric(targetMg) > 0;
   const requirements: NutrientRequirement[] = [
     {
       key: 'N',
@@ -86,13 +90,27 @@ const buildNutrientRequirements = ({
       percentage: (item) => getMaterialSecondaryNutrientPercentage(item, 's'),
       hasUpperTarget: true,
     },
+    ...(usesMagnesiumRange
+      ? [
+          {
+            key: 'MG',
+            label: 'Mg',
+            target: numeric(targetMg),
+            percentage: (item: RawMaterial) => getMaterialMagnesiumPercentage(item),
+            hasUpperTarget: true,
+          },
+        ]
+      : []),
   ];
 
   const microTargets = new Map<string, { label: string; target: number }>();
   Object.entries(targetMicros)
     .filter(
       ([name, value]) =>
-        name.trim().length > 0 && numeric(value) > 0 && !isSecondaryNutrientGuarantee(name)
+        name.trim().length > 0 &&
+        numeric(value) > 0 &&
+        !isSecondaryNutrientGuarantee(name) &&
+        !(usesMagnesiumRange && isMagnesiumGuarantee(name))
     )
     .forEach(([name, value]) => {
       const key = normalizeMicronutrientKey(name);

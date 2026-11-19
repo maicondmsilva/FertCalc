@@ -74,6 +74,7 @@ const PERMISSION_GROUPS: PermissionGroup[] = [
     items: [
       { id: 'calculator', label: 'Calculadora' },
       { id: 'simplified_calculator', label: 'Calculadora Simplificada' },
+      { id: 'simplified_calculator_beta', label: 'Calculadora Simplificada (Teste)' },
       { id: 'history', label: 'Situação / Precificações' },
       { id: 'savedFormulas', label: 'Fórmulas Salvas' },
       { id: 'produtosFormulados', label: 'Produtos Formulados' },
@@ -304,6 +305,7 @@ export default function UserManager({ currentUser }: UserManagerProps) {
       dashboard: true,
       calculator: true,
       simplified_calculator: true,
+      simplified_calculator_beta: false,
       history: true,
       clients: true,
       agents: true,
