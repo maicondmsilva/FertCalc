@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  LayoutDashboard,
   Settings,
   ShieldCheck,
   Calculator,
@@ -21,7 +20,6 @@ interface HomeProps {
     moduleId:
       | 'pricing'
       | 'config'
-      | 'prd'
       | 'managementReports'
       | 'expenses'
       | 'carregamento'
@@ -108,20 +106,6 @@ export default function Home({ currentUser, onSelectModule }: HomeProps) {
         !!(currentUser.permissions as any)?.users ||
         !!(currentUser.permissions as any)?.branches ||
         !!(currentUser.permissions as any)?.settings,
-    },
-    {
-      id: 'prd',
-      label: 'DOCUMENTAÇÃO PRD',
-      description: 'Acesse o Documento de Requisitos do Produto do sistema.',
-      icon: LayoutDashboard,
-      color: 'bg-blue-600',
-      hoverColor: 'hover:bg-blue-700',
-      textColor: 'text-blue-600',
-      allowed:
-        currentUser.role === 'master' ||
-        currentUser.role === 'admin' ||
-        currentUser.role === 'manager' ||
-        !!(currentUser.permissions as any)?.prd,
     },
   ];
 

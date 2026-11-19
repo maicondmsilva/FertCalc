@@ -28,7 +28,6 @@ const PedidosVenda = lazy(() => import('./PedidosVenda'));
 const PriceListManager = lazy(() => import('./PriceListManager'));
 const PricingBySeller = lazy(() => import('./PricingBySeller'));
 const PricingReport = lazy(() => import('./PricingReport'));
-const PrdModule = lazy(() => import('./PrdModule'));
 const ProductManager = lazy(() => import('./ProductManager'));
 const ProdutosFormulados = lazy(() => import('./ProdutosFormulados'));
 const Relatorios = lazy(() => import('./Relatorios'));
@@ -163,10 +162,6 @@ function AppContentRoute({
     ) {
       return <AlertCenter />;
     }
-  }
-
-  if (activeModule === 'prd' && activeTab === 'prd' && hasPermission('prd')) {
-    return <PrdModule currentUser={currentUser} />;
   }
 
   if (activeModule === 'managementReports' && hasPermission('managementReports')) {

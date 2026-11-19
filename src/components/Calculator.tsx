@@ -474,7 +474,8 @@ export default function Calculator({
 
   const pendingIssues = [
     !isSimplified && !factors.client?.id ? 'Selecione o cliente' : '',
-    !factors.branchId ? 'Informe a filial' : '',
+    // A calculadora simplificada não salva precificação, então não precisa de filial.
+    !isSimplified && !factors.branchId ? 'Informe a filial' : '',
     !factors.priceListId ? 'Selecione a lista de preço' : '',
     !hasValidExchangeRate ? 'Informe um câmbio válido para a lista em dólar' : '',
     calculations.length === 0 ? 'Adicione ao menos uma fórmula' : '',
@@ -777,29 +778,33 @@ export default function Calculator({
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 pt-6 border-t border-stone-100">
-              <div>
-                <label className="block text-sm font-medium text-stone-600 mb-1 flex items-center">
-                  <Building2 className="w-4 h-4 mr-1" /> Filial
-                </label>
-                <select
-                  value={factors.branchId}
-                  onChange={(e) => {
-                    setFactors({
-                      ...factors,
-                      branchId: e.target.value,
-                    });
-                  }}
-                  className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-                >
-                  <option value="">Selecione uma filial</option>
-                  {branches.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div
+              className={`grid grid-cols-1 gap-4 mt-6 pt-6 border-t border-stone-100 ${isSimplified ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}
+            >
+              {!isSimplified && (
+                <div>
+                  <label className="block text-sm font-medium text-stone-600 mb-1 flex items-center">
+                    <Building2 className="w-4 h-4 mr-1" /> Filial
+                  </label>
+                  <select
+                    value={factors.branchId}
+                    onChange={(e) => {
+                      setFactors({
+                        ...factors,
+                        branchId: e.target.value,
+                      });
+                    }}
+                    className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="">Selecione uma filial</option>
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-stone-600 mb-1 flex items-center">
                   <MapPin className="w-4 h-4 mr-1" /> Local de Carregamento

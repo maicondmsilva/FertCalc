@@ -133,7 +133,6 @@ export interface User {
     savedFormulas_report?: boolean;
     pricingReport?: boolean;
     commissionReport?: boolean;
-    prd?: boolean;
     pricingBySeller?: boolean;
     produtosFormulados?: boolean;
     produtosFormulados_edit?: boolean;

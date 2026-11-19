@@ -139,7 +139,6 @@ const PERMISSION_GROUPS: PermissionGroup[] = [
       { id: 'micro_create', label: 'Micro — Criar' },
       { id: 'micro_edit', label: 'Micro — Editar' },
       { id: 'micro_delete', label: 'Micro — Excluir' },
-      { id: 'prd', label: 'Documentação PRD' },
       { id: 'produtosFormulados', label: 'Produtos Formulados' },
       { id: 'produtosFormulados_edit', label: 'Produtos Formulados — Editar' },
     ],

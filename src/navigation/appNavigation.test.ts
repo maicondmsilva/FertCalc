@@ -19,7 +19,7 @@ describe('app navigation', () => {
   it.each([
     ['calculator', 'pricing'],
     ['users', 'config'],
-    ['prd', 'prd'],
+    ['prd', null],
     ['managementReports_dashboard', 'managementReports'],
     ['expenses_aprovacao', 'expenses'],
     ['carregamento_logistica', 'carregamento'],
