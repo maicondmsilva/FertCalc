@@ -63,6 +63,28 @@ export async function getHistoricoPrecos(
   return data.map(mapHistorico);
 }
 
+/** Histórico de vários produtos em uma única consulta (usado no relatório de preços). */
+export async function getHistoricoPrecosForProducts(
+  produtoIds: string[]
+): Promise<Record<string, HistoricoPrecoFormulado[]>> {
+  const result: Record<string, HistoricoPrecoFormulado[]> = {};
+  if (produtoIds.length === 0) return result;
+  // Consulta em blocos para não estourar o tamanho da URL.
+  for (let index = 0; index < produtoIds.length; index += 100) {
+    const chunk = produtoIds.slice(index, index + 100);
+    const { data, error } = await supabase
+      .from('historico_precos_formulados')
+      .select('*')
+      .in('produto_formulado_id', chunk)
+      .order('registrado_em', { ascending: true });
+    if (error) throw error;
+    (data || []).map(mapHistorico).forEach((entry) => {
+      (result[entry.produto_formulado_id] ||= []).push(entry);
+    });
+  }
+  return result;
+}
+
 export async function addHistoricoPreco(
   entry: Omit<HistoricoPrecoFormulado, 'id' | 'registrado_em'>
 ): Promise<void> {

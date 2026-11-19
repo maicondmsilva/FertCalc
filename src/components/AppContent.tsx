@@ -102,7 +102,7 @@ function AppContentRoute({
       return <SavedFormulas currentUser={currentUser} />;
     }
     if (activeTab === 'produtos_formulados' && hasPermission('produtosFormulados')) {
-      return <ProdutosFormulados />;
+      return <ProdutosFormulados currentUser={currentUser} />;
     }
     if (activeTab === 'history' && hasPermission('history')) {
       return <History onEdit={onEditPricing} currentUser={currentUser} />;

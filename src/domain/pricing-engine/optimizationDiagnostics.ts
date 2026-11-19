@@ -7,7 +7,11 @@ import {
   isSecondaryNutrientGuarantee,
   normalizeMicronutrientKey,
 } from '../../utils/micronutrients';
-import type { FormulaOptimizationInput } from './optimizationEngine';
+import {
+  NPK_UPPER_TOLERANCE,
+  SECONDARY_UPPER_TOLERANCE,
+  type FormulaOptimizationInput,
+} from './optimizationEngine';
 
 export type OptimizationDiagnosticCode =
   | 'NO_SELECTED_MATERIALS'
@@ -250,7 +254,10 @@ export function diagnoseFormulaInfeasibility(
           total + numeric(material.minQty) * (requirement.percentage(material) / 100),
         0
       );
-      const upperMass = requirement.target * 10 + 9;
+      const tolerance = ['N', 'P', 'K'].includes(requirement.key)
+        ? NPK_UPPER_TOLERANCE
+        : SECONDARY_UPPER_TOLERANCE;
+      const upperMass = (requirement.target + tolerance) * 10;
       if (fixedMass > upperMass + 1e-7) {
         diagnostics.push({
           code: 'FIXED_NUTRIENT_EXCEEDS_TARGET',

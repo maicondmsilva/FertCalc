@@ -18,6 +18,7 @@ import type { Embalagem, SavedFormula, TargetFormula } from '../../types';
 import type { ProdutoFormulado } from '../../services/produtosFormuladosService';
 import type { FormulaComparisonAlternative } from '../../utils/formulaComparison';
 import { getCalculationMode } from '../../utils/calculationMode';
+import { NPK_UPPER_TOLERANCE, SECONDARY_UPPER_TOLERANCE } from '../../domain/pricing-engine';
 import {
   formatMicronutrientLabel,
   getCalculatedMicronutrientValue,
@@ -141,7 +142,12 @@ function GuaranteeTile({
   large?: boolean;
 }) {
   const style = NUTRIENT_STYLES[nutrient];
-  const status = getNutrientStatus(target, obtained);
+  // N-P-K aceitam até 0,98 acima do alvo; Ca, S e Mg até 0,9.
+  const status = getNutrientStatus(
+    target,
+    obtained,
+    large ? NPK_UPPER_TOLERANCE : SECONDARY_UPPER_TOLERANCE
+  );
   const badge = STATUS_BADGE[status];
   return (
     <div className={`rounded-xl border p-3 ${large ? style.box : 'border-stone-200 bg-white'}`}>
@@ -349,6 +355,7 @@ export default function BetaFormulaCard({
       .filter(
         (product) =>
           product.ativo &&
+          !product.arquivado_em &&
           (product.nome.toLowerCase().includes(term) ||
             (product.formula_npk || '').toLowerCase().includes(term))
       )

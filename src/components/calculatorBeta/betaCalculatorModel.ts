@@ -111,16 +111,14 @@ const draftNumber = (raw: string): number | undefined => {
  * Sugere batidas/produtos formulados cuja fórmula N-P-K combina com o que já foi
  * digitado. Campos vazios não filtram; assim as sugestões aparecem desde o N.
  */
-export function findProductsMatchingNpk<T extends { ativo?: boolean; formula_npk?: string }>(
-  products: T[],
-  draft: NpkDraft,
-  limit = 8
-): T[] {
+export function findProductsMatchingNpk<
+  T extends { ativo?: boolean; arquivado_em?: string; formula_npk?: string },
+>(products: T[], draft: NpkDraft, limit = 8): T[] {
   const typed = { n: draftNumber(draft.n), p: draftNumber(draft.p), k: draftNumber(draft.k) };
   if (typed.n === undefined && typed.p === undefined && typed.k === undefined) return [];
   return products
     .filter((product) => {
-      if (product.ativo === false) return false;
+      if (product.ativo === false || product.arquivado_em) return false;
       const target = parseFormulaTarget(product.formula_npk);
       if (!target) return false;
       return (['n', 'p', 'k'] as const).every(
@@ -135,17 +133,21 @@ export const isValidNutrientInput = (raw: string) => /^\d{0,2}(?:[.,]\d{0,2})?$/
 
 export type NutrientStatus = 'none' | 'pending' | 'met' | 'above' | 'below';
 
-/** Situação da garantia obtida em relação ao alvo (tolerância de 0,05 ponto). */
+/**
+ * Situação da garantia obtida. Abaixo do alvo tolera só arredondamento (0,05);
+ * acima, aceita a faixa do nutriente (N-P-K até 0,98; Ca, S e Mg até 0,9).
+ */
 export function getNutrientStatus(
   target: number | undefined,
   obtained: number | undefined,
-  tolerance = 0.05
+  upperTolerance = 0.05
 ): NutrientStatus {
   if (!(numeric(target) > 0)) return 'none';
   if (obtained === undefined || !Number.isFinite(obtained)) return 'pending';
   const difference = numeric(obtained) - numeric(target);
-  if (Math.abs(difference) <= tolerance) return 'met';
-  return difference > 0 ? 'above' : 'below';
+  if (difference < -0.05) return 'below';
+  if (difference > upperTolerance + 0.005) return 'above';
+  return 'met';
 }
 
 /** Meta de Mg da fórmula: o campo próprio ou, em batidas antigas, a meta entre os micros. */

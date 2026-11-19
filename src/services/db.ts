@@ -1386,29 +1386,38 @@ export async function acceptPricingTransfer(id: string, user: User): Promise<voi
 
 import { SavedFormula } from '../types';
 
-export async function getSavedFormulas(): Promise<SavedFormula[]> {
+/**
+ * Batidas salvas. Por padrão não traz as arquivadas, que só aparecem na aba
+ * "Arquivadas" de Batidas Salvas.
+ */
+export async function getSavedFormulas(
+  options: { includeArchived?: boolean } = {}
+): Promise<SavedFormula[]> {
   const { data, error } = await supabase
     .from('saved_formulas')
     .select('*')
     .order('id_numeric', { ascending: true, nullsFirst: false });
   if (error || !data) return [];
-  return data.map((d) => ({
-    id: d.id,
-    organizationId: d.organization_id,
-    id_numeric: d.id_numeric != null ? Number(d.id_numeric) : undefined,
-    userId: d.user_id,
-    userName: d.user_name,
-    name: d.name,
-    date: d.date,
-    targetFormula: d.target_formula,
-    category: d.category as SavedFormula['category'],
-    targetCa: d.target_ca != null ? Number(d.target_ca) : undefined,
-    targetS: d.target_s != null ? Number(d.target_s) : undefined,
-    targetMicros: (d.target_micros as Record<string, number> | null) || undefined,
-    macros: d.macros || [],
-    micros: d.micros || [],
-    local_carregamento_id: d.local_carregamento_id as string | undefined,
-  }));
+  return data
+    .map((d) => ({
+      id: d.id,
+      organizationId: d.organization_id,
+      id_numeric: d.id_numeric != null ? Number(d.id_numeric) : undefined,
+      userId: d.user_id,
+      userName: d.user_name,
+      name: d.name,
+      date: d.date,
+      targetFormula: d.target_formula,
+      category: d.category as SavedFormula['category'],
+      targetCa: d.target_ca != null ? Number(d.target_ca) : undefined,
+      targetS: d.target_s != null ? Number(d.target_s) : undefined,
+      targetMicros: (d.target_micros as Record<string, number> | null) || undefined,
+      macros: d.macros || [],
+      micros: d.micros || [],
+      local_carregamento_id: d.local_carregamento_id as string | undefined,
+      arquivadaEm: (d.arquivada_em as string | null) || undefined,
+    }))
+    .filter((formula) => options.includeArchived || !formula.arquivadaEm);
 }
 
 export async function createSavedFormula(formula: Omit<SavedFormula, 'id'>): Promise<SavedFormula> {

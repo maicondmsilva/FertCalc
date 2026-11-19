@@ -53,7 +53,7 @@ import {
   buildFormulaComparisonAlternatives,
   type FormulaComparisonAlternative,
 } from '../utils/formulaComparison';
-import { parseFormulaTarget } from '../domain/pricing-engine';
+import { isWithinGuaranteeRange, parseFormulaTarget } from '../domain/pricing-engine';
 
 const formatPricingMoney = (value: number | undefined, currency: 'BRL' | 'USD' = 'BRL') =>
   Number(value || 0).toLocaleString('pt-BR', {
@@ -1075,6 +1075,7 @@ export default function Calculator({
                                       const filteredProds = produtosFormulados.filter(
                                         (p) =>
                                           p.ativo &&
+                                          !p.arquivado_em &&
                                           (p.nome.toLowerCase().includes(term) ||
                                             (p.formula_npk || '').toLowerCase().includes(term))
                                       );
@@ -2307,17 +2308,17 @@ export default function Calculator({
                                 const tN = parseFloat(fmatch[1].replace(',', '.'));
                                 const tP = parseFloat(fmatch[2].replace(',', '.'));
                                 const tK = parseFloat(fmatch[3].replace(',', '.'));
-                                const TOL = 0.05;
+                                // Acima do alvo é aceito até 0,98 ponto (faixa do otimizador).
                                 const deviations: string[] = [];
-                                if (Math.abs(calc.summary.resultingN - tN) > TOL)
+                                if (!isWithinGuaranteeRange(tN, calc.summary.resultingN))
                                   deviations.push(
                                     `N: ${calc.summary.resultingN.toFixed(2)} (alvo ${tN})`
                                   );
-                                if (Math.abs(calc.summary.resultingP - tP) > TOL)
+                                if (!isWithinGuaranteeRange(tP, calc.summary.resultingP))
                                   deviations.push(
                                     `P: ${calc.summary.resultingP.toFixed(2)} (alvo ${tP})`
                                   );
-                                if (Math.abs(calc.summary.resultingK - tK) > TOL)
+                                if (!isWithinGuaranteeRange(tK, calc.summary.resultingK))
                                   deviations.push(
                                     `K: ${calc.summary.resultingK.toFixed(2)} (alvo ${tK})`
                                   );

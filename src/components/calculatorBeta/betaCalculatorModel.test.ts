@@ -88,6 +88,10 @@ describe('campos N-P-K', () => {
     expect(getNutrientStatus(4, 4.03)).toBe('met');
     expect(getNutrientStatus(4, 4.6)).toBe('above');
     expect(getNutrientStatus(4, 3.5)).toBe('below');
+    // N-P-K: até 0,98 acima do alvo ainda está no alvo.
+    expect(getNutrientStatus(5, 5.98, 0.98)).toBe('met');
+    expect(getNutrientStatus(5, 6.1, 0.98)).toBe('above');
+    expect(getNutrientStatus(5, 4.9, 0.98)).toBe('below');
   });
 });
 

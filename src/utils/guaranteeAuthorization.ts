@@ -1,5 +1,6 @@
 import type { PricingRecord, TargetFormula, User } from '../types';
 import { parseFormulaTarget } from '../domain/pricing-engine/formulaEngine';
+import { isWithinGuaranteeRange } from '../domain/pricing-engine/optimizationEngine';
 import { buildGuaranteeComparisons } from './guaranteeComparison';
 
 export interface GuaranteeDivergence {
@@ -9,8 +10,6 @@ export interface GuaranteeDivergence {
   target: number;
   calculated: number;
 }
-
-const NPK_TOLERANCE = 0.05;
 
 export function getGuaranteeDivergences(calculations: TargetFormula[]): GuaranteeDivergence[] {
   return calculations
@@ -24,8 +23,11 @@ export function getGuaranteeDivergences(calculations: TargetFormula[]): Guarante
             ['P', formulaTarget.p, summary.resultingP],
             ['K', formulaTarget.k, summary.resultingK],
           ]
-            .filter(([, target, calculated]) =>
-              Number.isFinite(target) && Math.abs(Number(calculated) - Number(target)) > NPK_TOLERANCE
+            // Dentro da folga do otimizador (até +0,98 acima do alvo) não é divergência.
+            .filter(
+              ([, target, calculated]) =>
+                Number.isFinite(target) &&
+                !isWithinGuaranteeRange(Number(target), Number(calculated))
             )
             .map(([nutrient, target, calculated]) => ({
               formulaId: calculation.id,
@@ -60,7 +62,9 @@ export function canAuthorizeGuaranteeDivergence(user: User): boolean {
 export function getPricingGuaranteeAuthorizationSummary(pricing: PricingRecord) {
   const authorizations = (pricing.calculations || [])
     .map((calculation) => calculation.guaranteeDivergenceAuthorization)
-    .filter((authorization): authorization is NonNullable<typeof authorization> => Boolean(authorization));
+    .filter((authorization): authorization is NonNullable<typeof authorization> =>
+      Boolean(authorization)
+    );
   const latest = [...authorizations].sort((left, right) =>
     right.authorizedAt.localeCompare(left.authorizedAt)
   )[0];
@@ -82,7 +86,9 @@ export function formatPricingGuaranteeAuthorizationAudit(pricing: PricingRecord)
       authorization: calculation.guaranteeDivergenceAuthorization,
     }))
     .filter(
-      (entry): entry is {
+      (
+        entry
+      ): entry is {
         formula: string;
         authorization: NonNullable<TargetFormula['guaranteeDivergenceAuthorization']>;
       } => Boolean(entry.authorization)
