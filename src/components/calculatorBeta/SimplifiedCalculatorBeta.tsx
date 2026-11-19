@@ -213,6 +213,7 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
         selected: true,
         summary: undefined,
         approximation: undefined,
+        notClosed: undefined,
         profitabilityAnalysis: undefined,
         macros: calculation.macros.map((material) => ({ ...material, quantity: 0 })),
         micros: calculation.micros.map((material) => ({ ...material, quantity: 0 })),

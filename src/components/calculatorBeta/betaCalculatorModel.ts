@@ -212,6 +212,7 @@ export function applySavedFormulaToCalculation(
     micros: restore(calculation.micros, savedFormula.micros),
     summary: undefined,
     approximation: undefined,
+    notClosed: undefined,
   };
 }
 

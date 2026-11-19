@@ -9,6 +9,9 @@ import {
 import { formatNPK } from '../../utils/formatters';
 import {
   buildFormulaOptimizationModel,
+  distanceOutsideGuaranteeRange,
+  NPK_UPPER_TOLERANCE,
+  SECONDARY_UPPER_TOLERANCE,
   type FormulaOptimizationInput,
   type OptimizationModel,
 } from './optimizationEngine';
@@ -79,8 +82,9 @@ export function approximateFormula(input: FormulaOptimizationInput): FormulaAppr
     })),
   ];
 
-  relaxedTargets.forEach(({ constraint, value }, index) => {
-    model.constraints[constraint] = { equal: value };
+  // Mantém as faixas do otimizador (alvo até +0,99) e só mede o que ficar fora
+  // delas: dentro da faixa não há desvio, e o custo decide a composição.
+  relaxedTargets.forEach(({ constraint }, index) => {
     const under = `approx_under_${index}`;
     const over = `approx_over_${index}`;
     model.variables[under] = { deviation: 1, [constraint]: 1, cost: 0 };
@@ -127,17 +131,19 @@ export function approximateFormula(input: FormulaOptimizationInput): FormulaAppr
       numeric(getCalculatedMicronutrientValue(composition.resultingMicros, name)),
     ])
   );
+  const npkOutside = (target: number, obtained: number) =>
+    distanceOutsideGuaranteeRange(target, obtained, NPK_UPPER_TOLERANCE);
+  const secondaryOutside = (target: number, obtained: number) =>
+    target > 0 ? distanceOutsideGuaranteeRange(target, obtained, SECONDARY_UPPER_TOLERANCE) : 0;
   const deviationScore =
-    Math.abs(composition.resultingN - input.target.n) +
-    Math.abs(composition.resultingP - input.target.p) +
-    Math.abs(composition.resultingK - input.target.k) +
-    (numeric(input.targetCa) > 0
-      ? Math.abs(composition.resultingCa - numeric(input.targetCa))
-      : 0) +
-    (numeric(input.targetS) > 0 ? Math.abs(composition.resultingS - numeric(input.targetS)) : 0) +
-    (targetMg > 0 ? Math.abs(composition.resultingMg - targetMg) : 0) +
+    npkOutside(input.target.n, composition.resultingN) +
+    npkOutside(input.target.p, composition.resultingP) +
+    npkOutside(input.target.k, composition.resultingK) +
+    secondaryOutside(numeric(input.targetCa), composition.resultingCa) +
+    secondaryOutside(numeric(input.targetS), composition.resultingS) +
+    secondaryOutside(targetMg, composition.resultingMg) +
     microTargets.reduce(
-      (total, { name, value }) => total + Math.abs(numeric(achievedMicroTargets[name]) - value),
+      (total, { name, value }) => total + Math.max(0, value - numeric(achievedMicroTargets[name])),
       0
     );
 

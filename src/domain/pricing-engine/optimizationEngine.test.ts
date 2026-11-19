@@ -36,7 +36,7 @@ describe('LP optimization engine', () => {
       micros: [],
       incompatibilityRules: [],
     });
-    expect(model.constraints.n_eq).toEqual({ min: 450, max: 459.8 });
+    expect(model.constraints.n_eq).toEqual({ min: 450, max: 459.9 });
     expect(model.constraints.weight).toEqual({ equal: 1000 });
     expect(model.variables.ureia.weight).toBe(1);
     expect(model.ints.use_ureia).toBe(1);
@@ -266,7 +266,7 @@ describe('LP optimization engine', () => {
 });
 
 describe('folga do N-P-K', () => {
-  it('aceita até 0,98 acima do alvo e joga o excedente onde fica mais barato', () => {
+  it('aceita até 0,99 acima do alvo e joga o excedente onde fica mais barato', () => {
     // N barato (ureia) e P caro: com 05-25-15 o otimizador pode subir o N,
     // mas mantém P e K no mínimo, porque subir esses custaria mais.
     const result = optimizeFormula({
@@ -283,7 +283,7 @@ describe('folga do N-P-K', () => {
     expect(result.feasible).toBe(true);
     const { resultingN, resultingP, resultingK } = result.composition;
     expect(resultingN).toBeGreaterThanOrEqual(5 - 1e-6);
-    expect(resultingN).toBeLessThanOrEqual(5.98 + 1e-6);
+    expect(resultingN).toBeLessThanOrEqual(5.99 + 1e-6);
     expect(resultingP).toBeCloseTo(25, 4);
     expect(resultingK).toBeCloseTo(15, 4);
   });

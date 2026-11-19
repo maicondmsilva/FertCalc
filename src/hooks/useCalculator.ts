@@ -58,7 +58,7 @@ import {
   formatOptimizationDiagnostics,
   hasFormulaTarget,
 } from '../domain/pricing-engine';
-import { validatePricingForSave } from '../utils/pricingValidation';
+import { getCalculationSaveBlockReason, validatePricingForSave } from '../utils/pricingValidation';
 import {
   getPriceListCurrencySnapshot,
   hasValidPricingExchangeRate,
@@ -890,7 +890,12 @@ export function useCalculator({
     setCalculations(
       calculations.map((c) => {
         if (c.id === id) {
-          let updatedFormula = { ...c, [field]: value, approximation: undefined };
+          let updatedFormula = {
+            ...c,
+            [field]: value,
+            approximation: undefined,
+            notClosed: undefined,
+          };
 
           // Se a mudança for na categoria, vamos auto-selecionar os produtos
           if (field === 'category') {
@@ -962,6 +967,7 @@ export function useCalculator({
             ...approximation.targetMicros,
           },
           approximation: undefined,
+          notClosed: undefined,
         };
       })
     );
@@ -1167,7 +1173,9 @@ export function useCalculator({
           return {
             ...c,
             factors: newFactors,
-            summary: calculateSummary(c.macros, c.micros, newFactors),
+            // Sem resumo a fórmula ainda não foi calculada: não inventa um preço
+            // com as quantidades de um cálculo anterior.
+            summary: c.summary ? calculateSummary(c.macros, c.micros, newFactors) : undefined,
           };
         }
         return c;
@@ -1248,6 +1256,17 @@ export function useCalculator({
     }
     if (!factors?.client?.id) {
       showError('Não é possível salvar precificação sem cliente.');
+      return;
+    }
+
+    // Valida antes de recalcular o resumo: uma fórmula alterada e não calculada
+    // (sem resumo) ou que não fechou não pode ser salva.
+    const blockedCalculation = calculations
+      .filter((calculation) => calculation.selected)
+      .map(getCalculationSaveBlockReason)
+      .find(Boolean);
+    if (blockedCalculation) {
+      showError(blockedCalculation);
       return;
     }
 
@@ -1791,6 +1810,11 @@ export function useCalculator({
     const selectedCalc = calculations.find((c) => c.selected);
     if (!selectedCalc) {
       showError('Calcule e selecione uma fórmula para salvar a batida.');
+      return;
+    }
+    const batidaBlock = getCalculationSaveBlockReason(selectedCalc);
+    if (batidaBlock) {
+      showError(batidaBlock);
       return;
     }
 

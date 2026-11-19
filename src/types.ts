@@ -462,6 +462,11 @@ export interface TargetFormula {
   targetMg?: number;
   targetMicros?: Record<string, number>;
   approximation?: FormulaApproximation;
+  /**
+   * O último cálculo não fechou a fórmula-alvo: summary/quantidades mostram o
+   * resultado mais próximo (o da sugestão). Não pode ser salva assim.
+   */
+  notClosed?: boolean;
   guaranteeDivergenceAuthorization?: {
     authorizedByUserId: string;
     authorizedByUserName: string;

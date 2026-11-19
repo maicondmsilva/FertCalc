@@ -39,7 +39,7 @@ const magnesio = material({
 });
 
 describe('magnésio com regra de faixa (igual a Ca e S)', () => {
-  it('cria a faixa do alvo até +0,9 ponto e lê "Magnésio" ou "Mg"', () => {
+  it('cria a faixa do alvo até +0,99 ponto e lê "Magnésio" ou "Mg"', () => {
     const model = buildFormulaOptimizationModel({
       target: { n: 10, p: 0, k: 0 },
       targetMg: 1,
@@ -49,7 +49,7 @@ describe('magnésio com regra de faixa (igual a Ca e S)', () => {
       incompatibilityRules: [],
     });
 
-    expect(model.constraints.mg_eq).toEqual({ min: 10, max: 19 });
+    expect(model.constraints.mg_eq).toEqual({ min: 10, max: 19.9 });
     expect(model.variables['oxido-mg'].mg_eq).toBe(0.5);
     // O Mg não vira também uma meta mínima de micronutriente.
     expect(Object.keys(model.constraints).some((key) => key.startsWith('micro_target'))).toBe(
@@ -81,7 +81,7 @@ describe('magnésio com regra de faixa (igual a Ca e S)', () => {
 
     expect(result.feasible).toBe(true);
     expect(result.composition.resultingMg).toBeGreaterThanOrEqual(1 - 1e-6);
-    expect(result.composition.resultingMg).toBeLessThanOrEqual(1.9 + 1e-6);
+    expect(result.composition.resultingMg).toBeLessThanOrEqual(1.99 + 1e-6);
   });
 
   it('calcula o Mg da composição a partir das garantias', () => {

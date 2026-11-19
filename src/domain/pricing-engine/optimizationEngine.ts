@@ -48,12 +48,23 @@ const numeric = (value: unknown): number => Number(value) || 0;
 
 /**
  * Quanto cada garantia N, P e K pode ficar acima do alvo (em pontos percentuais).
- * Ex.: 5-25-15 aceita até 5,98-25,98-15,98. O otimizador minimiza o custo, então
+ * Ex.: 5-25-15 aceita até 5,99-25,99-15,99. O otimizador minimiza o custo, então
  * o excedente vai para onde a mistura fica mais barata.
  */
-export const NPK_UPPER_TOLERANCE = 0.98;
-/** Faixa de Ca, S e Mg acima do alvo (pontos percentuais). */
-export const SECONDARY_UPPER_TOLERANCE = 0.9;
+export const NPK_UPPER_TOLERANCE = 0.99;
+/** Faixa de Ca, S e Mg acima do alvo, quando informados (mesma regra do N-P-K). */
+export const SECONDARY_UPPER_TOLERANCE = 0.99;
+
+/** Quanto a garantia ficou fora da faixa aceita (0 quando está dentro). */
+export function distanceOutsideGuaranteeRange(
+  target: number,
+  obtained: number,
+  upperTolerance: number = NPK_UPPER_TOLERANCE
+): number {
+  if (obtained < target) return target - obtained;
+  if (obtained > target + upperTolerance) return obtained - (target + upperTolerance);
+  return 0;
+}
 
 /**
  * A garantia obtida está dentro da faixa aceita? Abaixo do alvo, tolera só o

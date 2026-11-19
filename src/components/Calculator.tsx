@@ -498,6 +498,8 @@ export default function Calculator({
         formula: calc.formula,
         selected: true,
         summary: undefined,
+        approximation: undefined,
+        notClosed: undefined,
         profitabilityAnalysis: undefined,
         macros: calc.macros.map((material) => ({ ...material, quantity: 0 })),
         micros: calc.micros.map((material) => ({ ...material, quantity: 0 })),
@@ -988,13 +990,15 @@ export default function Calculator({
                                   Fórmula {calcIdx + 1}
                                 </p>
                                 <p
-                                  className={`text-[11px] font-bold ${calc.summary ? 'text-emerald-600' : calc.formula && Number(calc.factors?.totalTons) > 0 ? 'text-blue-600' : 'text-amber-600'}`}
+                                  className={`text-[11px] font-bold ${calc.notClosed ? 'text-red-600' : calc.summary ? 'text-emerald-600' : calc.formula && Number(calc.factors?.totalTons) > 0 ? 'text-blue-600' : 'text-amber-600'}`}
                                 >
-                                  {calc.summary
-                                    ? 'Calculada'
-                                    : calc.formula && Number(calc.factors?.totalTons) > 0
-                                      ? 'Pronta para calcular'
-                                      : 'Configuração incompleta'}
+                                  {calc.notClosed
+                                    ? 'Não fecha'
+                                    : calc.summary
+                                      ? 'Calculada'
+                                      : calc.formula && Number(calc.factors?.totalTons) > 0
+                                        ? 'Pronta para calcular'
+                                        : 'Configuração incompleta'}
                                 </p>
                               </div>
                             </div>
@@ -1024,6 +1028,33 @@ export default function Calculator({
                               </button>
                             </div>
                           </div>
+
+                          {calc.notClosed && (
+                            <div
+                              role="alert"
+                              className="mb-3 flex flex-col gap-2 rounded-lg border border-red-200 bg-red-50 p-3 sm:flex-row sm:items-center sm:justify-between"
+                            >
+                              <div className="text-xs text-red-800">
+                                <p className="font-black uppercase">
+                                  A fórmula {calc.formula} não fecha com os produtos selecionados
+                                </p>
+                                <p className="mt-0.5">
+                                  {calc.approximation
+                                    ? `O resultado mostrado é o mais próximo, do jeito mais barato: ${calc.approximation.suggestedFormula}. Aplique a sugestão ou ajuste a fórmula e os produtos. Não é possível salvar assim.`
+                                    : 'Nenhuma composição possível com os produtos selecionados. Ajuste a fórmula ou os produtos.'}
+                                </p>
+                              </div>
+                              {calc.approximation && (
+                                <button
+                                  type="button"
+                                  onClick={() => applyFormulaApproximation(calc.id)}
+                                  className="shrink-0 rounded-lg bg-red-700 px-3 py-2 text-xs font-bold text-white hover:bg-red-800"
+                                >
+                                  Aplicar sugestão {calc.approximation.suggestedFormula}
+                                </button>
+                              )}
+                            </div>
+                          )}
 
                           {/* Main row: checkbox + formula + CA/S + type + gear + calc + delete */}
                           <div className="flex flex-wrap items-end gap-2">
