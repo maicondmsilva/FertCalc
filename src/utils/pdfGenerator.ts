@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf';
+import { getCompanyDisplayName } from './companyBranding';
 import html2canvas from 'html2canvas';
 import { PricingRecord, AppSettings } from '../types';
 import {
@@ -140,7 +141,7 @@ export const generatePricingPDF = (
             : `<div style="width:45px;height:45px;background:#1a1a2e;border-radius:10px;display:flex;align-items:center;justify-content:center;"><span style="color:#fff;font-size:22px;font-weight:900;">${(settings.companyName || 'E')[0]}</span></div>`
         }
         <div>
-          <div style="font-size:18px;font-weight:900;color:#1a1a2e;letter-spacing:-0.5px;line-height:1;">${settings.companyName || 'EMPRESA'}</div>
+          ${getCompanyDisplayName(settings) ? `<div style="font-size:18px;font-weight:900;color:#1a1a2e;letter-spacing:-0.5px;line-height:1;">${getCompanyDisplayName(settings)}</div>` : ''}
           ${settings.companyCnpj ? `<div style="font-size:10px;color:#555;margin-top:4px;">CNPJ: ${settings.companyCnpj}</div>` : ''}
         </div>
       </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getCompanyDisplayName } from '../utils/companyBranding';
 import { PricingRecord, User, AppSettings, Branch } from '../types';
 import { getPricingRecords, getAppSettings, getBranches, getUsers } from '../services/db';
 import {
@@ -183,7 +184,7 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
       }
       doc.setFontSize(16);
       doc.setFont(undefined, 'bold');
-      doc.text(appSettings.companyName, appSettings.companyLogo ? 32 : 10, 16);
+      doc.text(getCompanyDisplayName(appSettings), appSettings.companyLogo ? 32 : 10, 16);
       doc.setFontSize(10);
       doc.setFont(undefined, 'normal');
       doc.text('Relatório de Precificação', appSettings.companyLogo ? 32 : 10, 22);
@@ -298,7 +299,7 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
     try {
       const XLSX = await import('xlsx');
       const wsData = [
-        ['RELATÓRIO DE PRECIFICAÇÃO', appSettings.companyName],
+        ['RELATÓRIO DE PRECIFICAÇÃO', appSettings.companyName || ''],
         ['Gerado em', new Date().toLocaleString('pt-BR'), 'Por', currentUser.name],
         [
           'Período',
@@ -738,8 +739,10 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
                               className="mt-1 block max-w-48 truncate text-[10px] text-stone-500"
                               title={formatPricingGuaranteeAuthorizationAudit(p)}
                             >
-                              {getPricingGuaranteeAuthorizationSummary(p).latestAuthorization
-                                ?.authorizedByUserName}
+                              {
+                                getPricingGuaranteeAuthorizationSummary(p).latestAuthorization
+                                  ?.authorizedByUserName
+                              }
                               {' · '}
                               {getPricingGuaranteeAuthorizationSummary(p).latestAuthorization
                                 ?.authorizedAt
@@ -749,8 +752,10 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
                                   ).toLocaleString('pt-BR')
                                 : 'Data não informada'}
                               {' · '}
-                              {getPricingGuaranteeAuthorizationSummary(p).latestAuthorization
-                                ?.justification}
+                              {
+                                getPricingGuaranteeAuthorizationSummary(p).latestAuthorization
+                                  ?.justification
+                              }
                             </span>
                           </div>
                         ) : (
@@ -840,17 +845,23 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
                         {getPricingGuaranteeAuthorizationSummary(p).divergenceCount}
                       </span>
                       <span className="mt-0.5 block">
-                        {getPricingGuaranteeAuthorizationSummary(p).latestAuthorization
-                          ?.authorizedByUserName}
+                        {
+                          getPricingGuaranteeAuthorizationSummary(p).latestAuthorization
+                            ?.authorizedByUserName
+                        }
                         {' · '}
-                        {getPricingGuaranteeAuthorizationSummary(p).latestAuthorization?.authorizedAt
+                        {getPricingGuaranteeAuthorizationSummary(p).latestAuthorization
+                          ?.authorizedAt
                           ? new Date(
                               getPricingGuaranteeAuthorizationSummary(p).latestAuthorization!
                                 .authorizedAt
                             ).toLocaleString('pt-BR')
                           : 'Data não informada'}
                         {' · '}
-                        {getPricingGuaranteeAuthorizationSummary(p).latestAuthorization?.justification}
+                        {
+                          getPricingGuaranteeAuthorizationSummary(p).latestAuthorization
+                            ?.justification
+                        }
                       </span>
                     </div>
                   )}

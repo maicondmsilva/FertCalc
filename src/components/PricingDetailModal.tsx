@@ -476,7 +476,7 @@ export default function PricingDetailModal({
       // Título compacto
       doc.setFontSize(16);
       doc.setFont(undefined as any, 'bold');
-      doc.text(appSettings.companyName, 14, 15);
+      doc.text(appSettings.companyName || '', 14, 15);
       doc.setFontSize(9);
       doc.setFont(undefined as any, 'normal');
       doc.text('PROPOSTA COMPLETA', 14, 20);
@@ -671,7 +671,7 @@ export default function PricingDetailModal({
 
       const wsData: Array<Array<string | number>> = [
         ['RELATÓRIO DE PRECIFICAÇÃO'],
-        ['Empresa', appSettings.companyName],
+        ['Empresa', appSettings.companyName || ''],
         ['ID', pricing.id],
         ['Data', new Date(pricing.date).toLocaleString('pt-BR')],
         ['Status', pricing.status],

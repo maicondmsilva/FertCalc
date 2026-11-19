@@ -267,6 +267,8 @@ export const DEFAULT_CATEGORIAS: string[] = [
 export interface AppSettings {
   companyName: string;
   companyLogo: string; // Base64
+  /** Mostra o nome escrito ao lado da logo (topo das páginas e relatórios). Padrão: sim. */
+  showCompanyName?: boolean;
   companyCnpj?: string;
   pricingTerms?: string;
   defaultFactorBRL?: number;

@@ -1,7 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Save, Image as ImageIcon, Building, Download, Upload, Database, FileText, Users, UserCheck } from 'lucide-react';
+import {
+  Settings,
+  Save,
+  Image as ImageIcon,
+  Building,
+  Download,
+  Upload,
+  Database,
+  FileText,
+  Users,
+  UserCheck,
+} from 'lucide-react';
 import { AppSettings, Client, Agent } from '../types';
-import { getAppSettings, saveAppSettings, createClientsBulk, createAgentsBulk } from '../services/db';
+import {
+  getAppSettings,
+  saveAppSettings,
+  createClientsBulk,
+  createAgentsBulk,
+} from '../services/db';
 import { useToast } from './Toast';
 import CompatibilityCategoryManager from './CompatibilityCategoryManager';
 import SystemHealthPanel from './SystemHealthPanel';
@@ -23,7 +39,7 @@ export default function SettingsManager() {
   });
 
   useEffect(() => {
-    getAppSettings().then(saved => {
+    getAppSettings().then((saved) => {
       if (saved) setSettings(saved);
     });
   }, []);
@@ -48,14 +64,16 @@ export default function SettingsManager() {
       await saveAppSettings(settings);
       showSuccess('Configurações salvas com sucesso!');
     } catch (error) {
-      showError(`Erro ao salvar configurações: ${error instanceof Error ? error.message : 'Tente novamente.'}`);
+      showError(
+        `Erro ao salvar configurações: ${error instanceof Error ? error.message : 'Tente novamente.'}`
+      );
     }
   };
 
   const handleBackup = () => {
     const data = {
       info: 'Dados agora armazenados no Supabase. Use o painel Supabase para backups completos.',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -72,23 +90,25 @@ export default function SettingsManager() {
     setPreparingTemplate('clients');
     try {
       const XLSX = await import('xlsx');
-      const ws = XLSX.utils.json_to_sheet([{
-      'Razão Social / Nome*': '',
-      'CNPJ / CPF*': '',
-      'Código': '',
-      'E-mail': '',
-      'Telefone': '',
-      'Inscrição Estadual': '',
-      'Fazenda': '',
-      'CEP': '',
-      'Rua': '',
-      'Número': '',
-      'Bairro': '',
-      'Cidade': '',
-      'Estado (UF)': ''
-    }]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Clientes');
+      const ws = XLSX.utils.json_to_sheet([
+        {
+          'Razão Social / Nome*': '',
+          'CNPJ / CPF*': '',
+          Código: '',
+          'E-mail': '',
+          Telefone: '',
+          'Inscrição Estadual': '',
+          Fazenda: '',
+          CEP: '',
+          Rua: '',
+          Número: '',
+          Bairro: '',
+          Cidade: '',
+          'Estado (UF)': '',
+        },
+      ]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Clientes');
       XLSX.writeFile(wb, 'modelo_importacao_clientes.xlsx');
     } catch {
       showError('Não foi possível gerar o modelo de clientes.');
@@ -101,22 +121,24 @@ export default function SettingsManager() {
     setPreparingTemplate('agents');
     try {
       const XLSX = await import('xlsx');
-      const ws = XLSX.utils.json_to_sheet([{
-      'Nome*': '',
-      'Documento*': '',
-      'Código': '',
-      'E-mail': '',
-      'Telefone': '',
-      'Inscrição Estadual': '',
-      'CEP': '',
-      'Rua': '',
-      'Número': '',
-      'Bairro': '',
-      'Cidade': '',
-      'Estado (UF)': ''
-    }]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Agentes');
+      const ws = XLSX.utils.json_to_sheet([
+        {
+          'Nome*': '',
+          'Documento*': '',
+          Código: '',
+          'E-mail': '',
+          Telefone: '',
+          'Inscrição Estadual': '',
+          CEP: '',
+          Rua: '',
+          Número: '',
+          Bairro: '',
+          Cidade: '',
+          'Estado (UF)': '',
+        },
+      ]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Agentes');
       XLSX.writeFile(wb, 'modelo_importacao_agentes.xlsx');
     } catch {
       showError('Não foi possível gerar o modelo de agentes.');
@@ -153,14 +175,17 @@ export default function SettingsManager() {
           phone: row['Telefone'] ? String(row['Telefone']) : '',
           stateRegistration: row['Inscrição Estadual'] ? String(row['Inscrição Estadual']) : '',
           fazenda: row['Fazenda'] ? String(row['Fazenda']) : '',
-          address: (row['CEP'] || row['Rua']) ? {
-            cep: row['CEP'] ? String(row['CEP']) : '',
-            street: row['Rua'] ? String(row['Rua']) : '',
-            number: row['Número'] ? String(row['Número']) : '',
-            neighborhood: row['Bairro'] ? String(row['Bairro']) : '',
-            city: row['Cidade'] ? String(row['Cidade']) : '',
-            state: row['Estado (UF)'] ? String(row['Estado (UF)']) : ''
-          } : undefined
+          address:
+            row['CEP'] || row['Rua']
+              ? {
+                  cep: row['CEP'] ? String(row['CEP']) : '',
+                  street: row['Rua'] ? String(row['Rua']) : '',
+                  number: row['Número'] ? String(row['Número']) : '',
+                  neighborhood: row['Bairro'] ? String(row['Bairro']) : '',
+                  city: row['Cidade'] ? String(row['Cidade']) : '',
+                  state: row['Estado (UF)'] ? String(row['Estado (UF)']) : '',
+                }
+              : undefined,
         });
       }
 
@@ -168,7 +193,9 @@ export default function SettingsManager() {
         await createClientsBulk(clientsToImport);
         showSuccess(`${clientsToImport.length} clientes importados com sucesso!`);
       } else {
-        showError('Nenhum cliente válido encontrado na planilha. Verifique se os campos com * estão preenchidos.');
+        showError(
+          'Nenhum cliente válido encontrado na planilha. Verifique se os campos com * estão preenchidos.'
+        );
       }
     } catch (err) {
       console.error(err);
@@ -206,14 +233,17 @@ export default function SettingsManager() {
           email: row['E-mail'] ? String(row['E-mail']) : '',
           phone: row['Telefone'] ? String(row['Telefone']) : '',
           ie: row['Inscrição Estadual'] ? String(row['Inscrição Estadual']) : '',
-          address: (row['CEP'] || row['Rua']) ? {
-            cep: row['CEP'] ? String(row['CEP']) : '',
-            street: row['Rua'] ? String(row['Rua']) : '',
-            number: row['Número'] ? String(row['Número']) : '',
-            neighborhood: row['Bairro'] ? String(row['Bairro']) : '',
-            city: row['Cidade'] ? String(row['Cidade']) : '',
-            state: row['Estado (UF)'] ? String(row['Estado (UF)']) : ''
-          } : undefined
+          address:
+            row['CEP'] || row['Rua']
+              ? {
+                  cep: row['CEP'] ? String(row['CEP']) : '',
+                  street: row['Rua'] ? String(row['Rua']) : '',
+                  number: row['Número'] ? String(row['Número']) : '',
+                  neighborhood: row['Bairro'] ? String(row['Bairro']) : '',
+                  city: row['Cidade'] ? String(row['Cidade']) : '',
+                  state: row['Estado (UF)'] ? String(row['Estado (UF)']) : '',
+                }
+              : undefined,
         });
       }
 
@@ -221,7 +251,9 @@ export default function SettingsManager() {
         await createAgentsBulk(agentsToImport);
         showSuccess(`${agentsToImport.length} agentes importados com sucesso!`);
       } else {
-        showError('Nenhum agente válido encontrado na planilha. Verifique se os campos com * estão preenchidos.');
+        showError(
+          'Nenhum agente válido encontrado na planilha. Verifique se os campos com * estão preenchidos.'
+        );
       }
     } catch (err) {
       console.error(err);
@@ -243,10 +275,13 @@ export default function SettingsManager() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <div className="space-y-6">
-            <h3 className="text-xs font-bold text-stone-400 uppercase tracking-widest border-b border-stone-100 pb-2">Informações Gerais</h3>
+            <h3 className="text-xs font-bold text-stone-400 uppercase tracking-widest border-b border-stone-100 pb-2">
+              Informações Gerais
+            </h3>
             <div>
               <label className="block text-sm font-medium text-stone-600 mb-1 flex items-center">
-                <Building className="w-4 h-4 mr-1" /> Nome da Empresa
+                <Building className="w-4 h-4 mr-1" /> Nome da Empresa{' '}
+                <span className="ml-1 text-xs font-normal text-stone-400">(opcional)</span>
               </label>
               <input
                 type="text"
@@ -255,6 +290,21 @@ export default function SettingsManager() {
                 className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-stone-500"
                 placeholder="Ex: AgroFertil S.A."
               />
+              <label className="mt-3 flex items-start gap-2 text-sm text-stone-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={settings.showCompanyName !== false}
+                  onChange={(e) => setSettings({ ...settings, showCompanyName: e.target.checked })}
+                  className="mt-0.5 h-4 w-4 rounded border-stone-300 text-emerald-600 focus:ring-emerald-500"
+                />
+                <span>
+                  Mostrar o nome ao lado da logo
+                  <span className="block text-xs text-stone-400">
+                    Vale para o topo das páginas e os relatórios. Desmarque se a logo já tem o nome.
+                    Sem logo cadastrada, o nome sempre aparece.
+                  </span>
+                </span>
+              </label>
             </div>
 
             <div>
@@ -264,7 +314,11 @@ export default function SettingsManager() {
               <div className="mt-2 flex items-center gap-4">
                 {settings.companyLogo ? (
                   <div className="w-24 h-24 border border-stone-200 rounded-lg overflow-hidden bg-stone-50 flex items-center justify-center">
-                    <img src={settings.companyLogo} alt="Logo" className="max-w-full max-h-full object-contain" />
+                    <img
+                      src={settings.companyLogo}
+                      alt="Logo"
+                      className="max-w-full max-h-full object-contain"
+                    />
                   </div>
                 ) : (
                   <div className="w-24 h-24 border-2 border-dashed border-stone-200 rounded-lg flex items-center justify-center text-stone-400">
@@ -278,7 +332,9 @@ export default function SettingsManager() {
                     onChange={handleLogoChange}
                     className="block w-full text-sm text-stone-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-stone-100 file:text-stone-700 hover:file:bg-stone-200 cursor-pointer"
                   />
-                  <p className="mt-1 text-xs text-stone-400">Recomendado: PNG ou JPG, fundo transparente.</p>
+                  <p className="mt-1 text-xs text-stone-400">
+                    Recomendado: PNG ou JPG, fundo transparente.
+                  </p>
                 </div>
               </div>
             </div>
@@ -298,7 +354,9 @@ export default function SettingsManager() {
           </div>
 
           <div className="space-y-6">
-            <h3 className="text-xs font-bold text-stone-400 uppercase tracking-widest border-b border-stone-100 pb-2">Parâmetros por Módulo</h3>
+            <h3 className="text-xs font-bold text-stone-400 uppercase tracking-widest border-b border-stone-100 pb-2">
+              Parâmetros por Módulo
+            </h3>
 
             <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100">
               <h4 className="text-sm font-bold text-emerald-800 mb-2 flex items-center">
@@ -307,31 +365,49 @@ export default function SettingsManager() {
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[10px] font-bold text-emerald-600 uppercase mb-1">Fator padrão — Real</label>
+                    <label className="block text-[10px] font-bold text-emerald-600 uppercase mb-1">
+                      Fator padrão — Real
+                    </label>
                     <input
                       type="number"
                       min="0"
                       step="0.01"
                       value={settings.defaultFactorBRL ?? 0.8}
-                      onChange={(event) => setSettings({ ...settings, defaultFactorBRL: Math.max(0, Number(event.target.value)) })}
+                      onChange={(event) =>
+                        setSettings({
+                          ...settings,
+                          defaultFactorBRL: Math.max(0, Number(event.target.value)),
+                        })
+                      }
                       className="w-full px-3 py-2 border border-emerald-200 rounded-lg focus:ring-2 focus:ring-emerald-500 text-sm"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-emerald-600 uppercase mb-1">Fator padrão — Dólar</label>
+                    <label className="block text-[10px] font-bold text-emerald-600 uppercase mb-1">
+                      Fator padrão — Dólar
+                    </label>
                     <input
                       type="number"
                       min="0"
                       step="0.01"
                       value={settings.defaultFactorUSD ?? 0}
-                      onChange={(event) => setSettings({ ...settings, defaultFactorUSD: Math.max(0, Number(event.target.value)) })}
+                      onChange={(event) =>
+                        setSettings({
+                          ...settings,
+                          defaultFactorUSD: Math.max(0, Number(event.target.value)),
+                        })
+                      }
                       className="w-full px-3 py-2 border border-emerald-200 rounded-lg focus:ring-2 focus:ring-emerald-500 text-sm"
                     />
-                    <p className="mt-1 text-[10px] text-emerald-700">Zero não altera o custo da lista em dólar.</p>
+                    <p className="mt-1 text-[10px] text-emerald-700">
+                      Zero não altera o custo da lista em dólar.
+                    </p>
                   </div>
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-emerald-600 uppercase mb-1">Termos Comerciais Padrão</label>
+                  <label className="block text-[10px] font-bold text-emerald-600 uppercase mb-1">
+                    Termos Comerciais Padrão
+                  </label>
                   <textarea
                     value={settings.pricingTerms || ''}
                     onChange={(e) => setSettings({ ...settings, pricingTerms: e.target.value })}
@@ -341,7 +417,9 @@ export default function SettingsManager() {
                 </div>
                 <div className="flex items-center gap-2">
                   <input type="checkbox" id="auto_approve" className="rounded text-emerald-600" />
-                  <label htmlFor="auto_approve" className="text-xs text-emerald-700">Habilitar auto-aprovação para margens acima de 15%</label>
+                  <label htmlFor="auto_approve" className="text-xs text-emerald-700">
+                    Habilitar auto-aprovação para margens acima de 15%
+                  </label>
                 </div>
               </div>
             </div>
@@ -350,7 +428,9 @@ export default function SettingsManager() {
               <h4 className="text-sm font-bold text-stone-800 mb-2 flex items-center">
                 <Settings className="w-4 h-4 mr-2" /> Módulo Configuração
               </h4>
-              <p className="text-[10px] text-stone-500 italic">Configurações avançadas de sistema em breve.</p>
+              <p className="text-[10px] text-stone-500 italic">
+                Configurações avançadas de sistema em breve.
+              </p>
             </div>
           </div>
         </div>
@@ -372,7 +452,8 @@ export default function SettingsManager() {
           Categorias / Grupos de Produtos
         </h2>
         <p className="text-sm text-stone-500 mb-6">
-          Personalize as categorias (grupos de produtos) para organizar suas matérias-primas e facilitar a seleção rápida calculadora.
+          Personalize as categorias (grupos de produtos) para organizar suas matérias-primas e
+          facilitar a seleção rápida calculadora.
         </p>
         <CompatibilityCategoryManager />
       </div>
@@ -389,7 +470,8 @@ export default function SettingsManager() {
               <Download className="w-4 h-4 mr-2" /> Exportar Dados
             </h3>
             <p className="text-sm text-stone-500 mb-4">
-              Baixe uma cópia completa de todos os dados do sistema (clientes, histórico, configurações, etc).
+              Baixe uma cópia completa de todos os dados do sistema (clientes, histórico,
+              configurações, etc).
             </p>
             <button
               onClick={handleBackup}
@@ -432,7 +514,8 @@ export default function SettingsManager() {
                 <Users className="w-4 h-4 mr-2" /> Importar Clientes
               </h3>
               <p className="text-sm text-emerald-700/80 mb-4 h-10">
-                Baixe o modelo, preencha as informações e importe a planilha para cadastrar clientes em lote.
+                Baixe o modelo, preencha as informações e importe a planilha para cadastrar clientes
+                em lote.
               </p>
             </div>
             <div className="flex flex-col gap-2">
@@ -468,7 +551,8 @@ export default function SettingsManager() {
                 <UserCheck className="w-4 h-4 mr-2" /> Importar Agentes
               </h3>
               <p className="text-sm text-blue-700/80 mb-4 h-10">
-                Baixe o modelo, preencha as informações e importe a planilha para cadastrar agentes em lote.
+                Baixe o modelo, preencha as informações e importe a planilha para cadastrar agentes
+                em lote.
               </p>
             </div>
             <div className="flex flex-col gap-2">

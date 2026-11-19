@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { getCompanyDisplayName } from '../utils/companyBranding';
 import { ChevronDown, Home as HomeIcon, Leaf, LogOut, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { AppSettings, NavItem, User } from '../types';
@@ -117,9 +118,9 @@ export default function AppSidebar({
             ) : (
               <Leaf className="w-8 h-8 text-emerald-600 flex-shrink-0" />
             )}
-            {isExpanded && (
+            {isExpanded && getCompanyDisplayName(appSettings) && (
               <span className="ml-2 text-lg font-bold text-emerald-700 truncate whitespace-nowrap">
-                {appSettings.companyName}
+                {getCompanyDisplayName(appSettings)}
               </span>
             )}
           </div>
