@@ -1,14 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import {
   getSavedFormulas,
-  deleteSavedFormula,
   getPriceLists,
   getAppSettings,
   getClients,
   getBrands,
 } from '../services/db';
 import { getLocaisAtivos } from '../services/locaisCarregamentoService';
-import { getProdutoFormuladoBySavedFormulaId } from '../services/produtosFormuladosService';
+import {
+  getProdutoFormuladoBySavedFormulaId,
+  getProdutosFormulados,
+} from '../services/produtosFormuladosService';
+import { setSavedFormulaArchived } from '../services/savedFormulaService';
+import Pagination from './ui/Pagination';
+import { usePagination } from '../hooks/usePagination';
 import { addHistoricoPrecos } from '../services/historicoPrecoService';
 import {
   SavedFormula,
@@ -41,6 +46,8 @@ import {
   Star,
   Search,
   X,
+  Archive,
+  ArchiveRestore,
 } from 'lucide-react';
 import { useToast } from './Toast';
 import { useConfirm } from '../hooks/useConfirm';
@@ -54,6 +61,7 @@ import {
 } from '../utils/savedFormulaWorkflow';
 import Calculator from './Calculator';
 import { formatPricingMoney } from '../utils/pricingCurrency';
+import { saveOrSharePdf } from '../utils/pdfDelivery';
 
 interface SavedFormulasProps {
   currentUser: User;
@@ -243,17 +251,6 @@ function ReportFactorsForm({
           className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2"
         />
       </label>
-      <label className="text-xs font-medium text-stone-600">
-        Quantidade total (t)
-        <input
-          type="number"
-          step="0.01"
-          min="0"
-          value={factors.totalTons || ''}
-          onChange={(event) => onChange('totalTons', Number(event.target.value || 0))}
-          className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2"
-        />
-      </label>
       <div className="sm:col-span-2 lg:col-span-3">
         <span className="text-xs font-medium text-stone-600">Condição de pagamento</span>
         <div className="mt-1 flex flex-wrap gap-4">
@@ -351,6 +348,9 @@ function ModalGerarRelatorio({
   const [perFormulaFactors, setPerFormulaFactors] = useState<
     Record<string, ReportCommercialFactors>
   >({});
+  // Quantidade (t) de cada produto do relatório. Opcional: sem quantidade, o
+  // relatório mostra só o preço por tonelada.
+  const [quantities, setQuantities] = useState<Record<string, string>>({});
 
   const [clients, setClients] = useState<Client[]>([]);
   const [embalagens, setEmbalagens] = useState<Embalagem[]>([]);
@@ -370,6 +370,7 @@ function ModalGerarRelatorio({
       setClientSearch('');
       setApplyToAll(true);
       setGlobalFactors({ ...DEFAULT_REPORT_COMMERCIAL_FACTORS });
+      setQuantities({});
       setPerFormulaFactors(
         Object.fromEntries(
           formulas
@@ -382,8 +383,14 @@ function ModalGerarRelatorio({
 
   if (!isOpen) return null;
 
-  const getFactors = (formulaId: string) =>
-    applyToAll ? globalFactors : perFormulaFactors[formulaId] || DEFAULT_REPORT_COMMERCIAL_FACTORS;
+  const getQuantity = (formulaId: string) =>
+    Number((quantities[formulaId] || '').replace(',', '.')) || 0;
+  const getFactors = (formulaId: string): ReportCommercialFactors => ({
+    ...(applyToAll
+      ? globalFactors
+      : perFormulaFactors[formulaId] || DEFAULT_REPORT_COMMERCIAL_FACTORS),
+    totalTons: getQuantity(formulaId),
+  });
   const reportCurrency = getListCurrency(selectedList);
 
   const calcPrecoFinal = (formula: SavedFormula): number => {
@@ -464,7 +471,9 @@ function ModalGerarRelatorio({
           idFormatado,
           formula.name,
           formula.targetFormula,
-          Number(reportFactors.totalTons || 0).toLocaleString('pt-BR'),
+          Number(reportFactors.totalTons) > 0
+            ? Number(reportFactors.totalTons).toLocaleString('pt-BR')
+            : '—',
           precoFinal > 0 ? formatPricingMoney(precoFinal, reportCurrency) : '—',
           totalSale > 0 ? formatPricingMoney(totalSale, reportCurrency) : '—',
         ];
@@ -592,7 +601,11 @@ function ModalGerarRelatorio({
       ).filter((entry): entry is NonNullable<typeof entry> => entry !== null);
       await addHistoricoPrecos(historyEntries);
 
-      doc.save(`relatorio-precos-${dateStr.replace(/\//g, '-')}.pdf`);
+      await saveOrSharePdf(
+        doc,
+        `relatorio-precos-${dateStr.replace(/\//g, '-')}.pdf`,
+        'Relatório de preços'
+      );
       onClose();
     } catch {
       showError('Não foi possível gerar o relatório em PDF.');
@@ -777,25 +790,88 @@ function ModalGerarRelatorio({
             </div>
           )}
 
-          {/* Preview */}
-          <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-200">
-            <h3 className="text-sm font-bold text-emerald-700 mb-2 uppercase tracking-wider">
-              Prévia de custos da composição
-            </h3>
-            <div className="space-y-1">
-              {selectedFormulas.map((formula) => {
-                const precoFinal = calcPrecoFinal(formula);
-                return (
-                  <div key={formula.id} className="flex justify-between text-sm">
-                    <span className="text-stone-700">
-                      {formatId(formula.id_numeric, 'BAT-')} — {formula.name}
-                    </span>
-                    <span className="font-bold text-emerald-700">
-                      {precoFinal > 0 ? formatPricingMoney(precoFinal, reportCurrency) : '—'}
-                    </span>
-                  </div>
-                );
-              })}
+          {/* Produtos do relatório: quantidade por produto e prévia */}
+          <div className="overflow-hidden rounded-xl border border-emerald-200">
+            <div className="flex flex-wrap items-center justify-between gap-2 bg-emerald-50 px-4 py-3">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-emerald-800">
+                Produtos do relatório
+              </h3>
+              <span className="text-xs text-emerald-700">
+                Quantidade opcional: sem ela, o relatório mostra só o preço por tonelada.
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-stone-100 text-xs font-bold uppercase tracking-wide text-stone-500">
+                    <th className="px-4 py-2 text-left">Produto</th>
+                    <th className="px-4 py-2 text-left">Quantidade (t)</th>
+                    <th className="px-4 py-2 text-right">Preço {reportCurrency}/t</th>
+                    <th className="px-4 py-2 text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedFormulas.map((formula) => {
+                    const precoFinal = calcPrecoFinal(formula);
+                    const quantity = getQuantity(formula.id);
+                    return (
+                      <tr key={formula.id} className="border-b border-stone-100 last:border-0">
+                        <td className="px-4 py-2">
+                          <span className="block font-semibold text-stone-800">{formula.name}</span>
+                          <span className="font-mono text-xs text-emerald-700">
+                            {formatId(formula.id_numeric, 'BAT-')} · {formula.targetFormula}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2">
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={quantities[formula.id] || ''}
+                            onChange={(event) => {
+                              const raw = event.target.value;
+                              if (!/^\d*(?:[.,]\d{0,3})?$/.test(raw)) return;
+                              setQuantities((current) => ({ ...current, [formula.id]: raw }));
+                            }}
+                            placeholder="—"
+                            aria-label={`Quantidade em toneladas de ${formula.name}`}
+                            className="h-10 w-28 rounded-lg border border-stone-300 px-3 text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          />
+                        </td>
+                        <td className="px-4 py-2 text-right font-bold tabular-nums text-emerald-700">
+                          {precoFinal > 0 ? formatPricingMoney(precoFinal, reportCurrency) : '—'}
+                        </td>
+                        <td className="px-4 py-2 text-right tabular-nums text-stone-700">
+                          {precoFinal > 0 && quantity > 0
+                            ? formatPricingMoney(precoFinal * quantity, reportCurrency)
+                            : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-stone-50 font-bold">
+                    <td className="px-4 py-2 text-stone-700">Total</td>
+                    <td className="px-4 py-2 tabular-nums text-stone-700">
+                      {selectedFormulas
+                        .reduce((total, formula) => total + getQuantity(formula.id), 0)
+                        .toLocaleString('pt-BR', { maximumFractionDigits: 3 })}{' '}
+                      t
+                    </td>
+                    <td />
+                    <td className="px-4 py-2 text-right tabular-nums text-emerald-800">
+                      {formatPricingMoney(
+                        selectedFormulas.reduce(
+                          (total, formula) =>
+                            total + calcPrecoFinal(formula) * getQuantity(formula.id),
+                          0
+                        ),
+                        reportCurrency
+                      )}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
             </div>
           </div>
         </div>
@@ -825,6 +901,9 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
   const { showSuccess, showError } = useToast();
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
   const [formulas, setFormulas] = useState<SavedFormula[]>([]);
+  const [archivedFormulas, setArchivedFormulas] = useState<SavedFormula[]>([]);
+  const [view, setView] = useState<'ativas' | 'arquivadas'>('ativas');
+  const [archivingId, setArchivingId] = useState<string | null>(null);
   const [priceLists, setPriceLists] = useState<PriceList[]>([]);
   const [locais, setLocais] = useState<LocalCarregamento[]>([]);
   const [selectedLocalId, setSelectedLocalId] = useState<string>('');
@@ -850,13 +929,18 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
     setFormulas([]);
     setLoading(true);
     try {
-      const [allFormulas, allLists, allLocais, settings, allBrands] = await Promise.all([
-        getSavedFormulas(),
-        getPriceLists(),
-        getLocaisAtivos(),
-        getAppSettings(),
-        getBrands(),
-      ]);
+      const [savedFormulas, allLists, allLocais, settings, allBrands, products] = await Promise.all(
+        [
+          getSavedFormulas({ includeArchived: true }),
+          getPriceLists(),
+          getLocaisAtivos(),
+          getAppSettings(),
+          getBrands(),
+          getProdutosFormulados().catch(() => []),
+        ]
+      );
+      const allFormulas = savedFormulas.filter((formula) => !formula.arquivadaEm);
+      setArchivedFormulas(savedFormulas.filter((formula) => formula.arquivadaEm));
 
       // All users with permission see all batidas (remove userId restriction)
       setFormulas(allFormulas);
@@ -874,18 +958,11 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
         );
       });
 
-      // Load linha_diferenciada for each formula
+      // Uma única consulta (antes era uma por batida).
       const ldMap: Record<string, boolean> = {};
-      await Promise.all(
-        allFormulas.map(async (f) => {
-          try {
-            const produto = await getProdutoFormuladoBySavedFormulaId(f.id);
-            if (produto) ldMap[f.id] = produto.linha_diferenciada;
-          } catch {
-            // ignore
-          }
-        })
-      );
+      products.forEach((product) => {
+        if (product.saved_formula_id) ldMap[product.saved_formula_id] = product.linha_diferenciada;
+      });
       setLinhasDiferenciadas(ldMap);
     } catch (error) {
       console.error('Error loading formulas data:', error);
@@ -895,21 +972,44 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
+  const permissions = (currentUser.permissions || {}) as Record<string, unknown>;
+  const canArchive =
+    currentUser.role === 'master' ||
+    currentUser.role === 'admin' ||
+    currentUser.role === 'manager' ||
+    permissions.savedFormulas_delete !== false;
+
+  const handleArchive = async (formula: SavedFormula) => {
     const ok = await confirm({
-      title: 'Excluir Fórmula',
-      message: `Tem certeza que deseja excluir a fórmula "${name}"?`,
-      variant: 'danger',
+      title: 'Arquivar batida?',
+      message: `"${formula.name}" sai da lista e da calculadora, junto com o produto formulado ligado a ela. A composição e o histórico de preços ficam guardados, e você pode restaurar em "Arquivadas".`,
+      variant: 'warning',
+      confirmLabel: 'Arquivar',
     });
     if (!ok) return;
-
+    setArchivingId(formula.id);
     try {
-      await deleteSavedFormula(id);
-      showSuccess('Fórmula excluída com sucesso!');
-      setSelectedFormulas((prev) => prev.filter((sid) => sid !== id));
+      await setSavedFormulaArchived(formula.id, true);
+      showSuccess('Batida arquivada. Você pode restaurá-la em "Arquivadas".');
+      setSelectedFormulas((prev) => prev.filter((sid) => sid !== formula.id));
       await loadData();
-    } catch {
-      showError('Erro ao excluir fórmula');
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Erro ao arquivar a batida.');
+    } finally {
+      setArchivingId(null);
+    }
+  };
+
+  const handleRestore = async (formula: SavedFormula) => {
+    setArchivingId(formula.id);
+    try {
+      await setSavedFormulaArchived(formula.id, false);
+      showSuccess(`Batida "${formula.name}" restaurada, com o produto formulado.`);
+      await loadData();
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Erro ao restaurar a batida.');
+    } finally {
+      setArchivingId(null);
     }
   };
 
@@ -1014,20 +1114,13 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
     });
   };
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
-      </div>
-    );
-  }
-
   const selectedList = compatiblePriceLists.find((l) => l.id === selectedPriceListId);
   const selectedCurrency = getListCurrency(selectedList);
+  const sourceFormulas = view === 'ativas' ? formulas : archivedFormulas;
 
-  // Batidas belong to the organization and can be priced at every loading location.
+  // Batidas pertencem à organização e podem ser precificadas em qualquer local.
   const normalizedSearch = formulaSearch.trim().toLocaleLowerCase('pt-BR');
-  const filteredFormulas = formulas.filter((formula) => {
+  const filteredFormulas = sourceFormulas.filter((formula) => {
     if (!normalizedSearch) return true;
     const materialBrandNames = [...formula.macros, ...formula.micros]
       .map((material) => brands.find((brand) => brand.id === material.brandId)?.name || '')
@@ -1035,6 +1128,7 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
     return [
       formula.name,
       formula.targetFormula,
+      formatId(formula.id_numeric, 'BAT-'),
       materialBrandNames,
       ...formula.macros.map((material) => material.name),
       ...formula.micros.map((material) => material.name),
@@ -1043,111 +1137,212 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
       .toLocaleLowerCase('pt-BR')
       .includes(normalizedSearch);
   });
+  const pagination = usePagination(filteredFormulas, 12);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
+      </div>
+    );
+  }
 
   const allSelected =
+    view === 'ativas' &&
     filteredFormulas.length > 0 &&
     filteredFormulas.every((formula) => selectedFormulas.includes(formula.id));
 
+  const openReport = () => {
+    if (!selectedLocalId) {
+      showError('Selecione o local de carregamento para gerar o relatório.');
+      return;
+    }
+    if (!selectedList) {
+      showError('Selecione uma lista de preços vinculada ao local.');
+      return;
+    }
+    setIsReportModalOpen(true);
+  };
+
+  const selectClass =
+    'h-11 w-full rounded-xl border border-stone-300 bg-white px-3 text-[15px] text-stone-800 focus:outline-none focus:ring-2 focus:ring-emerald-500';
+
   return (
     <React.Fragment>
-      <div className="space-y-6 pb-12">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-          <div>
-            <h2 className="text-2xl font-bold text-stone-800 flex items-center gap-2">
-              <Beaker className="w-6 h-6 text-emerald-600" />
-              Fórmulas Salvas (Batidas)
-            </h2>
-            <p className="text-stone-500">
-              Gerencie suas batidas e gere relatórios de preços para clientes.
-            </p>
-          </div>
+      <div className="space-y-5 pb-12">
+        {/* Cabeçalho */}
+        <div className="flex flex-col gap-1">
+          <h2 className="flex items-center gap-2 text-2xl font-black text-stone-900">
+            <span className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-600 text-white">
+              <Beaker className="h-5 w-5" />
+            </span>
+            Batidas Salvas
+          </h2>
+          <p className="text-[15px] text-stone-500">
+            Consulte as batidas, atualize a composição e gere relatórios de preços para clientes.
+          </p>
+        </div>
 
-          <div className="flex flex-wrap gap-2 items-center">
-            {/* Local de Carregamento filter */}
-            <div className="bg-white px-4 py-2 rounded-xl shadow-sm border border-stone-200 flex items-center gap-2">
-              <MapPin className="w-5 h-5 text-stone-400" />
-              <div className="flex flex-col">
-                <span className="text-xs font-bold text-stone-400 uppercase tracking-wider">
-                  Local de Carregamento
-                </span>
-                <select
-                  value={selectedLocalId}
-                  onChange={(e) => setSelectedLocalId(e.target.value)}
-                  className="bg-transparent text-stone-700 font-medium outline-none text-sm cursor-pointer max-w-[160px]"
-                >
-                  <option value="">Selecione o local</option>
-                  {locais.map((local) => (
-                    <option key={local.id} value={local.id}>
-                      {local.nome}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Price List filter */}
-            <div className="bg-white px-4 py-2 rounded-xl shadow-sm border border-stone-200 flex items-center gap-2">
-              <Database className="w-5 h-5 text-stone-400" />
-              <div className="flex flex-col">
-                <span className="text-xs font-bold text-stone-400 uppercase tracking-wider">
-                  Tabela de Preços
-                </span>
-                <select
-                  value={selectedPriceListId}
-                  onChange={(e) => setSelectedPriceListId(e.target.value)}
-                  className="bg-transparent text-stone-700 font-medium outline-none text-sm cursor-pointer max-w-[160px]"
-                >
-                  {compatiblePriceLists.length > 0 ? (
-                    compatiblePriceLists.map((list) => (
-                      <option key={list.id} value={list.id}>
-                        {list.name}
-                      </option>
-                    ))
-                  ) : (
-                    <option value="">
-                      {selectedLocalId
-                        ? 'Sem tabela para este local'
-                        : 'Selecione o local primeiro'}
-                    </option>
-                  )}
-                </select>
-              </div>
-            </div>
-
-            {/* Generate report button */}
-            {selectedFormulas.length > 0 && (
-              <button
-                onClick={() => {
-                  if (!selectedLocalId) {
-                    showError('Selecione o local de carregamento para gerar o relatório.');
-                    return;
-                  }
-                  if (!selectedList) {
-                    showError('Selecione uma lista de preços vinculada ao local.');
-                    return;
-                  }
-                  setIsReportModalOpen(true);
-                }}
-                disabled={!selectedLocalId || !selectedList}
-                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm"
+        {/* Filtros */}
+        <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1.6fr]">
+            <label className="block">
+              <span className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-stone-500">
+                <MapPin className="h-4 w-4" /> Local de carregamento
+              </span>
+              <select
+                value={selectedLocalId}
+                onChange={(e) => setSelectedLocalId(e.target.value)}
+                className={selectClass}
               >
-                <FileText className="w-4 h-4" />
-                Gerar Relatório de Preços ({selectedFormulas.length})
+                <option value="">Selecione o local</option>
+                {locais.map((local) => (
+                  <option key={local.id} value={local.id}>
+                    {local.nome}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-stone-500">
+                <Database className="h-4 w-4" /> Tabela de preços
+              </span>
+              <select
+                value={selectedPriceListId}
+                onChange={(e) => setSelectedPriceListId(e.target.value)}
+                className={selectClass}
+              >
+                {compatiblePriceLists.length > 0 ? (
+                  compatiblePriceLists.map((list) => (
+                    <option key={list.id} value={list.id}>
+                      {list.name}
+                    </option>
+                  ))
+                ) : (
+                  <option value="">
+                    {selectedLocalId ? 'Sem tabela para este local' : 'Selecione o local primeiro'}
+                  </option>
+                )}
+              </select>
+            </label>
+            <label className="block md:col-span-2 xl:col-span-1">
+              <span className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-stone-500">
+                <Search className="h-4 w-4" /> Pesquisar
+              </span>
+              <input
+                type="search"
+                value={formulaSearch}
+                onChange={(event) => setFormulaSearch(event.target.value)}
+                placeholder="Nome, NPK, código BAT, produto ou marca…"
+                className={selectClass}
+              />
+            </label>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-stone-100 pt-4">
+            <div
+              role="tablist"
+              aria-label="Situação das batidas"
+              className="inline-flex rounded-xl bg-stone-100 p-1"
+            >
+              {(
+                [
+                  ['ativas', `Ativas (${formulas.length})`],
+                  ['arquivadas', `Arquivadas (${archivedFormulas.length})`],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="tab"
+                  aria-selected={view === value}
+                  onClick={() => setView(value)}
+                  className={`rounded-lg px-4 py-2 text-sm font-bold transition-colors ${
+                    view === value
+                      ? 'bg-white text-stone-900 shadow-sm'
+                      : 'text-stone-500 hover:text-stone-800'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {view === 'ativas' && filteredFormulas.length > 0 && (
+              <button
+                type="button"
+                onClick={toggleSelectAll}
+                className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-stone-600 hover:bg-stone-100"
+              >
+                {allSelected ? (
+                  <CheckSquare className="h-4 w-4 text-emerald-600" />
+                ) : (
+                  <Square className="h-4 w-4" />
+                )}
+                {allSelected
+                  ? 'Desmarcar todas'
+                  : `Selecionar todas${normalizedSearch ? ' da busca' : ''} (${filteredFormulas.length})`}
               </button>
             )}
           </div>
-        </div>
+        </section>
 
-        <div className="relative rounded-xl border border-stone-200 bg-white shadow-sm">
-          <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-stone-400" />
-          <input
-            type="search"
-            value={formulaSearch}
-            onChange={(event) => setFormulaSearch(event.target.value)}
-            placeholder="Pesquisar batida por fórmula NPK, nome, produto ou marca..."
-            className="w-full rounded-xl bg-transparent py-3 pl-12 pr-4 text-sm text-stone-700 outline-none focus:ring-2 focus:ring-emerald-500"
-          />
-        </div>
+        {/* Barra de seleção */}
+        {view === 'ativas' && selectedFormulas.length > 0 && (
+          <section className="sticky top-2 z-20 flex flex-col gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/95 p-4 shadow-md backdrop-blur lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="text-[15px] font-black text-emerald-950">
+                {selectedFormulas.length} batida(s) selecionada(s)
+              </p>
+              <button
+                type="button"
+                onClick={() => setSelectedFormulas([])}
+                className="text-sm font-semibold text-emerald-800 underline-offset-2 hover:underline"
+              >
+                Limpar seleção
+              </button>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+              <label className="flex min-w-64 flex-col gap-1 text-xs font-bold uppercase tracking-wide text-emerald-800">
+                Revisar uma batida antes do relatório
+                <select
+                  value={formulaToUpdateId}
+                  onChange={(event) => setFormulaToUpdateId(event.target.value)}
+                  className="h-10 rounded-lg border border-emerald-300 bg-white px-3 text-sm font-medium normal-case tracking-normal text-stone-700"
+                >
+                  {selectedFormulas.map((id) => {
+                    const formula = formulas.find((item) => item.id === id);
+                    if (!formula) return null;
+                    const blocked = linhasDiferenciadas[formula.id] === true;
+                    return (
+                      <option key={formula.id} value={formula.id} disabled={blocked}>
+                        {formula.name}
+                        {blocked ? ' — linha diferenciada' : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  const formula = formulas.find((item) => item.id === formulaToUpdateId);
+                  if (formula) openFormulaEditor(formula);
+                }}
+                disabled={!formulaToUpdateId}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-emerald-300 bg-white px-4 text-sm font-bold text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Beaker className="h-4 w-4" /> Atualizar
+              </button>
+              <button
+                type="button"
+                onClick={openReport}
+                disabled={!selectedLocalId || !selectedList}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-stone-300"
+              >
+                <FileText className="h-4 w-4" /> Gerar relatório de preços
+              </button>
+            </div>
+          </section>
+        )}
 
         {formulaInEditor && (
           <section className="rounded-2xl border-2 border-emerald-300 bg-stone-50 p-3 shadow-lg sm:p-5">
@@ -1187,269 +1382,231 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
         )}
 
         {filteredFormulas.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-sm border border-stone-200 p-12 text-center">
-            <div className="w-16 h-16 bg-stone-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Save className="w-8 h-8 text-stone-400" />
+          <div className="rounded-2xl border border-dashed border-stone-300 bg-white p-12 text-center">
+            <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-full bg-stone-100">
+              {view === 'ativas' ? (
+                <Save className="h-7 w-7 text-stone-400" />
+              ) : (
+                <Archive className="h-7 w-7 text-stone-400" />
+              )}
             </div>
-            <h3 className="text-lg font-bold text-stone-800 mb-2">Nenhuma fórmula salva</h3>
-            <p className="text-stone-500 max-w-md mx-auto">
-              {selectedLocalId
-                ? 'Nenhuma batida salva está disponível para esta organização.'
-                : 'Acesse a Calculadora, faça uma batida e clique em "Salvar Batida".'}
+            <h3 className="mb-1 text-lg font-bold text-stone-800">
+              {normalizedSearch
+                ? 'Nenhuma batida encontrada para esta busca'
+                : view === 'ativas'
+                  ? 'Nenhuma batida salva'
+                  : 'Nenhuma batida arquivada'}
+            </h3>
+            <p className="mx-auto max-w-md text-[15px] text-stone-500">
+              {view === 'ativas'
+                ? 'Na Calculadora, faça uma batida e clique em "Salvar nova batida".'
+                : 'Batidas arquivadas aparecem aqui e podem ser restauradas a qualquer momento.'}
             </p>
           </div>
         ) : (
           <>
-            {/* Select all row */}
-            <div className="flex items-center gap-3 px-1">
-              <button
-                onClick={toggleSelectAll}
-                className="flex items-center gap-2 text-sm text-stone-600 hover:text-emerald-600 transition-colors"
-              >
-                {allSelected ? (
-                  <CheckSquare className="w-4 h-4 text-emerald-600" />
-                ) : (
-                  <Square className="w-4 h-4" />
-                )}
-                {allSelected ? 'Desmarcar todos' : 'Selecionar todos'}
-              </button>
-              {selectedFormulas.length > 0 && (
-                <span className="text-xs text-stone-400">
-                  {selectedFormulas.length} selecionada(s)
-                </span>
-              )}
-            </div>
-
-            {selectedFormulas.length > 0 && (
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-                  <div>
-                    <p className="font-bold text-emerald-900">
-                      Revisar uma batida antes do relatório
-                    </p>
-                    <p className="text-sm text-emerald-800">
-                      Escolha a fórmula que precisa ser recalculada. Micros são preservados e
-                      produtos de linha diferenciada não podem ser alterados.
-                    </p>
-                  </div>
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-                    <label className="flex min-w-64 flex-col gap-1 text-xs font-bold uppercase tracking-wide text-emerald-800">
-                      Batida para atualizar
-                      <select
-                        value={formulaToUpdateId}
-                        onChange={(event) => setFormulaToUpdateId(event.target.value)}
-                        className="rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm font-medium normal-case tracking-normal text-stone-700"
-                      >
-                        {selectedFormulas.map((id) => {
-                          const formula = formulas.find((item) => item.id === id);
-                          if (!formula) return null;
-                          const blocked = linhasDiferenciadas[formula.id] === true;
-                          return (
-                            <option key={formula.id} value={formula.id} disabled={blocked}>
-                              {formula.name}
-                              {blocked ? ' — linha diferenciada' : ''}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const formula = formulas.find((item) => item.id === formulaToUpdateId);
-                        if (formula) openFormulaEditor(formula);
-                      }}
-                      disabled={!formulaToUpdateId}
-                      className="flex items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Atualizar nesta página
-                      <Beaker className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredFormulas.map((formula) => {
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {pagination.pageItems.map((formula) => {
                 const results = getFormulaCost(formula, selectedList);
-                const isSelected = selectedFormulas.includes(formula.id);
+                const isArchived = view === 'arquivadas';
+                const isSelected = !isArchived && selectedFormulas.includes(formula.id);
                 const isLinhaDiferenciada = linhasDiferenciadas[formula.id] === true;
+                const usedMaterials = [
+                  ...formula.macros
+                    .filter((m) => m.quantity > 0)
+                    .map((m) => ({ ...m, kind: 'macro' as const })),
+                  ...formula.micros
+                    .filter((m) => m.quantity > 0)
+                    .map((m) => ({ ...m, kind: 'micro' as const })),
+                ];
+                const microTargets = Object.entries(formula.targetMicros || {}).filter(
+                  ([, value]) => Number(value) > 0
+                );
                 return (
-                  <div
+                  <article
                     key={formula.id}
-                    className={`bg-white rounded-xl shadow-sm border overflow-hidden hover:shadow-md transition-all flex flex-col ${
-                      isSelected ? 'border-emerald-500 ring-2 ring-emerald-200' : 'border-stone-200'
+                    className={`flex flex-col overflow-hidden rounded-2xl border bg-white shadow-sm transition-all hover:shadow-md ${
+                      isSelected
+                        ? 'border-emerald-500 ring-2 ring-emerald-200'
+                        : isArchived
+                          ? 'border-stone-200 bg-stone-50/60'
+                          : 'border-stone-200'
                     }`}
                   >
-                    <div className="p-5 border-b border-stone-100 flex-1">
-                      <div className="flex justify-between items-start mb-3">
-                        <div className="flex items-center gap-2 flex-1 min-w-0">
-                          {/* Checkbox */}
-                          <button
-                            onClick={() => toggleSelectFormula(formula.id)}
-                            className="flex-shrink-0 text-stone-400 hover:text-emerald-600 transition-colors"
-                          >
-                            {isSelected ? (
-                              <CheckSquare className="w-5 h-5 text-emerald-600" />
-                            ) : (
-                              <Square className="w-5 h-5" />
-                            )}
-                          </button>
-                          <div className="min-w-0">
-                            <h3 className="font-bold text-lg text-stone-800 truncate">
-                              {formula.name}
-                            </h3>
-                            {formula.id_numeric != null && (
-                              <span className="text-xs font-mono text-emerald-600 font-bold">
-                                {formatId(formula.id_numeric, 'BAT-')}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1 flex-shrink-0 ml-2">
-                          {isLinhaDiferenciada && (
-                            <span className="flex items-center gap-1 bg-amber-100 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                              <Star className="w-3 h-3" />
-                              Linha Dif.
+                    <header className="flex items-start gap-3 p-4 pb-3">
+                      {!isArchived && (
+                        <button
+                          type="button"
+                          onClick={() => toggleSelectFormula(formula.id)}
+                          aria-pressed={isSelected}
+                          aria-label={`Selecionar ${formula.name}`}
+                          className="mt-0.5 shrink-0 text-stone-400 hover:text-emerald-600"
+                        >
+                          {isSelected ? (
+                            <CheckSquare className="h-5 w-5 text-emerald-600" />
+                          ) : (
+                            <Square className="h-5 w-5" />
+                          )}
+                        </button>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-1 flex flex-wrap items-center gap-1.5">
+                          {formula.id_numeric != null && (
+                            <span className="rounded-md bg-emerald-50 px-1.5 py-0.5 font-mono text-xs font-bold text-emerald-700">
+                              {formatId(formula.id_numeric, 'BAT-')}
                             </span>
                           )}
-                          <button
-                            onClick={() => handleDelete(formula.id, formula.name)}
-                            className="text-stone-400 hover:text-red-500 transition-colors p-1"
-                            title="Excluir fórmula"
+                          {isLinhaDiferenciada && (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-xs font-bold text-amber-800">
+                              <Star className="h-3 w-3" /> Linha diferenciada
+                            </span>
+                          )}
+                          {isArchived && formula.arquivadaEm && (
+                            <span className="rounded-md bg-stone-200 px-1.5 py-0.5 text-xs font-bold text-stone-700">
+                              Arquivada em{' '}
+                              {new Date(formula.arquivadaEm).toLocaleDateString('pt-BR')}
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="text-[15px] font-bold leading-snug text-stone-900">
+                          {formula.name}
+                        </h3>
+                        <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-stone-500">
+                          <span className="inline-flex items-center gap-1">
+                            <UserIcon className="h-3 w-3" /> {formula.userName}
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            {new Date(formula.date).toLocaleDateString('pt-BR')}
+                          </span>
+                        </p>
+                      </div>
+                      {canArchive && !isArchived && (
+                        <button
+                          type="button"
+                          onClick={() => void handleArchive(formula)}
+                          disabled={archivingId === formula.id}
+                          className="shrink-0 rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700 disabled:opacity-40"
+                          title="Arquivar batida"
+                          aria-label={`Arquivar ${formula.name}`}
+                        >
+                          <Archive className="h-4 w-4" />
+                        </button>
+                      )}
+                    </header>
+
+                    <div className="space-y-3 px-4 pb-4">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="rounded-lg bg-stone-900 px-2.5 py-1 font-mono text-[15px] font-bold text-white">
+                          {formula.targetFormula || '—'}
+                        </span>
+                        {microTargets.map(([name, value]) => (
+                          <span
+                            key={name}
+                            className="rounded-md border border-cyan-200 bg-cyan-50 px-1.5 py-0.5 text-xs font-bold text-cyan-800"
                           >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
+                            {name} {Number(value).toFixed(2)}%
+                          </span>
+                        ))}
                       </div>
 
-                      <div className="flex items-center text-xs text-stone-500 mb-4 gap-2">
-                        <span className="flex items-center gap-1">
-                          <UserIcon className="w-3 h-3" /> {formula.userName}
-                        </span>
-                        <span>•</span>
-                        <span className="flex items-center gap-1">
-                          <Calendar className="w-3 h-3" />{' '}
-                          {new Date(formula.date).toLocaleDateString('pt-BR')}
-                        </span>
-                      </div>
-
-                      <div className="bg-stone-50 p-3 rounded-lg border border-stone-100 mb-4">
-                        <div className="flex justify-between items-center mb-1">
-                          <p className="text-xs font-bold text-stone-500 uppercase tracking-widest">
-                            Fórmula Alvo
-                          </p>
-                        </div>
-                        <p className="font-mono text-emerald-700 font-bold text-lg mb-3">
-                          {formula.targetFormula}
+                      <div className="rounded-xl border border-stone-100 bg-stone-50">
+                        <p className="flex justify-between border-b border-stone-100 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-stone-500">
+                          <span>Composição</span>
+                          <span>{usedMaterials.length} produto(s)</span>
                         </p>
-
-                        {Object.entries(formula.targetMicros || {}).some(
-                          ([, value]) => Number(value) > 0
-                        ) && (
-                          <div className="mb-3 flex flex-wrap gap-1.5">
-                            {Object.entries(formula.targetMicros || {})
-                              .filter(([, value]) => Number(value) > 0)
-                              .map(([name, value]) => (
-                                <span
-                                  key={name}
-                                  className="rounded-full border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[10px] font-bold text-cyan-800"
-                                >
-                                  {name}: {Number(value).toFixed(2)}%
-                                </span>
-                              ))}
-                          </div>
-                        )}
-
-                        <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-1 border-t border-stone-200 pt-2">
-                          Composição (kg)
-                        </p>
-                        <div className="grid grid-cols-1 gap-1 max-h-32 overflow-y-auto pr-1 custom-scrollbar">
-                          {formula.macros
-                            .filter((m) => m.quantity > 0)
-                            .map((m) => (
-                              <div
-                                key={m.id}
-                                className="flex justify-between items-center text-[11px]"
-                              >
-                                <span className="text-stone-600 flex items-center gap-1 pr-2">
-                                  <Package className="w-3 h-3 text-stone-400 flex-shrink-0" />
-                                  {m.name}
-                                </span>
-                                <span className="font-mono font-bold text-stone-800">
-                                  {m.quantity.toFixed(0)}
-                                </span>
-                              </div>
-                            ))}
-                          {formula.micros
-                            .filter((m) => m.quantity > 0)
-                            .map((m) => (
-                              <div
-                                key={m.id}
-                                className="flex justify-between items-center text-[11px]"
-                              >
-                                <span className="text-emerald-700 flex items-center gap-1 pr-2">
-                                  <Zap className="w-3 h-3 text-emerald-400 flex-shrink-0" />
-                                  {m.name}
-                                </span>
-                                <span className="font-mono font-bold text-emerald-800">
-                                  {m.quantity.toFixed(0)}
-                                </span>
-                              </div>
-                            ))}
-                        </div>
+                        <ul className="max-h-52 divide-y divide-stone-100 overflow-y-auto">
+                          {usedMaterials.map((material) => (
+                            <li
+                              key={material.id}
+                              className="flex items-center justify-between gap-2 px-3 py-1.5 text-sm"
+                            >
+                              <span className="flex min-w-0 items-center gap-1.5 text-stone-700">
+                                {material.kind === 'macro' ? (
+                                  <Package className="h-3.5 w-3.5 shrink-0 text-stone-400" />
+                                ) : (
+                                  <Zap className="h-3.5 w-3.5 shrink-0 text-cyan-500" />
+                                )}
+                                <span className="truncate">{material.name}</span>
+                              </span>
+                              <span className="shrink-0 font-mono font-bold tabular-nums text-stone-900">
+                                {Number(material.quantity).toLocaleString('pt-BR', {
+                                  maximumFractionDigits: 2,
+                                })}{' '}
+                                kg
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
 
                       {results.missingItems.length > 0 && selectedList && (
-                        <div className="mb-4 p-2 bg-red-50 border border-red-100 rounded-lg flex items-start gap-2">
-                          <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-                          <div className="flex flex-col">
-                            <p className="text-[10px] font-bold text-red-600 uppercase tracking-tighter">
-                              Itens Não Disponíveis
-                            </p>
-                            <p className="text-[10px] text-red-500 leading-tight">
-                              {results.missingItems.join(', ')} não encontrado(s) nesta tabela.
-                            </p>
-                          </div>
+                        <div className="flex items-start gap-2 rounded-lg border border-red-100 bg-red-50 p-2 text-xs text-red-700">
+                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                          <span>
+                            <strong>Sem preço nesta tabela:</strong>{' '}
+                            {results.missingItems.join(', ')}.
+                          </span>
                         </div>
                       )}
+                    </div>
 
-                      <div className="flex justify-between items-end mt-4">
-                        <div>
-                          <p className="text-xs text-stone-500">Custo Total (por Ton)</p>
-                          <p className="text-lg font-black text-stone-800">
-                            {selectedList
-                              ? formatPricingMoney(results.total, selectedCurrency)
-                              : 'Selecione uma tabela'}
-                          </p>
-                        </div>
+                    <footer className="mt-auto flex items-end justify-between gap-3 border-t border-stone-100 bg-stone-50/70 px-4 py-3">
+                      <div>
+                        <p className="text-xs font-semibold text-stone-500">Custo por tonelada</p>
+                        <p className="text-lg font-black tabular-nums text-stone-900">
+                          {selectedList
+                            ? formatPricingMoney(results.total, selectedCurrency)
+                            : 'Selecione uma tabela'}
+                        </p>
                       </div>
-                    </div>
-
-                    <div className="bg-stone-50 p-3 border-t border-stone-100">
-                      <button
-                        onClick={() => openFormulaEditor(formula)}
-                        disabled={isLinhaDiferenciada || !selectedLocalId || !selectedList}
-                        className="w-full flex justify-center items-center gap-2 bg-white border border-stone-200 hover:border-emerald-500 hover:text-emerald-600 text-stone-700 font-medium py-2 rounded-lg transition-colors text-sm shadow-sm disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-400"
-                        title={
-                          isLinhaDiferenciada
-                            ? 'A composição de produtos de linha diferenciada é protegida'
-                            : !selectedLocalId
-                              ? 'Selecione o local de carregamento'
-                              : !selectedList
-                                ? 'Não existe lista de preços vinculada ao local'
-                                : 'Atualizar esta batida nesta página'
-                        }
-                      >
-                        {isLinhaDiferenciada ? 'Composição protegida' : 'Atualizar nesta página'}
-                        <Beaker className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
+                      {isArchived ? (
+                        canArchive && (
+                          <button
+                            type="button"
+                            onClick={() => void handleRestore(formula)}
+                            disabled={archivingId === formula.id}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+                          >
+                            <ArchiveRestore className="h-4 w-4" /> Restaurar
+                          </button>
+                        )
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => openFormulaEditor(formula)}
+                          disabled={isLinhaDiferenciada || !selectedLocalId || !selectedList}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm font-bold text-stone-700 hover:border-emerald-500 hover:text-emerald-700 disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-400"
+                          title={
+                            isLinhaDiferenciada
+                              ? 'A composição de produtos de linha diferenciada é protegida'
+                              : !selectedLocalId
+                                ? 'Selecione o local de carregamento'
+                                : !selectedList
+                                  ? 'Não existe lista de preços vinculada ao local'
+                                  : 'Atualizar esta batida nesta página'
+                          }
+                        >
+                          <Beaker className="h-4 w-4" />
+                          {isLinhaDiferenciada ? 'Protegida' : 'Atualizar'}
+                        </button>
+                      )}
+                    </footer>
+                  </article>
                 );
               })}
             </div>
+            <Pagination
+              page={pagination.page}
+              totalPages={pagination.totalPages}
+              totalItems={pagination.totalItems}
+              firstItemNumber={pagination.firstItemNumber}
+              lastItemNumber={pagination.lastItemNumber}
+              pageSize={pagination.pageSize}
+              itemLabel="batidas"
+              onPageChange={pagination.setPage}
+              onPageSizeChange={pagination.setPageSize}
+            />
           </>
         )}
       </div>

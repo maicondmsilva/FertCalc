@@ -111,16 +111,14 @@ const draftNumber = (raw: string): number | undefined => {
  * Sugere batidas/produtos formulados cuja fórmula N-P-K combina com o que já foi
  * digitado. Campos vazios não filtram; assim as sugestões aparecem desde o N.
  */
-export function findProductsMatchingNpk<T extends { ativo?: boolean; formula_npk?: string }>(
-  products: T[],
-  draft: NpkDraft,
-  limit = 8
-): T[] {
+export function findProductsMatchingNpk<
+  T extends { ativo?: boolean; arquivado_em?: string; formula_npk?: string },
+>(products: T[], draft: NpkDraft, limit = 8): T[] {
   const typed = { n: draftNumber(draft.n), p: draftNumber(draft.p), k: draftNumber(draft.k) };
   if (typed.n === undefined && typed.p === undefined && typed.k === undefined) return [];
   return products
     .filter((product) => {
-      if (product.ativo === false) return false;
+      if (product.ativo === false || product.arquivado_em) return false;
       const target = parseFormulaTarget(product.formula_npk);
       if (!target) return false;
       return (['n', 'p', 'k'] as const).every(

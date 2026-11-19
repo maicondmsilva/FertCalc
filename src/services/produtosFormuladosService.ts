@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { formatId } from '../utils/formatId';
+import { describeArchiveError } from './savedFormulaService';
 
 export interface ProdutoFormulado {
   id: string;
@@ -12,6 +13,8 @@ export interface ProdutoFormulado {
   ativo: boolean;
   criado_em?: string;
   criado_por?: string;
+  /** Data em que o produto foi arquivado; o histórico de preços é preservado. */
+  arquivado_em?: string;
 }
 
 function mapProduto(d: Record<string, unknown>): ProdutoFormulado {
@@ -27,7 +30,22 @@ function mapProduto(d: Record<string, unknown>): ProdutoFormulado {
     ativo: Boolean(d.ativo),
     criado_em: d.criado_em as string | undefined,
     criado_por: d.criado_por as string | undefined,
+    arquivado_em: (d.arquivado_em as string | null) || undefined,
   };
+}
+
+/** Produto disponível para uso na calculadora: ativo e não arquivado. */
+export const isProdutoFormuladoDisponivel = (
+  produto: Pick<ProdutoFormulado, 'ativo' | 'arquivado_em'>
+) => produto.ativo !== false && !produto.arquivado_em;
+
+/** Arquiva (ou restaura) o produto e a batida de origem, juntos. */
+export async function setProdutoFormuladoArchived(id: string, archived: boolean): Promise<void> {
+  const { error } = await supabase.rpc('set_produto_formulado_archived', {
+    p_produto_id: id,
+    p_archived: archived,
+  });
+  if (error) throw new Error(describeArchiveError(error));
 }
 
 export async function getProdutosFormulados(): Promise<ProdutoFormulado[]> {

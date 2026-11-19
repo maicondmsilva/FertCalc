@@ -29,7 +29,29 @@ function mapSavedFormula(data: Record<string, unknown>): SavedFormula {
     targetMicros: (data.target_micros as Record<string, number> | null) || undefined,
     macros: (data.macros as RawMaterial[]) || [],
     micros: (data.micros as RawMaterial[]) || [],
+    arquivadaEm: (data.arquivada_em as string | null) || undefined,
   };
+}
+
+/** Mensagem clara quando a migração de arquivamento ainda não foi aplicada no banco. */
+export function describeArchiveError(error: { code?: string; message?: string }): string {
+  if (
+    error?.code === 'PGRST202' ||
+    /set_(saved_formula|produto_formulado)_archived/.test(error?.message || '')
+  ) {
+    return 'O banco ainda não tem a atualização de arquivamento. Peça ao administrador para aplicar a migração 20261119190000.';
+  }
+  if (error?.code === 'P0002') return 'Registro não encontrado ou sem permissão para alterá-lo.';
+  return error?.message || 'Não foi possível concluir a operação.';
+}
+
+/** Arquiva (ou restaura) a batida e o produto formulado ligado a ela, juntos. */
+export async function setSavedFormulaArchived(id: string, archived: boolean): Promise<void> {
+  const { error } = await supabase.rpc('set_saved_formula_archived', {
+    p_formula_id: id,
+    p_archived: archived,
+  });
+  if (error) throw new Error(describeArchiveError(error));
 }
 
 export async function saveFormulaWithProduct(

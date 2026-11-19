@@ -503,6 +503,8 @@ export interface SavedFormula {
   local_carregamento_id?: string;
   protectedMaterialIds?: string[];
   isRevisionFromSavedFormula?: boolean;
+  /** Data em que a batida foi arquivada (fora das listas, recuperável). */
+  arquivadaEm?: string;
 }
 
 export interface PricingFactors {

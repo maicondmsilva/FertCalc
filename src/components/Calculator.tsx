@@ -1075,6 +1075,7 @@ export default function Calculator({
                                       const filteredProds = produtosFormulados.filter(
                                         (p) =>
                                           p.ativo &&
+                                          !p.arquivado_em &&
                                           (p.nome.toLowerCase().includes(term) ||
                                             (p.formula_npk || '').toLowerCase().includes(term))
                                       );

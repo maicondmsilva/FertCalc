@@ -349,6 +349,7 @@ export default function BetaFormulaCard({
       .filter(
         (product) =>
           product.ativo &&
+          !product.arquivado_em &&
           (product.nome.toLowerCase().includes(term) ||
             (product.formula_npk || '').toLowerCase().includes(term))
       )
