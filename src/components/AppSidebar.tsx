@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { ChevronDown, ExternalLink, Home as HomeIcon, Leaf, LogOut, X } from 'lucide-react';
+import { getCompanyDisplayName } from '../utils/companyBranding';
+import { ChevronDown, Home as HomeIcon, Leaf, LogOut, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { AppSettings, NavItem, User } from '../types';
 import type { ActiveModule } from '../navigation/appNavigation';
@@ -86,21 +87,11 @@ export default function AppSidebar({
     onNavigate(routeId, clear);
   };
 
-  const canOpenStandalone = activeModule === 'pricing';
-
-  const standaloneLink = (routeId: string, label: string) =>
-    canOpenStandalone && isExpanded ? (
-      <a
-        href={`/${routeId}?standalone=true`}
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-label={`Abrir ${label} em nova guia`}
-        title={`Abrir ${label} em nova guia`}
-        className="ml-1 rounded-md p-1.5 text-stone-400 transition-colors hover:bg-white hover:text-emerald-600"
-      >
-        <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-      </a>
-    ) : null;
+  // No módulo de precificação o endereço do link abre a página sozinha (sem o menu
+  // lateral). O clique normal continua navegando dentro do app; o botão direito →
+  // "Abrir link em nova guia" (ou Ctrl/clique do meio) usa esse endereço.
+  const linkTarget = (routeId: string) =>
+    activeModule === 'pricing' ? `/${routeId}?standalone=true` : `/${routeId}`;
 
   return (
     <>
@@ -127,9 +118,9 @@ export default function AppSidebar({
             ) : (
               <Leaf className="w-8 h-8 text-emerald-600 flex-shrink-0" />
             )}
-            {isExpanded && (
+            {isExpanded && getCompanyDisplayName(appSettings) && (
               <span className="ml-2 text-lg font-bold text-emerald-700 truncate whitespace-nowrap">
-                {appSettings.companyName}
+                {getCompanyDisplayName(appSettings)}
               </span>
             )}
           </div>
@@ -211,7 +202,7 @@ export default function AppSidebar({
                           return (
                             <div key={child.id} className="flex items-center gap-1">
                               <Link
-                                to={`/${child.id}`}
+                                to={linkTarget(child.id)}
                                 onClick={(event) => navigate(event, child.id, true)}
                                 className={`min-w-0 flex-1 flex items-center px-3 py-2.5 rounded-lg transition-colors ${isChildActive ? activeColors : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900'}`}
                               >
@@ -225,7 +216,6 @@ export default function AppSidebar({
                                   </span>
                                 )}
                               </Link>
-                              {standaloneLink(child.id, child.label)}
                             </div>
                           );
                         })}
@@ -238,7 +228,7 @@ export default function AppSidebar({
             return (
               <div key={item.id} className="flex items-center gap-1">
                 <Link
-                  to={`/${item.id}`}
+                  to={linkTarget(item.id)}
                   onClick={(event) =>
                     navigate(
                       event,
@@ -254,7 +244,6 @@ export default function AppSidebar({
                   />
                   {isExpanded && <span className="ml-3 truncate">{item.label}</span>}
                 </Link>
-                {standaloneLink(item.id, item.label)}
               </div>
             );
           })}

@@ -3,6 +3,7 @@
  * Central data access layer for all Supabase operations
  */
 
+import { assertDeleted, toDeleteError } from '../utils/deleteErrors';
 import { supabase } from './supabase';
 import {
   User,
@@ -43,8 +44,9 @@ export async function getAppSettings(): Promise<AppSettings | null> {
   const { data, error } = await supabase.from('app_settings').select('*').limit(1).single();
   if (error || !data) return null;
   return {
-    companyName: data.company_name,
+    companyName: data.company_name || '',
     companyLogo: data.company_logo || '',
+    showCompanyName: data.show_company_name ?? true,
     companyCnpj: data.company_cnpj,
     pricingTerms: data.pricing_terms,
     defaultFactorBRL: data.default_factor_brl == null ? 0.8 : Number(data.default_factor_brl),
@@ -55,21 +57,26 @@ export async function getAppSettings(): Promise<AppSettings | null> {
 export async function saveAppSettings(settings: AppSettings): Promise<void> {
   const { data: existing } = await supabase.from('app_settings').select('id').limit(1).single();
   const payload = {
-    company_name: settings.companyName,
+    company_name: settings.companyName?.trim() || '',
     company_logo: settings.companyLogo,
+    show_company_name: settings.showCompanyName ?? true,
     company_cnpj: settings.companyCnpj,
     pricing_terms: settings.pricingTerms,
     default_factor_brl: settings.defaultFactorBRL ?? 0.8,
     default_factor_usd: settings.defaultFactorUSD ?? 0,
     updated_at: new Date().toISOString(),
   };
-  if (existing?.id) {
-    const { error } = await supabase.from('app_settings').update(payload).eq('id', existing.id);
-    if (error) throw error;
-  } else {
-    const { error } = await supabase.from('app_settings').insert(payload);
-    if (error) throw error;
+  const write = (values: Record<string, unknown>) =>
+    existing?.id
+      ? supabase.from('app_settings').update(values).eq('id', existing.id)
+      : supabase.from('app_settings').insert(values);
+  let { error } = await write(payload);
+  // Enquanto a migração da opção "mostrar nome" não estiver aplicada, salva o resto.
+  if (error?.code === 'PGRST204' && /show_company_name/.test(error.message || '')) {
+    const { show_company_name: _ignored, ...withoutShowName } = payload;
+    ({ error } = await write(withoutShowName));
   }
+  if (error) throw error;
 }
 
 // ============================================================
@@ -205,8 +212,9 @@ export async function updateBranch(id: string, branch: Partial<Branch>): Promise
 }
 
 export async function deleteBranch(id: string): Promise<void> {
-  const { error } = await supabase.from('branches').delete().eq('id', id);
-  if (error) throw error;
+  const { data, error } = await supabase.from('branches').delete().eq('id', id).select('id');
+  if (error) throw toDeleteError(error);
+  assertDeleted(data);
 }
 
 // ============================================================

@@ -409,7 +409,7 @@ function ModalGerarRelatorio({
       doc.setFontSize(20);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(16, 124, 65);
-      doc.text(companyName, 14, 22);
+      doc.text(companyName || '', 14, 22);
 
       doc.setFontSize(10);
       doc.setFont('helvetica', 'bold');

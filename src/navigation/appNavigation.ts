@@ -31,7 +31,6 @@ import type { NavItem, User } from '../types';
 export type ActiveModule =
   | 'pricing'
   | 'config'
-  | 'prd'
   | 'managementReports'
   | 'expenses'
   | 'carregamento'
@@ -78,7 +77,6 @@ registerRoutes('config', [
   'access_levels',
   'alert_center',
 ]);
-registerRoutes('prd', ['prd']);
 registerRoutes('managementReports', [
   'managementReports_dashboard',
   'managementReports_lancamentos',
@@ -230,8 +228,6 @@ export function getNavigationItems(
       { id: 'settings', label: 'Personalização', icon: Settings, permission: 'settings' },
       { id: 'alert_center', label: 'Central de Alertas', icon: Bell, permission: 'alertas' },
     ];
-  } else if (activeModule === 'prd') {
-    items = [{ id: 'prd', label: 'Documentação PRD', icon: BarChart3, permission: 'prd' }];
   } else if (activeModule === 'managementReports') {
     items = [
       {

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getCompanyDisplayName } from '../utils/companyBranding';
 import { PricingRecord, User as AppUser, AppSettings, Branch, PriceList } from '../types';
 import {
   Search,
@@ -121,7 +122,7 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
         )
       );
     }
-    if (savedSettings?.companyName) setAppSettings(savedSettings);
+    if (savedSettings) setAppSettings(savedSettings);
     setLoading(false);
   };
   const [filter, setFilter] = useState('');
@@ -205,7 +206,7 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
       doc.addImage(appSettings.companyLogo, 'PNG', 10, 10, 20, 20);
     }
     doc.setFontSize(16);
-    doc.text(appSettings.companyName, appSettings.companyLogo ? 35 : 10, 20);
+    doc.text(getCompanyDisplayName(appSettings), appSettings.companyLogo ? 35 : 10, 20);
     doc.setFontSize(12);
     doc.text('Relatório Consolidado de Precificações', 10, 35);
     doc.setFontSize(10);

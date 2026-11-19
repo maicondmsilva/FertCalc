@@ -18,7 +18,7 @@ export function useAppData(activeModule: ActiveModule, currentUserId?: string) {
     let active = true;
     getAppSettings()
       .then((savedSettings) => {
-        if (active && savedSettings?.companyName) setAppSettings(savedSettings);
+        if (active && savedSettings) setAppSettings(savedSettings);
       })
       .catch(() => {
         // Mantém a identidade padrão quando a configuração remota não está disponível.

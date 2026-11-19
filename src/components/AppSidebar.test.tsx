@@ -59,19 +59,25 @@ describe('AppSidebar', () => {
     expect(onNavigate).toHaveBeenCalledWith('dashboard', true);
   });
 
-  it('oferece uma rota standalone em nova guia para páginas da precificação', () => {
+  it('usa o endereço da página sozinha no link, para o botão direito abrir em nova guia', () => {
     renderSidebar();
 
-    const standaloneLink = screen.getByRole('link', {
-      name: 'Abrir Dashboard em nova guia',
-    });
-    expect(standaloneLink.getAttribute('href')).toBe('/dashboard?standalone=true');
-    expect(standaloneLink.getAttribute('target')).toBe('_blank');
-    expect(standaloneLink.getAttribute('rel')).toContain('noopener');
+    const link = screen.getByRole('link', { name: 'Dashboard' });
+    expect(link.getAttribute('href')).toBe('/dashboard?standalone=true');
+    expect(link.getAttribute('target')).toBeNull();
+    expect(screen.queryByLabelText('Abrir Dashboard em nova guia')).toBeNull();
   });
 
-  it('não oferece abertura standalone fora do módulo de precificação', () => {
+  it('abre em nova guia com Ctrl+clique sem navegar na guia atual', () => {
+    const onNavigate = renderSidebar();
+
+    fireEvent.click(screen.getByRole('link', { name: 'Dashboard' }), { ctrlKey: true });
+
+    expect(onNavigate).not.toHaveBeenCalled();
+  });
+
+  it('mantém o endereço normal fora do módulo de precificação', () => {
     renderSidebar('config');
-    expect(screen.queryByLabelText('Abrir Dashboard em nova guia')).toBeNull();
+    expect(screen.getByRole('link', { name: 'Dashboard' }).getAttribute('href')).toBe('/dashboard');
   });
 });

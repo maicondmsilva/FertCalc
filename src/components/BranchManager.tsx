@@ -27,6 +27,7 @@ import {
   deleteLocalCarregamento,
 } from '../services/locaisCarregamentoService';
 import { formatId } from '../utils/formatId';
+import { DeleteBlockedError } from '../utils/deleteErrors';
 
 function fmtBranchNum(branch: { id_numeric?: number; id: string }): string {
   return branch.id_numeric != null ? formatId(branch.id_numeric) : branch.id.slice(0, 8);
@@ -163,6 +164,46 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
     }
   };
 
+  /**
+   * Explica por que a exclusão não aconteceu. Quando há dados ligados, oferece
+   * desativar o cadastro, que some das listas sem quebrar o histórico.
+   */
+  const handleDeleteFailure = async (
+    error: unknown,
+    entityLabel: string,
+    deactivate: () => Promise<void>,
+    canDeactivate: boolean
+  ) => {
+    if (error instanceof DeleteBlockedError && error.reason === 'not_allowed') {
+      showError(`Somente administradores podem excluir ${entityLabel}.`);
+      return;
+    }
+    if (error instanceof DeleteBlockedError && error.reason === 'linked') {
+      if (!canDeactivate) {
+        showError(
+          `Não é possível excluir: existem ${error.linkedTo} ligados a este ${entityLabel}. Ele já está desativado.`
+        );
+        return;
+      }
+      const shouldDeactivate = await confirm({
+        title: 'Não é possível excluir',
+        message: `Existem ${error.linkedTo} ligados a este ${entityLabel}. Excluir apagaria esse histórico. Deseja desativar em vez de excluir? Ele deixa de aparecer para seleção, e você pode reativar depois.`,
+        variant: 'warning',
+        confirmLabel: 'Desativar',
+        cancelLabel: 'Cancelar',
+      });
+      if (!shouldDeactivate) return;
+      try {
+        await deactivate();
+        showSuccess(`${entityLabel.charAt(0).toUpperCase()}${entityLabel.slice(1)} desativado(a).`);
+      } catch {
+        showError(`Não foi possível desativar o(a) ${entityLabel}.`);
+      }
+      return;
+    }
+    showError(`Erro ao excluir ${entityLabel}. Tente novamente.`);
+  };
+
   const handleToggleAtivo = async (branch: Branch) => {
     if (!canEdit) return;
     try {
@@ -175,6 +216,7 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
   };
 
   const handleDeleteBranch = async (id: string) => {
+    const branch = branches.find((item) => item.id === id);
     const ok = await confirm({
       title: 'Excluir filial?',
       message:
@@ -187,8 +229,17 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
       await deleteBranch(id);
       showSuccess('Filial excluída com sucesso!');
       await loadBranches();
-    } catch {
-      showError('Erro ao excluir filial.');
+    } catch (error) {
+      await handleDeleteFailure(
+        error,
+        'filial',
+        async () => {
+          if (!branch) return;
+          await updateBranch(id, { ativo: false });
+          await loadBranches();
+        },
+        branch?.ativo !== false
+      );
     }
   };
 
@@ -290,8 +341,16 @@ export default function BranchManager({ currentUser }: { currentUser: User }) {
       await deleteLocalCarregamento(local.id);
       showSuccess('Local excluído com sucesso!');
       await loadLocais();
-    } catch {
-      showError('Erro ao excluir local.');
+    } catch (error) {
+      await handleDeleteFailure(
+        error,
+        'local de carregamento',
+        async () => {
+          await updateLocalCarregamento(local.id, { ativo: false });
+          await loadLocais();
+        },
+        local.ativo !== false
+      );
     }
   };
 

@@ -1,6 +1,27 @@
 import type jsPDF from 'jspdf';
+import { Capacitor } from '@capacitor/core';
 
 export type PdfDeliveryResult = 'shared' | 'downloaded' | 'cancelled';
+
+interface NavigatorWithUserAgentData extends Navigator {
+  userAgentData?: { mobile?: boolean };
+}
+
+/**
+ * O painel de compartilhamento só faz sentido no celular e no app. No computador
+ * (ex.: Chrome no Windows) ele abre o painel do sistema em vez de baixar o arquivo.
+ */
+export function shouldSharePdf(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  try {
+    if (Capacitor.isNativePlatform()) return true;
+  } catch {
+    // Fora do app nativo o Capacitor pode não estar disponível.
+  }
+  const userAgentDataMobile = (navigator as NavigatorWithUserAgentData).userAgentData?.mobile;
+  if (typeof userAgentDataMobile === 'boolean') return userAgentDataMobile;
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+}
 
 export async function saveOrSharePdf(
   document: jsPDF,
@@ -8,8 +29,8 @@ export async function saveOrSharePdf(
   title = 'Documento FertCalc'
 ): Promise<PdfDeliveryResult> {
   const canShareFiles =
+    shouldSharePdf() &&
     typeof File !== 'undefined' &&
-    typeof navigator !== 'undefined' &&
     typeof navigator.share === 'function' &&
     typeof navigator.canShare === 'function';
 

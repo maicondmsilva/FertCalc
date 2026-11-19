@@ -17,7 +17,6 @@ const MODULE_ROUTES: Record<string, string> = {
   pricing: '/dashboard',
   config: '/users',
   managementReports: '/managementReports_dashboard',
-  prd: '/prd',
   expenses: '/expenses_lancamentos',
   carregamento: '/carregamento_visao_geral',
   relatorios: '/relatorios',

@@ -192,7 +192,7 @@ export default function BetaConditionsPanel({
         </div>
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-2">
+      <div className="grid gap-3 @4xl:grid-cols-2">
         <Group icon={Percent} title="Fatores comerciais" tone="bg-emerald-100 text-emerald-700">
           <div className="grid grid-cols-2 gap-3">
             <Field label="Fator" unit="×">
