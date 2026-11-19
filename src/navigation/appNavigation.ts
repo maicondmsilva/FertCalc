@@ -138,7 +138,7 @@ export function getNavigationItems(
       },
       {
         id: 'simplified_calculator_beta',
-        label: 'Calculadora Simplificada (Teste)',
+        label: 'Calculadora Teste',
         icon: FlaskConical,
         permission: 'simplified_calculator_beta',
       },

@@ -80,7 +80,8 @@ export function splitFormulaTarget(formula?: string): NpkDraft {
 }
 
 const normalizeDraftNumber = (raw: string) => {
-  const value = raw.trim();
+  // "4," ainda está sendo digitado: vale 4 até a casa decimal chegar.
+  const value = raw.trim().replace(/[.,]$/, '');
   if (!value) return '00';
   return /^\d$/.test(value) ? value.padStart(2, '0') : value;
 };
@@ -89,6 +90,44 @@ const normalizeDraftNumber = (raw: string) => {
 export function composeFormulaTarget({ n, p, k }: NpkDraft): string {
   if (![n, p, k].some((value) => value.trim())) return '';
   return [n, p, k].map(normalizeDraftNumber).join('-');
+}
+
+/** Indica se o rascunho dos campos e a fórmula representam o mesmo alvo N-P-K. */
+export function isSameFormulaTarget(draft: NpkDraft, formula?: string): boolean {
+  const fromDraft = parseFormulaTarget(composeFormulaTarget(draft));
+  const fromFormula = parseFormulaTarget(formula);
+  if (!fromDraft || !fromFormula) return !fromDraft && !fromFormula;
+  return (
+    fromDraft.n === fromFormula.n && fromDraft.p === fromFormula.p && fromDraft.k === fromFormula.k
+  );
+}
+
+const draftNumber = (raw: string): number | undefined => {
+  const value = raw.trim().replace(/[.,]$/, '');
+  return value ? Number(value.replace(',', '.')) : undefined;
+};
+
+/**
+ * Sugere batidas/produtos formulados cuja fórmula N-P-K combina com o que já foi
+ * digitado. Campos vazios não filtram; assim as sugestões aparecem desde o N.
+ */
+export function findProductsMatchingNpk<T extends { ativo?: boolean; formula_npk?: string }>(
+  products: T[],
+  draft: NpkDraft,
+  limit = 8
+): T[] {
+  const typed = { n: draftNumber(draft.n), p: draftNumber(draft.p), k: draftNumber(draft.k) };
+  if (typed.n === undefined && typed.p === undefined && typed.k === undefined) return [];
+  return products
+    .filter((product) => {
+      if (product.ativo === false) return false;
+      const target = parseFormulaTarget(product.formula_npk);
+      if (!target) return false;
+      return (['n', 'p', 'k'] as const).every(
+        (key) => typed[key] === undefined || target[key] === typed[key]
+      );
+    })
+    .slice(0, limit);
 }
 
 /** Aceita somente números com até uma vírgula/ponto enquanto o usuário digita. */

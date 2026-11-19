@@ -33,11 +33,13 @@ import {
   applySavedFormulaToCalculation,
   buildCompositionTable,
   composeFormulaTarget,
+  findProductsMatchingNpk,
   formatKg,
   formatMoney,
   formatPercent,
   getFormulaMagnesiumTarget,
   getNutrientStatus,
+  isSameFormulaTarget,
   isValidNutrientInput,
   splitFormulaTarget,
   type NpkDraft,
@@ -217,9 +219,11 @@ export default function BetaFormulaCard({
   // Mantém os campos N-P-K em sincronia quando a fórmula muda por fora
   // (batida carregada, sugestão aplicada, troca de modo).
   useEffect(() => {
-    const parsed = splitFormulaTarget(calculation.formula);
+    // Compara pelo valor numérico para não apagar uma vírgula ainda sem decimais ("4,").
     setNpkDraft((current) =>
-      composeFormulaTarget(current) === composeFormulaTarget(parsed) ? current : parsed
+      isSameFormulaTarget(current, calculation.formula)
+        ? current
+        : splitFormulaTarget(calculation.formula)
     );
   }, [calculation.formula]);
 
@@ -350,6 +354,15 @@ export default function BetaFormulaCard({
       )
       .slice(0, 12);
   }, [loadSearch, produtosFormulados]);
+
+  const npkMatches = useMemo(
+    () => findProductsMatchingNpk(produtosFormulados, npkDraft),
+    [npkDraft, produtosFormulados]
+  );
+  const isSearchingByText = loadSearch.trim().length > 0;
+  const suggestions = isSearchingByText ? loadResults : npkMatches;
+  const showSuggestions = isLoadOpen && (isSearchingByText || npkMatches.length > 0);
+  const closeSuggestionsLater = () => setTimeout(() => setIsLoadOpen(false), 200);
 
   const togglePanel = (next: Exclude<Panel, null>) =>
     setPanel((current) => (current === next ? null : next));
@@ -503,23 +516,28 @@ export default function BetaFormulaCard({
                     <React.Fragment key={field}>
                       {position > 0 && <span className="font-bold text-stone-300">–</span>}
                       <label
-                        className={`flex h-12 w-[92px] items-center gap-2 rounded-xl border px-3 ${style.box}`}
+                        className={`flex h-12 w-[112px] items-center gap-2 rounded-xl border px-3 ${style.box}`}
                       >
                         <span className={`text-xs font-black ${style.text}`}>{nutrient}</span>
                         <input
                           type="text"
                           inputMode="decimal"
                           value={npkDraft[field]}
-                          onChange={(event) => updateNpk(field, event.target.value)}
+                          onChange={(event) => {
+                            updateNpk(field, event.target.value);
+                            setIsLoadOpen(true);
+                          }}
+                          onFocus={() => setIsLoadOpen(true)}
+                          onBlur={closeSuggestionsLater}
                           placeholder="00"
                           aria-label={`${style.label} alvo`}
-                          className={`w-full min-w-0 bg-transparent text-right text-xl font-black tabular-nums focus:outline-none ${style.text}`}
+                          className={`w-full min-w-0 bg-transparent text-right text-xl font-black tabular-nums placeholder:text-stone-300 focus:outline-none ${style.text}`}
                         />
                       </label>
                     </React.Fragment>
                   );
                 })}
-                <div className="relative min-w-[220px] flex-1">
+                <div className="relative min-w-[180px] flex-1">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
                   <input
                     type="text"
@@ -529,16 +547,21 @@ export default function BetaFormulaCard({
                       setIsLoadOpen(true);
                     }}
                     onFocus={() => setIsLoadOpen(true)}
-                    onBlur={() => setTimeout(() => setIsLoadOpen(false), 200)}
+                    onBlur={closeSuggestionsLater}
                     placeholder="Carregar batida ou produto formulado…"
                     className="h-12 w-full rounded-xl border border-stone-300 bg-white pl-9 pr-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
-                  {isLoadOpen && loadSearch.trim() && (
-                    <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-64 overflow-y-auto rounded-xl border border-stone-200 bg-white shadow-xl">
-                      {loadResults.length === 0 ? (
+                  {showSuggestions && (
+                    <div className="absolute left-0 top-full z-30 mt-1 max-h-72 w-full min-w-[300px] overflow-y-auto rounded-xl border border-stone-200 bg-white shadow-xl">
+                      {!isSearchingByText && (
+                        <p className="border-b border-stone-100 bg-stone-50 px-3 py-2 text-xs font-bold uppercase tracking-wide text-stone-500">
+                          Sugestões pelo N-P-K digitado
+                        </p>
+                      )}
+                      {suggestions.length === 0 ? (
                         <p className="p-3 text-sm text-stone-500">Nenhuma batida encontrada.</p>
                       ) : (
-                        loadResults.map((product) => (
+                        suggestions.map((product) => (
                           <button
                             key={product.id}
                             type="button"
