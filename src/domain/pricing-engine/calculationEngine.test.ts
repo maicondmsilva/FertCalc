@@ -96,7 +96,7 @@ describe('calculation orchestration engine', () => {
     });
   });
 
-  it('preserva a composição e informa quando a fórmula é inviável', () => {
+  it('mostra o resultado mais próximo (o da sugestão) quando a fórmula não fecha', () => {
     const target = calculation({ formula: '00-00-60' });
     const result = execute(target);
 
@@ -110,8 +110,10 @@ describe('calculation orchestration engine', () => {
         },
       ],
     });
-    expect(result.calculation.macros[0].quantity).toBe(0);
-    expect(result.calculation.summary?.totalWeight).toBe(0);
+    expect(result.calculation.notClosed).toBe(true);
+    // Nunca o resultado de um cálculo anterior: é o resultado mais próximo obtido.
+    expect(result.calculation.macros[0].quantity).toBeCloseTo(1000);
+    expect(result.calculation.summary?.totalWeight).toBeCloseTo(1000);
     expect(result.calculation.approximation?.suggestedFormula).toBe('45-0-0');
     expect(result.calculation.approximation?.macros[0].quantity).toBeCloseTo(1000);
   });

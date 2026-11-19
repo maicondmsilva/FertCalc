@@ -281,7 +281,13 @@ export default function BetaFormulaCard({
     setCalculations((current) =>
       current.map((item) =>
         item.id === calculation.id
-          ? { ...item, ...patch, summary: undefined, approximation: undefined }
+          ? {
+              ...item,
+              ...patch,
+              summary: undefined,
+              approximation: undefined,
+              notClosed: undefined,
+            }
           : item
       )
     );
@@ -339,7 +345,13 @@ export default function BetaFormulaCard({
           ? item
           : saved
             ? applySavedFormulaToCalculation(item, saved, formulaName)
-            : { ...item, formula: formulaName, summary: undefined, approximation: undefined }
+            : {
+                ...item,
+                formula: formulaName,
+                summary: undefined,
+                approximation: undefined,
+                notClosed: undefined,
+              }
       )
     );
     setSecondaryInputs({});
@@ -374,11 +386,13 @@ export default function BetaFormulaCard({
   const togglePanel = (next: Exclude<Panel, null>) =>
     setPanel((current) => (current === next ? null : next));
 
-  const statusLabel = summary
-    ? { text: 'Calculada', className: 'bg-emerald-100 text-emerald-800' }
-    : calculation.formula || isFreeProducts
-      ? { text: 'Pronta para calcular', className: 'bg-blue-100 text-blue-800' }
-      : { text: 'Defina a fórmula', className: 'bg-amber-100 text-amber-800' };
+  const statusLabel = calculation.notClosed
+    ? { text: 'Não fecha', className: 'bg-red-100 text-red-800' }
+    : summary
+      ? { text: 'Calculada', className: 'bg-emerald-100 text-emerald-800' }
+      : calculation.formula || isFreeProducts
+        ? { text: 'Pronta para calcular', className: 'bg-blue-100 text-blue-800' }
+        : { text: 'Defina a fórmula', className: 'bg-amber-100 text-amber-800' };
 
   const target = {
     N: Number(npkDraft.n.replace(',', '.')) || 0,
@@ -919,31 +933,43 @@ export default function BetaFormulaCard({
           </section>
         )}
 
-        {/* Sugestão de fórmula aproximada */}
-        {calculation.approximation && (
-          <section className="flex flex-col gap-3 rounded-2xl border border-sky-200 bg-sky-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+        {/* Fórmula que não fecha: alerta fixo, resultado mais próximo e sugestão */}
+        {calculation.notClosed && (
+          <section
+            role="alert"
+            className="flex flex-col gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 sm:flex-row sm:items-center sm:justify-between"
+          >
             <div className="flex items-start gap-3">
-              <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-sky-700" />
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-700" />
               <div>
-                <p className="text-[15px] font-black text-sky-950">
-                  A fórmula não fecha. Sugestão mais próxima:{' '}
-                  {calculation.approximation.suggestedFormula}
+                <p className="text-[15px] font-black text-red-950">
+                  A fórmula {calculation.formula} não fecha com os produtos selecionados
                 </p>
-                <p className="text-sm text-sky-800">
-                  N {formatPercent(calculation.approximation.summary.resultingN, 2)} · P{' '}
-                  {formatPercent(calculation.approximation.summary.resultingP, 2)} · K{' '}
-                  {formatPercent(calculation.approximation.summary.resultingK, 2)} · custo base{' '}
-                  {formatMoney(calculation.approximation.summary.baseCost, currency)}
-                </p>
+                {calculation.approximation ? (
+                  <p className="text-sm text-red-800">
+                    Abaixo está o resultado mais próximo, do jeito mais barato:{' '}
+                    <strong>{calculation.approximation.suggestedFormula}</strong> · custo base{' '}
+                    {formatMoney(calculation.approximation.summary.baseCost, currency)}. Aplique a
+                    sugestão ou ajuste a fórmula e os produtos. Não é possível salvar assim.
+                  </p>
+                ) : (
+                  <p className="text-sm text-red-800">
+                    Nenhuma composição possível com os produtos selecionados. Ajuste a fórmula ou os
+                    produtos.
+                  </p>
+                )}
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => applyFormulaApproximation(calculation.id)}
-              className="shrink-0 rounded-xl bg-sky-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-sky-800"
-            >
-              Aplicar sugestão
-            </button>
+            {calculation.approximation && (
+              <button
+                type="button"
+                onClick={() => applyFormulaApproximation(calculation.id)}
+                className="shrink-0 rounded-xl bg-red-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-800"
+              >
+                <Sparkles className="mr-1.5 inline h-4 w-4" />
+                Aplicar sugestão {calculation.approximation.suggestedFormula}
+              </button>
+            )}
           </section>
         )}
 

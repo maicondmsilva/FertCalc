@@ -155,13 +155,32 @@ export function calculateTargetFormula({
       targetMicros: approximation.achievedMicroTargets,
     };
   };
+  /**
+   * A fórmula não fecha: mostra o resultado mais próximo obtido (o mesmo da
+   * sugestão, pelo menor custo) e marca a fórmula como "não fecha". Nunca mantém
+   * as quantidades de um cálculo anterior, que seriam de outra fórmula.
+   */
+  const buildNotClosedCalculation = (): TargetFormula => {
+    const approximation = buildApproximation();
+    const zeroed = (materials: RawMaterial[]) =>
+      materials.map((material) => ({ ...material, quantity: 0 }));
+    const macros = approximation ? approximation.macros : zeroed(currentMacros);
+    const micros = approximation ? approximation.micros : zeroed(currentMicros);
+    return {
+      ...calculation,
+      macros,
+      micros,
+      approximation,
+      notClosed: true,
+      summary: approximation
+        ? approximation.summary
+        : calculatePricingSummary(macros, micros, calculation.factors),
+    };
+  };
+
   if (missingMicronutrientSources.length > 0) {
     return {
-      calculation: {
-        ...calculation,
-        approximation: buildApproximation(),
-        summary: calculatePricingSummary(currentMacros, currentMicros, calculation.factors),
-      },
+      calculation: buildNotClosedCalculation(),
       issue: {
         code: 'MISSING_MICRO_TARGET_SOURCE',
         micronutrients: missingMicronutrientSources,
@@ -172,15 +191,7 @@ export function calculateTargetFormula({
   const optimization = optimizeFormula(optimizationInput);
   if (!optimization.feasible) {
     return {
-      calculation: {
-        ...calculation,
-        approximation: buildApproximation(),
-        summary: calculatePricingSummary(
-          calculation.macros,
-          calculation.micros,
-          calculation.factors
-        ),
-      },
+      calculation: buildNotClosedCalculation(),
       issue: {
         code: 'INFEASIBLE_FORMULA',
         formula: calculation.formula,
@@ -193,6 +204,7 @@ export function calculateTargetFormula({
     calculation: {
       ...calculation,
       approximation: undefined,
+      notClosed: undefined,
       macros: optimization.macros,
       micros: optimization.micros,
       summary: calculatePricingSummary(

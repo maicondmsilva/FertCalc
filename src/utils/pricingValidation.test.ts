@@ -9,6 +9,7 @@ const calculation = (overrides: Partial<TargetFormula> = {}): TargetFormula => (
   factors: { totalTons: 10, commission: 0 } as TargetFormula['factors'],
   macros: [],
   micros: [],
+  summary: { finalPrice: 1000 } as TargetFormula['summary'],
   ...overrides,
 });
 
