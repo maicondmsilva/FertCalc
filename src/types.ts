@@ -112,6 +112,8 @@ export interface User {
     dashboard: boolean;
     calculator: boolean;
     simplified_calculator?: boolean;
+    /** Acesso à página de teste do novo layout da calculadora simplificada. */
+    simplified_calculator_beta?: boolean;
     history: boolean;
     clients: boolean;
     agents: boolean;
@@ -455,6 +457,8 @@ export interface TargetFormula {
   targetK?: number;
   targetCa?: number;
   targetS?: number;
+  /** Meta de magnésio com a regra de faixa de Ca e S (usada pela calculadora de teste). */
+  targetMg?: number;
   targetMicros?: Record<string, number>;
   approximation?: FormulaApproximation;
   guaranteeDivergenceAuthorization?: {
@@ -577,6 +581,8 @@ export interface PricingSummary {
   resultingK: number;
   resultingS: number;
   resultingCa: number;
+  /** Magnésio total da mistura (%), usado quando o Mg segue a regra de faixa. */
+  resultingMg?: number;
   resultingMicros: Record<string, number>;
 }
 

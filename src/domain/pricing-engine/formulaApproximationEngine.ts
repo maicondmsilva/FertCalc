@@ -2,6 +2,7 @@ import solver from 'javascript-lp-solver';
 import type { RawMaterial } from '../../types';
 import {
   getCalculatedMicronutrientValue,
+  isMagnesiumGuarantee,
   isSecondaryNutrientGuarantee,
   normalizeMicronutrientKey,
 } from '../../utils/micronutrients';
@@ -30,12 +31,15 @@ interface RelaxedTarget {
 
 const numeric = (value: unknown): number => Number(value) || 0;
 
-const normalizedMicroTargets = (targets: Record<string, number> = {}) => {
+const normalizedMicroTargets = (targets: Record<string, number> = {}, excludeMagnesium = false) => {
   const normalized = new Map<string, { name: string; value: number }>();
   Object.entries(targets)
     .filter(
       ([name, value]) =>
-        name.trim().length > 0 && numeric(value) > 0 && !isSecondaryNutrientGuarantee(name)
+        name.trim().length > 0 &&
+        numeric(value) > 0 &&
+        !isSecondaryNutrientGuarantee(name) &&
+        !(excludeMagnesium && isMagnesiumGuarantee(name))
     )
     .forEach(([name, value]) => {
       const key = normalizeMicronutrientKey(name);
@@ -56,7 +60,8 @@ const cloneModel = (model: OptimizationModel): OptimizationModel =>
 
 export function approximateFormula(input: FormulaOptimizationInput): FormulaApproximationResult {
   const model = buildFormulaOptimizationModel(input);
-  const microTargets = normalizedMicroTargets(input.targetMicros);
+  const targetMg = numeric(input.targetMg);
+  const microTargets = normalizedMicroTargets(input.targetMicros, targetMg > 0);
   const relaxedTargets: RelaxedTarget[] = [
     { constraint: 'n_eq', value: input.target.n * 10 },
     { constraint: 'p_eq', value: input.target.p * 10 },
@@ -67,6 +72,7 @@ export function approximateFormula(input: FormulaOptimizationInput): FormulaAppr
     ...(numeric(input.targetCa) > 0
       ? [{ constraint: 'ca_eq', value: numeric(input.targetCa) * 10 }]
       : []),
+    ...(targetMg > 0 ? [{ constraint: 'mg_eq', value: targetMg * 10 }] : []),
     ...microTargets.map(({ value }, index) => ({
       constraint: `micro_target_${index}`,
       value: value * 10,
@@ -129,6 +135,7 @@ export function approximateFormula(input: FormulaOptimizationInput): FormulaAppr
       ? Math.abs(composition.resultingCa - numeric(input.targetCa))
       : 0) +
     (numeric(input.targetS) > 0 ? Math.abs(composition.resultingS - numeric(input.targetS)) : 0) +
+    (targetMg > 0 ? Math.abs(composition.resultingMg - targetMg) : 0) +
     microTargets.reduce(
       (total, { name, value }) => total + Math.abs(numeric(achievedMicroTargets[name]) - value),
       0

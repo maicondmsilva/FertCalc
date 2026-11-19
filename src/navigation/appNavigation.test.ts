@@ -53,6 +53,19 @@ describe('app navigation', () => {
     expect(items.map(({ id }) => id)).toEqual(['simplified_calculator', 'saved_formulas']);
   });
 
+  it('mostra a calculadora de teste somente para quem tem a permissão própria', () => {
+    const withoutBeta = getNavigationItems('pricing', (permission) =>
+      ['simplified_calculator'].includes(permission)
+    );
+    expect(withoutBeta.map(({ id }) => id)).not.toContain('simplified_calculator_beta');
+
+    const withBeta = getNavigationItems('pricing', (permission) =>
+      ['simplified_calculator_beta'].includes(permission)
+    );
+    expect(withBeta.map(({ id }) => id)).toEqual(['simplified_calculator_beta']);
+    expect(getActiveModule('simplified_calculator_beta')).toBe('pricing');
+  });
+
   it('injeta as contagens do workflow de despesas nos badges corretos', () => {
     const items = getNavigationItems('expenses', () => true, {
       pendingExpenses: 4,

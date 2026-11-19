@@ -3,7 +3,9 @@ import type { IncompatibilityRule, RawMaterial } from '../../types';
 import type { FormulaTarget } from './formulaEngine';
 import { calculateMaterialComposition } from './pricingEngine';
 import {
+  getMaterialMagnesiumPercentage,
   getMaterialSecondaryNutrientPercentage,
+  isMagnesiumGuarantee,
   isSecondaryNutrientGuarantee,
   normalizeMicronutrientKey,
 } from '../../utils/micronutrients';
@@ -23,6 +25,11 @@ export interface FormulaOptimizationInput {
   target: FormulaTarget;
   targetS?: number;
   targetCa?: number;
+  /**
+   * Meta de magnésio com a mesma regra de Ca e S (faixa do alvo até +0,9 ponto).
+   * Quando informada, o Mg deixa de ser tratado como micronutriente mínimo.
+   */
+  targetMg?: number;
   targetMicros?: Record<string, number>;
   macros: RawMaterial[];
   micros: RawMaterial[];
@@ -43,16 +50,22 @@ export function buildFormulaOptimizationModel({
   target,
   targetS = 0,
   targetCa = 0,
+  targetMg = 0,
   targetMicros = {},
   macros,
   micros,
   incompatibilityRules,
 }: FormulaOptimizationInput): OptimizationModel {
+  const usesMagnesiumRange = numeric(targetMg) > 0;
   const normalizedMicroTargets = new Map<string, { name: string; value: number }>();
   Object.entries(targetMicros)
     .map(([name, value]) => ({ name: name.trim(), value: numeric(value) }))
     .filter(
-      ({ name, value }) => name.length > 0 && value > 0 && !isSecondaryNutrientGuarantee(name)
+      ({ name, value }) =>
+        name.length > 0 &&
+        value > 0 &&
+        !isSecondaryNutrientGuarantee(name) &&
+        !(usesMagnesiumRange && isMagnesiumGuarantee(name))
     )
     .forEach(({ name, value }) => {
       const key = normalizeMicronutrientKey(name);
@@ -78,6 +91,7 @@ export function buildFormulaOptimizationModel({
       k_eq: { min: target.k * 10, max: target.k * 10 + 9 },
       ...(targetS > 0 ? { s_eq: { min: targetS * 10, max: targetS * 10 + 9 } } : {}),
       ...(targetCa > 0 ? { ca_eq: { min: targetCa * 10, max: targetCa * 10 + 9 } } : {}),
+      ...(usesMagnesiumRange ? { mg_eq: { min: targetMg * 10, max: targetMg * 10 + 9 } } : {}),
       ...Object.fromEntries(
         // Micronutrient guarantees are minimum declared guarantees. Requiring an exact
         // equality makes a valid blend infeasible whenever one selected source carries
@@ -99,6 +113,7 @@ export function buildFormulaOptimizationModel({
     const minimumQuantity = numeric(material.minQty);
     const sulfurPercentage = getMaterialSecondaryNutrientPercentage(material, 's');
     const calciumPercentage = getMaterialSecondaryNutrientPercentage(material, 'ca');
+    const magnesiumPercentage = getMaterialMagnesiumPercentage(material);
     const microContributions = Object.fromEntries(
       microTargets.flatMap(({ key, constraint }) => {
         const guarantee = (material.microGuarantees || [])
@@ -114,6 +129,9 @@ export function buildFormulaOptimizationModel({
       ...(numeric(material.k) !== 0 ? { k_eq: numeric(material.k) / 100 } : {}),
       ...(targetS > 0 && sulfurPercentage !== 0 ? { s_eq: sulfurPercentage / 100 } : {}),
       ...(targetCa > 0 && calciumPercentage !== 0 ? { ca_eq: calciumPercentage / 100 } : {}),
+      ...(usesMagnesiumRange && magnesiumPercentage !== 0
+        ? { mg_eq: magnesiumPercentage / 100 }
+        : {}),
       ...microContributions,
       weight: 1,
       ...(minimumQuantity > 0 ? { [minimumLink]: 1 } : {}),

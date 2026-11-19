@@ -10,6 +10,7 @@ import {
   ClipboardList,
   CreditCard,
   Database,
+  FlaskConical,
   FileEdit,
   History as HistoryIcon,
   LayoutDashboard,
@@ -49,6 +50,7 @@ registerRoutes('pricing', [
   'dashboard',
   'calculator',
   'simplified_calculator',
+  'simplified_calculator_beta',
   'saved_formulas',
   'produtos_formulados',
   'history',
@@ -133,6 +135,12 @@ export function getNavigationItems(
         label: 'Calculadora Simplificada',
         icon: CalcIcon,
         permission: 'simplified_calculator',
+      },
+      {
+        id: 'simplified_calculator_beta',
+        label: 'Calculadora Simplificada (Teste)',
+        icon: FlaskConical,
+        permission: 'simplified_calculator_beta',
       },
       {
         id: 'saved_formulas',

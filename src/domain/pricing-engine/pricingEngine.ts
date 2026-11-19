@@ -3,6 +3,7 @@ import { convertPriceToBRL, getPricingCurrencyContext } from '../../utils/priceL
 import { applyCommercialWaterfall, roundMoney } from './commercialWaterfall';
 import {
   formatMicronutrientLabel,
+  getMaterialMagnesiumPercentage,
   getMaterialSecondaryNutrientPercentage,
   isSecondaryNutrientGuarantee,
   normalizeMicronutrientKey,
@@ -43,6 +44,7 @@ export function calculateMaterialComposition(macros: RawMaterial[], micros: RawM
   let totalK = 0;
   let totalS = 0;
   let totalCa = 0;
+  let totalMg = 0;
   const micronutrients = new Map<string, { label: string; amount: number }>();
 
   selected.forEach((material) => {
@@ -54,6 +56,7 @@ export function calculateMaterialComposition(macros: RawMaterial[], micros: RawM
     totalK += quantity * (numberOrZero(material.k) / 100);
     totalS += quantity * (getMaterialSecondaryNutrientPercentage(material, 's') / 100);
     totalCa += quantity * (getMaterialSecondaryNutrientPercentage(material, 'ca') / 100);
+    totalMg += quantity * (getMaterialMagnesiumPercentage(material) / 100);
     material.microGuarantees?.forEach((guarantee) => {
       if (isSecondaryNutrientGuarantee(guarantee.name)) return;
       const key = normalizeMicronutrientKey(guarantee.name);
@@ -75,6 +78,7 @@ export function calculateMaterialComposition(macros: RawMaterial[], micros: RawM
     resultingK: percentage(totalK),
     resultingS: percentage(totalS),
     resultingCa: percentage(totalCa),
+    resultingMg: percentage(totalMg),
     resultingMicros: Object.fromEntries(
       Array.from(micronutrients.values()).map(({ label, amount }) => [label, percentage(amount)])
     ),
@@ -163,12 +167,24 @@ export function calculatePricingSummary(
     finalPrice,
     totalSaleValue,
     baseCostBRL: convertPriceToBRL(composition.baseCost, currencyContext),
-    basePriceBRL: useMixedCurrencyWaterfall ? commercial.basePrice : convertPriceToBRL(basePrice, currencyContext),
-    interestValueBRL: useMixedCurrencyWaterfall ? commercial.interestValue : convertPriceToBRL(interestValue, currencyContext),
-    taxValueBRL: useMixedCurrencyWaterfall ? commercial.taxValue : convertPriceToBRL(taxValue, currencyContext),
-    commissionValueBRL: useMixedCurrencyWaterfall ? commercial.commissionValue : convertPriceToBRL(commissionValue, currencyContext),
-    freightValueBRL: useMixedCurrencyWaterfall ? commercial.freightValue : convertPriceToBRL(freightValue, currencyContext),
-    finalPriceBRL: useMixedCurrencyWaterfall ? commercial.finalPrice : convertPriceToBRL(finalPrice, currencyContext),
+    basePriceBRL: useMixedCurrencyWaterfall
+      ? commercial.basePrice
+      : convertPriceToBRL(basePrice, currencyContext),
+    interestValueBRL: useMixedCurrencyWaterfall
+      ? commercial.interestValue
+      : convertPriceToBRL(interestValue, currencyContext),
+    taxValueBRL: useMixedCurrencyWaterfall
+      ? commercial.taxValue
+      : convertPriceToBRL(taxValue, currencyContext),
+    commissionValueBRL: useMixedCurrencyWaterfall
+      ? commercial.commissionValue
+      : convertPriceToBRL(commissionValue, currencyContext),
+    freightValueBRL: useMixedCurrencyWaterfall
+      ? commercial.freightValue
+      : convertPriceToBRL(freightValue, currencyContext),
+    finalPriceBRL: useMixedCurrencyWaterfall
+      ? commercial.finalPrice
+      : convertPriceToBRL(finalPrice, currencyContext),
     totalSaleValueBRL: useMixedCurrencyWaterfall
       ? roundMoney(commercial.finalPrice * numberOrZero(factors.totalTons))
       : convertPriceToBRL(totalSaleValue, currencyContext),
