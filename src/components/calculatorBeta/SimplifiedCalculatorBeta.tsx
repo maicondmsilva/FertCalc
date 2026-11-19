@@ -225,7 +225,7 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
   const selectedCount = calculations.filter((calculation) => calculation.selected).length;
 
   return (
-    <div className="mx-auto max-w-[1400px] space-y-5 pb-[max(3rem,env(safe-area-inset-bottom))]">
+    <div className="@container w-full space-y-5 pb-[max(3rem,env(safe-area-inset-bottom))]">
       {/* Cabeçalho da página */}
       <div className="flex flex-col gap-3 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3">
@@ -245,8 +245,8 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
       </div>
 
       {/* Dados da batida */}
-      <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm md:p-5">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm @3xl:p-5">
+        <div className="grid grid-cols-1 gap-4 @2xl:grid-cols-2">
           <label className="block">
             <span className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-stone-500">
               <MapPin className="h-4 w-4" /> Local de carregamento

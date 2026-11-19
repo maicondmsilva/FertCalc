@@ -148,12 +148,12 @@ function GuaranteeTile({
       <div className="flex items-center justify-between gap-2">
         <span className={`text-sm font-black ${style.text}`}>
           {nutrient}
-          {large && <span className="hidden font-bold lg:inline"> · {style.label}</span>}
+          {large && <span className="hidden font-bold @6xl:inline"> · {style.label}</span>}
         </span>
         {badge && (
           <span className={`flex items-center gap-0.5 text-xs font-bold ${badge.className}`}>
             {status === 'met' && <Check className="h-3.5 w-3.5" />}
-            <span className="hidden sm:inline">{badge.text}</span>
+            <span className="hidden @2xl:inline">{badge.text}</span>
           </span>
         )}
       </div>
@@ -443,19 +443,19 @@ export default function BetaFormulaCard({
 
   return (
     <article
-      className={`overflow-hidden rounded-2xl border bg-white shadow-sm transition md:grid md:grid-cols-[104px_minmax(0,1fr)] ${
+      className={`overflow-hidden rounded-2xl border bg-white shadow-sm transition @3xl:grid @3xl:grid-cols-[104px_minmax(0,1fr)] ${
         calculation.selected ? 'border-emerald-200 ring-1 ring-emerald-100' : 'border-stone-200'
       }`}
     >
       {/* Ações na lateral (computador) */}
       <nav
         aria-label={`Ações da fórmula ${index + 1}`}
-        className="hidden flex-col gap-1.5 border-r border-stone-200 bg-stone-50 p-2.5 md:flex"
+        className="hidden flex-col gap-1.5 border-r border-stone-200 bg-stone-50 p-2.5 @3xl:flex"
       >
         {rail}
       </nav>
 
-      <div className="min-w-0 space-y-5 p-4 md:p-5">
+      <div className="min-w-0 space-y-5 p-4 @3xl:p-5">
         {/* Cabeçalho */}
         <header className="flex flex-wrap items-center justify-between gap-3">
           <label className="flex items-center gap-3">
@@ -503,7 +503,7 @@ export default function BetaFormulaCard({
 
         {/* Alvos */}
         {!isFreeProducts && (
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto]">
+          <div className="grid gap-4 @6xl:grid-cols-[minmax(0,1fr)_auto]">
             <div>
               <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-stone-500">
                 Fórmula alvo (N-P-K)
@@ -613,7 +613,7 @@ export default function BetaFormulaCard({
                   return (
                     <label
                       key={nutrient}
-                      className={`flex h-12 w-full items-center gap-1.5 rounded-xl border px-3 xl:w-[104px] ${style.box}`}
+                      className={`flex h-12 w-full items-center gap-1.5 rounded-xl border px-3 @6xl:w-[104px] ${style.box}`}
                     >
                       <span className={`text-xs font-black ${style.text}`}>{nutrient}</span>
                       <input
@@ -747,7 +747,7 @@ export default function BetaFormulaCard({
                 Nenhum micronutriente encontrado nos produtos ativos.
               </p>
             ) : (
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+              <div className="grid grid-cols-2 gap-2 @xl:grid-cols-3 @4xl:grid-cols-5">
                 {microTargetNames.map((name) => {
                   const targetValue = Number(getMicroTarget(name) || 0);
                   const missingSource =
@@ -868,7 +868,7 @@ export default function BetaFormulaCard({
               )}
             </div>
             {comparisonAlternatives.length > 0 && (
-              <ul className="mt-4 grid gap-2 md:grid-cols-2">
+              <ul className="mt-4 grid gap-2 @3xl:grid-cols-2">
                 {comparisonAlternatives.map((alternative) => {
                   const altSummary = alternative.calculation.summary;
                   const difference =
@@ -946,7 +946,7 @@ export default function BetaFormulaCard({
             <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-stone-500">
               Garantias obtidas
             </p>
-            <div className="grid grid-cols-3 gap-2 lg:grid-cols-6">
+            <div className="grid grid-cols-3 gap-2 @4xl:grid-cols-6">
               <GuaranteeTile nutrient="N" obtained={summary.resultingN} target={target.N} large />
               <GuaranteeTile nutrient="P" obtained={summary.resultingP} target={target.P} large />
               <GuaranteeTile nutrient="K" obtained={summary.resultingK} target={target.K} large />
@@ -996,7 +996,7 @@ export default function BetaFormulaCard({
 
         {/* Composição + preços */}
         {summary ? (
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="grid gap-4 @6xl:grid-cols-[minmax(0,1fr)_340px]">
             <section className="overflow-hidden rounded-2xl border border-stone-200">
               <div className="flex items-center justify-between border-b border-stone-200 bg-stone-50 px-4 py-3">
                 <h3 className="text-[15px] font-black text-stone-900">Composição da batida</h3>
@@ -1005,7 +1005,7 @@ export default function BetaFormulaCard({
                 </span>
               </div>
               {/* Tabela (telas médias e grandes) */}
-              <table className="hidden w-full text-[15px] sm:table">
+              <table className="hidden w-full text-[15px] @2xl:table">
                 <thead>
                   <tr className="text-right text-xs font-bold uppercase tracking-wide text-stone-500">
                     <th className="px-4 pb-2 pt-3 text-left">Produto</th>
@@ -1068,7 +1068,7 @@ export default function BetaFormulaCard({
                 </tfoot>
               </table>
               {/* Lista (celular) */}
-              <ul className="divide-y divide-stone-100 sm:hidden">
+              <ul className="divide-y divide-stone-100 @2xl:hidden">
                 {composition.rows.map((row) => (
                   <li key={row.id} className="grid grid-cols-[1fr_auto] gap-x-3 px-4 py-2.5">
                     <span className="font-semibold text-stone-800">{row.name}</span>
@@ -1110,28 +1110,30 @@ export default function BetaFormulaCard({
             </section>
 
             <section className="flex flex-col gap-3 rounded-2xl bg-gradient-to-b from-[#0f2a1f] to-[#123526] p-4 text-white">
-              <div className="rounded-xl border border-white/10 bg-white/5 p-3.5">
-                <p className="text-xs font-bold uppercase tracking-wide text-emerald-200/80">
-                  Custo base
-                </p>
-                <p className="mt-0.5 text-2xl font-black tabular-nums">
-                  {formatMoney(summary.baseCost, currency)}
-                </p>
-                <p className="text-sm text-emerald-100/70">por tonelada · soma da composição</p>
-              </div>
-              <div className="rounded-xl bg-emerald-50 p-3.5 text-emerald-900">
-                <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">
-                  Preço final
-                </p>
-                <p className="mt-0.5 text-[28px] font-black leading-tight tabular-nums">
-                  {formatMoney(summary.finalPrice, currency)}
-                </p>
-                <p className="text-sm text-emerald-700">
-                  por tonelada
-                  {currency === 'USD' && summary.finalPriceBRL !== undefined
-                    ? ` · ${formatMoney(summary.finalPriceBRL, 'BRL')}`
-                    : ''}
-                </p>
+              <div className="grid gap-3 @2xl:grid-cols-2 @6xl:grid-cols-1">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3.5">
+                  <p className="text-xs font-bold uppercase tracking-wide text-emerald-200/80">
+                    Custo base
+                  </p>
+                  <p className="mt-0.5 text-2xl font-black tabular-nums">
+                    {formatMoney(summary.baseCost, currency)}
+                  </p>
+                  <p className="text-sm text-emerald-100/70">por tonelada · soma da composição</p>
+                </div>
+                <div className="rounded-xl bg-emerald-50 p-3.5 text-emerald-900">
+                  <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">
+                    Preço final
+                  </p>
+                  <p className="mt-0.5 text-[28px] font-black leading-tight tabular-nums">
+                    {formatMoney(summary.finalPrice, currency)}
+                  </p>
+                  <p className="text-sm text-emerald-700">
+                    por tonelada
+                    {currency === 'USD' && summary.finalPriceBRL !== undefined
+                      ? ` · ${formatMoney(summary.finalPriceBRL, 'BRL')}`
+                      : ''}
+                  </p>
+                </div>
               </div>
               <div className="flex items-center justify-between rounded-xl bg-white/5 px-3 py-2 text-sm text-emerald-50/80">
                 <span>Sobre o custo</span>
@@ -1207,7 +1209,7 @@ export default function BetaFormulaCard({
       {/* Ações no rodapé (celular) */}
       <nav
         aria-label={`Ações da fórmula ${index + 1}`}
-        className="grid grid-cols-4 gap-1.5 border-t border-stone-200 bg-stone-50 p-2.5 md:hidden"
+        className="grid grid-cols-4 gap-1.5 border-t border-stone-200 bg-stone-50 p-2.5 @3xl:hidden"
       >
         {rail}
       </nav>
