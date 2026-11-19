@@ -3,6 +3,7 @@
  * Central data access layer for all Supabase operations
  */
 
+import { assertDeleted, toDeleteError } from '../utils/deleteErrors';
 import { supabase } from './supabase';
 import {
   User,
@@ -205,8 +206,9 @@ export async function updateBranch(id: string, branch: Partial<Branch>): Promise
 }
 
 export async function deleteBranch(id: string): Promise<void> {
-  const { error } = await supabase.from('branches').delete().eq('id', id);
-  if (error) throw error;
+  const { data, error } = await supabase.from('branches').delete().eq('id', id).select('id');
+  if (error) throw toDeleteError(error);
+  assertDeleted(data);
 }
 
 // ============================================================

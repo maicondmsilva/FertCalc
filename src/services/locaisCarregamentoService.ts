@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { assertDeleted, toDeleteError } from '../utils/deleteErrors';
 import { LocalCarregamento } from '../types/carregamento';
 
 function mapLocal(d: Record<string, unknown>): LocalCarregamento {
@@ -87,6 +88,11 @@ export async function updateLocalCarregamento(
 }
 
 export async function deleteLocalCarregamento(id: string): Promise<void> {
-  const { error } = await supabase.from('locais_carregamento').delete().eq('id', id);
-  if (error) throw error;
+  const { data, error } = await supabase
+    .from('locais_carregamento')
+    .delete()
+    .eq('id', id)
+    .select('id');
+  if (error) throw toDeleteError(error);
+  assertDeleted(data);
 }
