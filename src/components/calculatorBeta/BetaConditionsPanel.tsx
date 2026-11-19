@@ -125,7 +125,6 @@ export default function BetaConditionsPanel({
   const id = calculation.id;
   const isUsd = globalFactors.priceListCurrency === 'USD';
   const currencySymbol = isUsd ? 'US$' : 'R$';
-  const hasAgent = Boolean(globalFactors.agent?.id);
 
   const set = (field: keyof PricingFactors, value: string | number | boolean) =>
     updateCalculationFactors(id, field, value);
@@ -215,16 +214,11 @@ export default function BetaConditionsPanel({
                 className={`${inputClass} pr-14`}
               />
             </Field>
-            <Field
-              label="Comissão"
-              unit="%"
-              hint={!hasAgent ? 'Exige agente (calculadora completa).' : undefined}
-            >
+            <Field label="Comissão" unit="%">
               <input
                 type="number"
                 step="0.1"
                 min="0"
-                disabled={!hasAgent}
                 value={numberValue(factors.commission)}
                 onChange={(event) => set('commission', parseNumber(event.target.value))}
                 className={inputClass}

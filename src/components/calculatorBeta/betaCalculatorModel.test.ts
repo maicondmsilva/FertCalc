@@ -5,8 +5,10 @@ import {
   applySavedFormulaToCalculation,
   buildCompositionTable,
   composeFormulaTarget,
+  findProductsMatchingNpk,
   getFormulaMagnesiumTarget,
   getNutrientStatus,
+  isSameFormulaTarget,
   isValidNutrientInput,
   splitFormulaTarget,
 } from './betaCalculatorModel';
@@ -86,6 +88,49 @@ describe('campos N-P-K', () => {
     expect(getNutrientStatus(4, 4.03)).toBe('met');
     expect(getNutrientStatus(4, 4.6)).toBe('above');
     expect(getNutrientStatus(4, 3.5)).toBe('below');
+  });
+});
+
+describe('digitação com casas decimais', () => {
+  it('mantém a vírgula enquanto a casa decimal ainda não foi digitada', () => {
+    const draft = { n: '4,', p: '14', k: '08' };
+    const formula = composeFormulaTarget(draft);
+    expect(formula).toBe('04-14-08');
+    // O campo não é reescrito para "04", então a vírgula continua lá.
+    expect(isSameFormulaTarget(draft, formula)).toBe(true);
+  });
+
+  it('aceita duas casas após a vírgula', () => {
+    const draft = { n: '4,25', p: '14', k: '8,5' };
+    expect(isValidNutrientInput('4,25')).toBe(true);
+    expect(isValidNutrientInput('4,255')).toBe(false);
+    expect(composeFormulaTarget(draft)).toBe('4,25-14-8,5');
+    expect(isSameFormulaTarget(draft, '4,25-14-8,5')).toBe(true);
+    expect(isSameFormulaTarget(draft, '04-14-08')).toBe(false);
+  });
+});
+
+describe('sugestão de batidas pelo N-P-K', () => {
+  const products = [
+    { id: 'a', ativo: true, formula_npk: '04-14-08' },
+    { id: 'b', ativo: true, formula_npk: '04-30-10 + Zn' },
+    { id: 'c', ativo: true, formula_npk: '20-00-20' },
+    { id: 'd', ativo: false, formula_npk: '04-14-08' },
+    { id: 'e', ativo: true, formula_npk: 'sem fórmula' },
+  ];
+
+  it('filtra conforme os campos digitados', () => {
+    expect(findProductsMatchingNpk(products, { n: '', p: '', k: '' })).toEqual([]);
+    expect(findProductsMatchingNpk(products, { n: '4', p: '', k: '' }).map((p) => p.id)).toEqual([
+      'a',
+      'b',
+    ]);
+    expect(findProductsMatchingNpk(products, { n: '04', p: '14', k: '' }).map((p) => p.id)).toEqual(
+      ['a']
+    );
+    expect(
+      findProductsMatchingNpk(products, { n: '4,', p: '30', k: '10' }).map((p) => p.id)
+    ).toEqual(['b']);
   });
 });
 

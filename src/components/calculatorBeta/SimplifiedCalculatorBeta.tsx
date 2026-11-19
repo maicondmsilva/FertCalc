@@ -233,9 +233,7 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
             <FlaskConical className="h-5 w-5" />
           </span>
           <div>
-            <p className="text-base font-black text-violet-950">
-              Calculadora Simplificada · página de teste
-            </p>
+            <p className="text-base font-black text-violet-950">Calculadora Teste</p>
             <p className="text-sm text-violet-800">
               Novo layout em avaliação. Usa as mesmas regras e preços da calculadora oficial.
             </p>

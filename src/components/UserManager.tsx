@@ -74,7 +74,7 @@ const PERMISSION_GROUPS: PermissionGroup[] = [
     items: [
       { id: 'calculator', label: 'Calculadora' },
       { id: 'simplified_calculator', label: 'Calculadora Simplificada' },
-      { id: 'simplified_calculator_beta', label: 'Calculadora Simplificada (Teste)' },
+      { id: 'simplified_calculator_beta', label: 'Calculadora Teste' },
       { id: 'history', label: 'Situação / Precificações' },
       { id: 'savedFormulas', label: 'Fórmulas Salvas' },
       { id: 'produtosFormulados', label: 'Produtos Formulados' },
