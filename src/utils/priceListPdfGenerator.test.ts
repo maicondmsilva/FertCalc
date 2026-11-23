@@ -54,4 +54,50 @@ describe('PDF da lista de preços', () => {
     expect(document.getNumberOfPages()).toBeGreaterThanOrEqual(1);
     expect(document.output('arraybuffer').byteLength).toBeGreaterThan(3000);
   });
+
+  it('cabe em uma página com uma lista do tamanho das reais', () => {
+    const macros = Array.from({ length: 15 }, (_, index) => ({
+      ...material(`macro-${index}`, `Matéria-prima granulada ${index + 1}`, 3000 + index * 90),
+      n: index % 3 === 0 ? 11 : 0,
+      p: index % 3 === 1 ? 52 : 0,
+      k: index % 3 === 2 ? 60 : 0,
+      s: index % 4 === 0 ? 8 : 0,
+      ca: index % 5 === 0 ? 17 : 0,
+      isPremiumLine: index >= 9,
+    }));
+    const micros = Array.from({ length: 15 }, (_, index) => ({
+      ...material(`micro-${index}`, `Micronutriente ${index + 1}`, 9000 + index * 150),
+      type: 'micro' as const,
+      microGuarantees: [
+        { name: ['B', 'Zn', 'Cu', 'Mn', 'Mg'][index % 5], value: 10 + index },
+        { name: 'S', value: 5 },
+      ],
+    }));
+    const realList = (id: string, localId: string, offset: number): PriceList => ({
+      ...list(id, localId, offset),
+      macros: macros.map((item) => ({ ...item, price: item.price + offset })),
+      micros: micros.map((item) => ({ ...item, price: item.price + offset })),
+    });
+
+    const document = createPriceListPdfDocument({
+      group: {
+        id: 'legacy:611:BRL',
+        label: 'Lista 611/2026',
+        currency: 'BRL',
+        competence: '2026-11-23',
+        locations: [],
+        sortOrder: 1,
+        notes: 'Preços FOB; Sujeito a alteração sem aviso; Validade de 5 dias',
+      },
+      lists: [realList('1', 'a', 0), realList('2', 'b', 40), realList('3', 'c', 80)],
+      locationNames: new Map([
+        ['a', 'Uberaba'],
+        ['b', 'Catalão'],
+        ['c', 'Rio Verde'],
+      ]),
+      settings: null,
+    });
+
+    expect(document.getNumberOfPages()).toBe(1);
+  });
 });
