@@ -77,44 +77,74 @@ const collectNutrients = (materials: RawMaterial[]) => {
   });
 };
 
-export function createPriceListPdfDocument({
-  group,
-  lists,
-  locationNames,
-  settings,
-}: PriceListPdfDocumentInput): jsPDF {
+/** Escalas tentadas, da maior para a menor, até o conteúdo caber numa página. */
+const FIT_SCALES = [1, 0.92, 0.85, 0.78, 0.72, 0.66, 0.61, 0.56];
+
+/**
+ * Gera o PDF da lista de preços em uma única página: tenta a escala normal e,
+ * se o conteúdo não couber, reduz fonte, espaçamentos e cabeçalho até caber.
+ */
+export function createPriceListPdfDocument(input: PriceListPdfDocumentInput): jsPDF {
+  let doc = renderPriceListPdf(input, FIT_SCALES[0]);
+  for (const scale of FIT_SCALES.slice(1)) {
+    if (doc.getNumberOfPages() <= 1) break;
+    doc = renderPriceListPdf(input, scale);
+  }
+  return doc;
+}
+
+function renderPriceListPdf(
+  { group, lists, locationNames, settings }: PriceListPdfDocumentInput,
+  scale: number
+): jsPDF {
   const orderedLists = [...lists].sort((a, b) => {
     const aName = locationNames.get(a.local_carregamento_id || '') || '';
     const bName = locationNames.get(b.local_carregamento_id || '') || '';
     return aName.localeCompare(bName, 'pt-BR');
   });
   const landscape = orderedLists.length > 3;
-  const doc = new jsPDF({ orientation: landscape ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' });
+  const doc = new jsPDF({
+    orientation: landscape ? 'landscape' : 'portrait',
+    unit: 'mm',
+    format: 'a4',
+  });
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 12;
+  // Cabeçalho reduz menos que a tabela para continuar legível.
+  const headerScale = Math.max(0.75, scale);
+  const headerBottom = 28 * headerScale;
 
   if (settings?.companyLogo) {
     try {
       const logoFormat = settings.companyLogo.includes('image/jpeg') ? 'JPEG' : 'PNG';
-      doc.addImage(settings.companyLogo, logoFormat, margin, 9, 39, 16, undefined, 'FAST');
+      doc.addImage(
+        settings.companyLogo,
+        logoFormat,
+        margin,
+        9,
+        39 * headerScale,
+        16 * headerScale,
+        undefined,
+        'FAST'
+      );
     } catch {
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(178, 24, 31);
-      doc.setFontSize(18);
-      doc.text(settings.companyName || 'FERTIGran', margin, 19);
+      doc.setFontSize(18 * headerScale);
+      doc.text(settings.companyName || 'FERTIGran', margin, 19 * headerScale);
     }
   } else {
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(178, 24, 31);
-    doc.setFontSize(18);
-    doc.text(settings?.companyName || 'FERTIGran', margin, 19);
+    doc.setFontSize(18 * headerScale);
+    doc.text(settings?.companyName || 'FERTIGran', margin, 19 * headerScale);
   }
 
   doc.setTextColor(30, 30, 30);
-  doc.setFontSize(15);
+  doc.setFontSize(15 * headerScale);
   doc.setFont('helvetica', 'bold');
-  doc.text(group.label, pageWidth - margin, 15, { align: 'right' });
-  doc.setFontSize(8.5);
+  doc.text(group.label, pageWidth - margin, 15 * headerScale, { align: 'right' });
+  doc.setFontSize(8.5 * headerScale);
   doc.setFont('helvetica', 'normal');
   const details = [
     `Moeda: ${group.currency}`,
@@ -125,20 +155,24 @@ export function createPriceListPdfDocument({
       ? `Validade: ${formatDate(group.validFrom)} a ${formatDate(group.validUntil)}`
       : '',
   ].filter(Boolean);
-  doc.text(details.join('  |  '), pageWidth - margin, 21, { align: 'right' });
+  doc.text(details.join('  |  '), pageWidth - margin, 21 * headerScale, { align: 'right' });
   doc.setDrawColor(25, 25, 25);
   doc.setLineWidth(0.5);
-  doc.line(margin, 28, pageWidth - margin, 28);
+  doc.line(margin, headerBottom, pageWidth - margin, headerBottom);
 
-  let cursorY = 33;
+  let cursorY = headerBottom + 5 * scale;
   const sections = [
     {
       title: 'Linha Convencional',
-      materials: uniqueMaterials(orderedLists, (list) => list.macros.filter((item) => !item.isPremiumLine)),
+      materials: uniqueMaterials(orderedLists, (list) =>
+        list.macros.filter((item) => !item.isPremiumLine)
+      ),
     },
     {
       title: 'Linha Diferenciada',
-      materials: uniqueMaterials(orderedLists, (list) => list.macros.filter((item) => item.isPremiumLine)),
+      materials: uniqueMaterials(orderedLists, (list) =>
+        list.macros.filter((item) => item.isPremiumLine)
+      ),
     },
     {
       title: 'Micronutrientes',
@@ -174,16 +208,22 @@ export function createPriceListPdfDocument({
       cursorY = 14;
     }
     doc.setFillColor(25, 25, 25);
-    doc.roundedRect(margin, cursorY, pageWidth - margin * 2, 7, 1, 1, 'F');
+    doc.roundedRect(margin, cursorY, pageWidth - margin * 2, 7 * scale, 1, 1, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.text(section.title, margin + 3, cursorY + 4.8);
-    cursorY += 8;
+    doc.setFontSize(9 * scale);
+    doc.text(section.title, margin + 3, cursorY + 4.8 * scale);
+    cursorY += 8 * scale;
 
     const nutrientWidth = nutrients.length > 7 ? 7 : 8;
-    const priceWidth = Math.max(24, Math.min(34, (pageWidth - margin * 2) / (orderedLists.length + 3)));
-    const columnStyles: Record<number, { cellWidth: number; halign?: 'left' | 'center' | 'right'; fontStyle?: 'normal' | 'bold' }> = {
+    const priceWidth = Math.max(
+      24,
+      Math.min(34, (pageWidth - margin * 2) / (orderedLists.length + 3))
+    );
+    const columnStyles: Record<
+      number,
+      { cellWidth: number; halign?: 'left' | 'center' | 'right'; fontStyle?: 'normal' | 'bold' }
+    > = {
       0: { cellWidth: 'auto' as unknown as number, halign: 'left', fontStyle: 'bold' },
     };
     nutrients.forEach((_, index) => {
@@ -199,40 +239,63 @@ export function createPriceListPdfDocument({
       body,
       theme: 'grid',
       margin: { left: margin, right: margin, bottom: 15 },
-      styles: { font: 'helvetica', fontSize: 7.6, cellPadding: 1.35, textColor: [25, 25, 25], lineColor: [80, 80, 80], lineWidth: 0.15, overflow: 'linebreak' },
-      headStyles: { fillColor: [255, 255, 255], textColor: [20, 20, 20], fontStyle: 'bold', halign: 'center', lineColor: [20, 20, 20], lineWidth: 0.25 },
+      styles: {
+        font: 'helvetica',
+        fontSize: 7.6 * scale,
+        cellPadding: 1.35 * scale,
+        textColor: [25, 25, 25],
+        lineColor: [80, 80, 80],
+        lineWidth: 0.15,
+        overflow: 'linebreak',
+      },
+      headStyles: {
+        fillColor: [255, 255, 255],
+        textColor: [20, 20, 20],
+        fontStyle: 'bold',
+        halign: 'center',
+        lineColor: [20, 20, 20],
+        lineWidth: 0.25,
+      },
       alternateRowStyles: { fillColor: [248, 248, 248] },
       columnStyles,
       rowPageBreak: 'avoid',
     });
-    cursorY = ((doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? cursorY) + 6;
+    cursorY =
+      ((doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? cursorY) +
+      6 * scale;
   });
 
   if (group.notes?.trim()) {
-    const notes = group.notes.split(/\r?\n|;/).map((note) => note.trim()).filter(Boolean);
+    doc.setFontSize(8 * scale);
+    const notes = group.notes
+      .split(/\r?\n|;/)
+      .map((note) => note.trim())
+      .filter(Boolean);
     const wrappedNotes = notes.map((note) =>
       doc.splitTextToSize(`- ${note}`, pageWidth - margin * 2)
     );
-    const requiredHeight = 10 + wrappedNotes.reduce((height, lines) => height + lines.length * 4, 0);
+    const lineHeight = 4 * scale;
+    const requiredHeight =
+      10 * scale + wrappedNotes.reduce((height, lines) => height + lines.length * lineHeight, 0);
     if (cursorY + requiredHeight > doc.internal.pageSize.getHeight() - 14) {
       doc.addPage();
       cursorY = 14;
     }
     doc.setTextColor(178, 24, 31);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9.5);
+    doc.setFontSize(9.5 * scale);
     doc.text('Atenção', margin, cursorY);
     doc.setTextColor(35, 35, 35);
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    let noteY = cursorY + 5;
+    doc.setFontSize(8 * scale);
+    let noteY = cursorY + 5 * scale;
     wrappedNotes.forEach((lines) => {
-      if (noteY + lines.length * 4 > doc.internal.pageSize.getHeight() - 14) {
+      if (noteY + lines.length * lineHeight > doc.internal.pageSize.getHeight() - 14) {
         doc.addPage();
         noteY = 14;
       }
       doc.text(lines, margin, noteY);
-      noteY += lines.length * 4;
+      noteY += lines.length * lineHeight;
     });
   }
 
@@ -242,8 +305,17 @@ export function createPriceListPdfDocument({
     doc.setTextColor(110, 110, 110);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7);
-    doc.text(`Gerado em ${new Date().toLocaleString('pt-BR')}`, margin, doc.internal.pageSize.getHeight() - 6);
-    doc.text(`Página ${page} de ${totalPages}`, pageWidth - margin, doc.internal.pageSize.getHeight() - 6, { align: 'right' });
+    doc.text(
+      `Gerado em ${new Date().toLocaleString('pt-BR')}`,
+      margin,
+      doc.internal.pageSize.getHeight() - 6
+    );
+    doc.text(
+      `Página ${page} de ${totalPages}`,
+      pageWidth - margin,
+      doc.internal.pageSize.getHeight() - 6,
+      { align: 'right' }
+    );
   }
 
   return doc;
