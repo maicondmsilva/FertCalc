@@ -261,43 +261,62 @@ export async function getEmitentesUsados(numeroPedido: string): Promise<number[]
   return Array.from(usados).sort((a, b) => a - b);
 }
 
+export type NovoPedidoVendaItem = Omit<
+  PedidoVendaItem,
+  | 'id'
+  | 'organization_id'
+  | 'pedido_venda_id'
+  | 'criado_em'
+  | 'quantidade_reservada'
+  | 'quantidade_carregada'
+  | 'saldo_disponivel'
+  | 'saldo_a_carregar'
+>;
+
+/**
+ * Cria o pedido e os produtos numa única transação no banco (criar_pedido_venda).
+ * O banco define dono, status e saldos; quantidades e cancelamentos não vêm da tela.
+ */
 export async function createPedidoVenda(
-  pedido: Omit<PedidoVenda, 'id' | 'criado_em' | 'atualizado_em'>
+  pedido: Omit<PedidoVenda, 'id' | 'criado_em' | 'atualizado_em' | 'status'> & {
+    status?: PedidoVenda['status'];
+  },
+  itens: NovoPedidoVendaItem[]
 ): Promise<PedidoVenda> {
-  const { data, error } = await supabase
-    .from('pedidos_venda')
-    .insert({
+  if (itens.length === 0) {
+    throw new Error('Informe ao menos um produto no pedido.');
+  }
+  const { data: pedidoId, error } = await supabase.rpc('criar_pedido_venda', {
+    p_pedido: {
       precificacao_id: pedido.precificacao_id || null,
-      numero_pedido: pedido.numero_pedido,
-      barra_pedido: pedido.barra_pedido,
-      data_pedido: pedido.data_pedido,
-      data_vencimento: pedido.data_vencimento ?? null,
-      quantidade_real: pedido.quantidade_real,
-      quantidade_original: pedido.quantidade_original ?? pedido.quantidade_real,
-      quantidade_desmembrada: pedido.quantidade_desmembrada ?? 0,
-      quantidade_cancelada_definitiva: pedido.quantidade_cancelada_definitiva ?? 0,
-      embalagem: pedido.embalagem,
-      valor_unitario_negociado: pedido.valor_unitario_negociado,
-      valor_total_negociado: pedido.valor_total_negociado,
-      tipo_frete: pedido.tipo_frete,
-      valor_frete: pedido.valor_frete,
-      status: pedido.status ?? 'pendente',
-      status_pedido: pedido.status_pedido ?? 'ativo',
-      pdf_url: pedido.pdf_url,
-      dados_extraidos: pedido.dados_extraidos,
-      importado_por: pedido.importado_por,
-      // Extended fields
-      cliente_id: pedido.cliente_id,
-      preco_unitario: pedido.preco_unitario,
-      condicao_pagamento: pedido.condicao_pagamento,
-      observacoes: pedido.observacoes,
-      filial_id: pedido.filial_id,
-      formulacao_alterada: pedido.formulacao_alterada,
-      pedido_pai_id: pedido.pedido_pai_id,
+      numero_pedido: pedido.numero_pedido ?? null,
+      barra_pedido: pedido.barra_pedido ?? null,
       emitente: pedido.emitente ?? 1,
-    })
-    .select()
-    .single();
+      data_pedido: pedido.data_pedido ?? null,
+      data_vencimento: pedido.data_vencimento ?? null,
+      embalagem: pedido.embalagem ?? null,
+      valor_unitario_negociado: pedido.valor_unitario_negociado ?? null,
+      valor_total_negociado: pedido.valor_total_negociado ?? null,
+      tipo_frete: pedido.tipo_frete ?? null,
+      valor_frete: pedido.valor_frete ?? null,
+      pdf_url: pedido.pdf_url ?? null,
+      dados_extraidos: pedido.dados_extraidos ?? null,
+      cliente_id: pedido.cliente_id ?? null,
+      preco_unitario: pedido.preco_unitario ?? null,
+      condicao_pagamento: pedido.condicao_pagamento ?? null,
+      observacoes: pedido.observacoes ?? null,
+      filial_id: pedido.filial_id ?? null,
+      formulacao_alterada: pedido.formulacao_alterada ?? false,
+    },
+    p_itens: itens.map((item) => ({
+      produto_nome: item.produto_nome,
+      formulacao: item.formulacao ?? null,
+      quantidade_ton: item.quantidade_ton,
+      preco_unitario: item.preco_unitario ?? null,
+      embalagem: item.embalagem ?? null,
+      precificacao_id: item.precificacao_id ?? null,
+    })),
+  });
   if (error) {
     const errorCode =
       typeof error === 'object' && error !== null && 'code' in error
@@ -308,7 +327,11 @@ export async function createPedidoVenda(
     }
     throw error;
   }
-  return mapPedido(data);
+  if (!pedidoId) throw new Error('O pedido não foi criado.');
+
+  const criado = await getPedidoVendaById(String(pedidoId));
+  if (!criado) throw new Error('O pedido foi criado, mas não pôde ser carregado.');
+  return criado;
 }
 
 export async function updatePedidoVendaProtegido(
@@ -382,25 +405,6 @@ export async function getPedidosPendentes(filialIds?: string[]): Promise<PedidoV
   return (data || []).map(mapPedido);
 }
 
-export async function createPedidoVendaItens(
-  pedidoVendaId: string,
-  itens: Omit<PedidoVendaItem, 'id' | 'pedido_venda_id' | 'criado_em'>[]
-): Promise<void> {
-  if (!itens || itens.length === 0) return;
-  const rows = itens.map((item) => ({
-    pedido_venda_id: pedidoVendaId,
-    produto_nome: item.produto_nome,
-    formulacao: item.formulacao ?? null,
-    quantidade_ton: item.quantidade_ton,
-    saldo_disponivel: item.saldo_disponivel ?? item.quantidade_ton,
-    preco_unitario: item.preco_unitario ?? null,
-    embalagem: item.embalagem ?? null,
-    precificacao_id: item.precificacao_id ?? null,
-  }));
-  const { error } = await supabase.from('pedidos_venda_itens').insert(rows);
-  if (error) throw error;
-}
-
 export async function getPedidoVendaItens(pedidoVendaId: string): Promise<PedidoVendaItem[]> {
   const { data, error } = await supabase
     .from('pedidos_venda_itens')
@@ -444,36 +448,6 @@ function mapCancelamento(d: Record<string, unknown>): CancelamentoPedido {
     usuario_nome: d.usuario_nome as string | undefined,
     criado_em: d.criado_em as string,
   };
-}
-
-export interface CreateCancelamentoPayload {
-  pedido_origem_id: string;
-  pedido_destino_id?: string;
-  tipo: 'canc_substitui' | 'definitivo';
-  quantidade: number;
-  motivo?: string;
-  usuario_id?: string;
-  usuario_nome?: string;
-}
-
-export async function createCancelamento(
-  payload: CreateCancelamentoPayload
-): Promise<CancelamentoPedido> {
-  const { data, error } = await supabase
-    .from('cancelamentos_pedido')
-    .insert({
-      pedido_origem_id: payload.pedido_origem_id,
-      pedido_destino_id: payload.pedido_destino_id ?? null,
-      tipo: payload.tipo,
-      quantidade: payload.quantidade,
-      motivo: payload.motivo ?? null,
-      usuario_id: payload.usuario_id ?? null,
-      usuario_nome: payload.usuario_nome ?? null,
-    })
-    .select()
-    .single();
-  if (error) throw error;
-  return mapCancelamento(data);
 }
 
 export interface GetCancelamentosFilters {
@@ -745,4 +719,3 @@ export async function syncPedidoVendaStatus(pedidoVendaId: string): Promise<void
   });
   if (error) throw error;
 }
-

@@ -5,7 +5,6 @@ import { getClients } from '../services/db';
 import {
   checkPedidoDuplicado,
   createPedidoVenda,
-  createPedidoVendaItens,
   getEmitentesUsados,
 } from '../services/pedidosVendaService';
 import { getProdutosFormulados, ProdutoFormulado } from '../services/produtosFormuladosService';
@@ -312,26 +311,23 @@ export default function NovoPedidoVendaModal({
       const precoPrincipal =
         itens[0].preco_unitario !== '' ? Number(itens[0].preco_unitario) : undefined;
 
-      const pedidoCriado = await createPedidoVenda({
-        precificacao_id: pricing?.id ?? undefined,
-        numero_pedido: numeroPedidoTrim,
-        barra_pedido: barraPedido,
-        emitente: emitenteNum,
-        data_pedido: dataPedido || undefined,
-        data_vencimento: dataVencimento || undefined,
-        cliente_id: clientId || undefined,
-        quantidade_real: totalTon,
-        preco_unitario: precoPrincipal,
-        tipo_frete: tipoFrete,
-        valor_frete: tipoFrete === 'CIF' && valorFrete !== '' ? Number(valorFrete) : undefined,
-        condicao_pagamento: condicaoPagamento.trim() || undefined,
-        observacoes: observacoes.trim() || undefined,
-        status: 'pendente',
-        importado_por: currentUser.id,
-      });
-
-      await createPedidoVendaItens(
-        pedidoCriado.id,
+      await createPedidoVenda(
+        {
+          precificacao_id: pricing?.id ?? undefined,
+          numero_pedido: numeroPedidoTrim,
+          barra_pedido: barraPedido,
+          emitente: emitenteNum,
+          data_pedido: dataPedido || undefined,
+          data_vencimento: dataVencimento || undefined,
+          cliente_id: clientId || undefined,
+          quantidade_real: totalTon,
+          preco_unitario: precoPrincipal,
+          tipo_frete: tipoFrete,
+          valor_frete: tipoFrete === 'CIF' && valorFrete !== '' ? Number(valorFrete) : undefined,
+          condicao_pagamento: condicaoPagamento.trim() || undefined,
+          observacoes: observacoes.trim() || undefined,
+          importado_por: currentUser.id,
+        },
         itens.map((item) => ({
           produto_nome: item.produto_nome.trim(),
           quantidade_ton: Number(item.quantidade_ton),
