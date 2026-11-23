@@ -255,33 +255,60 @@ export default function PricingDetailModal({
     }
     setSavingPedido(true);
     try {
-      const novo = await createPedidoVenda({
-        precificacao_id: selectedPricing.id,
-        numero_pedido: extractedData.numero_pedido || undefined,
-        barra_pedido: extractedData.barra_pedido || undefined,
-        data_pedido: extractedData.data_pedido || undefined,
-        quantidade_real: extractedData.quantidade_real
-          ? parseFloat(extractedData.quantidade_real)
-          : undefined,
-        embalagem: extractedData.embalagem || undefined,
-        valor_unitario_negociado: extractedData.valor_unitario_negociado
-          ? parseFloat(extractedData.valor_unitario_negociado)
-          : undefined,
-        valor_total_negociado: extractedData.valor_total_negociado
-          ? parseFloat(extractedData.valor_total_negociado)
-          : undefined,
-        tipo_frete: extractedData.tipo_frete || undefined,
-        valor_frete: extractedData.valor_frete ? parseFloat(extractedData.valor_frete) : undefined,
-        status: 'pendente',
-        importado_por: currentUser.id,
-        dados_extraidos: extractedData,
-      });
+      const quantidade = extractedData.quantidade_real
+        ? parseFloat(extractedData.quantidade_real)
+        : 0;
+      if (!(quantidade > 0)) {
+        showError('Informe a quantidade do pedido.');
+        return;
+      }
+      const valorUnitario = extractedData.valor_unitario_negociado
+        ? parseFloat(extractedData.valor_unitario_negociado)
+        : undefined;
+      // O pedido nasce com o produto da precificação: sem produto, o saldo
+      // ficava zerado e o pedido aparecia como concluído.
+      const produto = getCalculationFormulaLabel(selectedPricing.calculations?.[0] || {});
+      const novo = await createPedidoVenda(
+        {
+          precificacao_id: selectedPricing.id,
+          numero_pedido: extractedData.numero_pedido || undefined,
+          barra_pedido: extractedData.barra_pedido || undefined,
+          data_pedido: extractedData.data_pedido || undefined,
+          quantidade_real: quantidade,
+          embalagem: extractedData.embalagem || undefined,
+          valor_unitario_negociado: valorUnitario,
+          valor_total_negociado: extractedData.valor_total_negociado
+            ? parseFloat(extractedData.valor_total_negociado)
+            : undefined,
+          tipo_frete: extractedData.tipo_frete || undefined,
+          valor_frete: extractedData.valor_frete
+            ? parseFloat(extractedData.valor_frete)
+            : undefined,
+          cliente_id: selectedPricing.factors?.client?.id || undefined,
+          importado_por: currentUser.id,
+          dados_extraidos: extractedData,
+        },
+        [
+          {
+            produto_nome: produto,
+            formulacao: produto,
+            quantidade_ton: quantidade,
+            preco_unitario: valorUnitario,
+            embalagem: extractedData.embalagem || undefined,
+            precificacao_id: selectedPricing.id,
+          },
+        ]
+      );
       setPedidoVenda(novo);
       showSuccess('Pedido de Venda vinculado com sucesso!');
       setShowPdfImportModal(false);
       setExtractedData(null);
-    } catch {
-      showError('Erro ao salvar pedido de venda. Verifique número e emitente.');
+    } catch (error) {
+      const message =
+        error && typeof error === 'object' && 'message' in error
+          ? String((error as { message: unknown }).message)
+          : 'Verifique número e emitente.';
+      showError(`Erro ao salvar pedido de venda: ${message}`);
     } finally {
       setSavingPedido(false);
     }

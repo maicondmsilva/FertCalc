@@ -470,22 +470,6 @@ export async function getHistoricoCarregamento(
   return data as HistoricoCarregamento[];
 }
 
-export async function addHistorico(
-  carregamentoId: string,
-  statusAnterior: string | undefined,
-  statusNovo: string,
-  descricao: string,
-  alteradoPor: string
-): Promise<void> {
-  await supabase.from('historico_carregamento').insert({
-    carregamento_id: carregamentoId,
-    status_anterior: statusAnterior,
-    status_novo: statusNovo,
-    descricao,
-    alterado_por: alteradoPor,
-  });
-}
-
 // ─────────────────────────────────────────────────────────────
 //  KPIs
 // ─────────────────────────────────────────────────────────────
