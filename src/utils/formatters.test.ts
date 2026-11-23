@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { formatDocument, formatPhone, formatCEP, formatNPK } from './formatters';
+import {
+  formatDocument,
+  formatPhone,
+  formatCEP,
+  formatGuarantee,
+  formatNPK,
+  truncateGuarantee,
+} from './formatters';
 
 describe('formatDocument', () => {
   it('formata CPF corretamente', () => {
@@ -61,5 +68,25 @@ describe('formatNPK', () => {
   it('usa separador - entre os valores', () => {
     const result = formatNPK('04-14-08', 4, 14, 8);
     expect(result).toBe('04-14-08');
+  });
+});
+
+describe('garantia real (sem arredondar para cima)', () => {
+  // Batida 05-25-15: Map 332,26 kg + Ureia 50 kg → N = 5,9548...%
+  const realN = (332.26 * 0.11 + 50 * 0.46) / 10;
+
+  it('mostra 5,95 e nunca 6,0 ou 5,96', () => {
+    expect(realN).toBeCloseTo(5.9549, 3);
+    expect(truncateGuarantee(realN)).toBe(5.95);
+    expect(formatGuarantee(realN)).toBe('5,95');
+    expect(formatNPK('05-25-15', realN, 25, 15)).toBe('5,95-25-15');
+  });
+
+  it('não transforma valores exatos em um a menos por imprecisão', () => {
+    expect(formatGuarantee(25)).toBe('25,00');
+    expect(formatGuarantee(0.1 + 0.2)).toBe('0,30');
+    expect(formatGuarantee(14.999999999)).toBe('15,00');
+    expect(formatGuarantee(24.9999993)).toBe('25,00');
+    expect(formatGuarantee(2.9449)).toBe('2,94');
   });
 });

@@ -80,6 +80,24 @@ export const lookupCEP = async (cep: string) => {
   return null;
 };
 
+/**
+ * Garantia exibida: corta nas casas decimais pedidas, sem arredondar para cima,
+ * para nunca mostrar mais nutriente do que a mistura realmente entrega.
+ * O pequeno ajuste evita que 24,999999 (precisão do otimizador) apareça como 24,99.
+ */
+export const truncateGuarantee = (value: number, decimals = 2): number => {
+  const factor = 10 ** decimals;
+  // Tolera imprecisões de até 0,000001 ponto (do otimizador e de ponto flutuante).
+  return Math.floor((Number(value) || 0) * factor + 1e-4) / factor;
+};
+
+/** Garantia formatada em pt-BR com casas fixas e sem arredondar para cima. */
+export const formatGuarantee = (value: number | undefined, decimals = 2): string =>
+  truncateGuarantee(Number(value) || 0, decimals).toLocaleString('pt-BR', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+
 export const formatNPK = (
   targetFormula: string,
   resultingN: number,
@@ -92,12 +110,13 @@ export const formatNPK = (
   const tK = parts[2] || '0';
 
   const formatPart = (targetPart: string, val: number) => {
-    const rounded = Number((val || 0).toFixed(2));
-    if (Number.isInteger(rounded)) {
-      if (Number(targetPart) === rounded) return targetPart;
-      return rounded.toString();
+    // Garantia real: corta na 2ª casa, nunca arredonda para cima (5,9548 → 5,95).
+    const truncated = truncateGuarantee(val);
+    if (Number.isInteger(truncated)) {
+      if (Number(targetPart) === truncated) return targetPart;
+      return truncated.toString();
     }
-    return rounded.toString().replace('.', ',');
+    return truncated.toString().replace('.', ',');
   };
 
   return `${formatPart(tN, resultingN)}-${formatPart(tP, resultingP)}-${formatPart(tK, resultingK)}`;

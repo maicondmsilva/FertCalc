@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { PricingRecord, SavedFormula, User as AppUser, Embalagem } from '../types';
 import { useToast } from './Toast';
-import { formatNPK } from '../utils/formatters';
+import { formatGuarantee, formatNPK } from '../utils/formatters';
 import { FertigranPComparisonModal } from './FertigranPComparisonModal';
 import { CalculatorSettingsModal } from './CalculatorSettingsModal';
 import ProfitabilityModal from './ProfitabilityModal';
@@ -2319,12 +2319,12 @@ export default function Calculator({
                               </span>
                               {(calc.summary.resultingCa || 0) > 0 && (
                                 <span className="px-2 py-1 bg-amber-50 text-amber-700 rounded text-xs font-bold">
-                                  CA: {calc.summary.resultingCa.toFixed(2)}%
+                                  CA: {formatGuarantee(calc.summary.resultingCa)}%
                                 </span>
                               )}
                               {(calc.summary.resultingS || 0) > 0 && (
                                 <span className="px-2 py-1 bg-yellow-50 text-yellow-700 rounded text-xs font-bold">
-                                  S: {calc.summary.resultingS.toFixed(2)}%
+                                  S: {formatGuarantee(calc.summary.resultingS)}%
                                 </span>
                               )}
                               <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded text-xs font-bold">
@@ -2343,15 +2343,15 @@ export default function Calculator({
                                 const deviations: string[] = [];
                                 if (!isWithinGuaranteeRange(tN, calc.summary.resultingN))
                                   deviations.push(
-                                    `N: ${calc.summary.resultingN.toFixed(2)} (alvo ${tN})`
+                                    `N: ${formatGuarantee(calc.summary.resultingN)} (alvo ${tN})`
                                   );
                                 if (!isWithinGuaranteeRange(tP, calc.summary.resultingP))
                                   deviations.push(
-                                    `P: ${calc.summary.resultingP.toFixed(2)} (alvo ${tP})`
+                                    `P: ${formatGuarantee(calc.summary.resultingP)} (alvo ${tP})`
                                   );
                                 if (!isWithinGuaranteeRange(tK, calc.summary.resultingK))
                                   deviations.push(
-                                    `K: ${calc.summary.resultingK.toFixed(2)} (alvo ${tK})`
+                                    `K: ${formatGuarantee(calc.summary.resultingK)} (alvo ${tK})`
                                   );
                                 if (deviations.length === 0)
                                   return (
@@ -2466,12 +2466,12 @@ export default function Calculator({
                             (calc.summary.resultingS || 0) > 0) && (
                             <p className="text-[9px] text-stone-500">
                               {(calc.summary.resultingCa || 0) > 0 &&
-                                `CA:${calc.summary.resultingCa.toFixed(1)}%`}
+                                `CA:${formatGuarantee(calc.summary.resultingCa)}%`}
                               {(calc.summary.resultingCa || 0) > 0 &&
                                 (calc.summary.resultingS || 0) > 0 &&
                                 ' '}
                               {(calc.summary.resultingS || 0) > 0 &&
-                                `S:${calc.summary.resultingS.toFixed(1)}%`}
+                                `S:${formatGuarantee(calc.summary.resultingS)}%`}
                             </p>
                           )}
                         </div>
@@ -2803,15 +2803,15 @@ export default function Calculator({
                           <div className="mt-3 grid grid-cols-3 gap-1 text-center text-[9px]">
                             <span className="rounded bg-stone-900 px-1 py-1 text-stone-200">
                               N {requestedTarget?.n.toFixed(2)} →{' '}
-                              {calc.approximation.summary.resultingN.toFixed(2)}%
+                              {formatGuarantee(calc.approximation.summary.resultingN)}%
                             </span>
                             <span className="rounded bg-stone-900 px-1 py-1 text-stone-200">
                               P {requestedTarget?.p.toFixed(2)} →{' '}
-                              {calc.approximation.summary.resultingP.toFixed(2)}%
+                              {formatGuarantee(calc.approximation.summary.resultingP)}%
                             </span>
                             <span className="rounded bg-stone-900 px-1 py-1 text-stone-200">
                               K {requestedTarget?.k.toFixed(2)} →{' '}
-                              {calc.approximation.summary.resultingK.toFixed(2)}%
+                              {formatGuarantee(calc.approximation.summary.resultingK)}%
                             </span>
                           </div>
                           <div className="mt-2 flex flex-wrap gap-1">
@@ -2939,13 +2939,13 @@ export default function Calculator({
                                     <>
                                       <div className="mt-2 grid grid-cols-3 gap-1 text-center text-[9px] text-stone-300">
                                         <span className="rounded bg-stone-900 px-1 py-1">
-                                          N {alternativeSummary.resultingN.toFixed(2)}%
+                                          N {formatGuarantee(alternativeSummary.resultingN)}%
                                         </span>
                                         <span className="rounded bg-stone-900 px-1 py-1">
-                                          P {alternativeSummary.resultingP.toFixed(2)}%
+                                          P {formatGuarantee(alternativeSummary.resultingP)}%
                                         </span>
                                         <span className="rounded bg-stone-900 px-1 py-1">
-                                          K {alternativeSummary.resultingK.toFixed(2)}%
+                                          K {formatGuarantee(alternativeSummary.resultingK)}%
                                         </span>
                                       </div>
                                       <div className="mt-2 flex flex-wrap gap-1">

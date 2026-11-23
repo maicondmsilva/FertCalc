@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf';
+import { formatGuarantee } from './formatters';
 import { getCompanyDisplayName } from './companyBranding';
 import html2canvas from 'html2canvas';
 import { PricingRecord, AppSettings } from '../types';
@@ -111,10 +112,10 @@ export const generatePricingPDF = (
               : '';
           const color =
             item.status === 'met' ? '#047857' : item.status === 'divergent' ? '#b45309' : '#334155';
-          return `<span style="display:inline-block;margin:2px 5px 2px 0;padding:3px 7px;border:1px solid ${color}40;border-radius:5px;color:${color};font-weight:700;">${item.label}: ${fmtN(item.calculated)}%${targetText}</span>`;
+          return `<span style="display:inline-block;margin:2px 5px 2px 0;padding:3px 7px;border:1px solid ${color}40;border-radius:5px;color:${color};font-weight:700;">${item.label}: ${formatGuarantee(item.calculated)}%${targetText}</span>`;
         })
         .join('');
-      const npk = `${fmtN(Number(summary.resultingN))}-${fmtN(Number(summary.resultingP))}-${fmtN(Number(summary.resultingK))}`;
+      const npk = `${formatGuarantee(Number(summary.resultingN))}-${formatGuarantee(Number(summary.resultingP))}-${formatGuarantee(Number(summary.resultingK))}`;
       return `
         <tr style="background:${index % 2 === 0 ? '#fff' : '#f9fafb'};border-bottom:1px solid #e5e7eb;">
           <td style="padding:6px;font-weight:800;white-space:nowrap;">${calc.formula}</td>

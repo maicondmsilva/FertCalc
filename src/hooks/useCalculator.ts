@@ -32,7 +32,7 @@ import {
   getAppSettings,
 } from '../services/db';
 import { useToast } from '../components/Toast';
-import { formatNPK } from '../utils/formatters';
+import { formatGuarantee, formatNPK } from '../utils/formatters';
 import {
   addProdutoLivre,
   applyCalculationModeChange,
@@ -1209,8 +1209,9 @@ export function useCalculator({
     });
     const caParts: string[] = [];
     if ((targetCa || 0) > 0 && (resultingCa || 0) > 0)
-      caParts.push(`CA: ${resultingCa!.toFixed(2)}%`);
-    if ((targetS || 0) > 0 && (resultingS || 0) > 0) caParts.push(`S: ${resultingS!.toFixed(2)}%`);
+      caParts.push(`CA: ${formatGuarantee(resultingCa!)}%`);
+    if ((targetS || 0) > 0 && (resultingS || 0) > 0)
+      caParts.push(`S: ${formatGuarantee(resultingS!)}%`);
 
     let caStr = '';
     if (caParts.length > 0) {
@@ -1219,7 +1220,7 @@ export function useCalculator({
 
     const microParts = Object.entries(resultingMicros || {})
       .filter(([_, val]) => (val as number) > 0)
-      .map(([name, val]) => `${name}: ${(val as number).toFixed(2)}%`);
+      .map(([name, val]) => `${name}: ${formatGuarantee(val as number)}%`);
 
     let microStr = '';
     if (microParts.length > 0) {
