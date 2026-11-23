@@ -42,7 +42,9 @@ export function calculateProfitability(
 ): ProfitabilityResult {
   const unitaryPrice = numeric(input.unitaryPrice);
   const freightDeduction = numeric(input.freightDeduction);
-  const baseCostAfterFactor = roundMoney(numeric(input.baseCost) * numeric(input.factor));
+  // Fator vazio ou zero vale 1 (como no cálculo do preço), para não zerar o custo.
+  const factor = numeric(input.factor) > 0 ? numeric(input.factor) : 1;
+  const baseCostAfterFactor = roundMoney(numeric(input.baseCost) * factor);
   const daysOfInterest = calculateInterestDays(
     input.dueDate,
     Boolean(input.exemptCurrentMonth),

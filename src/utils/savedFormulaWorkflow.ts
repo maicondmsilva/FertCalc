@@ -1,5 +1,9 @@
-import type { PriceList, PricingFactors, SavedFormula } from '../types';
-import { applyCommercialWaterfall, calculateInterestDays } from '../domain/pricing-engine';
+import type { PriceList, PriceListCurrency, PricingFactors, SavedFormula } from '../types';
+import {
+  applyCommercialWaterfall,
+  calculateInterestDays,
+  roundMoney,
+} from '../domain/pricing-engine';
 
 export type ReportCommercialFactors = Pick<
   PricingFactors,
@@ -44,10 +48,16 @@ export const DEFAULT_REPORT_COMMERCIAL_FACTORS: ReportCommercialFactors = {
   embalagem_ajuste: 'nenhum',
 };
 
+/**
+ * Preço final do relatório de batidas, com a mesma regra da calculadora: em lista
+ * em dólar com câmbio válido, embalagem e frete são valores em reais (R$/t), o
+ * custo convertido entra em reais na cascata e o preço volta para dólar no final.
+ */
 export function calculateReportPrice(
   baseCost: number,
   factors: ReportCommercialFactors,
-  today = new Date()
+  today = new Date(),
+  currency: { currency?: PriceListCurrency; exchangeRate?: number } = {}
 ): number {
   const days = calculateInterestDays(
     factors.dueDate,
@@ -56,9 +66,14 @@ export function calculateReportPrice(
     factors.interestStartDate
   );
   const freight = factors.tipoFrete === 'CIF' ? Number(factors.freight || 0) : 0;
-  return applyCommercialWaterfall({
-    adjustedCost: baseCost * (Number(factors.factor) || 1),
-    discount: factors.discount,
+  const adjustedCost = baseCost * (Number(factors.factor) || 1);
+  const exchangeRate = Number(currency.exchangeRate);
+  const isMixedCurrency = currency.currency === 'USD' && exchangeRate > 0;
+  const finalPrice = applyCommercialWaterfall({
+    adjustedCost: isMixedCurrency
+      ? (adjustedCost - Number(factors.discount || 0)) * exchangeRate
+      : adjustedCost,
+    discount: isMixedCurrency ? 0 : factors.discount,
     packagingAdjustment: factors.embalagem_valor,
     monthlyInterestRate: factors.monthlyInterestRate,
     interestDays: days,
@@ -66,6 +81,7 @@ export function calculateReportPrice(
     taxRate: factors.taxRate,
     freight,
   }).finalPrice;
+  return isMixedCurrency ? roundMoney(finalPrice / exchangeRate) : finalPrice;
 }
 
 export function getPriceListsForLoadingLocation(

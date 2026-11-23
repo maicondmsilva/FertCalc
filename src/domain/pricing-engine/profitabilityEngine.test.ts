@@ -15,6 +15,14 @@ const input = {
 };
 
 describe('profitability engine', () => {
+  it('trata fator zero ou vazio como 1 para não zerar o custo', () => {
+    const today = { today: new Date('2026-01-16T12:00:00') };
+    const withOne = calculateProfitability(input, today);
+    expect(calculateProfitability({ ...input, factor: 0 }, today).baseCostAfterFactor).toBe(
+      withOne.baseCostAfterFactor
+    );
+  });
+
   it('calcula deduções e rentabilidade com data determinística', () => {
     const result = calculateProfitability(input, { today: new Date('2026-01-16T12:00:00') });
     expect(result.daysOfInterest).toBe(30);

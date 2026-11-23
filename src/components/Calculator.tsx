@@ -439,10 +439,9 @@ export default function Calculator({
   const isUsdPriceList = factors.priceListCurrency === 'USD';
   const hasValidExchangeRate = !isUsdPriceList || isValidExchangeRate(factors.appliedExchangeRate);
   const pricingCurrencySymbol = isUsdPriceList ? 'US$' : 'R$';
-  const convertRegisteredBRLToPricingCurrency = (value: number) =>
-    isUsdPriceList && isValidExchangeRate(factors.appliedExchangeRate)
-      ? value / Number(factors.appliedExchangeRate)
-      : value;
+  // Embalagem e frete ficam em reais por tonelada, também em listas em dólar:
+  // o motor soma esses valores em reais e só depois converte o preço para dólar.
+  const convertRegisteredBRLToPricingCurrency = (value: number) => value;
 
   const updateAppliedExchangeRate = (rawValue: string, source: 'list' | 'manual') => {
     setExchangeRateInput(rawValue);
@@ -1921,7 +1920,7 @@ export default function Calculator({
                                   placeholder={
                                     calc.factors.cotacaoFreteNumero
                                       ? `🔗 ${calc.factors.cotacaoFreteNumero} — editável`
-                                      : `${pricingCurrencySymbol}/ton — digite ou vincule cotação`
+                                      : `R$/ton — digite ou vincule cotação`
                                   }
                                   value={calc.factors.freight === 0 ? '' : calc.factors.freight}
                                   onChange={(e) => {
@@ -1946,7 +1945,7 @@ export default function Calculator({
                                 <div className="flex items-center gap-1 mt-1 text-[10px] text-emerald-700 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">
                                   <Truck className="w-3 h-3 shrink-0" />
                                   <span className="flex-1 truncate">
-                                    ✓ {calc.factors.cotacaoFreteNumero} · {pricingCurrencySymbol}{' '}
+                                    ✓ {calc.factors.cotacaoFreteNumero} · R${' '}
                                     {(calc.factors.freight || 0).toFixed(2)}/t
                                   </span>
                                   <button
@@ -2089,8 +2088,8 @@ export default function Calculator({
                                           {ajusteAtual === 'nenhum'
                                             ? 'Sem ajuste'
                                             : (calc.factors.embalagem_valor || 0) >= 0
-                                              ? `Cobrar +${pricingCurrencySymbol} ${(calc.factors.embalagem_valor || 0).toFixed(2)}/t`
-                                              : `Descontar -${pricingCurrencySymbol} ${Math.abs(calc.factors.embalagem_valor || 0).toFixed(2)}/t`}
+                                              ? `Cobrar +R$ ${(calc.factors.embalagem_valor || 0).toFixed(2)}/t`
+                                              : `Descontar -R$ ${Math.abs(calc.factors.embalagem_valor || 0).toFixed(2)}/t`}
                                         </span>
                                       </div>
                                     )}
