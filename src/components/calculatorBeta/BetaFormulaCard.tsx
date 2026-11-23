@@ -18,6 +18,7 @@ import type { Embalagem, SavedFormula, TargetFormula } from '../../types';
 import type { ProdutoFormulado } from '../../services/produtosFormuladosService';
 import type { FormulaComparisonAlternative } from '../../utils/formulaComparison';
 import { getCalculationMode } from '../../utils/calculationMode';
+import { formatGuarantee } from '../../utils/formatters';
 import { NPK_UPPER_TOLERANCE, SECONDARY_UPPER_TOLERANCE } from '../../domain/pricing-engine';
 import {
   formatMicronutrientLabel,
@@ -166,11 +167,11 @@ function GuaranteeTile({
       <p
         className={`mt-1 font-black tabular-nums text-stone-900 ${large ? 'text-2xl' : 'text-xl'}`}
       >
-        {obtained === undefined ? '—' : formatPercent(obtained, large ? 1 : 2)}
+        {obtained === undefined ? '—' : formatGuarantee(obtained)}
         <span className="ml-0.5 text-sm font-bold text-stone-400">%</span>
       </p>
       <p className="text-xs text-stone-500">
-        {Number(target) > 0 ? `alvo ${formatPercent(target, large ? 1 : 2)} %` : 'sem alvo'}
+        {Number(target) > 0 ? `alvo ${formatGuarantee(target)} %` : 'sem alvo'}
       </p>
     </div>
   );
@@ -834,7 +835,7 @@ export default function BetaFormulaCard({
                             ? 'Sem produto fonte selecionado'
                             : status === 'pending'
                               ? 'Aguardando cálculo'
-                              : `Obtido ${formatPercent(calculated, 2)} %`}
+                              : `Obtido ${formatGuarantee(calculated)} %`}
                         </span>
                       )}
                     </label>
@@ -1014,10 +1015,10 @@ export default function BetaFormulaCard({
                           : 'border-amber-200 bg-amber-50 text-amber-800'
                       }`}
                     >
-                      {name} {formatPercent(obtained, 2)}
+                      {name} {formatGuarantee(obtained)}
                       <span className="font-medium text-stone-500">
                         {' '}
-                        / {formatPercent(targetValue, 2)}
+                        / {formatGuarantee(targetValue)}
                       </span>
                     </span>
                   );

@@ -25,7 +25,7 @@ import {
   CheckCircle as CheckCircleIcon,
 } from 'lucide-react';
 import NovoPedidoVendaModal from './NovoPedidoVendaModal';
-import { formatNPK } from '../utils/formatters';
+import { formatGuarantee, formatNPK } from '../utils/formatters';
 import {
   formatDatePtBr,
   getPedidoVendaDueDate,
@@ -1598,19 +1598,19 @@ export default function PricingDetailModal({
                       <div className="p-3 bg-stone-800 rounded-xl">
                         <p className="text-[10px] text-stone-500 font-bold mb-1">NITROGÊNIO (N)</p>
                         <p className="text-xl font-mono font-bold">
-                          {Number(calcSummary.resultingN).toFixed(2)}%
+                          {formatGuarantee(calcSummary.resultingN)}%
                         </p>
                       </div>
                       <div className="p-3 bg-stone-800 rounded-xl">
                         <p className="text-[10px] text-stone-500 font-bold mb-1">FÓSFORO (P)</p>
                         <p className="text-xl font-mono font-bold">
-                          {Number(calcSummary.resultingP).toFixed(2)}%
+                          {formatGuarantee(calcSummary.resultingP)}%
                         </p>
                       </div>
                       <div className="p-3 bg-stone-800 rounded-xl">
                         <p className="text-[10px] text-stone-500 font-bold mb-1">POTÁSSIO (K)</p>
                         <p className="text-xl font-mono font-bold">
-                          {Number(calcSummary.resultingK).toFixed(2)}%
+                          {formatGuarantee(calcSummary.resultingK)}%
                         </p>
                       </div>
                       {guaranteeComparisons.map((guarantee) => (
@@ -1628,7 +1628,7 @@ export default function PricingDetailModal({
                             {guarantee.label}
                           </p>
                           <p className="text-xl font-mono font-bold">
-                            {guarantee.calculated.toFixed(2)}%
+                            {formatGuarantee(guarantee.calculated)}%
                           </p>
                           {guarantee.target !== undefined && (
                             <p
@@ -1670,7 +1670,7 @@ export default function PricingDetailModal({
                             key={`${item.nutrient}-${item.target}`}
                             className="rounded-md border border-amber-200 bg-white px-2 py-1 text-[11px] font-bold text-amber-800"
                           >
-                            {item.nutrient}: {item.calculated.toFixed(2)}% · alvo{' '}
+                            {item.nutrient}: {formatGuarantee(item.calculated)}% · alvo{' '}
                             {item.target.toFixed(2)}%
                           </span>
                         ))}
@@ -1984,7 +1984,8 @@ export default function PricingDetailModal({
                                     className="rounded border border-violet-200 bg-white px-2 py-1 text-[10px] font-bold text-violet-800"
                                   >
                                     {divergence.nutrient}:{' '}
-                                    {Number(divergence.calculated || 0).toFixed(2)}%{' · alvo '}
+                                    {formatGuarantee(Number(divergence.calculated || 0))}%
+                                    {' · alvo '}
                                     {Number(divergence.target || 0).toFixed(2)}%
                                   </span>
                                 ))}
