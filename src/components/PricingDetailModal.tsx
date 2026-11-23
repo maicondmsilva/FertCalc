@@ -62,6 +62,7 @@ import {
 } from '../services/pricingHistoryService';
 import { buildGuaranteeComparisons } from '../utils/guaranteeComparison';
 import { getAuditLogs, type AuditLogEntry } from '../services/auditService';
+import { canDecidePricing, describeApprovalError } from '../utils/pricingApprovalRules';
 
 interface PricingDetailModalProps {
   selectedPricing: PricingRecord;
@@ -440,7 +441,7 @@ export default function PricingDetailModal({
         setIsRejecting(false);
         setRejectionReason('');
       } catch (err) {
-        showError('Erro ao atualizar status de aprovação.');
+        showError(describeApprovalError(err));
       }
     }
   };
@@ -1072,10 +1073,7 @@ export default function PricingDetailModal({
 
         <div className="flex-1 overflow-y-auto p-6 space-y-8">
           {/* Approval Section for Managers */}
-          {(currentUser.role === 'master' ||
-            currentUser.role === 'admin' ||
-            currentUser.role === 'manager' ||
-            (currentUser.permissions as any)?.approvals_canApprove) &&
+          {canDecidePricing(currentUser, selectedPricing) &&
             onUpdateApproval &&
             selectedPricing.approvalStatus === 'Pendente' && (
               <div className="bg-amber-50 p-4 rounded-xl border border-amber-200">

@@ -31,6 +31,7 @@ import { closeModalOnBackdrop } from '../utils/modalUtils';
 import { formatDatePtBr, getPricingDueDate } from '../utils/pricingDisplay';
 import { formatPricingMoney, getPricingCurrency } from '../utils/pricingCurrency';
 import { getPricingGuaranteeAuthorizationSummary } from '../utils/guaranteeAuthorization';
+import { canDecidePricing, describeApprovalError } from '../utils/pricingApprovalRules';
 import {
   decideGuaranteeAuthorizationRequest,
   getGuaranteeAuthorizationRequests,
@@ -44,9 +45,9 @@ interface ApprovalsProps {
 export default function Approvals({ currentUser }: ApprovalsProps) {
   const { showSuccess, showError } = useToast();
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
-  const [activeTab, setActiveTab] = useState<
-    'pricings' | 'guarantees' | 'goals' | 'deletions'
-  >('pricings');
+  const [activeTab, setActiveTab] = useState<'pricings' | 'guarantees' | 'goals' | 'deletions'>(
+    'pricings'
+  );
   const [allPricings, setAllPricings] = useState<PricingRecord[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [selectedPricing, setSelectedPricing] = useState<PricingRecord | null>(null);
@@ -194,8 +195,8 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
       if (selectedPricing?.id === id) setSelectedPricing(null);
       showSuccess(`Precificação ${newStatus.toLowerCase()} com sucesso!`);
       loadData(); // Refresh to ensure sync
-    } catch {
-      showError('Erro ao processar aprovação.');
+    } catch (error) {
+      showError(describeApprovalError(error));
     }
   };
 
@@ -389,9 +390,7 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
         type: 'pricing_approval',
         dataId: reviewed.id,
       });
-      setGuaranteeRequests((previous) =>
-        previous.filter((request) => request.id !== reviewed.id)
-      );
+      setGuaranteeRequests((previous) => previous.filter((request) => request.id !== reviewed.id));
       setReviewingGuaranteeRequest(null);
       setGuaranteeReviewReason('');
       showSuccess(
@@ -559,14 +558,18 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
                             ?.authorizedByUserName || 'Usuário não identificado'}
                         </strong>
                         {' · '}
-                        {getPricingGuaranteeAuthorizationSummary(p).latestAuthorization?.authorizedAt
+                        {getPricingGuaranteeAuthorizationSummary(p).latestAuthorization
+                          ?.authorizedAt
                           ? new Date(
                               getPricingGuaranteeAuthorizationSummary(p).latestAuthorization!
                                 .authorizedAt
                             ).toLocaleString('pt-BR')
                           : 'Data não informada'}
                         {' · '}
-                        {getPricingGuaranteeAuthorizationSummary(p).latestAuthorization?.justification}
+                        {
+                          getPricingGuaranteeAuthorizationSummary(p).latestAuthorization
+                            ?.justification
+                        }
                       </p>
                     </div>
                   )}
@@ -625,7 +628,15 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
                   >
                     📋
                   </button>
-                  {canApprove && (
+                  {canApprove && !canDecidePricing(currentUser, p) && (
+                    <span
+                      className="px-2 py-1 text-[11px] font-semibold text-stone-500"
+                      title="Outro aprovador precisa decidir sobre a sua precificação."
+                    >
+                      Aguardando outro aprovador
+                    </span>
+                  )}
+                  {canDecidePricing(currentUser, p) && (
                     <>
                       <button
                         onClick={() => handlePricingApproval(p.id, 'Aprovada')}
@@ -747,7 +758,11 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
           selectedPricing={selectedPricing}
           currentUser={currentUser}
           onClose={() => setSelectedPricing(null)}
-          onUpdateApproval={handlePricingApproval}
+          onUpdateApproval={() => {
+            // O modal já gravou a decisão; aqui só atualiza a lista.
+            setSelectedPricing(null);
+            loadData();
+          }}
           appSettings={appSettings}
         />
       )}

@@ -38,6 +38,23 @@ describe('calculateReportPrice', () => {
       })
     ).toBe(1000);
   });
+
+  it('em lista em dólar soma embalagem e frete em reais e devolve o preço em dólar', () => {
+    const result = calculateReportPrice(
+      100,
+      {
+        ...DEFAULT_REPORT_COMMERCIAL_FACTORS,
+        factor: 1,
+        freight: 50,
+        tipoFrete: 'CIF',
+        embalagem_valor: 20,
+      },
+      new Date('2026-09-01T12:00:00'),
+      { currency: 'USD', exchangeRate: 5 }
+    );
+    // (100 US$ × 5 + R$ 20 + R$ 50) ÷ 5
+    expect(result).toBe(114);
+  });
 });
 
 const material = (id: string, type: 'macro' | 'micro'): RawMaterial => ({

@@ -1516,6 +1516,9 @@ export function useCalculator({
         approvedGuaranteeRequest?.reviewReason || overrideJustification!.trim();
       historyEntry.action += ` · Divergência de garantias autorizada por ${authorizationUserName}: ${authorizationReason}`;
     }
+    if (initialData?.approvalStatus === 'Aprovada') {
+      historyEntry.action += ' · Aprovação anterior cancelada; voltou para aprovação';
+    }
     const selectedCalculation = selectedCalculations[0];
 
     // Merge global factors with selected calculation's factors (CIF/FOB, freight)
@@ -1540,10 +1543,9 @@ export function useCalculator({
       userCode: currentUser.nickname,
       date: initialData?.date || new Date().toISOString(),
       status,
-      approvalStatus:
-        initialData?.approvalStatus === 'Reprovada'
-          ? 'Pendente'
-          : initialData?.approvalStatus || 'Pendente',
+      // Salvar de novo uma precificação aprovada ou reprovada a devolve para
+      // aprovação (o banco aplica a mesma regra).
+      approvalStatus: 'Pendente',
       macros,
       micros,
       factors: mergedFactors,

@@ -2,7 +2,6 @@ import React from 'react';
 import { CalendarClock, Package, Percent, Truck, X } from 'lucide-react';
 import type { Embalagem, PricingFactors, TargetFormula } from '../../types';
 import { calculateInterestDays } from '../../domain/pricing-engine';
-import { isValidExchangeRate } from '../../utils/priceListCurrency';
 import { formatMoney } from './betaCalculatorModel';
 import type { BetaCalculator } from './SimplifiedCalculatorBeta';
 
@@ -141,17 +140,13 @@ export default function BetaConditionsPanel({
       : (factors.embalagem_valor || 0) < 0
         ? 'descontar'
         : 'nenhum');
-  // Mesma conversão da calculadora oficial para listas em dólar.
-  const toPricingCurrency = (value: number) =>
-    isUsd && isValidExchangeRate(globalFactors.appliedExchangeRate)
-      ? value / Number(globalFactors.appliedExchangeRate)
-      : value;
+  // Embalagem fica em reais por tonelada, também em listas em dólar (regra do motor).
   const packageValue = (embalagem: Embalagem, adjustment: 'nenhum' | 'cobrar' | 'descontar') => {
     if (adjustment === 'cobrar' && embalagem.cobrar) {
-      return toPricingCurrency(Number(embalagem.valor_cobrar ?? embalagem.valor ?? 0));
+      return Number(embalagem.valor_cobrar ?? embalagem.valor ?? 0);
     }
     if (adjustment === 'descontar' && (embalagem.descontar ?? embalagem.desconto)) {
-      return -toPricingCurrency(Number(embalagem.valor_descontar ?? embalagem.valor ?? 0));
+      return -Number(embalagem.valor_descontar ?? embalagem.valor ?? 0);
     }
     return 0;
   };
@@ -258,7 +253,7 @@ export default function BetaConditionsPanel({
                 }}
               />
             </div>
-            <Field label="Valor" unit={`${currencySymbol}/t`}>
+            <Field label="Valor" unit="R$/t">
               <input
                 type="number"
                 step="0.01"
@@ -436,9 +431,7 @@ export default function BetaConditionsPanel({
               {packageAdjustment !== 'nenhum' && (
                 <p className="mt-1.5 text-sm text-stone-600">
                   {packageAdjustment === 'cobrar' ? 'Acréscimo' : 'Desconto'} de{' '}
-                  <strong>
-                    {formatMoney(Math.abs(factors.embalagem_valor || 0), isUsd ? 'USD' : 'BRL')}/t
-                  </strong>
+                  <strong>{formatMoney(Math.abs(factors.embalagem_valor || 0), 'BRL')}/t</strong>
                 </p>
               )}
             </div>

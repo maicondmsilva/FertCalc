@@ -38,6 +38,10 @@ const parseMoneyInput = (value: string): number => {
 
 const formatMoneyInput = (value: number): string => value.toFixed(2).replace('.', ',');
 
+/** No FOB o frete não faz parte do preço; só desconta frete quando a venda é CIF. */
+const freightToDeduct = (factors?: { freight?: number; tipoFrete?: string }): number =>
+  factors?.tipoFrete === 'FOB' ? 0 : Number(factors?.freight) || 0;
+
 export default function ProfitabilityModal({
   isOpen,
   onClose,
@@ -53,7 +57,7 @@ export default function ProfitabilityModal({
   const [factor, setFactor] = useState(calc.factors.factor);
   const [taxRate, setTaxRate] = useState(calc.factors.taxRate);
   const [commission, setCommission] = useState(calc.factors.commission);
-  const [freight, setFreight] = useState(calc.factors.freight);
+  const [freight, setFreight] = useState(freightToDeduct(calc.factors));
   const [interestRate, setInterestRate] = useState(calc.factors.monthlyInterestRate);
   const [dueDate, setDueDate] = useState<string>(calc.factors?.dueDate || '');
   const [paymentCondition, setPaymentCondition] = useState<'vencimento' | 'ddf'>(
@@ -98,7 +102,7 @@ export default function ProfitabilityModal({
       setFactor(calc.factors.factor);
       setTaxRate(calc.factors.taxRate);
       setCommission(calc.factors.commission);
-      setFreight(calc.factors.freight);
+      setFreight(freightToDeduct(calc.factors));
       setInterestRate(calc.factors.monthlyInterestRate);
       setDueDate(calc.factors?.dueDate || '');
       setPaymentCondition(calc.factors?.paymentCondition || 'vencimento');
@@ -168,7 +172,8 @@ export default function ProfitabilityModal({
     // Migração automática dos fatores do produto selecionado
     const f = prod.factors || record.factors;
     if (f) {
-      setFreight(f.freight ?? freight);
+      setFactor(f.factor ?? factor);
+      setFreight(freightToDeduct(f));
       setCommission(f.commission ?? commission);
       setInterestRate(f.monthlyInterestRate ?? interestRate);
       setTaxRate(f.taxRate ?? taxRate);
@@ -224,10 +229,18 @@ export default function ProfitabilityModal({
     const price = typeof unitaryPrice === 'number' ? unitaryPrice : 0;
     const baseCost = analysisBaseCost;
 
+    // Ao escolher outro produto na busca, a análise é gravada nele, não na fórmula aberta.
+    const selectedProduct =
+      selectedRecord && selectedProductIdx >= 0
+        ? selectedRecord.calculations?.[selectedProductIdx]
+        : undefined;
+    const targetIndex = selectedProduct ? selectedProductIdx : calcIndex;
+    const targetFormulaName = selectedProduct?.formula || calc.formula;
+
     const analysis = createProfitabilityAnalysis({
       pricingRecordId: linkedPricingRecordId,
-      calculationIndex: calcIndex,
-      formulaName: calc.formula,
+      calculationIndex: targetIndex,
+      formulaName: targetFormulaName,
       unitaryPrice: price,
       factor,
       baseCost,
@@ -251,7 +264,7 @@ export default function ProfitabilityModal({
     savingRef.current = true;
     setIsSaving(true);
     try {
-      await saveProfitabilityToCalc(linkedPricingRecordId, calcIndex, analysis);
+      await saveProfitabilityToCalc(linkedPricingRecordId, targetIndex, analysis);
       showSuccess('Rentabilidade gravada com sucesso!');
       if (onSaved) onSaved();
     } catch {

@@ -108,7 +108,6 @@ function ReportFactorsForm({
   factors,
   embalagens,
   currency,
-  exchangeRate,
   onChange,
 }: ReportFactorsFormProps) {
   const selectedPackage = embalagens.find((item) => item.id === factors.embalagem_id);
@@ -124,11 +123,8 @@ function ReportFactorsForm({
       adjustment === 'cobrar'
         ? Number(selectedPackage.valor_cobrar ?? selectedPackage.valor ?? 0)
         : -Number(selectedPackage.valor_descontar ?? selectedPackage.valor ?? 0);
-    const value =
-      currency === 'USD' && Number(exchangeRate) > 0
-        ? registeredValue / Number(exchangeRate)
-        : registeredValue;
-    onChange('embalagem_valor', value);
+    // Embalagem fica em reais por tonelada, também em listas em dólar.
+    onChange('embalagem_valor', registeredValue);
   };
 
   return (
@@ -189,7 +185,7 @@ function ReportFactorsForm({
         </div>
       </div>
       <label className="text-xs font-medium text-stone-600">
-        Frete ({currency}/t)
+        Frete (R$/t)
         <input
           type="number"
           step="0.01"
@@ -395,7 +391,10 @@ function ModalGerarRelatorio({
 
   const calcPrecoFinal = (formula: SavedFormula): number => {
     const { total } = getFormulaCost(formula, selectedList);
-    return calculateReportPrice(total, getFactors(formula.id));
+    return calculateReportPrice(total, getFactors(formula.id), new Date(), {
+      currency: reportCurrency,
+      exchangeRate: selectedList?.exchangeRate,
+    });
   };
 
   const handleGeneratePDF = async () => {
