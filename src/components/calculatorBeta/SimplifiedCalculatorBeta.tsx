@@ -8,7 +8,13 @@ import {
   MapPin,
   Plus,
 } from 'lucide-react';
-import type { Embalagem, SavedFormula, TargetFormula, User as AppUser } from '../../types';
+import type {
+  Embalagem,
+  PriceListCurrency,
+  SavedFormula,
+  TargetFormula,
+  User as AppUser,
+} from '../../types';
 import { useCalculator } from '../../hooks/useCalculator';
 import { useToast } from '../Toast';
 import { CalculatorSettingsModal } from '../CalculatorSettingsModal';
@@ -28,6 +34,7 @@ import {
   type FormulaComparisonAlternative,
 } from '../../utils/formulaComparison';
 import BetaFormulaCard from './BetaFormulaCard';
+import { filterPriceLists, getPriceListCurrency } from './betaCalculatorModel';
 
 interface SimplifiedCalculatorBetaProps {
   currentUser: AppUser;
@@ -100,6 +107,25 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
   const isUsdPriceList = factors.priceListCurrency === 'USD';
   const hasValidExchangeRate = !isUsdPriceList || isValidExchangeRate(factors.appliedExchangeRate);
   const selectedPriceList = priceLists.find((list) => list.id === factors.priceListId);
+
+  // Moeda das listas mostradas no seletor (Reais ou Dólar).
+  const [listCurrency, setListCurrency] = useState<PriceListCurrency>(
+    factors.priceListCurrency === 'USD' ? 'USD' : 'BRL'
+  );
+  useEffect(() => {
+    // Ao abrir uma precificação ou batida salva, o botão acompanha a lista dela.
+    if (selectedPriceList) setListCurrency(getPriceListCurrency(selectedPriceList));
+  }, [selectedPriceList]);
+  const listsByCurrency = (currency: PriceListCurrency) =>
+    filterPriceLists(priceLists, { localId: factors.local_carregamento_id, currency });
+  const visiblePriceLists = listsByCurrency(listCurrency);
+  const changeListCurrency = (currency: PriceListCurrency) => {
+    if (currency === listCurrency) return;
+    setListCurrency(currency);
+    if (getPriceListCurrency(selectedPriceList) !== currency || !selectedPriceList) {
+      handleFactorChange('priceListId', listsByCurrency(currency)[0]?.id || '');
+    }
+  };
 
   useEffect(() => {
     setExchangeRateInput(
@@ -256,12 +282,10 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
               value={factors.local_carregamento_id || ''}
               onChange={(event) => {
                 const localId = event.target.value;
-                const matchingList = priceLists
-                  .filter((list) => list.local_carregamento_id === localId)
-                  .slice()
-                  .sort(
-                    (left, right) => new Date(right.date).getTime() - new Date(left.date).getTime()
-                  )[0];
+                const matchingList = filterPriceLists(priceLists, {
+                  localId: localId || undefined,
+                  currency: listCurrency,
+                })[0];
                 setFactors((previous) => ({
                   ...previous,
                   local_carregamento_id: localId || undefined,
@@ -281,28 +305,71 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
               ))}
             </select>
           </label>
-          <label className="block">
-            <span className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-stone-500">
-              <Database className="h-4 w-4" /> Lista de preço
-            </span>
+          <div>
+            <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+              <label
+                htmlFor="beta-price-list"
+                className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-stone-500"
+              >
+                <Database className="h-4 w-4" /> Lista de preço
+              </label>
+              <div
+                role="radiogroup"
+                aria-label="Moeda da lista de preço"
+                className="inline-flex rounded-lg bg-stone-100 p-0.5"
+              >
+                {(
+                  [
+                    { value: 'BRL', label: 'Reais', symbol: 'R$' },
+                    { value: 'USD', label: 'Dólar', symbol: 'US$' },
+                  ] as const
+                ).map((option) => {
+                  const active = listCurrency === option.value;
+                  const count = listsByCurrency(option.value).length;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      onClick={() => changeListCurrency(option.value)}
+                      className={`rounded-md px-3 py-1 text-xs font-bold transition-colors ${
+                        active
+                          ? option.value === 'USD'
+                            ? 'bg-blue-600 text-white shadow-sm'
+                            : 'bg-emerald-600 text-white shadow-sm'
+                          : 'text-stone-600 hover:bg-white'
+                      }`}
+                    >
+                      {option.symbol} {option.label}
+                      <span className={`ml-1 ${active ? 'text-white/80' : 'text-stone-400'}`}>
+                        ({count})
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             <select
+              id="beta-price-list"
               value={factors.priceListId}
               onChange={(event) => handleFactorChange('priceListId', event.target.value)}
               className="h-11 w-full rounded-xl border border-stone-300 bg-white px-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-emerald-500"
             >
-              <option value="">Selecione uma lista</option>
-              {(factors.local_carregamento_id
-                ? priceLists.filter(
-                    (list) => list.local_carregamento_id === factors.local_carregamento_id
-                  )
-                : priceLists
-              ).map((list) => (
+              <option value="">
+                {visiblePriceLists.length === 0
+                  ? `Nenhuma lista em ${listCurrency === 'USD' ? 'dólar' : 'reais'}${
+                      factors.local_carregamento_id ? ' neste local' : ''
+                    }`
+                  : 'Selecione uma lista'}
+              </option>
+              {visiblePriceLists.map((list) => (
                 <option key={list.id} value={list.id}>
                   {list.name}
                 </option>
               ))}
             </select>
-          </label>
+          </div>
         </div>
 
         {isUsdPriceList && (

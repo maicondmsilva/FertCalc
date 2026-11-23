@@ -1,4 +1,10 @@
-import type { RawMaterial, SavedFormula, TargetFormula } from '../../types';
+import type {
+  PriceList,
+  PriceListCurrency,
+  RawMaterial,
+  SavedFormula,
+  TargetFormula,
+} from '../../types';
 import { parseFormulaTarget } from '../../domain/pricing-engine';
 import { getMagnesiumTarget, isMagnesiumGuarantee } from '../../utils/micronutrients';
 
@@ -214,6 +220,24 @@ export function applySavedFormulaToCalculation(
     approximation: undefined,
     notClosed: undefined,
   };
+}
+
+/** Moeda da lista; listas antigas sem moeda são em reais. */
+export const getPriceListCurrency = (list?: Pick<PriceList, 'currency'>): PriceListCurrency =>
+  list?.currency === 'USD' ? 'USD' : 'BRL';
+
+/** Listas do local escolhido (ou de todos) na moeda escolhida, da mais recente à mais antiga. */
+export function filterPriceLists<
+  T extends Pick<PriceList, 'currency' | 'local_carregamento_id' | 'date'>,
+>(lists: T[], filters: { localId?: string; currency: PriceListCurrency }): T[] {
+  return lists
+    .filter(
+      (list) =>
+        getPriceListCurrency(list) === filters.currency &&
+        (!filters.localId || list.local_carregamento_id === filters.localId)
+    )
+    .slice()
+    .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime());
 }
 
 export const formatPercent = (value: number | undefined, digits = 1) =>

@@ -5,8 +5,10 @@ import {
   applySavedFormulaToCalculation,
   buildCompositionTable,
   composeFormulaTarget,
+  filterPriceLists,
   findProductsMatchingNpk,
   getFormulaMagnesiumTarget,
+  getPriceListCurrency,
   getNutrientStatus,
   isSameFormulaTarget,
   isValidNutrientInput,
@@ -183,5 +185,41 @@ describe('carregar batida salva', () => {
     });
     expect(result.micros[0]).toMatchObject({ selected: false, quantity: 0 });
     expect(result.summary).toBeUndefined();
+  });
+});
+
+describe('filtro de listas de preço por moeda', () => {
+  const lists = [
+    { id: 'brl-antiga', currency: 'BRL' as const, local_carregamento_id: 'l1', date: '2026-01-01' },
+    { id: 'brl-nova', currency: undefined, local_carregamento_id: 'l1', date: '2026-06-01' },
+    { id: 'usd', currency: 'USD' as const, local_carregamento_id: 'l1', date: '2026-05-01' },
+    {
+      id: 'usd-outro-local',
+      currency: 'USD' as const,
+      local_carregamento_id: 'l2',
+      date: '2026-07-01',
+    },
+  ];
+
+  it('lista sem moeda conta como reais', () => {
+    expect(getPriceListCurrency({ currency: undefined })).toBe('BRL');
+    expect(getPriceListCurrency({ currency: 'USD' })).toBe('USD');
+  });
+
+  it('mostra só as listas da moeda escolhida, da mais recente à mais antiga', () => {
+    expect(filterPriceLists(lists, { currency: 'BRL' }).map((list) => list.id)).toEqual([
+      'brl-nova',
+      'brl-antiga',
+    ]);
+    expect(filterPriceLists(lists, { currency: 'USD' }).map((list) => list.id)).toEqual([
+      'usd-outro-local',
+      'usd',
+    ]);
+  });
+
+  it('combina moeda e local de carregamento', () => {
+    expect(
+      filterPriceLists(lists, { currency: 'USD', localId: 'l1' }).map((list) => list.id)
+    ).toEqual(['usd']);
   });
 });
