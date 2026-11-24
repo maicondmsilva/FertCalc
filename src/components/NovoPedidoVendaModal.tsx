@@ -94,6 +94,11 @@ export default function NovoPedidoVendaModal({
   const [valorFrete, setValorFrete] = useState<number | ''>(getInitialValorFrete(pricing));
 
   const [observacoes, setObservacoes] = useState('');
+  // Dados comerciais
+  const [safra, setSafra] = useState('');
+  const [previsaoEntrega, setPrevisaoEntrega] = useState('');
+  const [localEntrega, setLocalEntrega] = useState('');
+  const [numeroContrato, setNumeroContrato] = useState('');
 
   /** Round price to 2 decimal places when initializing from pricing */
   const roundPrice = (v: number | undefined): number | '' => {
@@ -326,6 +331,10 @@ export default function NovoPedidoVendaModal({
           valor_frete: tipoFrete === 'CIF' && valorFrete !== '' ? Number(valorFrete) : undefined,
           condicao_pagamento: condicaoPagamento.trim() || undefined,
           observacoes: observacoes.trim() || undefined,
+          safra: safra.trim() || undefined,
+          previsao_entrega: previsaoEntrega || undefined,
+          local_entrega: localEntrega.trim() || undefined,
+          numero_contrato: numeroContrato.trim() || undefined,
           importado_por: currentUser.id,
         },
         itens.map((item) => ({
@@ -721,6 +730,45 @@ export default function NovoPedidoVendaModal({
               <Plus className="w-4 h-4" />
               Adicionar Produto
             </button>
+          </div>
+
+          {/* Dados comerciais */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
+              Safra
+              <input
+                value={safra}
+                onChange={(e) => setSafra(e.target.value)}
+                placeholder="Ex.: 2026/27"
+                className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm font-normal normal-case tracking-normal text-stone-800 outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
+              Previsão de entrega
+              <input
+                type="date"
+                value={previsaoEntrega}
+                onChange={(e) => setPrevisaoEntrega(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm font-normal normal-case tracking-normal text-stone-800 outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
+              Local de entrega
+              <input
+                value={localEntrega}
+                onChange={(e) => setLocalEntrega(e.target.value)}
+                placeholder="Fazenda, cidade ou armazém"
+                className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm font-normal normal-case tracking-normal text-stone-800 outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-stone-500">
+              Nº do contrato
+              <input
+                value={numeroContrato}
+                onChange={(e) => setNumeroContrato(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm font-normal normal-case tracking-normal text-stone-800 outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </label>
           </div>
 
           {/* Observações */}

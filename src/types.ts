@@ -756,6 +756,14 @@ export interface PedidoVenda {
   pedido_pai_id?: string;
   data_vencimento?: string;
   emitente?: number;
+  /** Dados comerciais */
+  safra?: string;
+  previsao_entrega?: string;
+  local_entrega?: string;
+  numero_contrato?: string;
+  /** Vindos da carteira (consulta com junções) */
+  vendedor_nome?: string;
+  ultima_movimentacao?: string;
   itens?: PedidoVendaItem[];
   // Joined fields
   precificacao?: PricingRecord;
