@@ -1,3 +1,4 @@
+import { drawCompanyLogo } from '../utils/pdfBranding';
 import React, { useState, useEffect } from 'react';
 import { getCompanyDisplayName } from '../utils/companyBranding';
 import { PricingRecord, User as AppUser, AppSettings, Branch, PriceList } from '../types';
@@ -20,7 +21,6 @@ import {
 import NovoPedidoVendaModal from './NovoPedidoVendaModal';
 import {
   getPricingRecords,
-  deletePricingRecord,
   updatePricingRecord,
   createPricingRecord,
   getAppSettings,
@@ -202,11 +202,14 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
 
-    if (appSettings.companyLogo) {
-      doc.addImage(appSettings.companyLogo, 'PNG', 10, 10, 20, 20);
-    }
+    const logoWidth = drawCompanyLogo(doc, appSettings, {
+      x: 10,
+      y: 10,
+      maxWidth: 45,
+      maxHeight: 18,
+    });
     doc.setFontSize(16);
-    doc.text(getCompanyDisplayName(appSettings), appSettings.companyLogo ? 35 : 10, 20);
+    doc.text(getCompanyDisplayName(appSettings), logoWidth ? 10 + logoWidth + 5 : 10, 20);
     doc.setFontSize(12);
     doc.text('Relatório Consolidado de Precificações', 10, 35);
     doc.setFontSize(10);
@@ -262,13 +265,26 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
 
     const okDel = await confirm({
       title: 'Excluir precificação?',
-      message: 'Esta ação não pode ser desfeita.',
+      message: 'A precificação vai para a aba "Excluídas" e fica no histórico.',
       variant: 'danger',
       confirmLabel: 'Excluir',
     });
     if (okDel) {
       try {
-        await deletePricingRecord(id);
+        // Exclusão lógica: a precificação vai para a aba "Excluídas" com histórico,
+        // igual à exclusão aprovada (o apagar definitivo não é usado pela tela).
+        await updatePricingRecord(id, {
+          status: 'Excluída',
+          history: [
+            ...(pricing.history || []),
+            {
+              date: new Date().toISOString(),
+              userId: currentUser.id,
+              userName: currentUser.name,
+              action: 'Precificação excluída',
+            },
+          ],
+        } as Partial<PricingRecord>);
 
         // ✅ Notificar Exclusão
         await notifyPricingDeleted(pricing, currentUser);
@@ -285,10 +301,14 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
           },
         });
 
-        setPricings(pricings.filter((p) => p.id !== id));
-        showSuccess('Precificação excluída com sucesso!');
+        setPricings(pricings.map((p) => (p.id === id ? { ...p, status: 'Excluída' as const } : p)));
+        showSuccess('Precificação excluída. Ela continua disponível na aba "Excluídas".');
       } catch (err) {
-        showError('Erro ao excluir precificação.');
+        showError(
+          err && typeof err === 'object' && 'message' in err
+            ? `Erro ao excluir precificação: ${String((err as { message: unknown }).message)}`
+            : 'Erro ao excluir precificação.'
+        );
       }
     }
   };

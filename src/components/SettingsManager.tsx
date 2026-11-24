@@ -1,57 +1,172 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Settings,
-  Save,
-  Image as ImageIcon,
+  Activity,
   Building,
-  Download,
-  Upload,
   Database,
+  Download,
   FileText,
-  Users,
+  Image as ImageIcon,
+  Layers,
+  Save,
+  Trash2,
+  Upload,
   UserCheck,
+  Users,
 } from 'lucide-react';
-import { AppSettings, Client, Agent } from '../types';
+import { AppSettings } from '../types';
 import {
-  getAppSettings,
-  saveAppSettings,
-  createClientsBulk,
   createAgentsBulk,
+  createClientsBulk,
+  getAgents,
+  getAppSettings,
+  getClients,
+  saveAppSettings,
 } from '../services/db';
 import { useToast } from './Toast';
 import CompatibilityCategoryManager from './CompatibilityCategoryManager';
 import SystemHealthPanel from './SystemHealthPanel';
+import { describeSkipped, parseAgentRows, parseClientRows } from './settings/importRows';
+import { prepareLogo, validateLogoFile } from './settings/logoUpload';
+
+type SectionId = 'empresa' | 'precificacao' | 'categorias' | 'importacao' | 'sistema';
+
+const SECTIONS: { id: SectionId; label: string; icon: React.ElementType }[] = [
+  { id: 'empresa', label: 'Empresa', icon: Building },
+  { id: 'precificacao', label: 'Precificação', icon: FileText },
+  { id: 'categorias', label: 'Categorias', icon: Layers },
+  { id: 'importacao', label: 'Importação', icon: Upload },
+  { id: 'sistema', label: 'Sistema', icon: Activity },
+];
+
+const DEFAULT_SETTINGS: AppSettings = {
+  companyName: 'FertCalc Pro',
+  companyLogo: '',
+  defaultFactorBRL: 0.8,
+  defaultFactorUSD: 0,
+};
+
+const CLIENT_TEMPLATE = {
+  'Razão Social / Nome*': '',
+  'CNPJ / CPF*': '',
+  Código: '',
+  'E-mail': '',
+  Telefone: '',
+  'Inscrição Estadual': '',
+  Fazenda: '',
+  CEP: '',
+  Rua: '',
+  Número: '',
+  Bairro: '',
+  Cidade: '',
+  'Estado (UF)': '',
+};
+
+const AGENT_TEMPLATE = {
+  'Nome*': '',
+  'Documento*': '',
+  Código: '',
+  'E-mail': '',
+  Telefone: '',
+  'Inscrição Estadual': '',
+  CEP: '',
+  Rua: '',
+  Número: '',
+  Bairro: '',
+  Cidade: '',
+  'Estado (UF)': '',
+};
+
+const SUPABASE_PROJECT_URL = 'https://supabase.com/dashboard/project/vadbhbyfnkrqvboiiakw';
+
+const inputClass =
+  'w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500';
+
+function Card({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="bg-white rounded-xl border border-stone-200 shadow-sm p-5 sm:p-6">
+      <h2 className="text-base font-bold text-stone-800">{title}</h2>
+      {description && <p className="mt-1 text-sm text-stone-500">{description}</p>}
+      <div className="mt-5">{children}</div>
+    </section>
+  );
+}
+
+function Field({
+  label,
+  htmlFor,
+  hint,
+  children,
+}: {
+  label: string;
+  htmlFor: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label htmlFor={htmlFor} className="block text-sm font-medium text-stone-700 mb-1">
+        {label}
+      </label>
+      {children}
+      {hint && <p className="mt-1 text-xs text-stone-400">{hint}</p>}
+    </div>
+  );
+}
 
 export default function SettingsManager() {
-  const { showSuccess, showError } = useToast();
-  const [isImportingClients, setIsImportingClients] = useState(false);
-  const [isImportingAgents, setIsImportingAgents] = useState(false);
+  const { showSuccess, showError, showInfo } = useToast();
+  const [section, setSection] = useState<SectionId>('empresa');
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [saved, setSaved] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isPreparingLogo, setIsPreparingLogo] = useState(false);
+  const [importing, setImporting] = useState<'clients' | 'agents' | null>(null);
   const [preparingTemplate, setPreparingTemplate] = useState<'clients' | 'agents' | null>(null);
 
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const clientInputRef = useRef<HTMLInputElement>(null);
   const agentInputRef = useRef<HTMLInputElement>(null);
 
-  const [settings, setSettings] = useState<AppSettings>({
-    companyName: 'FertCalc Pro',
-    companyLogo: '',
-    defaultFactorBRL: 0.8,
-    defaultFactorUSD: 0,
-  });
-
   useEffect(() => {
-    getAppSettings().then((saved) => {
-      if (saved) setSettings(saved);
+    getAppSettings().then((current) => {
+      if (current) {
+        setSettings(current);
+        setSaved(current);
+      }
     });
   }, []);
 
-  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setSettings({ ...settings, companyLogo: reader.result as string });
-      };
-      reader.readAsDataURL(file);
+  const isDirty = useMemo(
+    () => JSON.stringify(settings) !== JSON.stringify(saved),
+    [settings, saved]
+  );
+  const update = (patch: Partial<AppSettings>) =>
+    setSettings((current) => ({ ...current, ...patch }));
+
+  const handleLogoChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    const problem = validateLogoFile(file);
+    if (problem) {
+      showError(problem);
+      return;
+    }
+    setIsPreparingLogo(true);
+    try {
+      update({ companyLogo: await prepareLogo(file) });
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Não foi possível usar esta imagem.');
+    } finally {
+      setIsPreparingLogo(false);
     }
   };
 
@@ -60,527 +175,383 @@ export default function SettingsManager() {
       showError('Os fatores padrão não podem ser negativos.');
       return;
     }
+    setIsSaving(true);
     try {
       await saveAppSettings(settings);
-      showSuccess('Configurações salvas com sucesso!');
+      setSaved(settings);
+      showSuccess('Configurações salvas.');
     } catch (error) {
       showError(
         `Erro ao salvar configurações: ${error instanceof Error ? error.message : 'Tente novamente.'}`
       );
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const handleBackup = () => {
-    const data = {
-      info: 'Dados agora armazenados no Supabase. Use o painel Supabase para backups completos.',
-      timestamp: new Date().toISOString(),
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `fertcalc_info_${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showSuccess('Exportação concluída. Acesse o painel Supabase para dados completos.');
-  };
-
-  const handleDownloadClientTemplate = async () => {
-    setPreparingTemplate('clients');
+  const downloadTemplate = async (kind: 'clients' | 'agents') => {
+    setPreparingTemplate(kind);
     try {
       const XLSX = await import('xlsx');
-      const ws = XLSX.utils.json_to_sheet([
-        {
-          'Razão Social / Nome*': '',
-          'CNPJ / CPF*': '',
-          Código: '',
-          'E-mail': '',
-          Telefone: '',
-          'Inscrição Estadual': '',
-          Fazenda: '',
-          CEP: '',
-          Rua: '',
-          Número: '',
-          Bairro: '',
-          Cidade: '',
-          'Estado (UF)': '',
-        },
+      const sheet = XLSX.utils.json_to_sheet([
+        kind === 'clients' ? CLIENT_TEMPLATE : AGENT_TEMPLATE,
       ]);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Clientes');
-      XLSX.writeFile(wb, 'modelo_importacao_clientes.xlsx');
+      const book = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(book, sheet, kind === 'clients' ? 'Clientes' : 'Agentes');
+      XLSX.writeFile(
+        book,
+        kind === 'clients' ? 'modelo_importacao_clientes.xlsx' : 'modelo_importacao_agentes.xlsx'
+      );
     } catch {
-      showError('Não foi possível gerar o modelo de clientes.');
+      showError('Não foi possível gerar o modelo.');
     } finally {
       setPreparingTemplate(null);
     }
   };
 
-  const handleDownloadAgentTemplate = async () => {
-    setPreparingTemplate('agents');
-    try {
-      const XLSX = await import('xlsx');
-      const ws = XLSX.utils.json_to_sheet([
-        {
-          'Nome*': '',
-          'Documento*': '',
-          Código: '',
-          'E-mail': '',
-          Telefone: '',
-          'Inscrição Estadual': '',
-          CEP: '',
-          Rua: '',
-          Número: '',
-          Bairro: '',
-          Cidade: '',
-          'Estado (UF)': '',
-        },
-      ]);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Agentes');
-      XLSX.writeFile(wb, 'modelo_importacao_agentes.xlsx');
-    } catch {
-      showError('Não foi possível gerar o modelo de agentes.');
-    } finally {
-      setPreparingTemplate(null);
-    }
-  };
-
-  const handleImportClients = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleImport = async (
+    kind: 'clients' | 'agents',
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
     if (!file) return;
-
-    setIsImportingClients(true);
+    setImporting(kind);
     try {
-      const data = await file.arrayBuffer();
       const XLSX = await import('xlsx');
-      const workbook = XLSX.read(data);
-      const sheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[sheetName];
-      const json = XLSX.utils.sheet_to_json<any>(worksheet);
+      const workbook = XLSX.read(await file.arrayBuffer());
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(
+        workbook.Sheets[workbook.SheetNames[0]]
+      );
+      const label = kind === 'clients' ? 'clientes' : 'agentes';
+      const existing = (kind === 'clients' ? await getClients() : await getAgents()).map(
+        (item) => item.document
+      );
+      const result =
+        kind === 'clients' ? parseClientRows(rows, existing) : parseAgentRows(rows, existing);
+      const skipped = describeSkipped(result);
 
-      const clientsToImport: Omit<Client, 'id'>[] = [];
-
-      for (const row of json) {
-        if (!row['Razão Social / Nome*'] || !row['CNPJ / CPF*']) {
-          continue; // Skip invalid rows
-        }
-
-        clientsToImport.push({
-          name: String(row['Razão Social / Nome*']),
-          document: String(row['CNPJ / CPF*']),
-          code: row['Código'] ? String(row['Código']) : '',
-          email: row['E-mail'] ? String(row['E-mail']) : '',
-          phone: row['Telefone'] ? String(row['Telefone']) : '',
-          stateRegistration: row['Inscrição Estadual'] ? String(row['Inscrição Estadual']) : '',
-          fazenda: row['Fazenda'] ? String(row['Fazenda']) : '',
-          address:
-            row['CEP'] || row['Rua']
-              ? {
-                  cep: row['CEP'] ? String(row['CEP']) : '',
-                  street: row['Rua'] ? String(row['Rua']) : '',
-                  number: row['Número'] ? String(row['Número']) : '',
-                  neighborhood: row['Bairro'] ? String(row['Bairro']) : '',
-                  city: row['Cidade'] ? String(row['Cidade']) : '',
-                  state: row['Estado (UF)'] ? String(row['Estado (UF)']) : '',
-                }
-              : undefined,
-        });
-      }
-
-      if (clientsToImport.length > 0) {
-        await createClientsBulk(clientsToImport);
-        showSuccess(`${clientsToImport.length} clientes importados com sucesso!`);
-      } else {
+      if (result.items.length === 0) {
         showError(
-          'Nenhum cliente válido encontrado na planilha. Verifique se os campos com * estão preenchidos.'
+          `Nenhum ${label.slice(0, -1)} novo para importar.${skipped ? ` Ignorados: ${skipped}.` : ''}`
         );
+        return;
       }
-    } catch (err) {
-      console.error(err);
-      showError('Erro ao importar clientes. Verifique o formato do arquivo.');
+      if (kind === 'clients') await createClientsBulk(result.items as never);
+      else await createAgentsBulk(result.items as never);
+      showSuccess(`${result.items.length} ${label} importados.`);
+      if (skipped) showInfo(`Ignorados: ${skipped}.`, 'Algumas linhas ficaram de fora');
+    } catch (error) {
+      console.error(error);
+      showError(
+        `Erro ao importar. ${error instanceof Error ? error.message : 'Verifique o formato do arquivo.'}`
+      );
     } finally {
-      setIsImportingClients(false);
-      if (clientInputRef.current) clientInputRef.current.value = '';
+      setImporting(null);
     }
   };
 
-  const handleImportAgents = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsImportingAgents(true);
-    try {
-      const data = await file.arrayBuffer();
-      const XLSX = await import('xlsx');
-      const workbook = XLSX.read(data);
-      const sheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[sheetName];
-      const json = XLSX.utils.sheet_to_json<any>(worksheet);
-
-      const agentsToImport: Omit<Agent, 'id'>[] = [];
-
-      for (const row of json) {
-        if (!row['Nome*'] || !row['Documento*']) {
-          continue;
-        }
-
-        agentsToImport.push({
-          name: String(row['Nome*']),
-          document: String(row['Documento*']),
-          code: row['Código'] ? String(row['Código']) : '',
-          email: row['E-mail'] ? String(row['E-mail']) : '',
-          phone: row['Telefone'] ? String(row['Telefone']) : '',
-          ie: row['Inscrição Estadual'] ? String(row['Inscrição Estadual']) : '',
-          address:
-            row['CEP'] || row['Rua']
-              ? {
-                  cep: row['CEP'] ? String(row['CEP']) : '',
-                  street: row['Rua'] ? String(row['Rua']) : '',
-                  number: row['Número'] ? String(row['Número']) : '',
-                  neighborhood: row['Bairro'] ? String(row['Bairro']) : '',
-                  city: row['Cidade'] ? String(row['Cidade']) : '',
-                  state: row['Estado (UF)'] ? String(row['Estado (UF)']) : '',
-                }
-              : undefined,
-        });
-      }
-
-      if (agentsToImport.length > 0) {
-        await createAgentsBulk(agentsToImport);
-        showSuccess(`${agentsToImport.length} agentes importados com sucesso!`);
-      } else {
-        showError(
-          'Nenhum agente válido encontrado na planilha. Verifique se os campos com * estão preenchidos.'
-        );
-      }
-    } catch (err) {
-      console.error(err);
-      showError('Erro ao importar agentes. Verifique o formato do arquivo.');
-    } finally {
-      setIsImportingAgents(false);
-      if (agentInputRef.current) agentInputRef.current.value = '';
-    }
-  };
-
-  return (
-    <div className="max-w-4xl mx-auto space-y-6 pb-12">
-      <SystemHealthPanel />
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
-        <h2 className="text-xl font-bold text-stone-800 mb-6 flex items-center">
-          <Settings className="w-5 h-5 mr-2 text-stone-600" />
-          Personalização do Sistema
-        </h2>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div className="space-y-6">
-            <h3 className="text-xs font-bold text-stone-400 uppercase tracking-widest border-b border-stone-100 pb-2">
-              Informações Gerais
-            </h3>
-            <div>
-              <label className="block text-sm font-medium text-stone-600 mb-1 flex items-center">
-                <Building className="w-4 h-4 mr-1" /> Nome da Empresa{' '}
-                <span className="ml-1 text-xs font-normal text-stone-400">(opcional)</span>
-              </label>
-              <input
-                type="text"
-                value={settings.companyName || ''}
-                onChange={(e) => setSettings({ ...settings, companyName: e.target.value })}
-                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-stone-500"
-                placeholder="Ex: AgroFertil S.A."
-              />
-              <label className="mt-3 flex items-start gap-2 text-sm text-stone-700 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={settings.showCompanyName !== false}
-                  onChange={(e) => setSettings({ ...settings, showCompanyName: e.target.checked })}
-                  className="mt-0.5 h-4 w-4 rounded border-stone-300 text-emerald-600 focus:ring-emerald-500"
-                />
-                <span>
-                  Mostrar o nome ao lado da logo
-                  <span className="block text-xs text-stone-400">
-                    Vale para o topo das páginas e os relatórios. Desmarque se a logo já tem o nome.
-                    Sem logo cadastrada, o nome sempre aparece.
-                  </span>
-                </span>
-              </label>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-stone-600 mb-1 flex items-center">
-                <ImageIcon className="w-4 h-4 mr-1" /> Logo da Empresa
-              </label>
-              <div className="mt-2 flex items-center gap-4">
-                {settings.companyLogo ? (
-                  <div className="w-24 h-24 border border-stone-200 rounded-lg overflow-hidden bg-stone-50 flex items-center justify-center">
-                    <img
-                      src={settings.companyLogo}
-                      alt="Logo"
-                      className="max-w-full max-h-full object-contain"
-                    />
-                  </div>
-                ) : (
-                  <div className="w-24 h-24 border-2 border-dashed border-stone-200 rounded-lg flex items-center justify-center text-stone-400">
-                    <ImageIcon className="w-8 h-8" />
-                  </div>
-                )}
-                <div className="flex-1">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleLogoChange}
-                    className="block w-full text-sm text-stone-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-stone-100 file:text-stone-700 hover:file:bg-stone-200 cursor-pointer"
-                  />
-                  <p className="mt-1 text-xs text-stone-400">
-                    Recomendado: PNG ou JPG, fundo transparente.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-stone-600 mb-1 flex items-center">
-                <Building className="w-4 h-4 mr-1" /> CNPJ da Empresa
-              </label>
-              <input
-                type="text"
-                value={settings.companyCnpj || ''}
-                onChange={(e) => setSettings({ ...settings, companyCnpj: e.target.value })}
-                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-stone-500"
-                placeholder="Ex: 00.000.000/0001-00"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-6">
-            <h3 className="text-xs font-bold text-stone-400 uppercase tracking-widest border-b border-stone-100 pb-2">
-              Parâmetros por Módulo
-            </h3>
-
-            <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100">
-              <h4 className="text-sm font-bold text-emerald-800 mb-2 flex items-center">
-                <FileText className="w-4 h-4 mr-2" /> Módulo Precificação
-              </h4>
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-bold text-emerald-600 uppercase mb-1">
-                      Fator padrão — Real
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={settings.defaultFactorBRL ?? 0.8}
-                      onChange={(event) =>
-                        setSettings({
-                          ...settings,
-                          defaultFactorBRL: Math.max(0, Number(event.target.value)),
-                        })
-                      }
-                      className="w-full px-3 py-2 border border-emerald-200 rounded-lg focus:ring-2 focus:ring-emerald-500 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-emerald-600 uppercase mb-1">
-                      Fator padrão — Dólar
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={settings.defaultFactorUSD ?? 0}
-                      onChange={(event) =>
-                        setSettings({
-                          ...settings,
-                          defaultFactorUSD: Math.max(0, Number(event.target.value)),
-                        })
-                      }
-                      className="w-full px-3 py-2 border border-emerald-200 rounded-lg focus:ring-2 focus:ring-emerald-500 text-sm"
-                    />
-                    <p className="mt-1 text-[10px] text-emerald-700">
-                      Zero não altera o custo da lista em dólar.
-                    </p>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-emerald-600 uppercase mb-1">
-                    Termos Comerciais Padrão
-                  </label>
-                  <textarea
-                    value={settings.pricingTerms || ''}
-                    onChange={(e) => setSettings({ ...settings, pricingTerms: e.target.value })}
-                    className="w-full px-3 py-2 border border-emerald-200 rounded-lg focus:ring-2 focus:ring-emerald-500 h-24 text-sm"
-                    placeholder="Digite as condições de pagamento, entrega, etc."
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <input type="checkbox" id="auto_approve" className="rounded text-emerald-600" />
-                  <label htmlFor="auto_approve" className="text-xs text-emerald-700">
-                    Habilitar auto-aprovação para margens acima de 15%
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-4 bg-stone-50 rounded-xl border border-stone-200 opacity-60">
-              <h4 className="text-sm font-bold text-stone-800 mb-2 flex items-center">
-                <Settings className="w-4 h-4 mr-2" /> Módulo Configuração
-              </h4>
-              <p className="text-[10px] text-stone-500 italic">
-                Configurações avançadas de sistema em breve.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-8 pt-6 border-t border-stone-100 flex justify-end">
+  const saveBar = (section === 'empresa' || section === 'precificacao') && (
+    <div className="sticky bottom-0 mt-4 flex flex-col gap-2 rounded-xl border border-stone-200 bg-white/95 p-3 shadow-sm backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+      <p className={`text-sm ${isDirty ? 'text-amber-700' : 'text-stone-400'}`}>
+        {isDirty ? 'Há alterações não salvas.' : 'Tudo salvo.'}
+      </p>
+      <div className="flex gap-2">
+        {isDirty && (
           <button
-            onClick={saveSettings}
-            className="bg-stone-800 hover:bg-stone-900 text-white px-8 py-2 rounded-lg font-bold transition-colors flex items-center shadow-lg active:scale-95"
+            type="button"
+            onClick={() => setSettings(saved)}
+            className="px-4 py-2 rounded-lg border border-stone-300 text-sm font-medium text-stone-600 hover:bg-stone-50"
           >
-            <Save className="w-4 h-4 mr-2" />
-            Salvar Personalização
+            Descartar
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => void saveSettings()}
+          disabled={!isDirty || isSaving}
+          className="flex items-center gap-2 px-5 py-2 rounded-lg bg-emerald-600 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+        >
+          <Save className="w-4 h-4" />
+          {isSaving ? 'Salvando...' : 'Salvar'}
+        </button>
+      </div>
+    </div>
+  );
+
+  const importCard = (kind: 'clients' | 'agents') => {
+    const isClients = kind === 'clients';
+    const Icon = isClients ? Users : UserCheck;
+    const inputRef = isClients ? clientInputRef : agentInputRef;
+    return (
+      <div className="flex flex-col justify-between rounded-xl border border-stone-200 p-4">
+        <div>
+          <h3 className="flex items-center gap-2 font-bold text-stone-800">
+            <Icon className="w-4 h-4 text-emerald-600" />
+            {isClients ? 'Clientes' : 'Agentes'}
+          </h3>
+          <p className="mt-1 text-sm text-stone-500">
+            Campos com * são obrigatórios. Documentos já cadastrados ou repetidos na planilha são
+            ignorados, e o sistema informa as linhas.
+          </p>
+        </div>
+        <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => void downloadTemplate(kind)}
+            disabled={preparingTemplate !== null}
+            className="flex items-center justify-center gap-2 rounded-lg border border-stone-300 px-3 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-50"
+          >
+            <Download className="w-4 h-4" />
+            {preparingTemplate === kind ? 'Preparando...' : 'Baixar modelo'}
+          </button>
+          <input
+            ref={inputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            className="hidden"
+            aria-label={`Planilha de ${isClients ? 'clientes' : 'agentes'}`}
+            onChange={(event) => void handleImport(kind, event)}
+          />
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            disabled={importing !== null}
+            className="flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+          >
+            <Upload className="w-4 h-4" />
+            {importing === kind ? 'Importando...' : 'Importar planilha'}
           </button>
         </div>
       </div>
+    );
+  };
 
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
-        <h2 className="text-xl font-bold text-stone-800 mb-6 flex items-center">
-          <Settings className="w-5 h-5 mr-2 text-stone-600" />
-          Categorias / Grupos de Produtos
-        </h2>
-        <p className="text-sm text-stone-500 mb-6">
-          Personalize as categorias (grupos de produtos) para organizar suas matérias-primas e
-          facilitar a seleção rápida calculadora.
-        </p>
-        <CompatibilityCategoryManager />
-      </div>
+  return (
+    <div className="max-w-5xl mx-auto pb-12">
+      <header className="mb-5">
+        <h1 className="text-2xl font-bold text-stone-800">Configurações</h1>
+        <p className="text-sm text-stone-500">Dados da empresa, padrões, cadastros e sistema.</p>
+      </header>
 
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
-        <h2 className="text-xl font-bold text-stone-800 mb-6 flex items-center">
-          <Database className="w-5 h-5 mr-2 text-stone-600" />
-          Backup e Restauração
-        </h2>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="p-4 bg-stone-50 rounded-lg border border-stone-200">
-            <h3 className="font-bold text-stone-700 mb-2 flex items-center">
-              <Download className="w-4 h-4 mr-2" /> Exportar Dados
-            </h3>
-            <p className="text-sm text-stone-500 mb-4">
-              Baixe uma cópia completa de todos os dados do sistema (clientes, histórico,
-              configurações, etc).
-            </p>
+      <div className="flex flex-col gap-5 md:flex-row">
+        <nav
+          aria-label="Seções de configurações"
+          className="flex gap-1 overflow-x-auto md:w-52 md:flex-shrink-0 md:flex-col"
+        >
+          {SECTIONS.map(({ id, label, icon: Icon }) => (
             <button
-              onClick={handleBackup}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center"
+              key={id}
+              type="button"
+              onClick={() => setSection(id)}
+              aria-current={section === id ? 'page' : undefined}
+              className={`flex items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                section === id
+                  ? 'bg-emerald-50 text-emerald-800'
+                  : 'text-stone-600 hover:bg-stone-100'
+              }`}
             >
-              <Download className="w-4 h-4 mr-2" />
-              Baixar Backup
+              <Icon className="w-4 h-4" />
+              {label}
             </button>
-          </div>
+          ))}
+        </nav>
 
-          <div className="p-4 bg-stone-50 rounded-lg border border-stone-200">
-            <h3 className="font-bold text-stone-700 mb-2 flex items-center">
-              <Upload className="w-4 h-4 mr-2" /> Dados na Nuvem
-            </h3>
-            <p className="text-sm text-stone-500 mb-2">
-              Os dados agora são armazenados de forma segura no <strong>Supabase</strong>.
-            </p>
-            <a
-              href="https://supabase.com/dashboard/project/joogfmtpecnaghbpexqy"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center"
+        <div className="min-w-0 flex-1 space-y-5">
+          {section === 'empresa' && (
+            <Card
+              title="Empresa"
+              description="Aparece no topo das páginas e nos relatórios em PDF."
             >
-              <Database className="w-4 h-4 mr-2" />
-              Abrir Painel Supabase
-            </a>
-          </div>
-        </div>
-      </div>
+              <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+                <div className="space-y-4">
+                  <Field label="Nome da empresa (opcional)" htmlFor="settings-company-name">
+                    <input
+                      id="settings-company-name"
+                      type="text"
+                      value={settings.companyName || ''}
+                      onChange={(event) => update({ companyName: event.target.value })}
+                      className={inputClass}
+                      placeholder="Ex: AgroFertil S.A."
+                    />
+                  </Field>
+                  <label className="flex items-start gap-2 text-sm text-stone-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settings.showCompanyName !== false}
+                      onChange={(event) => update({ showCompanyName: event.target.checked })}
+                      className="mt-0.5 h-4 w-4 rounded border-stone-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <span>
+                      Mostrar o nome ao lado da logo
+                      <span className="block text-xs text-stone-400">
+                        Desmarque se a logo já tem o nome. Sem logo, o nome sempre aparece.
+                      </span>
+                    </span>
+                  </label>
+                  <Field label="CNPJ" htmlFor="settings-company-cnpj">
+                    <input
+                      id="settings-company-cnpj"
+                      type="text"
+                      value={settings.companyCnpj || ''}
+                      onChange={(event) => update({ companyCnpj: event.target.value })}
+                      className={inputClass}
+                      placeholder="00.000.000/0001-00"
+                    />
+                  </Field>
+                </div>
 
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
-        <h2 className="text-xl font-bold text-stone-800 mb-6 flex items-center">
-          <Upload className="w-5 h-5 mr-2 text-stone-600" />
-          Importação de Dados
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="p-4 bg-emerald-50 rounded-lg border border-emerald-100 flex flex-col justify-between">
-            <div>
-              <h3 className="font-bold text-emerald-800 mb-2 flex items-center">
-                <Users className="w-4 h-4 mr-2" /> Importar Clientes
-              </h3>
-              <p className="text-sm text-emerald-700/80 mb-4 h-10">
-                Baixe o modelo, preencha as informações e importe a planilha para cadastrar clientes
-                em lote.
-              </p>
-            </div>
-            <div className="flex flex-col gap-2">
-              <button
-                onClick={() => void handleDownloadClientTemplate()}
-                disabled={preparingTemplate !== null}
-                className="w-full bg-white hover:bg-emerald-100 text-emerald-700 border border-emerald-300 px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center"
-              >
-                <Download className="w-4 h-4 mr-2" />
-                {preparingTemplate === 'clients' ? 'Preparando...' : 'Baixar Modelo Excel'}
-              </button>
-              <input
-                type="file"
-                accept=".xlsx,.xls"
-                className="hidden"
-                ref={clientInputRef}
-                onChange={handleImportClients}
-              />
-              <button
-                onClick={() => clientInputRef.current?.click()}
-                disabled={isImportingClients}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center cursor-pointer"
-              >
-                <Upload className="w-4 h-4 mr-2" />
-                {isImportingClients ? 'Importando...' : 'Importar Planilha'}
-              </button>
-            </div>
-          </div>
+                <div>
+                  <p className="text-sm font-medium text-stone-700 mb-1">Logo</p>
+                  <div className="flex h-36 items-center justify-center rounded-xl border-2 border-dashed border-stone-200 bg-stone-50 p-3">
+                    {settings.companyLogo ? (
+                      <img
+                        src={settings.companyLogo}
+                        alt="Logo da empresa"
+                        className="max-h-full max-w-full object-contain"
+                      />
+                    ) : (
+                      <ImageIcon className="w-10 h-10 text-stone-300" />
+                    )}
+                  </div>
+                  <input
+                    ref={logoInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="hidden"
+                    aria-label="Arquivo da logo"
+                    onChange={(event) => void handleLogoChange(event)}
+                  />
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => logoInputRef.current?.click()}
+                      disabled={isPreparingLogo}
+                      className="flex items-center gap-2 rounded-lg border border-stone-300 px-3 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-50"
+                    >
+                      <Upload className="w-4 h-4" />
+                      {isPreparingLogo
+                        ? 'Preparando...'
+                        : settings.companyLogo
+                          ? 'Trocar logo'
+                          : 'Enviar logo'}
+                    </button>
+                    {settings.companyLogo && (
+                      <button
+                        type="button"
+                        onClick={() => update({ companyLogo: '' })}
+                        className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Remover
+                      </button>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-stone-400">
+                    PNG, JPG ou WEBP até 2 MB. Prefira fundo transparente. A imagem é reduzida para
+                    no máximo 600 px.
+                  </p>
+                </div>
+              </div>
+            </Card>
+          )}
 
-          <div className="p-4 bg-blue-50 rounded-lg border border-blue-100 flex flex-col justify-between">
-            <div>
-              <h3 className="font-bold text-blue-800 mb-2 flex items-center">
-                <UserCheck className="w-4 h-4 mr-2" /> Importar Agentes
-              </h3>
-              <p className="text-sm text-blue-700/80 mb-4 h-10">
-                Baixe o modelo, preencha as informações e importe a planilha para cadastrar agentes
-                em lote.
-              </p>
-            </div>
-            <div className="flex flex-col gap-2">
-              <button
-                onClick={() => void handleDownloadAgentTemplate()}
-                disabled={preparingTemplate !== null}
-                className="w-full bg-white hover:bg-blue-100 text-blue-700 border border-blue-300 px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center"
+          {section === 'precificacao' && (
+            <Card
+              title="Padrões da precificação"
+              description="Valores usados ao iniciar uma nova precificação nas calculadoras."
+            >
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Fator padrão — Real" htmlFor="settings-factor-brl">
+                  <input
+                    id="settings-factor-brl"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={settings.defaultFactorBRL ?? 0.8}
+                    onChange={(event) =>
+                      update({ defaultFactorBRL: Math.max(0, Number(event.target.value)) })
+                    }
+                    className={inputClass}
+                  />
+                </Field>
+                <Field
+                  label="Fator padrão — Dólar"
+                  htmlFor="settings-factor-usd"
+                  hint="Zero não altera o custo da lista em dólar."
+                >
+                  <input
+                    id="settings-factor-usd"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={settings.defaultFactorUSD ?? 0}
+                    onChange={(event) =>
+                      update({ defaultFactorUSD: Math.max(0, Number(event.target.value)) })
+                    }
+                    className={inputClass}
+                  />
+                </Field>
+              </div>
+              <div className="mt-4">
+                <Field label="Termos comerciais padrão" htmlFor="settings-pricing-terms">
+                  <textarea
+                    id="settings-pricing-terms"
+                    value={settings.pricingTerms || ''}
+                    onChange={(event) => update({ pricingTerms: event.target.value })}
+                    className={`${inputClass} h-28`}
+                    placeholder="Condições de pagamento, entrega, etc."
+                  />
+                </Field>
+              </div>
+            </Card>
+          )}
+
+          {section === 'categorias' && (
+            <Card
+              title="Categorias de produtos"
+              description="Organizam as matérias-primas e agilizam a escolha na calculadora. Somente gerente ou acima altera."
+            >
+              <CompatibilityCategoryManager />
+            </Card>
+          )}
+
+          {section === 'importacao' && (
+            <Card
+              title="Importação em lote"
+              description="Baixe o modelo, preencha e importe a planilha."
+            >
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                {importCard('clients')}
+                {importCard('agents')}
+              </div>
+            </Card>
+          )}
+
+          {section === 'sistema' && (
+            <>
+              <SystemHealthPanel />
+              <Card
+                title="Backup dos dados"
+                description="Os dados ficam no Supabase, que faz cópias de segurança automáticas do banco."
               >
-                <Download className="w-4 h-4 mr-2" />
-                {preparingTemplate === 'agents' ? 'Preparando...' : 'Baixar Modelo Excel'}
-              </button>
-              <input
-                type="file"
-                accept=".xlsx,.xls"
-                className="hidden"
-                ref={agentInputRef}
-                onChange={handleImportAgents}
-              />
-              <button
-                onClick={() => agentInputRef.current?.click()}
-                disabled={isImportingAgents}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center cursor-pointer"
-              >
-                <Upload className="w-4 h-4 mr-2" />
-                {isImportingAgents ? 'Importando...' : 'Importar Planilha'}
-              </button>
-            </div>
-          </div>
+                <a
+                  href={SUPABASE_PROJECT_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-lg border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50"
+                >
+                  <Database className="w-4 h-4" />
+                  Abrir painel do Supabase
+                </a>
+                <p className="mt-2 text-xs text-stone-400">
+                  As cópias e a restauração ficam em Database → Backups, no painel.
+                </p>
+              </Card>
+            </>
+          )}
+
+          {saveBar}
         </div>
       </div>
     </div>
