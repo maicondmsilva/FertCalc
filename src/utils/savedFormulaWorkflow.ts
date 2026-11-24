@@ -89,7 +89,10 @@ export function getPriceListsForLoadingLocation(
   loadingLocationId: string
 ): PriceList[] {
   if (!loadingLocationId) return [];
-  return priceLists.filter((list) => list.local_carregamento_id === loadingLocationId);
+  // Listas arquivadas não entram em novos relatórios.
+  return priceLists.filter(
+    (list) => list.local_carregamento_id === loadingLocationId && !list.arquivadoEm
+  );
 }
 
 export function getFormulaUpdateProtection(

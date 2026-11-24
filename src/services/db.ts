@@ -973,6 +973,7 @@ const mapPriceList = (d: any): PriceList => ({
     d.currency === 'BRL' ? (d.exchange_rate ? Number(d.exchange_rate) : undefined) : undefined,
   macros: d.macros || [],
   micros: d.micros || [],
+  arquivadoEm: d.arquivado_em ?? undefined,
 });
 
 export interface PriceListPage {
@@ -987,6 +988,12 @@ export interface PriceListPageOptions {
   page?: number;
   pageSize?: number;
   search?: string;
+  /** Filtra por local de carregamento. */
+  localId?: string;
+  /** Filtra pela moeda; listas antigas sem moeda contam como reais. */
+  currency?: 'BRL' | 'USD';
+  /** true = só arquivadas; false (padrão) = só ativas. */
+  archived?: boolean;
 }
 
 export async function getPriceLists(): Promise<PriceList[]> {
@@ -1002,6 +1009,9 @@ export async function getPriceListsPage({
   page = 1,
   pageSize = 9,
   search = '',
+  localId,
+  currency,
+  archived = false,
 }: PriceListPageOptions = {}): Promise<PriceListPage> {
   const safePage = Math.max(1, Math.trunc(page));
   const safePageSize = Math.min(50, Math.max(1, Math.trunc(pageSize)));
@@ -1016,6 +1026,10 @@ export async function getPriceListsPage({
   } else if (normalizedSearch) {
     query = query.ilike('name', `%${normalizedSearch}%`);
   }
+  query = archived ? query.not('arquivado_em', 'is', null) : query.is('arquivado_em', null);
+  if (localId) query = query.eq('local_carregamento_id', localId);
+  if (currency === 'USD') query = query.eq('currency', 'USD');
+  if (currency === 'BRL') query = query.or('currency.eq.BRL,currency.is.null');
 
   const { data, error, count } = await query
     .order('id_numeric', { ascending: false })
@@ -1036,6 +1050,7 @@ export async function getPriceListsForPdfSelection(): Promise<PriceListPdfSource
   const { data, error } = await supabase
     .from('price_lists')
     .select('id,id_numeric,publication_id,name,local_carregamento_id,date,currency')
+    .is('arquivado_em', null)
     .order('id_numeric', { ascending: false });
   if (error) throw error;
   return (data ?? []).map((item) => ({
@@ -1118,9 +1133,30 @@ export async function updatePriceList(id: string, pl: Partial<PriceList>): Promi
   if (error) throw error;
 }
 
-export async function deletePriceList(id: string): Promise<void> {
-  const { error } = await supabase.from('price_lists').delete().eq('id', id);
+/**
+ * Exclui a lista se nenhuma precificação ou histórico de preço a usou; se já
+ * foi usada, o banco arquiva no lugar. Retorna o que aconteceu.
+ */
+export async function deleteOrArchivePriceList(id: string): Promise<'excluida' | 'arquivada'> {
+  const { data, error } = await supabase.rpc('excluir_ou_arquivar_lista_preco', {
+    p_list_id: id,
+  });
   if (error) throw error;
+  return data === 'arquivada' ? 'arquivada' : 'excluida';
+}
+
+export async function restorePriceList(id: string): Promise<void> {
+  const { error } = await supabase.rpc('restaurar_lista_preco', { p_list_id: id });
+  if (error) throw error;
+}
+
+export async function countArchivedPriceLists(): Promise<number> {
+  const { count, error } = await supabase
+    .from('price_lists')
+    .select('id', { count: 'exact', head: true })
+    .not('arquivado_em', 'is', null);
+  if (error) throw error;
+  return count ?? 0;
 }
 
 // ============================================================
