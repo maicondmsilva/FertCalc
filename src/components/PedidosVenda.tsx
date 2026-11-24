@@ -22,14 +22,13 @@ import { useToast } from './Toast';
 import Pagination from './ui/Pagination';
 import { PedidosCarteiraTable } from './pedidosVenda/PedidosCarteiraTable';
 import { PedidoDetailPanel } from './pedidosVenda/PedidoDetailPanel';
-import { SaldosCanceladosTab } from './pedidosVenda/SaldosCanceladosTab';
+import { CancelamentosReportView } from './pedidosVenda/CancelamentosReportView';
 import { STATUS_LABEL, formatTon, pedidoLabel } from './pedidosVenda/pedidosVendaModel';
 
 const NovoPedidoVendaModal = React.lazy(() => import('./NovoPedidoVendaModal'));
 const EditarPedidoVendaModal = React.lazy(() => import('./EditarPedidoVendaModal'));
 const CancSubstituiModal = React.lazy(() => import('./CancSubstituiModal'));
 const CancelamentoDefinitivoModal = React.lazy(() => import('./CancelamentoDefinitivoModal'));
-const RelatorioCancSubstitui = React.lazy(() => import('./RelatorioCancSubstitui'));
 const ModalNovoCarregamento = React.lazy(() =>
   import('./Carregamento').then((module) => ({ default: module.ModalNovoCarregamento }))
 );
@@ -355,16 +354,14 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
       </div>
 
       {activeTab === 'relatorio' && (
-        <React.Suspense fallback={<LoadingFeature label="Carregando relatório…" />}>
-          <RelatorioCancSubstitui
-            currentUser={currentUser}
-            onOpenPedido={(id) => void openPedidoById(id)}
-          />
-        </React.Suspense>
+        <CancelamentosReportView
+          mode="canc_substitui"
+          onOpenPedido={(id) => void openPedidoById(id)}
+        />
       )}
 
       {activeTab === 'saldos_cancelados' && (
-        <SaldosCanceladosTab onOpenPedido={(id) => void openPedidoById(id)} />
+        <CancelamentosReportView mode="definitivo" onOpenPedido={(id) => void openPedidoById(id)} />
       )}
 
       {activeTab === 'pedidos' && (
