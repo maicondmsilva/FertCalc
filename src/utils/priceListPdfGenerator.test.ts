@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PriceList, RawMaterial } from '../types';
 import { createPriceListPdfDocument } from './priceListPdfGenerator';
+import { SAMPLE_LOGO } from './__fixtures__/sampleLogo';
 
 const material = (id: string, name: string, price: number): RawMaterial => ({
   id,
@@ -87,7 +88,13 @@ describe('PDF da lista de preços', () => {
         competence: '2026-11-23',
         locations: [],
         sortOrder: 1,
-        notes: 'Preços FOB; Sujeito a alteração sem aviso; Validade de 5 dias',
+        notes: Array.from(
+          { length: 6 },
+          (_, index) =>
+            `Observação ${index + 1}: condição comercial importante para o cliente conferir antes de fechar o pedido.`
+        )
+          .join('\n')
+          .slice(0, 600),
       },
       lists: [realList('1', 'a', 0), realList('2', 'b', 40), realList('3', 'c', 80)],
       locationNames: new Map([
@@ -98,6 +105,27 @@ describe('PDF da lista de preços', () => {
       settings: null,
     });
 
+    expect(document.getNumberOfPages()).toBe(1);
+  });
+
+  it('usa o logo da empresa sem distorcer', () => {
+    const document = createPriceListPdfDocument({
+      group: {
+        id: 'legacy:setembro:BRL',
+        label: 'Lista Setembro',
+        currency: 'BRL',
+        competence: '2026-09-01',
+        locations: [],
+        sortOrder: 1,
+      },
+      lists: [list('1', 'uberaba', 0)],
+      locationNames: new Map([['uberaba', 'Uberaba']]),
+      settings: { companyName: 'Empresa', companyLogo: SAMPLE_LOGO },
+    });
+    const output = document.output();
+    // A imagem entra no PDF e o nome não é escrito no lugar dela.
+    expect(output).toContain('/Subtype /Image');
+    expect(output).not.toContain('(Empresa) Tj');
     expect(document.getNumberOfPages()).toBe(1);
   });
 });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   RawMaterial,
   PricingFactors,
@@ -401,7 +401,10 @@ export function useCalculator({
     const defaultLocal = locaisCarregamento.find((local) => local.nome === DEFAULT_LOCAL_NAME);
     const selectedLocalId = initialLoadingLocationId || defaultLocal?.id || '';
     const latestPriceList = priceLists
-      .filter((list) => !selectedLocalId || list.local_carregamento_id === selectedLocalId)
+      .filter(
+        (list) =>
+          !list.arquivadoEm && (!selectedLocalId || list.local_carregamento_id === selectedLocalId)
+      )
       .slice()
       .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime())[0];
 
@@ -1920,6 +1923,17 @@ export function useCalculator({
 
   // ─── Return ───────────────────────────────────────────────
 
+  // Listas arquivadas somem dos seletores; a que já está em uso continua visível.
+  const selectablePriceLists = useMemo(() => {
+    const inUse = new Set(
+      [
+        factors.priceListId,
+        ...calculations.map((calculation) => calculation.factors?.priceListId),
+      ].filter(Boolean)
+    );
+    return priceLists.filter((list) => !list.arquivadoEm || inUse.has(list.id));
+  }, [priceLists, factors.priceListId, calculations]);
+
   return {
     // Confirm dialog
     confirmState,
@@ -1968,7 +1982,7 @@ export function useCalculator({
 
     // Lookup data
     branches,
-    priceLists,
+    priceLists: selectablePriceLists,
     locaisCarregamento,
     availableClients,
     availableAgents,

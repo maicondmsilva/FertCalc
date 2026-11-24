@@ -325,6 +325,8 @@ export interface PriceList {
   dollarRate?: number; // Para efeito de conhecimento em listas BRL
   macros: RawMaterial[];
   micros: RawMaterial[];
+  /** Preenchido quando a lista foi arquivada (já usada em precificações). */
+  arquivadoEm?: string;
 }
 
 export type PriceListCurrency = 'BRL' | 'USD';

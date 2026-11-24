@@ -114,30 +114,34 @@ function renderPriceListPdf(
   const headerScale = Math.max(0.75, scale);
   const headerBottom = 28 * headerScale;
 
-  if (settings?.companyLogo) {
-    try {
-      const logoFormat = settings.companyLogo.includes('image/jpeg') ? 'JPEG' : 'PNG';
-      doc.addImage(
-        settings.companyLogo,
-        logoFormat,
-        margin,
-        9,
-        39 * headerScale,
-        16 * headerScale,
-        undefined,
-        'FAST'
-      );
-    } catch {
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(178, 24, 31);
-      doc.setFontSize(18 * headerScale);
-      doc.text(settings.companyName || 'FERTIGran', margin, 19 * headerScale);
-    }
-  } else {
+  const companyName = settings?.companyName?.trim() || 'FertCalc';
+  const drawCompanyName = () => {
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(178, 24, 31);
     doc.setFontSize(18 * headerScale);
-    doc.text(settings?.companyName || 'FERTIGran', margin, 19 * headerScale);
+    doc.text(companyName, margin, 19 * headerScale);
+  };
+  if (settings?.companyLogo) {
+    try {
+      // Logo da empresa (Configurações > Personalização), sem distorcer: cabe
+      // numa área de até 48 × 17 mm mantendo a proporção original.
+      const logoFormat = /image\/jpe?g/i.test(settings.companyLogo) ? 'JPEG' : 'PNG';
+      const properties = doc.getImageProperties(settings.companyLogo);
+      const maxWidth = 48 * headerScale;
+      const maxHeight = 17 * headerScale;
+      const ratio =
+        properties.width > 0 && properties.height > 0
+          ? properties.width / properties.height
+          : maxWidth / maxHeight;
+      const width = Math.min(maxWidth, maxHeight * ratio);
+      const height = width / ratio;
+      const top = 7 * headerScale + (maxHeight - height) / 2;
+      doc.addImage(settings.companyLogo, logoFormat, margin, top, width, height, undefined, 'FAST');
+    } catch {
+      drawCompanyName();
+    }
+  } else {
+    drawCompanyName();
   }
 
   doc.setTextColor(30, 30, 30);
@@ -284,7 +288,7 @@ function renderPriceListPdf(
     doc.setTextColor(178, 24, 31);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9.5 * scale);
-    doc.text('Atenção', margin, cursorY);
+    doc.text('Observações', margin, cursorY);
     doc.setTextColor(35, 35, 35);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8 * scale);
