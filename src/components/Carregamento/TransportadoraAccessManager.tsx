@@ -191,4 +191,3 @@ export default function TransportadoraAccessManager({ currentUser, transportador
     </section>
   );
 }
-
