@@ -57,6 +57,8 @@ export interface RawMaterial {
   type: NutrientType;
   name: string;
   price: number;
+  /** Preço em dólar (US$/t) na mesma lista; `price` é sempre em reais nas listas novas. */
+  priceUSD?: number;
   listPrice?: number;
   isManualPrice?: boolean;
   n: number;

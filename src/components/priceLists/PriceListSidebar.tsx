@@ -2,8 +2,7 @@ import React from 'react';
 import { Archive, ChevronLeft, ChevronRight, MapPin, Search } from 'lucide-react';
 import type { PriceList } from '../../types';
 import type { LocalCarregamento } from '../../types/carregamento';
-
-export type CurrencyFilter = 'all' | 'BRL' | 'USD';
+import { listCurrencies } from '../../utils/priceListCurrency';
 
 interface PriceListSidebarProps {
   lists: PriceList[];
@@ -14,8 +13,6 @@ interface PriceListSidebarProps {
   onSearchChange: (value: string) => void;
   localId: string;
   onLocalChange: (value: string) => void;
-  currency: CurrencyFilter;
-  onCurrencyChange: (value: CurrencyFilter) => void;
   archived: boolean;
   onArchivedChange: (value: boolean) => void;
   activeCount: number;
@@ -43,8 +40,6 @@ export function PriceListSidebar({
   onSearchChange,
   localId,
   onLocalChange,
-  currency,
-  onCurrencyChange,
   archived,
   onArchivedChange,
   activeCount,
@@ -84,36 +79,6 @@ export function PriceListSidebar({
               </option>
             ))}
           </select>
-          <div
-            role="radiogroup"
-            aria-label="Filtrar por moeda"
-            className="inline-flex shrink-0 rounded-lg bg-stone-100 p-0.5"
-          >
-            {(
-              [
-                { value: 'all', label: 'Todas' },
-                { value: 'BRL', label: 'R$' },
-                { value: 'USD', label: 'US$' },
-              ] as const
-            ).map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                role="radio"
-                aria-checked={currency === option.value}
-                onClick={() => onCurrencyChange(option.value)}
-                className={`rounded-md px-2.5 py-1.5 text-xs font-bold transition-colors ${
-                  currency === option.value
-                    ? option.value === 'USD'
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'bg-emerald-600 text-white shadow-sm'
-                    : 'text-stone-600 hover:bg-white'
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
         </div>
         <div className="flex gap-4 text-sm font-bold" role="tablist">
           <button
@@ -160,7 +125,6 @@ export function PriceListSidebar({
         {!loading &&
           lists.map((list) => {
             const selected = list.id === selectedId;
-            const usd = list.currency === 'USD';
             return (
               <button
                 key={list.id}
@@ -178,13 +142,18 @@ export function PriceListSidebar({
                     <span className="truncate text-[14px] font-black text-stone-800">
                       {list.name}
                     </span>
-                    <span
-                      className={`rounded-md px-1.5 py-0.5 text-[11px] font-black ${
-                        usd ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'
-                      }`}
-                    >
-                      {usd ? 'US$' : 'R$'}
-                    </span>
+                    {listCurrencies(list).map((currency) => (
+                      <span
+                        key={currency}
+                        className={`rounded-md px-1.5 py-0.5 text-[11px] font-black ${
+                          currency === 'USD'
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'bg-emerald-100 text-emerald-700'
+                        }`}
+                      >
+                        {currency === 'USD' ? 'US$' : 'R$'}
+                      </span>
+                    ))}
                     {list.arquivadoEm && <Archive className="h-3.5 w-3.5 text-stone-400" />}
                   </span>
                   <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-stone-500">

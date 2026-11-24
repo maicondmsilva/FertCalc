@@ -189,15 +189,40 @@ describe('carregar batida salva', () => {
 });
 
 describe('filtro de listas de preço por moeda', () => {
+  const brlItem = [material({ id: 'map', price: 7900 })];
+  const dualItem = [material({ id: 'map', price: 7900, priceUSD: 1460 })];
   const lists = [
-    { id: 'brl-antiga', currency: 'BRL' as const, local_carregamento_id: 'l1', date: '2026-01-01' },
-    { id: 'brl-nova', currency: undefined, local_carregamento_id: 'l1', date: '2026-06-01' },
-    { id: 'usd', currency: 'USD' as const, local_carregamento_id: 'l1', date: '2026-05-01' },
     {
-      id: 'usd-outro-local',
+      id: 'brl-antiga',
+      currency: 'BRL' as const,
+      local_carregamento_id: 'l1',
+      date: '2026-01-01',
+      macros: brlItem,
+      micros: [],
+    },
+    {
+      id: 'brl-nova',
+      currency: undefined,
+      local_carregamento_id: 'l1',
+      date: '2026-06-01',
+      macros: brlItem,
+      micros: [],
+    },
+    {
+      id: 'dupla',
+      currency: 'BRL' as const,
+      local_carregamento_id: 'l1',
+      date: '2026-05-01',
+      macros: dualItem,
+      micros: [],
+    },
+    {
+      id: 'usd-antiga',
       currency: 'USD' as const,
       local_carregamento_id: 'l2',
       date: '2026-07-01',
+      macros: brlItem,
+      micros: [],
     },
   ];
 
@@ -206,20 +231,22 @@ describe('filtro de listas de preço por moeda', () => {
     expect(getPriceListCurrency({ currency: 'USD' })).toBe('USD');
   });
 
-  it('mostra só as listas da moeda escolhida, da mais recente à mais antiga', () => {
+  it('mostra as listas com preço na moeda escolhida, da mais recente à mais antiga', () => {
     expect(filterPriceLists(lists, { currency: 'BRL' }).map((list) => list.id)).toEqual([
       'brl-nova',
+      'dupla',
       'brl-antiga',
     ]);
+    // A lista com reais e dólar aparece nas duas moedas.
     expect(filterPriceLists(lists, { currency: 'USD' }).map((list) => list.id)).toEqual([
-      'usd-outro-local',
-      'usd',
+      'usd-antiga',
+      'dupla',
     ]);
   });
 
   it('combina moeda e local de carregamento', () => {
     expect(
       filterPriceLists(lists, { currency: 'USD', localId: 'l1' }).map((list) => list.id)
-    ).toEqual(['usd']);
+    ).toEqual(['dupla']);
   });
 });

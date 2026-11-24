@@ -7,6 +7,8 @@ export interface PriceListPdfSelection {
   listIds: string[];
   /** Observações digitadas pelo usuário; saem no fim do PDF (que continua em uma página). */
   notes: string;
+  /** Moeda dos preços impressos (a mesma lista pode ter R$ e US$). */
+  currency: 'BRL' | 'USD';
 }
 
 /** Limite de texto para a observação caber na mesma página da lista. */
@@ -50,6 +52,7 @@ export function PriceListPdfSelectionDialog({
   const [groupId, setGroupId] = useState('');
   const [selectedListIds, setSelectedListIds] = useState<string[]>([]);
   const [notes, setNotes] = useState('');
+  const [currency, setCurrency] = useState<'BRL' | 'USD'>('BRL');
   const [generating, setGenerating] = useState(false);
   const selectedGroup = groups.find((group) => group.id === groupId);
 
@@ -88,7 +91,12 @@ export function PriceListPdfSelectionDialog({
     setGenerating(true);
     try {
       saveNotes(notes.trim());
-      await onConfirm({ group: selectedGroup, listIds: selectedListIds, notes: notes.trim() });
+      await onConfirm({
+        group: selectedGroup,
+        listIds: selectedListIds,
+        notes: notes.trim(),
+        currency,
+      });
     } finally {
       setGenerating(false);
     }
@@ -226,6 +234,41 @@ export function PriceListPdfSelectionDialog({
                   {selectedListIds.length} de {selectedGroup?.locations.length ?? 0} locais
                   selecionados
                 </p>
+              </div>
+
+              <div>
+                <span className="mb-1 block text-sm font-semibold text-stone-700">
+                  Moeda dos preços
+                </span>
+                <div
+                  role="radiogroup"
+                  aria-label="Moeda dos preços"
+                  className="inline-flex rounded-lg bg-stone-100 p-0.5"
+                >
+                  {(
+                    [
+                      { value: 'BRL', label: 'R$ Reais' },
+                      { value: 'USD', label: 'US$ Dólar' },
+                    ] as const
+                  ).map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={currency === option.value}
+                      onClick={() => setCurrency(option.value)}
+                      className={`rounded-md px-3 py-1.5 text-xs font-bold ${
+                        currency === option.value
+                          ? option.value === 'USD'
+                            ? 'bg-blue-600 text-white shadow-sm'
+                            : 'bg-emerald-600 text-white shadow-sm'
+                          : 'text-stone-600 hover:bg-white'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div>
