@@ -1,3 +1,4 @@
+import { drawCompanyLogo } from '../utils/pdfBranding';
 import React, { useState, useEffect } from 'react';
 import { getCompanyDisplayName } from '../utils/companyBranding';
 import { PricingRecord, User, AppSettings, Branch } from '../types';
@@ -179,15 +180,19 @@ export default function PricingReport({ currentUser }: PricingReportProps) {
       const doc = new jsPDF({ orientation: 'landscape' });
       const pageWidth = doc.internal.pageSize.getWidth();
 
-      if (appSettings.companyLogo) {
-        doc.addImage(appSettings.companyLogo, 'PNG', 10, 8, 18, 18);
-      }
+      const logoWidth = drawCompanyLogo(doc, appSettings, {
+        x: 10,
+        y: 7,
+        maxWidth: 45,
+        maxHeight: 18,
+      });
+      const textX = logoWidth ? 10 + logoWidth + 5 : 10;
       doc.setFontSize(16);
       doc.setFont(undefined, 'bold');
-      doc.text(getCompanyDisplayName(appSettings), appSettings.companyLogo ? 32 : 10, 16);
+      doc.text(getCompanyDisplayName(appSettings), textX, 16);
       doc.setFontSize(10);
       doc.setFont(undefined, 'normal');
-      doc.text('Relatório de Precificação', appSettings.companyLogo ? 32 : 10, 22);
+      doc.text('Relatório de Precificação', textX, 22);
       doc.text(
         `Gerado em: ${new Date().toLocaleString('pt-BR')} | Por: ${currentUser.name}`,
         10,
