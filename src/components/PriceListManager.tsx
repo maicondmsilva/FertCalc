@@ -20,11 +20,12 @@ import { getPriceListPublications } from '../services/priceListPublicationServic
 import { buildPriceListPdfGroups, type PriceListPdfGroup } from '../utils/priceListPdfSelection';
 import type { PriceListPdfSource } from '../utils/priceListPdfSelection';
 import { downloadPriceListPdf } from '../utils/priceListPdfGenerator';
+import { listHasCurrency, projectPriceList } from '../utils/priceListCurrency';
 import { useToast } from './Toast';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { useConfirm } from '../hooks/useConfirm';
 import { PriceListPdfSelectionDialog } from './PriceListPdfSelectionDialog';
-import { PriceListSidebar, type CurrencyFilter } from './priceLists/PriceListSidebar';
+import { PriceListSidebar } from './priceLists/PriceListSidebar';
 import { PriceListEditor } from './priceLists/PriceListEditor';
 import {
   buildPriceListSheetRows,
@@ -65,7 +66,6 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [localFilter, setLocalFilter] = useState('');
-  const [currencyFilter, setCurrencyFilter] = useState<CurrencyFilter>('all');
   const [archivedTab, setArchivedTab] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -125,7 +125,6 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
       pageSize: PAGE_SIZE,
       search: debouncedSearch,
       localId: localFilter || undefined,
-      currency: currencyFilter === 'all' ? undefined : currencyFilter,
       archived: archivedTab,
     })
       .then((result) => {
@@ -146,7 +145,7 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
     return () => {
       cancelled = true;
     };
-  }, [page, debouncedSearch, localFilter, currencyFilter, archivedTab, reloadToken]);
+  }, [page, debouncedSearch, localFilter, archivedTab, reloadToken]);
 
   useEffect(() => {
     getPriceListsForPdfSelection()
@@ -241,12 +240,13 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
       });
       if (!proceed) return;
     }
+    // A lista guarda os preços em reais (`price`) e em dólar (`priceUSD`) e um
+    // único câmbio (R$ por US$).
     const payload = {
       name: draft.name.trim(),
       local_carregamento_id: draft.localId || undefined,
-      currency: draft.currency,
-      exchangeRate: draft.currency === 'USD' ? draft.exchangeRate : undefined,
-      dollarRate: draft.currency === 'BRL' ? draft.exchangeRate || undefined : undefined,
+      currency: 'BRL' as const,
+      dollarRate: draft.exchangeRate > 0 ? draft.exchangeRate : undefined,
       macros: draft.macros,
       micros: draft.micros,
     };
@@ -388,9 +388,27 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
               if (selectedLists.length !== selection.listIds.length) {
                 throw new Error('Uma ou mais listas selecionadas não estão mais disponíveis.');
               }
+              if (!selectedLists.some((list) => listHasCurrency(list, selection.currency))) {
+                throw new Error(
+                  selection.currency === 'USD'
+                    ? 'Nenhuma lista selecionada tem preços em dólar.'
+                    : 'Nenhuma lista selecionada tem preços em reais.'
+                );
+              }
+              const projected = selectedLists.map((list) =>
+                projectPriceList(list, selection.currency)
+              );
               downloadPriceListPdf({
-                group: { ...selection.group, notes: selection.notes },
-                lists: selectedLists,
+                group: {
+                  ...selection.group,
+                  notes: selection.notes,
+                  currency: selection.currency,
+                  exchangeRate:
+                    selection.currency === 'USD'
+                      ? projected.find((list) => list.exchangeRate)?.exchangeRate
+                      : undefined,
+                },
+                lists: projected,
                 locationNames: new Map(locais.map((local) => [local.id, local.nome] as const)),
                 settings,
               });
@@ -493,11 +511,6 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
           localId={localFilter}
           onLocalChange={(value) => {
             setLocalFilter(value);
-            setPage(1);
-          }}
-          currency={currencyFilter}
-          onCurrencyChange={(value) => {
-            setCurrencyFilter(value);
             setPage(1);
           }}
           archived={archivedTab}

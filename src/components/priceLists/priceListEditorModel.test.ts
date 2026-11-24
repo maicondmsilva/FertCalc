@@ -6,6 +6,7 @@ import {
   draftFromList,
   emptyDraft,
   filterMaterials,
+  findMissingUsdItems,
   findZeroPriceItems,
   formatPriceInput,
   getDraftSaveProblem,
@@ -14,6 +15,8 @@ import {
   moveMaterial,
   orderForDisplay,
   parsePriceInput,
+  priceIn,
+  withPriceIn,
 } from './priceListEditorModel';
 
 const material = (overrides: Partial<RawMaterial> = {}): RawMaterial => ({
@@ -118,25 +121,46 @@ describe('editor de lista de preço', () => {
     expect(isDraftDirty(emptyDraft())).toBe(false);
   });
 
-  it('não salva sem nome, sem câmbio em dólar ou sem matéria-prima', () => {
+  it('não salva sem nome, sem câmbio para preços em dólar ou sem matéria-prima', () => {
     expect(getDraftSaveProblem({ ...draftFromList(list), name: ' ' })).toMatch('nome');
-    expect(
-      getDraftSaveProblem({ ...draftFromList(list), currency: 'USD', exchangeRate: 0 })
-    ).toMatch('câmbio');
+    const comDolar = draftFromList(list);
+    comDolar.macros[0].priceUSD = 1460;
+    expect(getDraftSaveProblem({ ...comDolar, exchangeRate: 0 })).toMatch('câmbio');
+    expect(getDraftSaveProblem({ ...comDolar, exchangeRate: 5.4 })).toBeNull();
     expect(getDraftSaveProblem({ ...emptyDraft(), name: 'Nova' })).toMatch('matéria-prima');
-    expect(getDraftSaveProblem(draftFromList(list))).toBeNull();
+    expect(getDraftSaveProblem({ ...draftFromList(list), exchangeRate: 0 })).toBeNull();
   });
 
-  it('gera as linhas do Excel com local, moeda e preço', () => {
-    const rows = buildPriceListSheetRows(draftFromList(list), 'Uberaba');
+  it('guarda preço em reais e em dólar na mesma lista', () => {
+    const draft = draftFromList(list);
+    const map = withPriceIn(draft.macros[0], 'USD', 1460);
+    expect([priceIn(map, 'BRL'), priceIn(map, 'USD')]).toEqual([7900, 1460]);
+    expect(findMissingUsdItems({ macros: [map, draft.macros[1]], micros: [] })).toHaveLength(1);
+    expect(isDraftDirty({ ...draft, macros: [map, draft.macros[1]] }, draftFromList(list))).toBe(
+      true
+    );
+  });
+
+  it('lista antiga em dólar abre com os preços na coluna de dólar', () => {
+    const draft = draftFromList({ ...list, currency: 'USD', exchangeRate: 5.1 });
+    expect(draft.currency).toBe('USD');
+    expect(draft.exchangeRate).toBe(5.1);
+    expect([draft.macros[0].price, draft.macros[0].priceUSD]).toEqual([0, 7900]);
+  });
+
+  it('gera as linhas do Excel com local e preços em R$ e US$', () => {
+    const draft = draftFromList(list);
+    draft.macros[0].priceUSD = 1460;
+    const rows = buildPriceListSheetRows(draft, 'Uberaba');
     expect(rows).toHaveLength(2);
     expect(rows[0]).toMatchObject({
       Lista: '611/2026',
       Local: 'Uberaba',
-      Moeda: 'BRL',
       'Matéria-prima': 'MAP Granulado',
       Garantias: 'N 11 · P 52',
       'Preço (R$/t)': 7900,
+      'Preço (US$/t)': 1460,
     });
+    expect(rows[1]['Preço (US$/t)']).toBe('');
   });
 });

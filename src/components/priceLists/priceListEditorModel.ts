@@ -8,8 +8,9 @@ export interface PriceListDraft {
   id?: string;
   name: string;
   localId: string;
+  /** Moeda que está sendo preenchida no editor (a lista guarda as duas). */
   currency: PriceListCurrencyCode;
-  /** Câmbio da lista em dólar ou câmbio de referência da lista em reais. */
+  /** Câmbio da lista (R$ por US$), usado nas precificações em dólar. */
   exchangeRate: number;
   macros: RawMaterial[];
   micros: RawMaterial[];
@@ -25,15 +26,19 @@ export const emptyDraft = (): PriceListDraft => ({
 });
 
 export function draftFromList(list: PriceList, asCopy = false): PriceListDraft {
-  const currency: PriceListCurrencyCode = list.currency === 'USD' ? 'USD' : 'BRL';
+  // Listas antigas em dólar guardavam o dólar em `price`: passam para `priceUSD`.
+  const legacyUsd = list.currency === 'USD';
+  const copyItem = (item: RawMaterial): RawMaterial =>
+    legacyUsd ? { ...item, priceUSD: Number(item.price) || 0, price: 0 } : { ...item };
   return {
     id: asCopy ? undefined : list.id,
     name: asCopy ? `${list.name} (cópia)` : list.name,
     localId: list.local_carregamento_id || '',
-    currency,
-    exchangeRate: Number(currency === 'USD' ? list.exchangeRate : list.dollarRate) || 0,
-    macros: (list.macros || []).map((item) => ({ ...item })),
-    micros: (list.micros || []).map((item) => ({ ...item })),
+    currency: legacyUsd ? 'USD' : 'BRL',
+    exchangeRate:
+      Number(legacyUsd ? list.exchangeRate : (list.dollarRate ?? list.exchangeRate)) || 0,
+    macros: (list.macros || []).map(copyItem),
+    micros: (list.micros || []).map(copyItem),
   };
 }
 
@@ -41,9 +46,28 @@ export function draftFromList(list: PriceList, asCopy = false): PriceListDraft {
 export const canManagePriceLists = (user: Pick<User, 'role'>) =>
   user.role === 'master' || user.role === 'admin' || user.role === 'manager';
 
-/** Matérias-primas da lista sem preço (zero ou vazio). */
+/** Preço da matéria-prima na moeda indicada. */
+export const priceIn = (item: RawMaterial, currency: PriceListCurrencyCode) =>
+  Number(currency === 'USD' ? item.priceUSD : item.price) || 0;
+
+/** Grava o preço da matéria-prima na moeda indicada. */
+export const withPriceIn = (
+  item: RawMaterial,
+  currency: PriceListCurrencyCode,
+  value: number
+): RawMaterial => (currency === 'USD' ? { ...item, priceUSD: value } : { ...item, price: value });
+
+/** Matérias-primas sem preço em reais (o preço em reais é obrigatório). */
 export const findZeroPriceItems = (draft: Pick<PriceListDraft, 'macros' | 'micros'>) =>
   [...draft.macros, ...draft.micros].filter((item) => !(Number(item.price) > 0));
+
+/** Matérias-primas sem preço em dólar: não aparecem na calculadora quando ela está em US$. */
+export const findMissingUsdItems = (draft: Pick<PriceListDraft, 'macros' | 'micros'>) =>
+  [...draft.macros, ...draft.micros].filter((item) => !(Number(item.priceUSD) > 0));
+
+/** A lista tem algum preço em dólar? */
+export const draftHasUsdPrices = (draft: Pick<PriceListDraft, 'macros' | 'micros'>) =>
+  [...draft.macros, ...draft.micros].some((item) => Number(item.priceUSD) > 0);
 
 /** Lê o preço digitado no formato brasileiro ("7.900,50") ou com ponto decimal ("7900.5"). */
 export function parsePriceInput(raw: string): number {
@@ -159,10 +183,9 @@ export function isDraftDirty(draft: PriceListDraft, saved?: PriceListDraft): boo
     JSON.stringify({
       name: value.name.trim(),
       localId: value.localId,
-      currency: value.currency,
       exchangeRate: Number(value.exchangeRate) || 0,
-      macros: value.macros.map((item) => [item.id, Number(item.price) || 0]),
-      micros: value.micros.map((item) => [item.id, Number(item.price) || 0]),
+      macros: value.macros.map((item) => [item.id, priceIn(item, 'BRL'), priceIn(item, 'USD')]),
+      micros: value.micros.map((item) => [item.id, priceIn(item, 'BRL'), priceIn(item, 'USD')]),
     });
   return snapshot(draft) !== snapshot(reference);
 }
@@ -170,8 +193,8 @@ export function isDraftDirty(draft: PriceListDraft, saved?: PriceListDraft): boo
 /** Problema que impede salvar o rascunho, ou null. */
 export function getDraftSaveProblem(draft: PriceListDraft): string | null {
   if (!draft.name.trim()) return 'Dê um nome para a lista.';
-  if (draft.currency === 'USD' && !(Number(draft.exchangeRate) > 0)) {
-    return 'Informe o câmbio para salvar uma lista em dólar.';
+  if (draftHasUsdPrices(draft) && !(Number(draft.exchangeRate) > 0)) {
+    return 'Informe o câmbio (R$ por US$) para usar os preços em dólar.';
   }
   if (draft.macros.length + draft.micros.length === 0) {
     return 'Adicione ao menos uma matéria-prima.';
@@ -179,21 +202,25 @@ export function getDraftSaveProblem(draft: PriceListDraft): string | null {
   return null;
 }
 
-/** Linhas da planilha Excel da lista (uma por matéria-prima). */
+/** Linhas da planilha Excel da lista (uma por matéria-prima, com preço em R$ e US$). */
 export function buildPriceListSheetRows(draft: PriceListDraft, localName: string) {
-  const symbol = draft.currency === 'USD' ? 'US$' : 'R$';
-  const row = (item: RawMaterial, tipo: string) => ({
+  const row = (item: RawMaterial, tipo: string, linha: string) => ({
+    Lista: draft.name,
+    Local: localName,
     Código: item.code || '',
     'Matéria-prima': item.name,
     Tipo: tipo,
-    Linha: item.isPremiumLine ? 'Diferenciada' : 'Convencional',
+    Linha: linha,
     Garantias: materialGuarantees(item)
       .map((guarantee) => `${guarantee.name} ${guarantee.value}`)
       .join(' · '),
-    [`Preço (${symbol}/t)`]: Number(item.price) || 0,
+    'Preço (R$/t)': priceIn(item, 'BRL'),
+    'Preço (US$/t)': priceIn(item, 'USD') || '',
   });
   return [
-    ...orderForDisplay(draft.macros).map((item) => row(item, 'Macro')),
-    ...draft.micros.map((item) => ({ ...row(item, 'Micro'), Linha: '' })),
-  ].map((line) => ({ Lista: draft.name, Local: localName, Moeda: draft.currency, ...line }));
+    ...orderForDisplay(draft.macros).map((item) =>
+      row(item, 'Macro', item.isPremiumLine ? 'Diferenciada' : 'Convencional')
+    ),
+    ...draft.micros.map((item) => row(item, 'Micro', '')),
+  ];
 }

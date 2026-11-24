@@ -38,7 +38,7 @@ import { CotacaoSolicitada } from '../types/carregamento';
 import { getEmbalagens } from '../services/embalagensService';
 import { getSavedFormulas } from '../services/db';
 import { getProdutosFormulados, ProdutoFormulado } from '../services/produtosFormuladosService';
-import { isValidExchangeRate } from '../utils/priceListCurrency';
+import { isValidExchangeRate, listHasCurrency } from '../utils/priceListCurrency';
 import {
   formatMicronutrientLabel,
   getCalculatedMicronutrientValue,
@@ -125,6 +125,7 @@ export default function Calculator({
     savedPricingId,
     branches,
     priceLists,
+    setPriceListCurrency,
     locaisCarregamento,
     availableClients,
     availableAgents,
@@ -436,6 +437,24 @@ export default function Calculator({
       (currentUser.permissions as any)?.calculator_savePricing !== false);
 
   const selectedPriceList = priceLists.find((list) => list.id === factors.priceListId);
+  // Moeda da lista: a mesma lista pode ter preços em reais e em dólar.
+  const selectedListCurrency = factors.priceListCurrency ?? 'BRL';
+  const listsForCurrency = (currency: 'BRL' | 'USD', localId = factors.local_carregamento_id) =>
+    priceLists
+      .filter(
+        (list) =>
+          listHasCurrency(list, currency) && (!localId || list.local_carregamento_id === localId)
+      )
+      .slice()
+      .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime());
+  const visiblePriceLists = listsForCurrency(selectedListCurrency);
+  const changeListCurrency = (currency: 'BRL' | 'USD') => {
+    if (currency === selectedListCurrency) return;
+    setPriceListCurrency(currency);
+    if (!selectedPriceList || !listHasCurrency(selectedPriceList, currency)) {
+      handleFactorChange('priceListId', listsForCurrency(currency)[0]?.id || '');
+    }
+  };
   const isUsdPriceList = factors.priceListCurrency === 'USD';
   const hasValidExchangeRate = !isUsdPriceList || isValidExchangeRate(factors.appliedExchangeRate);
   const pricingCurrencySymbol = isUsdPriceList ? 'US$' : 'R$';
@@ -815,7 +834,11 @@ export default function Calculator({
                   onChange={(e) => {
                     const localId = e.target.value;
                     const matchingList = priceLists
-                      .filter((list) => list.local_carregamento_id === localId)
+                      .filter(
+                        (list) =>
+                          list.local_carregamento_id === localId &&
+                          listHasCurrency(list, selectedListCurrency)
+                      )
                       .slice()
                       .sort(
                         (left, right) =>
@@ -839,21 +862,55 @@ export default function Calculator({
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-stone-600 mb-1 flex items-center">
-                  <Database className="w-4 h-4 mr-1" /> Lista de Preço
-                </label>
+                <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                  <label
+                    htmlFor="calculator-price-list"
+                    className="flex items-center text-sm font-medium text-stone-600"
+                  >
+                    <Database className="w-4 h-4 mr-1" /> Lista de Preço
+                  </label>
+                  <div
+                    role="radiogroup"
+                    aria-label="Moeda da lista de preço"
+                    className="inline-flex rounded-lg bg-stone-100 p-0.5"
+                  >
+                    {(
+                      [
+                        { value: 'BRL', label: 'R$ Reais' },
+                        { value: 'USD', label: 'US$ Dólar' },
+                      ] as const
+                    ).map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={selectedListCurrency === option.value}
+                        onClick={() => changeListCurrency(option.value)}
+                        className={`rounded-md px-2.5 py-1 text-xs font-bold transition-colors ${
+                          selectedListCurrency === option.value
+                            ? option.value === 'USD'
+                              ? 'bg-blue-600 text-white shadow-sm'
+                              : 'bg-emerald-600 text-white shadow-sm'
+                            : 'text-stone-600 hover:bg-white'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <select
+                  id="calculator-price-list"
                   value={factors.priceListId}
                   onChange={(e) => handleFactorChange('priceListId', e.target.value)}
                   className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
                 >
-                  <option value="">Selecione uma lista</option>
-                  {(factors.local_carregamento_id
-                    ? priceLists.filter(
-                        (l) => l.local_carregamento_id === factors.local_carregamento_id
-                      )
-                    : priceLists
-                  ).map((l) => (
+                  <option value="">
+                    {visiblePriceLists.length === 0
+                      ? `Nenhuma lista com preços em ${selectedListCurrency === 'USD' ? 'dólar' : 'reais'}`
+                      : 'Selecione uma lista'}
+                  </option>
+                  {visiblePriceLists.map((l) => (
                     <option key={l.id} value={l.id}>
                       {l.name}
                     </option>

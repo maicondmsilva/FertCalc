@@ -17,7 +17,10 @@ import { MaterialPickerModal } from './MaterialPickerModal';
 import { PriceInput } from './PriceInput';
 import {
   filterMaterials,
+  findMissingUsdItems,
   findZeroPriceItems,
+  priceIn,
+  withPriceIn,
   macroToRow,
   materialGuarantees,
   microToRow,
@@ -94,8 +97,20 @@ export function PriceListEditor({
   const setItems = (next: RawMaterial[]) =>
     onChange(tab === 'macro' ? { ...draft, macros: next } : { ...draft, micros: next });
 
+  // O preço editado é o da moeda escolhida nos botões (a lista guarda R$ e US$).
   const updatePrice = (id: string, price: number) =>
-    setItems(items.map((item) => (item.id === id ? { ...item, price } : item)));
+    setItems(
+      items.map((item) => (item.id === id ? withPriceIn(item, draft.currency, price) : item))
+    );
+  const otherCurrency = draft.currency === 'USD' ? 'BRL' : 'USD';
+  const formatOther = (value: number) =>
+    value > 0
+      ? `${otherCurrency === 'USD' ? 'US$' : 'R$'} ${value.toLocaleString('pt-BR', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}`
+      : `sem preço em ${otherCurrency === 'USD' ? 'dólar' : 'reais'}`;
+  const missingUsd = findMissingUsdItems(draft);
 
   const addFromCatalog = (ids: string[]) => {
     if (tab === 'macro') {
@@ -246,7 +261,7 @@ export function PriceListEditor({
           </select>
         </label>
         <div>
-          <span className={labelClass}>Moeda</span>
+          <span className={labelClass}>Preencher preços em</span>
           <div className="inline-flex h-11 w-full rounded-xl bg-stone-100 p-1" role="radiogroup">
             {(
               [
@@ -275,9 +290,7 @@ export function PriceListEditor({
           </div>
         </div>
         <label className="block">
-          <span className={labelClass}>
-            {draft.currency === 'USD' ? 'Câmbio da lista (R$)' : 'Câmbio de referência (R$)'}
-          </span>
+          <span className={labelClass}>Câmbio (R$ por US$)</span>
           <input
             type="number"
             min="0"
@@ -287,7 +300,11 @@ export function PriceListEditor({
             onChange={(event) =>
               onChange({ ...draft, exchangeRate: Math.max(0, Number(event.target.value) || 0) })
             }
-            placeholder={draft.currency === 'USD' ? 'Obrigatório' : 'Opcional'}
+            placeholder={
+              missingUsd.length < draft.macros.length + draft.micros.length
+                ? 'Obrigatório'
+                : 'Opcional'
+            }
             className={`${fieldClass} text-right font-mono`}
           />
         </label>
@@ -427,12 +444,15 @@ export function PriceListEditor({
                   <td className="px-3 py-2.5">
                     <PriceInput
                       label={`Preço de ${item.name}`}
-                      value={Number(item.price) || 0}
+                      value={priceIn(item, draft.currency)}
                       symbol={symbol}
                       disabled={readOnly}
-                      highlightEmpty={!readOnly}
+                      highlightEmpty={!readOnly && draft.currency === 'BRL'}
                       onChange={(price) => updatePrice(item.id, price)}
                     />
+                    <p className="mt-1 text-right text-[11px] text-stone-400">
+                      {formatOther(priceIn(item, otherCurrency))}
+                    </p>
                   </td>
                   {!readOnly && (
                     <td className="px-2 py-2.5 text-right">
@@ -465,9 +485,11 @@ export function PriceListEditor({
               <>
                 <AlertTriangle className="h-4 w-4 shrink-0" />
                 {zeroItems.length === 1
-                  ? `1 matéria-prima sem preço: ${zeroItems[0].name}`
-                  : `${zeroItems.length} matérias-primas sem preço`}
+                  ? `1 matéria-prima sem preço em reais: ${zeroItems[0].name}`
+                  : `${zeroItems.length} matérias-primas sem preço em reais`}
               </>
+            ) : draft.currency === 'USD' && missingUsd.length > 0 ? (
+              `${missingUsd.length} sem preço em dólar: não aparecem na calculadora em US$.`
             ) : dirty ? (
               'Há alterações não salvas.'
             ) : (

@@ -27,14 +27,14 @@ import {
   getProdutosFormulados,
   type ProdutoFormulado,
 } from '../../services/produtosFormuladosService';
-import { isValidExchangeRate } from '../../utils/priceListCurrency';
+import { isValidExchangeRate, listHasCurrency } from '../../utils/priceListCurrency';
 import {
   buildAppliedComparisonCalculation,
   buildFormulaComparisonAlternatives,
   type FormulaComparisonAlternative,
 } from '../../utils/formulaComparison';
 import BetaFormulaCard from './BetaFormulaCard';
-import { filterPriceLists, getPriceListCurrency } from './betaCalculatorModel';
+import { filterPriceLists } from './betaCalculatorModel';
 
 interface SimplifiedCalculatorBetaProps {
   currentUser: AppUser;
@@ -62,6 +62,7 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
     currentComparisonFormula,
     setCurrentComparisonFormula,
     priceLists,
+    setPriceListCurrency,
     locaisCarregamento,
     macros,
     micros,
@@ -108,21 +109,15 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
   const hasValidExchangeRate = !isUsdPriceList || isValidExchangeRate(factors.appliedExchangeRate);
   const selectedPriceList = priceLists.find((list) => list.id === factors.priceListId);
 
-  // Moeda das listas mostradas no seletor (Reais ou Dólar).
-  const [listCurrency, setListCurrency] = useState<PriceListCurrency>(
-    factors.priceListCurrency === 'USD' ? 'USD' : 'BRL'
-  );
-  useEffect(() => {
-    // Ao abrir uma precificação ou batida salva, o botão acompanha a lista dela.
-    if (selectedPriceList) setListCurrency(getPriceListCurrency(selectedPriceList));
-  }, [selectedPriceList]);
+  // Moeda da lista (R$ ou US$): a mesma lista pode ter preços nas duas moedas.
+  const listCurrency: PriceListCurrency = factors.priceListCurrency === 'USD' ? 'USD' : 'BRL';
   const listsByCurrency = (currency: PriceListCurrency) =>
     filterPriceLists(priceLists, { localId: factors.local_carregamento_id, currency });
   const visiblePriceLists = listsByCurrency(listCurrency);
   const changeListCurrency = (currency: PriceListCurrency) => {
     if (currency === listCurrency) return;
-    setListCurrency(currency);
-    if (getPriceListCurrency(selectedPriceList) !== currency || !selectedPriceList) {
+    setPriceListCurrency(currency);
+    if (!selectedPriceList || !listHasCurrency(selectedPriceList, currency)) {
       handleFactorChange('priceListId', listsByCurrency(currency)[0]?.id || '');
     }
   };

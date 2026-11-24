@@ -6,6 +6,7 @@ import type {
   TargetFormula,
 } from '../../types';
 import { parseFormulaTarget } from '../../domain/pricing-engine';
+import { listHasCurrency } from '../../utils/priceListCurrency';
 import { getMagnesiumTarget, isMagnesiumGuarantee } from '../../utils/micronutrients';
 
 export interface CompositionRow {
@@ -226,14 +227,17 @@ export function applySavedFormulaToCalculation(
 export const getPriceListCurrency = (list?: Pick<PriceList, 'currency'>): PriceListCurrency =>
   list?.currency === 'USD' ? 'USD' : 'BRL';
 
-/** Listas do local escolhido (ou de todos) na moeda escolhida, da mais recente à mais antiga. */
+/**
+ * Listas do local escolhido (ou de todos) que têm preços na moeda escolhida,
+ * da mais recente à mais antiga.
+ */
 export function filterPriceLists<
-  T extends Pick<PriceList, 'currency' | 'local_carregamento_id' | 'date'>,
+  T extends Pick<PriceList, 'currency' | 'local_carregamento_id' | 'date' | 'macros' | 'micros'>,
 >(lists: T[], filters: { localId?: string; currency: PriceListCurrency }): T[] {
   return lists
     .filter(
       (list) =>
-        getPriceListCurrency(list) === filters.currency &&
+        listHasCurrency(list, filters.currency) &&
         (!filters.localId || list.local_carregamento_id === filters.localId)
     )
     .slice()

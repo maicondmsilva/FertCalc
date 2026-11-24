@@ -107,6 +107,12 @@ function mapPedido(d: Record<string, unknown>): PedidoVenda {
     pedido_pai_id: d.pedido_pai_id as string | undefined,
     data_vencimento: d.data_vencimento as string | undefined,
     emitente: d.emitente != null ? Number(d.emitente) : 1,
+    safra: (d.safra as string | null) ?? undefined,
+    previsao_entrega: (d.previsao_entrega as string | null) ?? undefined,
+    local_entrega: (d.local_entrega as string | null) ?? undefined,
+    numero_contrato: (d.numero_contrato as string | null) ?? undefined,
+    vendedor_nome: (d.vendedor_nome as string | null) ?? undefined,
+    ultima_movimentacao: (d.ultima_movimentacao as string | null) ?? undefined,
   };
 }
 
@@ -198,6 +204,94 @@ export async function getPedidosVendaPage(
     total: rows[0] ? Number(rows[0].total_registros) : 0,
     data: rows.map((row) => mapPedido(row.pedido)),
   };
+}
+
+export interface CarteiraPedidosFilters {
+  busca?: string;
+  status?: string;
+  filialId?: string;
+  safra?: string;
+}
+
+/** Carteira de pedidos: mais recentes primeiro, com cliente, vendedor e última movimentação. */
+export async function getCarteiraPedidos(
+  filtros: CarteiraPedidosFilters = {},
+  page = 1,
+  pageSize = 25
+): Promise<PedidosVendaPage> {
+  const { data, error } = await supabase.rpc('buscar_carteira_pedidos_venda', {
+    p_busca: filtros.busca?.trim() || null,
+    p_status: filtros.status || null,
+    p_filial_id: filtros.filialId || null,
+    p_safra: filtros.safra || null,
+    p_offset: Math.max(0, page - 1) * pageSize,
+    p_limit: pageSize,
+  });
+  if (error) throw error;
+  const rows = (data ?? []) as Array<{ pedido: Record<string, unknown>; total_registros: number }>;
+  return {
+    total: rows[0] ? Number(rows[0].total_registros) : 0,
+    data: rows.map((row) => mapPedido(row.pedido)),
+  };
+}
+
+export interface ResumoCarteira {
+  ativos: number;
+  emCarregamento: number;
+  concluidos: number;
+  cancelados: number;
+  volumeAtivo: number;
+  saldoACarregar: number;
+  carregado: number;
+  parados: number;
+  safras: string[];
+}
+
+export async function getResumoCarteira(
+  filtros: Pick<CarteiraPedidosFilters, 'filialId' | 'safra'> = {},
+  diasParado = 30
+): Promise<ResumoCarteira> {
+  const { data, error } = await supabase.rpc('resumo_carteira_pedidos_venda', {
+    p_filial_id: filtros.filialId || null,
+    p_safra: filtros.safra || null,
+    p_dias_parado: diasParado,
+  });
+  if (error) throw error;
+  const d = (data ?? {}) as Record<string, unknown>;
+  const num = (value: unknown) => Number(value) || 0;
+  return {
+    ativos: num(d.ativos),
+    emCarregamento: num(d.em_carregamento),
+    concluidos: num(d.concluidos),
+    cancelados: num(d.cancelados),
+    volumeAtivo: num(d.volume_ativo),
+    saldoACarregar: num(d.saldo_a_carregar),
+    carregado: num(d.carregado),
+    parados: num(d.parados),
+    safras: Array.isArray(d.safras) ? (d.safras as string[]) : [],
+  };
+}
+
+export interface DadosComerciaisPedido {
+  safra?: string;
+  previsao_entrega?: string;
+  local_entrega?: string;
+  numero_contrato?: string;
+}
+
+/** Atualiza safra, previsão e local de entrega e contrato (registrado no histórico). */
+export async function updateDadosComerciaisPedido(
+  pedidoId: string,
+  dados: DadosComerciaisPedido
+): Promise<void> {
+  const { error } = await supabase.rpc('atualizar_dados_comerciais_pedido', {
+    p_pedido_id: pedidoId,
+    p_safra: dados.safra?.trim() || null,
+    p_previsao_entrega: dados.previsao_entrega || null,
+    p_local_entrega: dados.local_entrega?.trim() || null,
+    p_numero_contrato: dados.numero_contrato?.trim() || null,
+  });
+  if (error) throw error;
 }
 
 export async function getPedidoVendaById(id: string): Promise<PedidoVenda | null> {
@@ -307,6 +401,10 @@ export async function createPedidoVenda(
       observacoes: pedido.observacoes ?? null,
       filial_id: pedido.filial_id ?? null,
       formulacao_alterada: pedido.formulacao_alterada ?? false,
+      safra: pedido.safra ?? null,
+      previsao_entrega: pedido.previsao_entrega ?? null,
+      local_entrega: pedido.local_entrega ?? null,
+      numero_contrato: pedido.numero_contrato ?? null,
     },
     p_itens: itens.map((item) => ({
       produto_nome: item.produto_nome,

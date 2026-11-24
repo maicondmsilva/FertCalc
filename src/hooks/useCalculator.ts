@@ -5,6 +5,7 @@ import {
   PricingRecord,
   Branch,
   PriceList,
+  PriceListCurrency,
   Client,
   Agent,
   User as AppUser,
@@ -62,6 +63,9 @@ import { getCalculationSaveBlockReason, validatePricingForSave } from '../utils/
 import {
   getPriceListCurrencySnapshot,
   hasValidPricingExchangeRate,
+  listCurrencies,
+  listHasCurrency,
+  projectPriceList,
 } from '../utils/priceListCurrency';
 import {
   stripTemporaryMaterialPrices,
@@ -216,8 +220,11 @@ export function useCalculator({
     Record<string, { formula: string; macros: RawMaterial[]; micros: RawMaterial[] }>
   >({});
   const hasAppliedInitialDefaults = useRef(false);
+  // Chave "lista:moeda" da última lista aplicada (a mesma lista pode ser usada em R$ ou US$).
   const currencySnapshotPriceListId = useRef(
-    initialData?.factors.priceListCurrency ? initialData.factors.priceListId : ''
+    initialData?.factors.priceListCurrency
+      ? `${initialData.factors.priceListId}:${initialData.factors.priceListCurrency}`
+      : ''
   );
   const priceListResetRequested = useRef<string>('');
 
@@ -431,18 +438,24 @@ export function useCalculator({
   // Update prices when list changes
   useEffect(() => {
     if (factors.priceListId) {
-      const selectedList = priceLists.find((l) => l.id === factors.priceListId);
-      if (selectedList) {
+      const rawList = priceLists.find((l) => l.id === factors.priceListId);
+      if (rawList) {
+        // A lista é lida na moeda escolhida (preços e produtos daquela moeda).
+        const requestedCurrency = factors.priceListCurrency ?? 'BRL';
+        const listCurrency = listHasCurrency(rawList, requestedCurrency)
+          ? requestedCurrency
+          : (listCurrencies(rawList)[0] ?? 'BRL');
+        const selectedList = projectPriceList(rawList, listCurrency);
+        const snapshotKey = `${selectedList.id}:${listCurrency}`;
         const currencySnapshot = getPriceListCurrencySnapshot(selectedList);
         const defaultFactor =
           currencySnapshot.priceListCurrency === 'USD'
             ? (appSettings.defaultFactorUSD ?? 0)
             : (appSettings.defaultFactorBRL ?? 0.8);
-        const shouldRefreshCurrencySnapshot =
-          currencySnapshotPriceListId.current !== selectedList.id;
+        const shouldRefreshCurrencySnapshot = currencySnapshotPriceListId.current !== snapshotKey;
         const shouldResetProducts = priceListResetRequested.current === selectedList.id;
         if (shouldRefreshCurrencySnapshot) {
-          currencySnapshotPriceListId.current = selectedList.id;
+          currencySnapshotPriceListId.current = snapshotKey;
           setFactors((previousFactors) => ({
             ...previousFactors,
             ...currencySnapshot,
@@ -654,6 +667,7 @@ export function useCalculator({
     currentUser,
     factors.local_carregamento_id,
     factors.priceListId,
+    factors.priceListCurrency,
     initialData,
     priceLists,
   ]);
@@ -753,6 +767,16 @@ export function useCalculator({
         return applyFreeCompositionSummary(calc, calc.macros, updatedCalcMicros);
       })
     );
+  };
+
+  /**
+   * Troca a moeda da lista (R$ ou US$): a calculadora passa a usar os preços e
+   * os produtos daquela moeda. Os produtos das fórmulas são recarregados.
+   */
+  const setPriceListCurrency = (currency: PriceListCurrency) => {
+    if ((factors.priceListCurrency ?? 'BRL') === currency) return;
+    if (factors.priceListId) priceListResetRequested.current = factors.priceListId;
+    setFactors((previous) => ({ ...previous, priceListCurrency: currency }));
   };
 
   const handleFactorChange = (field: keyof PricingFactors, value: string | number | boolean) => {
@@ -1983,6 +2007,7 @@ export function useCalculator({
     // Lookup data
     branches,
     priceLists: selectablePriceLists,
+    setPriceListCurrency,
     locaisCarregamento,
     availableClients,
     availableAgents,

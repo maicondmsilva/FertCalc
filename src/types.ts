@@ -57,6 +57,8 @@ export interface RawMaterial {
   type: NutrientType;
   name: string;
   price: number;
+  /** Preço em dólar (US$/t) na mesma lista; `price` é sempre em reais nas listas novas. */
+  priceUSD?: number;
   listPrice?: number;
   isManualPrice?: boolean;
   n: number;
@@ -756,6 +758,14 @@ export interface PedidoVenda {
   pedido_pai_id?: string;
   data_vencimento?: string;
   emitente?: number;
+  /** Dados comerciais */
+  safra?: string;
+  previsao_entrega?: string;
+  local_entrega?: string;
+  numero_contrato?: string;
+  /** Vindos da carteira (consulta com junções) */
+  vendedor_nome?: string;
+  ultima_movimentacao?: string;
   itens?: PedidoVendaItem[];
   // Joined fields
   precificacao?: PricingRecord;

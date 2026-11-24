@@ -1,44 +1,34 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { User, PedidoVenda, Branch, PedidoVendaItem, Client, PricingRecord } from '../types';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Ban, ClipboardList, FileText, Plus, RefreshCw, Search } from 'lucide-react';
+import type { Branch, Client, PedidoVenda, PedidoVendaItem, PricingRecord, User } from '../types';
 import {
-  ClipboardList,
-  RefreshCw,
-  Search,
-  ChevronDown,
-  ChevronUp,
-  ChevronLeft,
-  ChevronRight,
-  GitBranch,
-  Ban,
-  FileText,
-  Pencil,
-  X,
-} from 'lucide-react';
-import {
-  getPedidosVendaPage,
+  getCarteiraPedidos,
+  getPedidoSaldoAlertaPreferencia,
   getPedidoVendaById,
   getPedidoVendaItens,
-  getSaldosCancelados,
-  getPedidoSaldoAlertaPreferencia,
+  getResumoCarteira,
   savePedidoSaldoAlertaPreferencia,
-  PedidoSaldoAlertaPreferencia,
-  CancelamentoRelatorioRow,
+  type PedidoSaldoAlertaPreferencia,
+  type ResumoCarteira,
 } from '../services/pedidosVendaService';
 import { createCarregamento, getFiliais } from '../services/carregamentoService';
 import { getBranches, getClients, getPricingRecords } from '../services/db';
-import { useToast } from './Toast';
-import type { CarregamentoFormData } from './Carregamento';
-import { Filial } from '../types/carregamento';
-import { getStatusInicial } from '../utils/getStatusInicial';
-import HistoricoCarregamentosPedido from './HistoricoCarregamentosPedido';
 import { canReceiveSaldoPedidoAlert } from '../services/alertConfigService';
 import { subscribeToOrderLoadingChanges } from '../services/orderLoadingSubscription';
+import { getStatusInicial } from '../utils/getStatusInicial';
+import type { CarregamentoFormData } from './Carregamento';
+import type { Filial } from '../types/carregamento';
+import { useToast } from './Toast';
+import Pagination from './ui/Pagination';
+import { PedidosCarteiraTable } from './pedidosVenda/PedidosCarteiraTable';
+import { PedidoDetailPanel } from './pedidosVenda/PedidoDetailPanel';
+import { CancelamentosReportView } from './pedidosVenda/CancelamentosReportView';
+import { STATUS_LABEL, formatTon, pedidoLabel } from './pedidosVenda/pedidosVendaModel';
 
 const NovoPedidoVendaModal = React.lazy(() => import('./NovoPedidoVendaModal'));
 const EditarPedidoVendaModal = React.lazy(() => import('./EditarPedidoVendaModal'));
 const CancSubstituiModal = React.lazy(() => import('./CancSubstituiModal'));
 const CancelamentoDefinitivoModal = React.lazy(() => import('./CancelamentoDefinitivoModal'));
-const RelatorioCancSubstitui = React.lazy(() => import('./RelatorioCancSubstitui'));
 const ModalNovoCarregamento = React.lazy(() =>
   import('./Carregamento').then((module) => ({ default: module.ModalNovoCarregamento }))
 );
@@ -50,7 +40,7 @@ function LoadingFeature({ label, overlay = false }: { label: string; overlay?: b
       className={
         overlay
           ? 'fixed inset-0 z-[100] flex items-center justify-center bg-black/30 text-sm font-bold text-white'
-          : 'flex min-h-48 items-center justify-center rounded-xl border border-stone-200 bg-white text-sm font-bold text-stone-500'
+          : 'flex min-h-48 items-center justify-center rounded-2xl border border-stone-200 bg-white text-sm font-bold text-stone-500'
       }
     >
       {label}
@@ -58,238 +48,170 @@ function LoadingFeature({ label, overlay = false }: { label: string; overlay?: b
   );
 }
 
-const STATUS_LABEL: Record<PedidoVenda['status'], string> = {
-  pendente: 'Ativo',
-  em_carregamento: 'Em Carregamento',
-  concluido: 'Concluído',
-  cancelado: 'Cancelado',
-};
-
-const STATUS_COLOR: Record<PedidoVenda['status'], string> = {
-  pendente: 'bg-emerald-100 text-emerald-800',
-  em_carregamento: 'bg-purple-100 text-purple-800',
-  concluido: 'bg-blue-100 text-blue-800',
-  cancelado: 'bg-red-100 text-red-800',
-};
-
-function fmtDate(s?: string) {
-  if (!s) return '—';
-  return new Date(s + 'T00:00:00').toLocaleDateString('pt-BR');
-}
-
 interface PedidosVendaProps {
   currentUser: User;
 }
 
 type ActiveTab = 'pedidos' | 'relatorio' | 'saldos_cancelados';
-const PEDIDOS_PAGE_SIZE = 25;
+const DIAS_PARADO = 30;
+const DEFAULT_ALERTA: PedidoSaldoAlertaPreferencia = { dias_limite: 30, desativado: false };
 
 export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
   const { showSuccess, showError } = useToast();
-  const [pedidos, setPedidos] = useState<PedidoVenda[]>([]);
-  const [pedidosPage, setPedidosPage] = useState(1);
-  const [pedidosTotal, setPedidosTotal] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [loadWarnings, setLoadWarnings] = useState<string[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [filialFilter, setFilialFilter] = useState('');
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [selectedPedidoId, setSelectedPedidoId] = useState<string | null>(null);
-  const selectedPedidoIdRef = useRef<string | null>(null);
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [showNovoPedido, setShowNovoPedido] = useState(false);
-  const [pedidoEdicao, setPedidoEdicao] = useState<PedidoVenda | null>(null);
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [filiais, setFiliais] = useState<Filial[]>([]);
-  const [pedidoParaCarregamento, setPedidoParaCarregamento] = useState<PedidoVenda | null>(null);
-  const [modalCarregamentoAberto, setModalCarregamentoAberto] = useState(false);
-  const [itensPorPedido, setItensPorPedido] = useState<Record<string, PedidoVendaItem[]>>({});
-  const [alertaSaldo, setAlertaSaldo] = useState<PedidoSaldoAlertaPreferencia>({
-    dias_limite: 30,
-    desativado: false,
-  });
-  const [podeReceberAlertaSaldo, setPodeReceberAlertaSaldo] = useState(false);
-  const [pedidoCancSubstitui, setPedidoCancSubstitui] = useState<PedidoVenda | null>(null);
-  const [pedidoCancelamentoDefinitivo, setPedidoCancelamentoDefinitivo] =
-    useState<PedidoVenda | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>('pedidos');
 
+  // Carteira
+  const [pedidos, setPedidos] = useState<PedidoVenda[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [resumo, setResumo] = useState<ResumoCarteira | null>(null);
+  const [busca, setBusca] = useState('');
+  const [buscaAplicada, setBuscaAplicada] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [filialFilter, setFilialFilter] = useState('');
+  const [safraFilter, setSafraFilter] = useState('');
+
+  // Cadastros de apoio
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [filiais, setFiliais] = useState<Filial[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [pricingRecords, setPricingRecords] = useState<PricingRecord[]>([]);
-  const [cancelamentos, setCancelamentos] = useState<CancelamentoRelatorioRow[]>([]);
-  const [loadingCancelamentos, setLoadingCancelamentos] = useState(false);
-  const [cancelamentosError, setCancelamentosError] = useState<string | null>(null);
-  const [cancelamentosPage, setCancelamentosPage] = useState(1);
-  const [cancelamentosTotal, setCancelamentosTotal] = useState(0);
-  const [cancelamentosQuantidade, setCancelamentosQuantidade] = useState(0);
-  const [cancSearch, setCancSearch] = useState('');
-  const [cancDataInicio, setCancDataInicio] = useState('');
-  const [cancDataFim, setCancDataFim] = useState('');
 
-  const load = useCallback(
-    async (requestedPage = 1, edge: 'first' | 'last' = 'first') => {
-      setLoading(true);
-      setLoadError(null);
-      setLoadWarnings([]);
-      try {
-        const result = await getPedidosVendaPage(
-          {
-            busca: searchTerm || undefined,
-            status: statusFilter || undefined,
-            filialId: filialFilter || undefined,
-          },
-          requestedPage,
-          PEDIDOS_PAGE_SIZE
-        );
-        const pedidosData = result.data;
-        setPedidos(pedidosData);
-        setPedidosPage(requestedPage);
-        setPedidosTotal(result.total);
-        const warnings: string[] = [];
+  // Detalhe
+  const [selected, setSelected] = useState<PedidoVenda | null>(null);
+  const [itens, setItens] = useState<PedidoVendaItem[]>([]);
+  const [alerta, setAlerta] = useState<PedidoSaldoAlertaPreferencia>(DEFAULT_ALERTA);
+  const [podeReceberAlerta, setPodeReceberAlerta] = useState(false);
+  const selectedIdRef = useRef<string | null>(null);
 
-        const firstPedido =
-          pedidosData.find((pedido) => pedido.id === selectedPedidoIdRef.current) ??
-          (edge === 'last' ? pedidosData[pedidosData.length - 1] : pedidosData[0]);
-        if (firstPedido) {
-          setSelectedPedidoId(firstPedido.id);
-          setExpandedIds(new Set([firstPedido.id]));
-          const [itensResult, preferenciaResult, podeReceberResult] = await Promise.allSettled([
-            getPedidoVendaItens(firstPedido.id),
-            getPedidoSaldoAlertaPreferencia(firstPedido.id, currentUser.id),
-            canReceiveSaldoPedidoAlert(currentUser.id, currentUser.role),
-          ]);
-          if (itensResult.status === 'fulfilled') {
-            setItensPorPedido({ [firstPedido.id]: itensResult.value });
-          } else {
-            warnings.push('itens do pedido');
-          }
-          if (preferenciaResult.status === 'fulfilled') {
-            setAlertaSaldo(preferenciaResult.value);
-          } else {
-            warnings.push('preferencia do alerta');
-          }
-          if (podeReceberResult.status === 'fulfilled') {
-            setPodeReceberAlertaSaldo(podeReceberResult.value);
-          } else {
-            warnings.push('permissao do alerta');
-          }
-        } else {
-          setSelectedPedidoId(null);
-          setExpandedIds(new Set());
-          setItensPorPedido({});
-        }
-        setLoadWarnings(warnings);
-      } catch (error) {
-        console.error('Erro ao carregar pedidos de venda:', error);
-        setLoadError('Nao foi possivel carregar os pedidos de venda. Tente novamente.');
-      } finally {
-        setLoading(false);
-      }
-    },
-    [currentUser.id, currentUser.role, filialFilter, searchTerm, statusFilter]
-  );
-
-  const loadCancelamentos = useCallback(async () => {
-    setLoadingCancelamentos(true);
-    setCancelamentosError(null);
-    try {
-      const result = await getSaldosCancelados(
-        {
-          busca: cancSearch || undefined,
-          dataInicio: cancDataInicio || undefined,
-          dataFim: cancDataFim || undefined,
-        },
-        cancelamentosPage,
-        20
-      );
-      setCancelamentos(result.data);
-      setCancelamentosTotal(result.total);
-      setCancelamentosQuantidade(result.totalQuantidade);
-    } catch {
-      setCancelamentosError('Não foi possível carregar os saldos cancelados. Tente novamente.');
-      showError('Erro ao carregar cancelamentos.');
-    } finally {
-      setLoadingCancelamentos(false);
-    }
-  }, [cancDataFim, cancDataInicio, cancSearch, cancelamentosPage, showError]);
+  // Modais
+  const [showNovoPedido, setShowNovoPedido] = useState(false);
+  const [pedidoEdicao, setPedidoEdicao] = useState<PedidoVenda | null>(null);
+  const [pedidoCancSubstitui, setPedidoCancSubstitui] = useState<PedidoVenda | null>(null);
+  const [pedidoCancelamento, setPedidoCancelamento] = useState<PedidoVenda | null>(null);
+  const [pedidoCarregamento, setPedidoCarregamento] = useState<PedidoVenda | null>(null);
 
   useEffect(() => {
-    if (activeTab === 'saldos_cancelados') {
-      const timer = setTimeout(() => void loadCancelamentos(), 300);
-      return () => clearTimeout(timer);
-    }
-  }, [activeTab, loadCancelamentos]);
-
-  useEffect(() => {
-    setCancelamentosPage(1);
-  }, [cancSearch, cancDataInicio, cancDataFim]);
-
-  useEffect(() => {
-    getFiliais()
-      .then(setFiliais)
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    const timer = setTimeout(() => void load(1), 300);
+    const timer = setTimeout(() => {
+      setBuscaAplicada(busca.trim());
+      setPage(1);
+    }, 300);
     return () => clearTimeout(timer);
-  }, [load]);
+  }, [busca]);
+
+  const loadCarteira = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const [result, summary] = await Promise.all([
+        getCarteiraPedidos(
+          {
+            busca: buscaAplicada,
+            status: statusFilter,
+            filialId: filialFilter,
+            safra: safraFilter,
+          },
+          page,
+          pageSize
+        ),
+        getResumoCarteira({ filialId: filialFilter, safra: safraFilter }, DIAS_PARADO),
+      ]);
+      setPedidos(result.data);
+      setTotal(result.total);
+      setResumo(summary);
+      const current = result.data.find((pedido) => pedido.id === selectedIdRef.current);
+      if (current) setSelected(current);
+    } catch (error) {
+      console.error('Erro ao carregar pedidos de venda:', error);
+      setLoadError('Não foi possível carregar os pedidos de venda. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
+  }, [buscaAplicada, statusFilter, filialFilter, safraFilter, page, pageSize]);
 
   useEffect(() => {
-    Promise.allSettled([getBranches(), getClients(), getPricingRecords()]).then(
-      ([branchesResult, clientsResult, pricingResult]) => {
-        const warnings: string[] = [];
-        if (branchesResult.status === 'fulfilled') setBranches(branchesResult.value);
-        else warnings.push('filiais');
-        if (clientsResult.status === 'fulfilled') setClients(clientsResult.value);
-        else warnings.push('clientes');
-        if (pricingResult.status === 'fulfilled') setPricingRecords(pricingResult.value);
-        else warnings.push('precificações');
-        if (warnings.length) setLoadWarnings((current) => [...new Set([...current, ...warnings])]);
-      }
-    );
-  }, []);
-
-  useEffect(() => {
-    selectedPedidoIdRef.current = selectedPedidoId;
-  }, [selectedPedidoId]);
+    void loadCarteira();
+  }, [loadCarteira]);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const unsubscribe = subscribeToOrderLoadingChanges(() => {
       clearTimeout(timer);
-      timer = setTimeout(() => void load(pedidosPage), 350);
+      timer = setTimeout(() => void loadCarteira(), 350);
     });
     return () => {
       clearTimeout(timer);
       unsubscribe();
     };
-  }, [load, pedidosPage]);
+  }, [loadCarteira]);
 
-  const toggleExpand = (id: string) => {
-    setExpandedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-        if (!itensPorPedido[id]) {
-          getPedidoVendaItens(id)
-            .then((itens) => {
-              setItensPorPedido((prev) => ({ ...prev, [id]: itens }));
-            })
-            .catch((error) => {
-              console.error('Erro ao carregar itens do pedido:', error);
-              setLoadWarnings((current) =>
-                current.includes('itens do pedido') ? current : [...current, 'itens do pedido']
-              );
-            });
-        }
+  useEffect(() => {
+    Promise.allSettled([getBranches(), getFiliais(), getClients(), getPricingRecords()]).then(
+      ([branchesResult, filiaisResult, clientsResult, pricingResult]) => {
+        if (branchesResult.status === 'fulfilled') setBranches(branchesResult.value);
+        if (filiaisResult.status === 'fulfilled') setFiliais(filiaisResult.value);
+        if (clientsResult.status === 'fulfilled') setClients(clientsResult.value);
+        if (pricingResult.status === 'fulfilled') setPricingRecords(pricingResult.value);
       }
-      return next;
-    });
+    );
+    canReceiveSaldoPedidoAlert(currentUser.id, currentUser.role)
+      .then(setPodeReceberAlerta)
+      .catch(() => setPodeReceberAlerta(false));
+  }, [currentUser.id, currentUser.role]);
+
+  const openPedido = useCallback(
+    async (pedido: PedidoVenda) => {
+      selectedIdRef.current = pedido.id;
+      setSelected(pedido);
+      setItens([]);
+      setAlerta(DEFAULT_ALERTA);
+      const [itensResult, alertaResult] = await Promise.allSettled([
+        getPedidoVendaItens(pedido.id),
+        getPedidoSaldoAlertaPreferencia(pedido.id, currentUser.id),
+      ]);
+      if (selectedIdRef.current !== pedido.id) return;
+      if (itensResult.status === 'fulfilled') setItens(itensResult.value);
+      if (alertaResult.status === 'fulfilled') setAlerta(alertaResult.value);
+    },
+    [currentUser.id]
+  );
+
+  const openPedidoById = async (pedidoId: string) => {
+    const pedido =
+      pedidos.find((item) => item.id === pedidoId) ?? (await getPedidoVendaById(pedidoId));
+    if (!pedido) {
+      showError('Este pedido não está disponível para o seu nível de acesso.');
+      return;
+    }
+    setActiveTab('pedidos');
+    await openPedido(pedido);
+  };
+
+  const closePedido = () => {
+    selectedIdRef.current = null;
+    setSelected(null);
+  };
+
+  const refreshAfterChange = async () => {
+    await loadCarteira();
+    if (selectedIdRef.current) {
+      const fresh = await getPedidoVendaById(selectedIdRef.current);
+      if (fresh) await openPedido({ ...selected, ...fresh } as PedidoVenda);
+    }
+  };
+
+  const saveAlerta = async (preferencia: PedidoSaldoAlertaPreferencia) => {
+    if (!selected) return;
+    try {
+      await savePedidoSaldoAlertaPreferencia(selected.id, currentUser.id, preferencia);
+      setAlerta(preferencia);
+      showSuccess('Preferência do alerta salva.');
+    } catch {
+      showError('Não foi possível salvar a preferência do alerta.');
+    }
   };
 
   const handleSolicitarCarregamento = async (form: CarregamentoFormData) => {
@@ -314,1017 +236,357 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
         form.itens,
         form.request_id
       );
-      showSuccess('Carregamento criado com sucesso!');
-      setModalCarregamentoAberto(false);
-      setPedidoParaCarregamento(null);
-      await load(pedidosPage);
+      showSuccess('Carregamento solicitado.');
+      setPedidoCarregamento(null);
+      await refreshAfterChange();
     } catch (err: unknown) {
-      const msg =
+      showError(
         err && typeof err === 'object' && 'message' in err
-          ? (err as { message: string }).message
-          : 'Erro ao criar carregamento. Verifique os dados e tente novamente.';
-      showError(msg);
+          ? String((err as { message: unknown }).message)
+          : 'Erro ao criar carregamento. Verifique os dados e tente novamente.'
+      );
       throw err;
     }
   };
 
-  const filtered = pedidos;
-  const selectedPedido = pedidos.find((pedido) => pedido.id === selectedPedidoId) ?? null;
-  const pedidosCronologicos = pedidos;
-  const pedidosTotalPages = Math.max(1, Math.ceil(pedidosTotal / PEDIDOS_PAGE_SIZE));
-  const selectedPedidoPosition = pedidosCronologicos.findIndex(
-    (pedido) => pedido.id === selectedPedidoId
-  );
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const selectedClient = selected
+    ? clients.find((client) => client.id === selected.cliente_id)
+    : undefined;
+  const pricingCode = selected?.precificacao_id
+    ? String(
+        pricingRecords.find((record) => record.id === selected.precificacao_id)?.cod ??
+          selected.precificacao_id.slice(0, 8)
+      )
+    : undefined;
+  const parentLabel = selected?.pedido_pai_id
+    ? (() => {
+        const parent = pedidos.find((item) => item.id === selected.pedido_pai_id);
+        return parent ? pedidoLabel(parent) : 'Ver em Canc/Substitui';
+      })()
+    : undefined;
 
-  const selectPedido = async (pedido: PedidoVenda) => {
-    setSelectedPedidoId(pedido.id);
-    setExpandedIds(new Set([pedido.id]));
-    setSearchOpen(false);
-    if (!itensPorPedido[pedido.id]) {
-      const [itensResult, preferenciaResult] = await Promise.allSettled([
-        getPedidoVendaItens(pedido.id),
-        getPedidoSaldoAlertaPreferencia(pedido.id, currentUser.id),
-      ]);
-      const warnings: string[] = [];
-      if (itensResult.status === 'fulfilled') {
-        setItensPorPedido((current) => ({ ...current, [pedido.id]: itensResult.value }));
-      } else warnings.push('itens do pedido');
-      if (preferenciaResult.status === 'fulfilled') {
-        setAlertaSaldo(preferenciaResult.value);
-      } else warnings.push('preferencia do alerta');
-      setLoadWarnings(warnings);
-    } else {
-      try {
-        setAlertaSaldo(await getPedidoSaldoAlertaPreferencia(pedido.id, currentUser.id));
-      } catch (error) {
-        console.error('Erro ao carregar preferencia do alerta:', error);
-        setLoadWarnings(['preferencia do alerta']);
-      }
-    }
-  };
+  const tabs: Array<{ id: ActiveTab; label: string; icon: typeof ClipboardList }> = [
+    { id: 'pedidos', label: 'Pedidos', icon: ClipboardList },
+    { id: 'relatorio', label: 'Canc/Substitui', icon: FileText },
+    { id: 'saldos_cancelados', label: 'Saldos cancelados', icon: Ban },
+  ];
 
-  const openPedidoById = async (pedidoId: string) => {
-    let pedido = pedidos.find((item) => item.id === pedidoId) ?? null;
-    if (!pedido) pedido = await getPedidoVendaById(pedidoId);
-    if (!pedido) {
-      showError('Este pedido não está disponível para o seu nível de acesso.');
-      return;
-    }
-    if (!pedidos.some((item) => item.id === pedido.id))
-      setPedidos((current) => [pedido!, ...current]);
-    setActiveTab('pedidos');
-    await selectPedido(pedido);
-  };
-
-  const navigatePedido = async (direction: -1 | 1) => {
-    const nextPosition = selectedPedidoPosition + direction;
-    const pedido = pedidosCronologicos[nextPosition];
-    if (pedido) return selectPedido(pedido);
-    if (direction === 1 && pedidosPage < pedidosTotalPages) {
-      await load(pedidosPage + 1, 'first');
-    } else if (direction === -1 && pedidosPage > 1) {
-      await load(pedidosPage - 1, 'last');
-    }
-  };
-
-  const saveAlertaSaldo = async (preferencia: PedidoSaldoAlertaPreferencia) => {
-    if (!selectedPedido) return;
-    try {
-      await savePedidoSaldoAlertaPreferencia(selectedPedido.id, currentUser.id, preferencia);
-      setAlertaSaldo(preferencia);
-      showSuccess('Preferência do alerta salva.');
-    } catch {
-      showError('Não foi possível salvar a preferência do alerta.');
-    }
-  };
+  const kpis = resumo
+    ? [
+        {
+          label: 'Pedidos ativos',
+          value: String(resumo.ativos),
+          hint: `${resumo.emCarregamento} em carregamento`,
+        },
+        {
+          label: 'Volume ativo',
+          value: formatTon(resumo.volumeAtivo),
+          hint: 'vendido nos pedidos ativos',
+        },
+        {
+          label: 'Saldo a carregar',
+          value: formatTon(resumo.saldoACarregar),
+          hint: `${formatTon(resumo.carregado)} já carregadas`,
+          accent: true,
+        },
+        {
+          label: 'Parados',
+          value: String(resumo.parados),
+          hint: `sem nova carga há ${DIAS_PARADO}+ dias`,
+          warning: resumo.parados > 0,
+        },
+      ]
+    : [];
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="mx-auto w-full max-w-[1500px] space-y-5">
+      <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-stone-800 flex items-center gap-2">
-            <ClipboardList className="w-7 h-7 text-emerald-600" />
+          <p className="text-xs font-bold uppercase tracking-widest text-emerald-700">Comercial</p>
+          <h1 className="mt-1 flex items-center gap-2 text-3xl font-black tracking-tight text-stone-900">
+            <ClipboardList className="h-7 w-7 text-emerald-600" aria-hidden="true" />
             Pedidos de Venda
           </h1>
-          <p className="text-stone-500 text-sm mt-1">Gerencie seus pedidos de venda</p>
+          <p className="mt-1 text-[15px] text-stone-500">
+            Carteira de pedidos, saldo a carregar e cancelamentos.
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowNovoPedido(true)}
-            className="px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-2"
-          >
-            <ClipboardList className="w-4 h-4" />+ Novo Pedido
-          </button>
-          <button
-            onClick={() => void load(pedidosPage)}
-            className="p-2 text-stone-400 hover:text-stone-600 hover:bg-stone-100 rounded-lg transition-colors"
-            title="Atualizar"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          </button>
-        </div>
-      </div>
-
-      {loadError && (
-        <div className="flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 sm:flex-row sm:items-center sm:justify-between">
-          <span>{loadError}</span>
+        <div className="flex gap-2">
           <button
             type="button"
-            onClick={() => void load(pedidosPage)}
-            className="rounded-lg bg-red-700 px-3 py-2 font-bold text-white hover:bg-red-800"
+            onClick={() => void loadCarteira()}
+            aria-label="Atualizar"
+            className="grid h-11 w-11 place-items-center rounded-xl border border-stone-300 bg-white text-stone-600 hover:bg-stone-50"
           >
-            Tentar novamente
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowNovoPedido(true)}
+            className="inline-flex h-11 items-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-emerald-700"
+          >
+            <Plus className="h-4 w-4" /> Novo pedido
           </button>
         </div>
-      )}
+      </header>
 
-      {!loadError && loadWarnings.length > 0 && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          Os pedidos foram carregados, mas houve falha em: {loadWarnings.join(', ')}. As demais
-          informacoes continuam disponiveis.
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-stone-200">
-        <button
-          onClick={() => setActiveTab('pedidos')}
-          className={`px-4 py-2 text-sm font-semibold rounded-t-lg transition-colors ${
-            activeTab === 'pedidos'
-              ? 'bg-white border border-b-white border-stone-200 text-emerald-700 -mb-px'
-              : 'text-stone-500 hover:text-stone-700'
-          }`}
-        >
-          <ClipboardList className="w-4 h-4 inline mr-1.5 mb-0.5" />
-          Pedidos
-        </button>
-        <button
-          onClick={() => setActiveTab('relatorio')}
-          className={`px-4 py-2 text-sm font-semibold rounded-t-lg transition-colors ${
-            activeTab === 'relatorio'
-              ? 'bg-white border border-b-white border-stone-200 text-emerald-700 -mb-px'
-              : 'text-stone-500 hover:text-stone-700'
-          }`}
-        >
-          <FileText className="w-4 h-4 inline mr-1.5 mb-0.5" />
-          Canc/Substitui
-        </button>
-        <button
-          onClick={() => setActiveTab('saldos_cancelados')}
-          className={`px-4 py-2 text-sm font-semibold rounded-t-lg transition-colors ${
-            activeTab === 'saldos_cancelados'
-              ? 'bg-white border border-b-white border-stone-200 text-emerald-700 -mb-px'
-              : 'text-stone-500 hover:text-stone-700'
-          }`}
-        >
-          <Ban className="w-4 h-4 inline mr-1.5 mb-0.5" />
-          Saldos Cancelados
-        </button>
+      <div
+        className="flex gap-1 rounded-xl bg-stone-100 p-1 text-sm font-bold sm:w-fit"
+        role="tablist"
+      >
+        {tabs.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === id}
+            onClick={() => setActiveTab(id)}
+            className={`inline-flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-center text-xs sm:flex-none sm:px-4 sm:text-sm ${
+              activeTab === id
+                ? 'bg-white text-stone-900 shadow-sm'
+                : 'text-stone-500 hover:text-stone-700'
+            }`}
+          >
+            <Icon className="hidden h-4 w-4 shrink-0 sm:block" /> {label}
+          </button>
+        ))}
       </div>
 
-      {activeTab === 'relatorio' ? (
-        <React.Suspense fallback={<LoadingFeature label="Carregando relatório..." />}>
-          <RelatorioCancSubstitui currentUser={currentUser} onOpenPedido={openPedidoById} />
-        </React.Suspense>
-      ) : activeTab === 'saldos_cancelados' ? (
-        <div className="space-y-4">
-          {/* Filters */}
-          <div className="bg-white rounded-xl border border-stone-200 shadow-sm p-4">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="relative md:col-span-2">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
-                <input
-                  type="text"
-                  placeholder="Buscar por pedido, cliente, I.E., produto ou usuário..."
-                  value={cancSearch}
-                  onChange={(e) => setCancSearch(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-                />
-              </div>
-              <div>
-                <input
-                  type="date"
-                  value={cancDataInicio}
-                  onChange={(e) => setCancDataInicio(e.target.value)}
-                  className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-                  placeholder="De"
-                  title="Data Início"
-                />
-              </div>
-              <div>
-                <input
-                  type="date"
-                  value={cancDataFim}
-                  onChange={(e) => setCancDataFim(e.target.value)}
-                  className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-                  placeholder="Até"
-                  title="Data Fim"
-                />
-              </div>
-            </div>
-          </div>
+      {activeTab === 'relatorio' && (
+        <CancelamentosReportView
+          mode="canc_substitui"
+          onOpenPedido={(id) => void openPedidoById(id)}
+        />
+      )}
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm">
-              <p className="text-xs font-bold uppercase tracking-wide text-stone-400">
-                Cancelamentos encontrados
-              </p>
-              <p className="mt-1 text-2xl font-black text-stone-800">{cancelamentosTotal}</p>
-            </div>
-            <div className="rounded-xl border border-red-100 bg-red-50 p-4 shadow-sm">
-              <p className="text-xs font-bold uppercase tracking-wide text-red-500">
-                Quantidade cancelada
-              </p>
-              <p className="mt-1 text-2xl font-black text-red-700">
-                {cancelamentosQuantidade.toLocaleString('pt-BR', {
-                  minimumFractionDigits: 3,
-                  maximumFractionDigits: 3,
-                })}{' '}
-                ton
-              </p>
-            </div>
-          </div>
+      {activeTab === 'saldos_cancelados' && (
+        <CancelamentosReportView mode="definitivo" onOpenPedido={(id) => void openPedidoById(id)} />
+      )}
 
-          {/* Table */}
-          {loadingCancelamentos ? (
-            <div className="flex justify-center py-12">
-              <RefreshCw className="w-6 h-6 animate-spin text-stone-300" />
-            </div>
-          ) : cancelamentosError ? (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-center text-sm text-red-700">
-              <p>{cancelamentosError}</p>
-              <button
-                type="button"
-                onClick={() => void loadCancelamentos()}
-                className="mt-3 rounded-lg border border-red-200 bg-white px-3 py-2 font-bold hover:bg-red-100"
-              >
-                Tentar novamente
-              </button>
-            </div>
-          ) : cancelamentos.length === 0 ? (
-            <div className="text-center py-12 bg-white rounded-xl border border-stone-200 shadow-sm text-stone-400">
-              <Ban className="w-12 h-12 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">Nenhum cancelamento definitivo de saldo encontrado</p>
-            </div>
-          ) : (
-            <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden animate-in fade-in duration-200">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead className="bg-stone-50 border-b border-stone-200 text-stone-500 uppercase text-[10px] font-bold">
-                    <tr>
-                      <th className="px-5 py-3">Pedido</th>
-                      <th className="px-5 py-3">Cliente / Fazenda</th>
-                      <th className="px-5 py-3 text-right">Qtd. Cancelada</th>
-                      <th className="px-5 py-3">Motivo</th>
-                      <th className="px-5 py-3">Data / Hora</th>
-                      <th className="px-5 py-3">Usuário</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-stone-100">
-                    {cancelamentos.map((c) => (
-                      <tr key={c.id} className="hover:bg-stone-50 transition-colors">
-                        <td className="px-5 py-4 font-mono font-bold">
-                          {c.pedidoOrigemDisponivel ? (
-                            <button
-                              type="button"
-                              onClick={() => void openPedidoById(c.pedido_origem_id)}
-                              className="text-emerald-700 underline decoration-emerald-300 underline-offset-2 hover:text-emerald-900"
-                            >
-                              {c.pedidoOrigemNome || '—'}
-                            </button>
-                          ) : (
-                            <span className="text-stone-400">{c.pedidoOrigemNome || '—'}</span>
-                          )}
-                        </td>
-                        <td className="px-5 py-4">
-                          <span className="text-stone-800 font-medium block">
-                            {c.pedidoOrigemCliente || '—'}
-                          </span>
-                          {c.pedidoOrigemIe && (
-                            <span className="text-stone-500 text-xs block">
-                              I.E. {c.pedidoOrigemIe}
-                            </span>
-                          )}
-                          {c.pedidoOrigemFazenda && (
-                            <span className="text-stone-400 text-xs block">
-                              {c.pedidoOrigemFazenda}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-5 py-4 text-right font-mono font-bold text-red-600">
-                          {c.quantidade.toLocaleString('pt-BR', { minimumFractionDigits: 3 })} ton
-                        </td>
-                        <td className="px-5 py-4 text-stone-600 max-w-xs truncate" title={c.motivo}>
-                          {c.motivo || '—'}
-                        </td>
-                        <td className="px-5 py-4 text-stone-500 text-xs">
-                          {c.criado_em ? new Date(c.criado_em).toLocaleString('pt-BR') : '—'}
-                        </td>
-                        <td className="px-5 py-4 text-stone-700 font-medium">
-                          {c.usuario_nome || '—'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {cancelamentosTotal > 20 && (
-                <div className="flex flex-col items-center justify-between gap-3 border-t border-stone-200 px-5 py-3 sm:flex-row">
-                  <span className="text-xs text-stone-500">
-                    Página {cancelamentosPage} de {Math.ceil(cancelamentosTotal / 20)}
-                  </span>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setCancelamentosPage((page) => Math.max(1, page - 1))}
-                      disabled={cancelamentosPage === 1}
-                      className="rounded-lg border border-stone-200 px-3 py-2 text-sm font-bold text-stone-600 hover:bg-stone-50 disabled:opacity-40"
-                    >
-                      Anterior
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCancelamentosPage((page) => page + 1)}
-                      disabled={cancelamentosPage >= Math.ceil(cancelamentosTotal / 20)}
-                      className="rounded-lg border border-stone-200 px-3 py-2 text-sm font-bold text-stone-600 hover:bg-stone-50 disabled:opacity-40"
-                    >
-                      Próxima
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      ) : (
+      {activeTab === 'pedidos' && (
         <>
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={() => setSearchOpen((open) => !open)}
-              className="inline-flex items-center gap-2 rounded-lg bg-stone-800 px-4 py-2 text-sm font-bold text-white hover:bg-stone-700"
-            >
-              {searchOpen ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
-              {searchOpen ? 'Fechar pesquisa' : 'Pesquisar pedido'}
-            </button>
-          </div>
-
-          {/* Filters */}
-          {searchOpen && (
-            <div className="bg-white rounded-xl border border-stone-200 shadow-sm p-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
-                  <input
-                    type="text"
-                    placeholder="Pedido, nome do cliente ou I.E."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-                  />
-                </div>
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+          {kpis.length > 0 && (
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              {kpis.map((kpi) => (
+                <div
+                  key={kpi.label}
+                  className={`rounded-2xl border p-4 shadow-sm ${
+                    kpi.warning ? 'border-amber-200 bg-amber-50' : 'border-stone-200 bg-white'
+                  }`}
                 >
-                  <option value="">Todos os status</option>
-                  {(Object.keys(STATUS_LABEL) as PedidoVenda['status'][]).map((s) => (
-                    <option key={s} value={s}>
-                      {STATUS_LABEL[s]}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={filialFilter}
-                  onChange={(e) => setFilialFilter(e.target.value)}
-                  className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-                >
-                  <option value="">Todas as filiais</option>
-                  {branches.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="mt-4 max-h-72 divide-y divide-stone-100 overflow-y-auto rounded-lg border border-stone-200">
-                {filtered.map((pedido) => {
-                  const client = clients.find((item) => item.id === pedido.cliente_id);
-                  return (
-                    <button
-                      key={pedido.id}
-                      type="button"
-                      onClick={() => void selectPedido(pedido)}
-                      className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left hover:bg-emerald-50"
-                    >
-                      <span>
-                        <strong className="block font-mono text-sm text-stone-800">
-                          {pedido.numero_pedido
-                            ? `${pedido.numero_pedido}/${pedido.emitente ?? 1}`
-                            : pedido.barra_pedido || 'Sem número'}
-                        </strong>
-                        <span className="text-sm text-stone-500">
-                          {client?.name || pedido.cliente_nome || 'Cliente não identificado'}
-                        </span>
-                      </span>
-                      <span className="text-xs text-stone-400">
-                        I.E. {client?.stateRegistration || pedido.cliente_ie || 'não informada'}
-                      </span>
-                    </button>
-                  );
-                })}
-                {filtered.length === 0 && (
-                  <p className="px-4 py-6 text-center text-sm text-stone-400">
-                    Nenhum pedido encontrado.
-                  </p>
-                )}
-              </div>
-              {pedidosTotalPages > 1 && (
-                <div className="mt-3 flex items-center justify-between text-xs text-stone-500">
-                  <span>
-                    Página {pedidosPage} de {pedidosTotalPages} · {pedidosTotal} pedido(s)
-                  </span>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => void load(Math.max(1, pedidosPage - 1), 'first')}
-                      disabled={pedidosPage === 1}
-                      className="rounded border border-stone-200 px-3 py-1.5 font-bold disabled:opacity-40"
-                    >
-                      Anterior
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        void load(Math.min(pedidosTotalPages, pedidosPage + 1), 'first')
-                      }
-                      disabled={pedidosPage === pedidosTotalPages}
-                      className="rounded border border-stone-200 px-3 py-1.5 font-bold disabled:opacity-40"
-                    >
-                      Próxima
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {selectedPedido && (
-            <nav
-              className="flex items-center justify-between rounded-xl border border-stone-200 bg-white px-4 py-3"
-              aria-label="Navegação entre pedidos"
-            >
-              <button
-                type="button"
-                onClick={() => void navigatePedido(-1)}
-                disabled={pedidosPage === 1 && selectedPedidoPosition <= 0}
-                className="inline-flex items-center gap-1 rounded-lg border border-stone-200 px-3 py-2 text-sm font-bold text-stone-600 hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <ChevronLeft className="h-4 w-4" /> Anterior
-              </button>
-              <span className="text-xs text-stone-500">
-                Pedido {(pedidosPage - 1) * PEDIDOS_PAGE_SIZE + selectedPedidoPosition + 1} de{' '}
-                {pedidosTotal}
-              </span>
-              <button
-                type="button"
-                onClick={() => void navigatePedido(1)}
-                disabled={
-                  selectedPedidoPosition < 0 ||
-                  (pedidosPage === pedidosTotalPages &&
-                    selectedPedidoPosition >= pedidosCronologicos.length - 1)
-                }
-                className="inline-flex items-center gap-1 rounded-lg border border-stone-200 px-3 py-2 text-sm font-bold text-stone-600 hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Próximo <ChevronRight className="h-4 w-4" />
-              </button>
-            </nav>
-          )}
-
-          {/* Cards */}
-          {loading ? (
-            <div className="flex justify-center py-12">
-              <RefreshCw className="w-6 h-6 animate-spin text-stone-300" />
-            </div>
-          ) : !selectedPedido ? (
-            <div className="text-center py-12 text-stone-400">
-              <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">Nenhum pedido de venda encontrado</p>
-              <p className="text-xs mt-1 text-stone-400">
-                Crie um novo pedido usando o botão acima ou a partir de uma precificação
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {(() => {
-                const idadeDias = selectedPedido.criado_em
-                  ? Math.floor(
-                      (Date.now() - new Date(selectedPedido.criado_em).getTime()) / 86400000
-                    )
-                  : 0;
-                const saldoReal = Math.max(0, Number(selectedPedido.saldo_a_carregar ?? 0));
-                if (
-                  !podeReceberAlertaSaldo ||
-                  alertaSaldo.desativado ||
-                  saldoReal <= 0 ||
-                  idadeDias < alertaSaldo.dias_limite
-                )
-                  return null;
-                return (
-                  <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <p>
-                        <strong>Atenção:</strong> este pedido ainda possui {saldoReal.toFixed(3)} t
-                        para carregar há {idadeDias} dias.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => void saveAlertaSaldo({ ...alertaSaldo, desativado: true })}
-                        className="font-bold underline"
-                      >
-                        Desativar neste pedido
-                      </button>
-                    </div>
-                    <label className="mt-3 flex items-center gap-2 text-xs">
-                      Alertar após
-                      <input
-                        type="number"
-                        min="1"
-                        max="365"
-                        value={alertaSaldo.dias_limite}
-                        onChange={(event) =>
-                          setAlertaSaldo((current) => ({
-                            ...current,
-                            dias_limite: Math.max(1, Number(event.target.value) || 1),
-                          }))
-                        }
-                        onBlur={() => void saveAlertaSaldo(alertaSaldo)}
-                        className="w-20 rounded border border-amber-300 bg-white px-2 py-1"
-                      />
-                      dias
-                    </label>
-                  </div>
-                );
-              })()}
-              {[selectedPedido].map((p) => {
-                const isExpanded = expandedIds.has(p.id);
-                const saldo = p.saldo_disponivel ?? null;
-                const saldoACarregar = p.saldo_a_carregar ?? null;
-                const itensPedido = itensPorPedido[p.id] ?? [];
-                const hasSaldoNosItens =
-                  itensPedido.length === 0 ||
-                  itensPedido.some(
-                    (item) => Number(item.saldo_disponivel ?? item.quantidade_ton ?? 0) > 0
-                  );
-
-                const clientObj = clients.find((c) => c.id === p.cliente_id);
-                const clientName = clientObj?.name || p.cliente_nome || '—';
-                const farmName = clientObj?.fazenda || p.cliente_fazenda || '—';
-
-                return (
-                  <div
-                    key={p.id}
-                    className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden"
+                  <p
+                    className={`text-xs font-bold uppercase tracking-wide ${
+                      kpi.warning ? 'text-amber-600' : 'text-stone-400'
+                    }`}
                   >
-                    {/* Card header */}
-                    <div
-                      className="flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-stone-50 transition-colors"
-                      onClick={() => toggleExpand(p.id)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault();
-                          toggleExpand(p.id);
-                        }
-                      }}
-                      role="button"
-                      tabIndex={0}
-                      aria-expanded={isExpanded}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span className="text-lg">📋</span>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-mono font-bold text-stone-800 text-sm">
-                              {p.barra_pedido ||
-                                (p.numero_pedido
-                                  ? `${p.numero_pedido}${p.emitente != null ? `/${p.emitente}` : ''}`
-                                  : '—')}
-                            </span>
-                            <span className="text-stone-500 text-sm truncate">
-                              | {clientName} {farmName !== '—' ? `(${farmName})` : ''}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-3 flex-wrap mt-1">
-                            <span className="text-xs text-stone-400">{fmtDate(p.data_pedido)}</span>
-                            <span
-                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_COLOR[p.status]}`}
-                            >
-                              {STATUS_LABEL[p.status]}
-                            </span>
-                            {p.status === 'concluido' && (
-                              <span className="text-xs font-semibold text-stone-600">
-                                Produto:{' '}
-                                {p.produto_nome ||
-                                  itensPedido.map((item) => item.produto_nome).join(', ') ||
-                                  'não informado'}
-                              </span>
-                            )}
-                            {(p.quantidade_cancelada_definitiva ?? 0) > 0 &&
-                              p.status !== 'cancelado' && (
-                                <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
-                                  Cancelamento parcial
-                                </span>
-                              )}
-                            {p.embalagem && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-600">
-                                📦 {p.embalagem}
-                              </span>
-                            )}
-                            {saldo != null && (
-                              <span className="text-xs text-stone-500">
-                                Saldo:{' '}
-                                <span
-                                  className={`font-bold ${saldo > 0 ? 'text-emerald-600' : 'text-red-600'}`}
-                                >
-                                  {saldo.toLocaleString('pt-BR')} ton
-                                </span>
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      <button className="ml-3 p-1 text-stone-400 hover:text-stone-600 shrink-0">
-                        {isExpanded ? (
-                          <ChevronUp className="w-5 h-5" />
-                        ) : (
-                          <ChevronDown className="w-5 h-5" />
-                        )}
-                      </button>
-                    </div>
-
-                    {/* Expanded detail */}
-                    {isExpanded && (
-                      <div className="border-t border-stone-100 px-5 py-4 space-y-4">
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-sm text-left">
-                            <thead className="text-stone-500 uppercase text-[10px] font-bold border-b border-stone-200">
-                              <tr>
-                                <th className="pb-2 pr-4">Produto</th>
-                                <th className="pb-2 pr-4">Qtd. Pedida</th>
-                                <th className="pb-2 pr-4">Reservada</th>
-                                <th className="pb-2 pr-4">Carregada</th>
-                                <th className="pb-2 pr-4">Disponível</th>
-                                <th className="pb-2 pr-4">Falta carregar</th>
-                                <th className="pb-2">Ação</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              <tr>
-                                <td className="py-2 pr-4 font-medium text-stone-800">
-                                  {p.produto_nome || '—'}
-                                </td>
-                                <td className="py-2 pr-4 text-stone-700 font-mono">
-                                  {p.quantidade_real != null
-                                    ? `${p.quantidade_real.toLocaleString('pt-BR')} ton`
-                                    : '—'}
-                                </td>
-                                <td className="py-2 pr-4 text-stone-700 font-mono">
-                                  {p.quantidade_reservada != null
-                                    ? `${p.quantidade_reservada.toLocaleString('pt-BR')} ton`
-                                    : '—'}
-                                </td>
-                                <td className="py-2 pr-4 text-stone-700 font-mono">
-                                  {p.quantidade_carregada != null
-                                    ? `${p.quantidade_carregada.toLocaleString('pt-BR')} ton`
-                                    : '—'}
-                                </td>
-                                <td className="py-2 pr-4">
-                                  {saldo != null ? (
-                                    <span
-                                      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${saldo > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}
-                                    >
-                                      {saldo.toLocaleString('pt-BR')} ton
-                                    </span>
-                                  ) : (
-                                    '—'
-                                  )}
-                                </td>
-                                <td className="py-2 pr-4 text-stone-700 font-mono">
-                                  {saldoACarregar != null
-                                    ? `${saldoACarregar.toLocaleString('pt-BR')} ton`
-                                    : '—'}
-                                </td>
-                                <td className="py-2">
-                                  {saldo != null && saldo > 0 && p.status !== 'cancelado' && (
-                                    <button
-                                      onClick={() => {
-                                        setPedidoParaCarregamento(p);
-                                        setModalCarregamentoAberto(true);
-                                      }}
-                                      disabled={!hasSaldoNosItens}
-                                      className="px-3 py-1 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-1 disabled:bg-stone-300 disabled:cursor-not-allowed"
-                                    >
-                                      🚛 Solicitar Carregamento
-                                    </button>
-                                  )}
-                                </td>
-                              </tr>
-                            </tbody>
-                          </table>
-                        </div>
-
-                        {/* Itens do pedido (multi-produto) */}
-                        {itensPorPedido[p.id] && itensPorPedido[p.id].length > 0 && (
-                          <div className="mt-3 border-t border-stone-100 pt-3">
-                            <p className="text-xs font-bold text-stone-400 uppercase mb-2">
-                              Produtos do Pedido
-                            </p>
-                            <div className="space-y-1">
-                              {itensPorPedido[p.id].map((item, i) => {
-                                const total = Number(item.quantidade_ton || 0);
-                                const carregado = Math.min(
-                                  total,
-                                  Math.max(0, item.quantidade_carregada ?? 0)
-                                );
-                                const saldoItem = Math.max(
-                                  0,
-                                  Number(item.saldo_a_carregar ?? total - carregado)
-                                );
-                                const progresso =
-                                  total > 0 ? Math.min(100, (carregado / total) * 100) : 0;
-                                return (
-                                  <div
-                                    key={item.id ?? i}
-                                    className="space-y-2 rounded-lg border border-stone-100 p-3 text-sm"
-                                  >
-                                    <div className="flex items-center justify-between gap-3">
-                                      <span className="font-bold text-stone-700">
-                                        {item.produto_nome}
-                                      </span>
-                                      <span className="text-xs text-stone-500">
-                                        {carregado.toFixed(3)} t carregadas · {saldoItem.toFixed(3)}{' '}
-                                        t restantes
-                                      </span>
-                                    </div>
-                                    <div className="h-2 overflow-hidden rounded-full bg-stone-100">
-                                      <div
-                                        className="h-full rounded-full bg-emerald-500 transition-all"
-                                        style={{ width: `${progresso}%` }}
-                                        role="progressbar"
-                                        aria-label={`Progresso de ${item.produto_nome}`}
-                                        aria-valuenow={Math.round(progresso)}
-                                        aria-valuemin={0}
-                                        aria-valuemax={100}
-                                      />
-                                    </div>
-                                    <p className="text-right text-[10px] font-bold text-stone-400">
-                                      {progresso.toFixed(1)}% carregado
-                                    </p>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Dados do Cliente */}
-                        {clientObj && (
-                          <div className="bg-stone-50 border border-stone-100 rounded-xl p-4 space-y-3">
-                            <p className="text-xs font-bold text-emerald-700 uppercase tracking-widest">
-                              Dados do Cliente
-                            </p>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-                              <div>
-                                <span className="font-semibold text-stone-500 block mb-0.5">
-                                  Razão Social / Nome
-                                </span>
-                                <span className="text-stone-800 font-medium text-sm">
-                                  {clientObj.name}
-                                </span>
-                              </div>
-                              {clientObj.document && (
-                                <div>
-                                  <span className="font-semibold text-stone-500 block mb-0.5">
-                                    CNPJ / CPF
-                                  </span>
-                                  <span className="text-stone-800 font-medium">
-                                    {clientObj.document}
-                                  </span>
-                                </div>
-                              )}
-                              {clientObj.stateRegistration && (
-                                <div>
-                                  <span className="font-semibold text-stone-500 block mb-0.5">
-                                    Inscrição Estadual (IE)
-                                  </span>
-                                  <span className="text-stone-800 font-medium">
-                                    {clientObj.stateRegistration}
-                                  </span>
-                                </div>
-                              )}
-                              {clientObj.phone && (
-                                <div>
-                                  <span className="font-semibold text-stone-500 block mb-0.5">
-                                    Telefone
-                                  </span>
-                                  <span className="text-stone-800 font-medium">
-                                    {clientObj.phone}
-                                  </span>
-                                </div>
-                              )}
-                              {clientObj.email && (
-                                <div>
-                                  <span className="font-semibold text-stone-500 block mb-0.5">
-                                    E-mail
-                                  </span>
-                                  <span className="text-stone-800 font-medium truncate block">
-                                    {clientObj.email}
-                                  </span>
-                                </div>
-                              )}
-                              {clientObj.fazenda && (
-                                <div>
-                                  <span className="font-semibold text-stone-500 block mb-0.5">
-                                    Fazenda
-                                  </span>
-                                  <span className="text-stone-800 font-medium">
-                                    {clientObj.fazenda}
-                                  </span>
-                                </div>
-                              )}
-                              {(clientObj.deliveryAddress || clientObj.address) && (
-                                <div className="md:col-span-3 border-t border-stone-200/60 pt-2">
-                                  <span className="font-semibold text-stone-500 block mb-1">
-                                    Endereço de Entrega
-                                  </span>
-                                  <span className="text-stone-700">
-                                    {(() => {
-                                      const addr = clientObj.deliveryAddress || clientObj.address;
-                                      if (!addr) return '—';
-                                      return `${addr.street}${addr.number ? `, ${addr.number}` : ''}${addr.neighborhood ? ` - ${addr.neighborhood}` : ''}${addr.city ? ` - ${addr.city}` : ''}${addr.state ? `/${addr.state}` : ''}${addr.cep ? ` (CEP: ${addr.cep})` : ''}`;
-                                    })()}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Extra info */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs pt-2 border-t border-stone-100">
-                          {p.precificacao_id && (
-                            <div>
-                              <p className="font-bold text-stone-400 uppercase mb-0.5">
-                                Precificação
-                              </p>
-                              <p className="text-stone-700 font-mono font-bold">
-                                {pricingRecords.find((x) => x.id === p.precificacao_id)?.cod ||
-                                  p.precificacao_id.slice(0, 8)}
-                              </p>
-                            </div>
-                          )}
-                          {p.condicao_pagamento && (
-                            <div>
-                              <p className="font-bold text-stone-400 uppercase mb-0.5">Pagamento</p>
-                              <p className="text-stone-700">{p.condicao_pagamento}</p>
-                            </div>
-                          )}
-                          {p.tipo_frete && (
-                            <div>
-                              <p className="font-bold text-stone-400 uppercase mb-0.5">Frete</p>
-                              <p className="text-stone-700">{p.tipo_frete}</p>
-                            </div>
-                          )}
-                          {p.preco_unitario != null && (
-                            <div>
-                              <p className="font-bold text-stone-400 uppercase mb-0.5">
-                                Preço Unit.
-                              </p>
-                              <p className="text-stone-700">
-                                R${' '}
-                                {p.preco_unitario.toLocaleString('pt-BR', {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: 2,
-                                })}
-                              </p>
-                            </div>
-                          )}
-                          {p.pedido_pai_id && (
-                            <div>
-                              <p className="font-bold text-stone-400 uppercase mb-0.5">
-                                Pedido Pai
-                              </p>
-                              <p className="text-stone-600 font-mono text-xs">
-                                {pedidos.find((x) => x.id === p.pedido_pai_id)?.barra_pedido ??
-                                  p.pedido_pai_id.slice(0, 8)}
-                              </p>
-                            </div>
-                          )}
-                          {p.observacoes && (
-                            <div className="col-span-2 md:col-span-4">
-                              <p className="font-bold text-stone-400 uppercase mb-0.5">
-                                Observações
-                              </p>
-                              <p className="text-stone-700">{p.observacoes}</p>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="pt-2 border-t border-stone-100">
-                          <h4 className="text-xs uppercase font-bold text-stone-500 mb-2">
-                            Histórico de Carregamentos
-                          </h4>
-                          <HistoricoCarregamentosPedido pedidoVendaId={p.id} />
-                        </div>
-
-                        <div className="flex flex-wrap gap-2 pt-2 border-t border-stone-100">
-                          <button
-                            onClick={() => setPedidoEdicao(p)}
-                            className="flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-100 px-3 py-1.5 text-xs font-bold text-emerald-800 hover:bg-emerald-200"
-                          >
-                            <Pencil className="h-3.5 w-3.5" /> Editar pedido
-                          </button>
-                          {p.status !== 'cancelado' && (
-                            <>
-                              <button
-                                onClick={() => setPedidoCancSubstitui(p)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-100 text-orange-800 border border-orange-300 text-xs font-bold rounded-lg hover:bg-orange-200 transition-colors"
-                              >
-                                <GitBranch className="w-3.5 h-3.5" />
-                                Canc/Substitui
-                              </button>
-                              <button
-                                onClick={() => setPedidoCancelamentoDefinitivo(p)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 bg-red-100 text-red-800 border border-red-300 text-xs font-bold rounded-lg hover:bg-red-200 transition-colors"
-                              >
-                                <Ban className="w-3.5 h-3.5" />
-                                Cancelar Definitivo
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                    {kpi.label}
+                  </p>
+                  <p
+                    className={`mt-1 text-2xl font-black ${
+                      kpi.warning
+                        ? 'text-amber-700'
+                        : kpi.accent
+                          ? 'text-emerald-700'
+                          : 'text-stone-900'
+                    }`}
+                  >
+                    {kpi.value}
+                  </p>
+                  <p className="mt-0.5 text-xs text-stone-500">{kpi.hint}</p>
+                </div>
+              ))}
             </div>
           )}
+
+          <section className="rounded-2xl border border-stone-200 bg-white shadow-sm">
+            <div className="grid grid-cols-1 gap-3 border-b border-stone-100 p-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))]">
+              <label className="relative block">
+                <span className="sr-only">Buscar pedido</span>
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+                <input
+                  type="search"
+                  value={busca}
+                  onChange={(event) => setBusca(event.target.value)}
+                  placeholder="Pedido, cliente, I.E., produto, vendedor ou contrato"
+                  className="h-11 w-full rounded-xl border border-stone-300 pl-9 pr-3 text-[14px] focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </label>
+              <select
+                value={statusFilter}
+                onChange={(event) => {
+                  setStatusFilter(event.target.value);
+                  setPage(1);
+                }}
+                aria-label="Status"
+                className="h-11 rounded-xl border border-stone-300 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="">Todos os status</option>
+                {(Object.keys(STATUS_LABEL) as PedidoVenda['status'][]).map((status) => (
+                  <option key={status} value={status}>
+                    {STATUS_LABEL[status]}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={filialFilter}
+                onChange={(event) => {
+                  setFilialFilter(event.target.value);
+                  setPage(1);
+                }}
+                aria-label="Filial"
+                className="h-11 rounded-xl border border-stone-300 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="">Todas as filiais</option>
+                {branches.map((branch) => (
+                  <option key={branch.id} value={branch.id}>
+                    {branch.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={safraFilter}
+                onChange={(event) => {
+                  setSafraFilter(event.target.value);
+                  setPage(1);
+                }}
+                aria-label="Safra"
+                className="h-11 rounded-xl border border-stone-300 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="">Todas as safras</option>
+                {(resumo?.safras ?? []).map((safra) => (
+                  <option key={safra} value={safra}>
+                    Safra {safra}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {loadError ? (
+              <div className="m-4 flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 sm:flex-row sm:items-center sm:justify-between">
+                <span>{loadError}</span>
+                <button
+                  type="button"
+                  onClick={() => void loadCarteira()}
+                  className="rounded-lg bg-red-700 px-3 py-2 font-bold text-white hover:bg-red-800"
+                >
+                  Tentar novamente
+                </button>
+              </div>
+            ) : loading && pedidos.length === 0 ? (
+              <p className="px-4 py-16 text-center text-sm text-stone-400">Carregando pedidos…</p>
+            ) : pedidos.length === 0 ? (
+              <div className="px-4 py-16 text-center">
+                <ClipboardList className="mx-auto h-10 w-10 text-stone-300" />
+                <p className="mt-2 font-bold text-stone-700">Nenhum pedido encontrado</p>
+                <p className="text-sm text-stone-500">
+                  Ajuste os filtros ou crie um pedido pelo botão acima ou a partir de uma
+                  precificação.
+                </p>
+              </div>
+            ) : (
+              <PedidosCarteiraTable
+                pedidos={pedidos}
+                selectedId={selected?.id}
+                diasParado={DIAS_PARADO}
+                onSelect={(pedido) => void openPedido(pedido)}
+              />
+            )}
+
+            <div className="border-t border-stone-100 px-4 py-3">
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                totalItems={total}
+                firstItemNumber={total === 0 ? 0 : (page - 1) * pageSize + 1}
+                lastItemNumber={Math.min(total, page * pageSize)}
+                pageSize={pageSize}
+                pageSizeOptions={[25, 50, 100]}
+                itemLabel="pedidos"
+                onPageChange={setPage}
+                onPageSizeChange={(size) => {
+                  setPageSize(size);
+                  setPage(1);
+                }}
+              />
+            </div>
+          </section>
         </>
       )}
 
-      <React.Suspense fallback={<LoadingFeature label="Carregando formulário..." overlay />}>
+      {/* Painel lateral do pedido */}
+      {selected && activeTab === 'pedidos' && (
+        <div className="fixed inset-0 z-40 flex justify-end">
+          <button
+            type="button"
+            aria-label="Fechar detalhe"
+            onClick={closePedido}
+            className="absolute inset-0 bg-black/30 backdrop-blur-[1px]"
+          />
+          <div className="relative h-full w-full max-w-2xl shadow-2xl">
+            <PedidoDetailPanel
+              pedido={selected}
+              itens={itens}
+              client={selectedClient}
+              pricingCode={pricingCode}
+              parentLabel={parentLabel}
+              alerta={alerta}
+              podeReceberAlerta={podeReceberAlerta}
+              onSaveAlerta={(preferencia) => void saveAlerta(preferencia)}
+              onClose={closePedido}
+              onEdit={() => setPedidoEdicao(selected)}
+              onSolicitarCarregamento={() => setPedidoCarregamento(selected)}
+              onCancSubstitui={() => setPedidoCancSubstitui(selected)}
+              onCancelamentoDefinitivo={() => setPedidoCancelamento(selected)}
+              onChanged={() => void refreshAfterChange()}
+            />
+          </div>
+        </div>
+      )}
+
+      <React.Suspense fallback={<LoadingFeature label="Carregando formulário…" overlay />}>
         {showNovoPedido && (
           <NovoPedidoVendaModal
             pricing={null}
             currentUser={currentUser}
             onClose={() => setShowNovoPedido(false)}
-            onSuccess={() => load(pedidosPage)}
+            onSuccess={() => void loadCarteira()}
           />
         )}
-
         {pedidoEdicao && (
           <EditarPedidoVendaModal
             pedido={pedidoEdicao}
-            items={itensPorPedido[pedidoEdicao.id] ?? []}
+            items={itens}
             clients={clients}
             pricingRecords={pricingRecords}
             branches={branches}
             currentUser={currentUser}
             onClose={() => setPedidoEdicao(null)}
-            onSuccess={() => load(pedidosPage)}
+            onSuccess={() => void refreshAfterChange()}
           />
         )}
-
         {pedidoCancSubstitui && (
           <CancSubstituiModal
             pedido={pedidoCancSubstitui}
             currentUser={currentUser}
             onClose={() => setPedidoCancSubstitui(null)}
-            onSuccess={() => load(pedidosPage)}
+            onSuccess={() => void refreshAfterChange()}
           />
         )}
-
-        {pedidoCancelamentoDefinitivo && (
+        {pedidoCancelamento && (
           <CancelamentoDefinitivoModal
-            pedido={pedidoCancelamentoDefinitivo}
+            pedido={pedidoCancelamento}
             currentUser={currentUser}
-            onClose={() => setPedidoCancelamentoDefinitivo(null)}
-            onSuccess={() => load(pedidosPage)}
+            onClose={() => setPedidoCancelamento(null)}
+            onSuccess={() => void refreshAfterChange()}
           />
         )}
-
-        {modalCarregamentoAberto && (
+        {pedidoCarregamento && (
           <ModalNovoCarregamento
             filiais={filiais}
-            pedidoVinculado={pedidoParaCarregamento ?? undefined}
+            pedidoVinculado={pedidoCarregamento}
             onSave={handleSolicitarCarregamento}
-            onClose={() => {
-              setModalCarregamentoAberto(false);
-              setPedidoParaCarregamento(null);
-            }}
+            onClose={() => setPedidoCarregamento(null)}
           />
         )}
       </React.Suspense>
