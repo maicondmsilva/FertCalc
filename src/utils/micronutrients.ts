@@ -45,16 +45,47 @@ const MICRONUTRIENT_ALIASES: Record<string, string> = {
   ENXOFRE: 'S',
 };
 
-export const normalizeMicronutrientKey = (name: string) => {
-  const normalized = name
+const toAliasKey = (name: string) =>
+  name
     .trim()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLocaleUpperCase('pt-BR');
+
+/** Siglas do cadastro de nutrientes (chave → sigla para exibir, ex.: ZN → Zn). */
+const REGISTERED_LABELS = new Map<string, string>();
+
+export interface NutrientDefinition {
+  sigla: string;
+  nome: string;
+  aliases?: string[];
+}
+
+/**
+ * Liga o cadastro de nutrientes ao cálculo: sigla, nome e nomes alternativos de
+ * cada nutriente passam a ser reconhecidos como o mesmo nutriente (além da lista
+ * fixa abaixo, que continua valendo para dados antigos).
+ */
+export function registerNutrients(nutrients: NutrientDefinition[]): void {
+  nutrients.forEach((nutrient) => {
+    const key = toAliasKey(nutrient.sigla);
+    if (!key) return;
+    REGISTERED_LABELS.set(key, nutrient.sigla.trim());
+    [nutrient.sigla, nutrient.nome, ...(nutrient.aliases || [])].forEach((alias) => {
+      const aliasKey = toAliasKey(alias || '');
+      if (aliasKey) MICRONUTRIENT_ALIASES[aliasKey] = key;
+    });
+  });
+}
+
+export const normalizeMicronutrientKey = (name: string) => {
+  const normalized = toAliasKey(name);
   return MICRONUTRIENT_ALIASES[normalized] || normalized;
 };
 
 export const formatMicronutrientLabel = (name: string) => {
+  const registered = REGISTERED_LABELS.get(normalizeMicronutrientKey(name));
+  if (registered) return registered;
   const trimmedName = name.trim();
   return /^[a-z]{1,3}$/i.test(trimmedName)
     ? `${trimmedName.charAt(0).toLocaleUpperCase('pt-BR')}${trimmedName.slice(1).toLocaleLowerCase('pt-BR')}`

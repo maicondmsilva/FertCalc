@@ -51,7 +51,6 @@ export default function AppSidebar({
       if (!(event.target as HTMLElement).closest('aside')) {
         setExpandedGroups((current) => {
           const next = new Set(current);
-          next.delete('materials_group');
           next.delete('reports');
           next.delete('managementReports_group');
           return next;

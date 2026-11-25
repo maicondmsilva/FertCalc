@@ -32,25 +32,19 @@ describe('micronutrient catalog helpers', () => {
   });
 
   it('informa somente metas sem fonte entre os produtos selecionados', () => {
-    const result = getMissingSelectedMicronutrientSources(
-      { B: 0.25, Zn: 0.1, Mn: 0 },
-      [
-        { selected: true, microGuarantees: [{ name: 'b', value: 5 }] },
-        { selected: false, microGuarantees: [{ name: 'Zn', value: 10 }] },
-      ]
-    );
+    const result = getMissingSelectedMicronutrientSources({ B: 0.25, Zn: 0.1, Mn: 0 }, [
+      { selected: true, microGuarantees: [{ name: 'b', value: 5 }] },
+      { selected: false, microGuarantees: [{ name: 'Zn', value: 10 }] },
+    ]);
 
     expect(result).toEqual(['Zn']);
   });
 
   it('encontra fontes selecionadas mesmo com nome completo na meta e símbolo na garantia', () => {
-    const result = getMissingSelectedMicronutrientSources(
-      { Boro: 0.3, Zinco: 1.25 },
-      [
-        { selected: true, microGuarantees: [{ name: 'B', value: 10 }] },
-        { selected: true, microGuarantees: [{ name: 'Zn', value: 10 }] },
-      ]
-    );
+    const result = getMissingSelectedMicronutrientSources({ Boro: 0.3, Zinco: 1.25 }, [
+      { selected: true, microGuarantees: [{ name: 'B', value: 10 }] },
+      { selected: true, microGuarantees: [{ name: 'Zn', value: 10 }] },
+    ]);
 
     expect(result).toEqual([]);
   });
@@ -101,5 +95,19 @@ describe('micronutrient catalog helpers', () => {
 
     expect(getSecondaryNutrientTarget(targets, 'ca')).toBe(1.2);
     expect(getSecondaryNutrientTarget(targets, 's')).toBe(2.5);
+  });
+});
+
+describe('cadastro de nutrientes ligado ao cálculo', () => {
+  it('nome e nomes alternativos cadastrados viram a mesma sigla', async () => {
+    const { registerNutrients, normalizeMicronutrientKey, formatMicronutrientLabel } =
+      await import('./micronutrients');
+    registerNutrients([{ sigla: 'Ge', nome: 'Germânio', aliases: ['GERMANIO QUELATADO'] }]);
+    expect(normalizeMicronutrientKey('germânio')).toBe('GE');
+    expect(normalizeMicronutrientKey('Germanio quelatado')).toBe('GE');
+    expect(normalizeMicronutrientKey('GE')).toBe('GE');
+    expect(formatMicronutrientLabel('GERMÂNIO')).toBe('Ge');
+    // nomes antigos continuam valendo
+    expect(normalizeMicronutrientKey('Zinco')).toBe('ZN');
   });
 });

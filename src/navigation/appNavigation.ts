@@ -152,22 +152,13 @@ export function getNavigationItems(
         icon: Package,
         permission: 'produtosFormulados',
       },
+      // Produtos, embalagens, marcas, nutrientes e incompatibilidade ficam em abas
+      // dentro desta tela (as rotas antigas continuam abrindo a aba certa).
       {
-        id: 'materials_group',
-        label: 'Cadastro de Matérias',
+        id: 'products',
+        label: 'Cadastro de Matéria-Prima',
         icon: Database,
         permission: 'priceLists',
-        type: 'parent',
-        children: [
-          { id: 'products', label: 'Produtos', icon: Package, permission: 'priceLists' },
-          { id: 'materials_brand', label: 'Marcas', icon: Tag, permission: 'priceLists' },
-          {
-            id: 'incompatibilities',
-            label: 'Incompatibilidades',
-            icon: AlertTriangle,
-            permission: 'priceLists',
-          },
-        ],
       },
       { id: 'pricelists', label: 'Lista de Preço', icon: Database, permission: 'priceLists' },
       { id: 'history', label: 'Precificações', icon: HistoryIcon, permission: 'history' },

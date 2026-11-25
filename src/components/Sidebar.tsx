@@ -28,7 +28,7 @@ export const menuItems = [
   { id: 'goals', label: 'Metas', icon: Target, permission: 'goals' },
   { id: 'reports', label: 'Relatórios', icon: BarChart3, permission: 'reports' },
   { id: 'priceLists', label: 'Listas de Preços', icon: Database, permission: 'priceLists' },
-  { id: 'products', label: 'Produtos', icon: Database, permission: 'priceLists' },
+  { id: 'products', label: 'Cadastro de Matéria-Prima', icon: Database, permission: 'priceLists' },
   { id: 'clients', label: 'Clientes', icon: Users, permission: 'clients' },
   { id: 'agents', label: 'Representantes', icon: UserCheck, permission: 'agents' },
   { id: 'branches', label: 'Filiais e Locais', icon: Building2, permission: 'branches' },
