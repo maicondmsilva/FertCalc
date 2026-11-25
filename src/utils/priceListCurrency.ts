@@ -44,19 +44,39 @@ export const listExchangeRate = (
   list: Pick<PriceList, 'currency' | 'exchangeRate' | 'dollarRate'>
 ) => (list.currency === 'USD' ? list.exchangeRate : (list.dollarRate ?? list.exchangeRate));
 
+export interface ProjectPriceListOptions {
+  /**
+   * Mantém os produtos da lista que não têm preço nesta moeda, com preço zero e
+   * marcados como `isMissingListPrice` (a calculadora mostra e deixa informar um valor).
+   * Sem esta opção (PDF, relatórios) eles ficam de fora em dólar, como antes.
+   */
+  includeUnpriced?: boolean;
+}
+
 /**
- * A lista vista numa moeda: preços daquela moeda e só os produtos que têm preço
- * nela (em reais, todos os produtos da lista continuam, como antes).
+ * A lista vista numa moeda: preços daquela moeda. Em reais todos os produtos
+ * continuam; em dólar, só os que têm preço, a não ser com `includeUnpriced`.
  */
-export function projectPriceList(list: PriceList, currency: PriceListCurrency): PriceList {
+export function projectPriceList(
+  list: PriceList,
+  currency: PriceListCurrency,
+  options: ProjectPriceListOptions = {}
+): PriceList {
   const rate = listExchangeRate(list);
   const legacyUsd = list.currency === 'USD';
+  const mark = (item: PriceList['macros'][number], price: number) => ({
+    ...item,
+    price,
+    isMissingListPrice: !hasPrice(price),
+  });
   const project = (items: PriceList['macros']) => {
-    if (legacyUsd) return currency === 'USD' ? items : [];
-    if (currency === 'BRL') return items;
+    if (legacyUsd) {
+      return currency === 'USD' ? items.map((item) => mark(item, Number(item.price) || 0)) : [];
+    }
+    if (currency === 'BRL') return items.map((item) => mark(item, Number(item.price) || 0));
     return items
-      .filter((item) => hasPrice(item.priceUSD))
-      .map((item) => ({ ...item, price: Number(item.priceUSD) }));
+      .filter((item) => options.includeUnpriced || hasPrice(item.priceUSD))
+      .map((item) => mark(item, Number(item.priceUSD) || 0));
   };
   return {
     ...list,
