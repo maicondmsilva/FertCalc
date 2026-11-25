@@ -13,6 +13,7 @@ import {
   Sparkles,
   Trash2,
   X,
+  TrendingUp,
 } from 'lucide-react';
 import type { Embalagem, SavedFormula, TargetFormula } from '../../types';
 import type { ProdutoFormulado } from '../../services/produtosFormuladosService';
@@ -49,6 +50,7 @@ import {
 } from './betaCalculatorModel';
 import BetaConditionsPanel from './BetaConditionsPanel';
 import GuaranteeSumStrip from './GuaranteeSumStrip';
+import { isZeroText } from '../ui/NumericInput';
 import { buildGuaranteeBreakdown } from '../../utils/guaranteeBreakdown';
 import type { BetaCalculator } from './SimplifiedCalculatorBeta';
 
@@ -68,6 +70,8 @@ interface BetaFormulaCardProps {
   onApplyComparisonAlternative: (alternative: FormulaComparisonAlternative) => void;
   onOpenReductionSimulation: () => void;
   onDuplicate: () => void;
+  /** Abre a análise de rentabilidade; ausente quando o usuário não tem permissão. */
+  onOpenProfitability?: () => void;
 }
 
 const NUTRIENT_STYLES = {
@@ -193,6 +197,7 @@ export default function BetaFormulaCard({
   onApplyComparisonAlternative,
   onOpenReductionSimulation,
   onDuplicate,
+  onOpenProfitability,
 }: BetaFormulaCardProps) {
   const {
     macros,
@@ -483,6 +488,14 @@ export default function BetaFormulaCard({
           onClick={() => togglePanel('compare')}
         />
       )}
+      {onOpenProfitability && (
+        <RailButton
+          icon={TrendingUp}
+          label="Rentabilidade"
+          disabled={!summary}
+          onClick={onOpenProfitability}
+        />
+      )}
       <RailButton icon={Copy} label="Duplicar" onClick={onDuplicate} />
       <RailButton
         icon={Trash2}
@@ -579,8 +592,20 @@ export default function BetaFormulaCard({
                             updateNpk(field, event.target.value);
                             setIsLoadOpen(true);
                           }}
-                          onFocus={() => setIsLoadOpen(true)}
-                          onBlur={closeSuggestionsLater}
+                          onFocus={() => {
+                            setIsLoadOpen(true);
+                            // "00" some ao clicar para digitar direto (a fórmula não muda).
+                            if (isZeroText(npkDraft[field]))
+                              setNpkDraft((current) => ({ ...current, [field]: '' }));
+                          }}
+                          onBlur={() => {
+                            closeSuggestionsLater();
+                            setNpkDraft((current) =>
+                              current[field].trim() === ''
+                                ? splitFormulaTarget(calculation.formula)
+                                : current
+                            );
+                          }}
                           placeholder="00"
                           aria-label={`${style.label} alvo`}
                           className={`w-full min-w-0 bg-transparent text-right text-xl font-black tabular-nums placeholder:text-stone-300 focus:outline-none ${style.text}`}

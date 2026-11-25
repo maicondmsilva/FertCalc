@@ -369,6 +369,19 @@ export const ProductPickerModal: React.FC<ProductPickerModalProps> = ({
                 if (!Number.isFinite(price)) return;
                 updateLocalProduct(type, p.id, applyTemporaryMaterialPrice(p, price));
               }}
+              onFocus={() => {
+                // Produto sem preço: o zero some para digitar direto.
+                if (priceInputs[p.id] === undefined && !(Number(p.price) > 0))
+                  setPriceInputs((current) => ({ ...current, [p.id]: '' }));
+              }}
+              onBlur={() =>
+                setPriceInputs((current) => {
+                  if (current[p.id] !== '') return current;
+                  const next = { ...current };
+                  delete next[p.id];
+                  return next;
+                })
+              }
               className={`${detailInput} font-mono normal-case tracking-normal`}
             />
           </label>
