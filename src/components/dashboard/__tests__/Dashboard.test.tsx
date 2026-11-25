@@ -15,11 +15,14 @@ const state: { current: DashboardData } = {
   },
 };
 // O gráfico (Recharts) usa ResizeObserver, que o jsdom não tem.
-globalThis.ResizeObserver ??= class {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-} as unknown as typeof ResizeObserver;
+vi.stubGlobal(
+  'ResizeObserver',
+  class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+);
 
 vi.mock('../useDashboardData', () => ({ useDashboardData: () => state.current }));
 
