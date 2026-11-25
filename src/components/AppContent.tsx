@@ -68,6 +68,9 @@ function AppContentRoute({
   onCalculatorSaved,
   onClearCalculator,
 }: AppContentProps) {
+  // Cadastros de catálogo (produtos, marcas, embalagens, incompatibilidade):
+  // o banco só aceita gravação de admin ou master.
+  const canManageCatalog = currentUser.role === 'master' || currentUser.role === 'admin';
   if (!activeModule) {
     return <Home currentUser={currentUser} onSelectModule={onSelectModule} />;
   }
@@ -129,10 +132,12 @@ function AppContentRoute({
     if (activeTab === 'pricelists' && hasPermission('priceLists')) {
       return <PriceListManager currentUser={currentUser} />;
     }
-    if (activeTab === 'materials_brand' && hasPermission('priceLists')) return <BrandManager />;
-    if (activeTab === 'products' && hasPermission('priceLists')) return <ProductManager />;
+    if (activeTab === 'materials_brand' && hasPermission('priceLists'))
+      return <BrandManager canManage={canManageCatalog} />;
+    if (activeTab === 'products' && hasPermission('priceLists'))
+      return <ProductManager canManage={canManageCatalog} />;
     if (activeTab === 'incompatibilities' && hasPermission('priceLists')) {
-      return <IncompatibilityManager />;
+      return <IncompatibilityManager canManage={canManageCatalog} />;
     }
     if (activeTab === 'clients' && hasPermission('clients')) {
       return <ClientManager currentUser={currentUser} />;

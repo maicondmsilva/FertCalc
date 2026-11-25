@@ -12,7 +12,7 @@ import { useToast } from './Toast';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { useConfirm } from '../hooks/useConfirm';
 
-export default function IncompatibilityManager() {
+export default function IncompatibilityManager({ canManage = true }: { canManage?: boolean }) {
   const { showSuccess, showError } = useToast();
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
   const [macros, setMacros] = useState<MacroMaterial[]>([]);
@@ -119,54 +119,65 @@ export default function IncompatibilityManager() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end mb-8 bg-stone-50 p-4 rounded-lg border border-stone-200">
-          <div>
-            <label className="block text-sm font-medium text-stone-600 mb-1">Matéria Prima A</label>
-            <select
-              value={selectedMaterialA}
-              onChange={(e) => setSelectedMaterialA(e.target.value)}
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500"
-            >
-              <option value="">Selecione...</option>
-              {allMaterials.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name} ({m.type})
-                </option>
-              ))}
-            </select>
-          </div>
+        {!canManage && (
+          <p className="mb-6 rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-600">
+            Somente leitura: apenas admin ou master pode alterar este cadastro.
+          </p>
+        )}
+        {canManage && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end mb-8 bg-stone-50 p-4 rounded-lg border border-stone-200">
+            <div>
+              <label className="block text-sm font-medium text-stone-600 mb-1">
+                Matéria Prima A
+              </label>
+              <select
+                value={selectedMaterialA}
+                onChange={(e) => setSelectedMaterialA(e.target.value)}
+                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+              >
+                <option value="">Selecione...</option>
+                {allMaterials.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name} ({m.type})
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          <div className="flex justify-center pb-2">
-            <X className="text-stone-400" />
-          </div>
+            <div className="flex justify-center pb-2">
+              <X className="text-stone-400" />
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-stone-600 mb-1">Matéria Prima B</label>
-            <select
-              value={selectedMaterialB}
-              onChange={(e) => setSelectedMaterialB(e.target.value)}
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500"
-            >
-              <option value="">Selecione...</option>
-              {allMaterials.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name} ({m.type})
-                </option>
-              ))}
-            </select>
-          </div>
+            <div>
+              <label className="block text-sm font-medium text-stone-600 mb-1">
+                Matéria Prima B
+              </label>
+              <select
+                value={selectedMaterialB}
+                onChange={(e) => setSelectedMaterialB(e.target.value)}
+                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+              >
+                <option value="">Selecione...</option>
+                {allMaterials.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name} ({m.type})
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          <div className="md:col-span-3 mt-2">
-            <button
-              onClick={handleAddRule}
-              disabled={!selectedMaterialA || !selectedMaterialB}
-              className="w-full bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg font-bold transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Adicionar Regra de Incompatibilidade
-            </button>
+            <div className="md:col-span-3 mt-2">
+              <button
+                onClick={handleAddRule}
+                disabled={!selectedMaterialA || !selectedMaterialB}
+                className="w-full bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg font-bold transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Adicionar Regra de Incompatibilidade
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="space-y-4">
           <div className="flex justify-between items-center">
@@ -202,13 +213,15 @@ export default function IncompatibilityManager() {
                     </td>
                     <td className="px-4 py-3 font-medium text-stone-800">{rule.materialBName}</td>
                     <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => removeRule(rule.id)}
-                        className="text-stone-400 hover:text-red-600 transition-colors"
-                        title="Remover regra"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {canManage && (
+                        <button
+                          onClick={() => removeRule(rule.id)}
+                          className="text-stone-400 hover:text-red-600 transition-colors"
+                          title="Remover regra"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

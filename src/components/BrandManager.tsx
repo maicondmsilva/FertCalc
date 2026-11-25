@@ -6,7 +6,7 @@ import { useToast } from './Toast';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { useConfirm } from '../hooks/useConfirm';
 
-export default function BrandManager() {
+export default function BrandManager({ canManage = true }: { canManage?: boolean }) {
   const { showSuccess, showError } = useToast();
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -93,37 +93,44 @@ export default function BrandManager() {
           {editingBrand ? 'Editar Marca' : 'Cadastro de Marcas de Produtos'}
         </h2>
 
-        <div className="flex gap-4 mb-8">
-          <div className="flex-1">
-            <label className="block text-sm font-medium text-stone-600 mb-1">Nome da Marca</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSave()}
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-              placeholder="Ex: Yara, Mosaic, Heringer..."
-            />
-          </div>
-          <div className="flex items-end gap-2">
-            {editingBrand && (
+        {!canManage && (
+          <p className="mb-6 rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-600">
+            Somente leitura: apenas admin ou master pode alterar este cadastro.
+          </p>
+        )}
+        {canManage && (
+          <div className="flex gap-4 mb-8">
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-stone-600 mb-1">Nome da Marca</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSave()}
+                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                placeholder="Ex: Yara, Mosaic, Heringer..."
+              />
+            </div>
+            <div className="flex items-end gap-2">
+              {editingBrand && (
+                <button
+                  onClick={cancelEdit}
+                  className="border border-stone-300 text-stone-600 px-4 py-2 rounded-lg hover:bg-stone-50 transition-colors font-medium"
+                >
+                  Cancelar
+                </button>
+              )}
               <button
-                onClick={cancelEdit}
-                className="border border-stone-300 text-stone-600 px-4 py-2 rounded-lg hover:bg-stone-50 transition-colors font-medium"
+                onClick={handleSave}
+                disabled={saving}
+                className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white px-6 py-2 rounded-lg font-bold transition-colors flex items-center gap-2"
               >
-                Cancelar
+                <Save className="w-4 h-4" />
+                {saving ? 'Salvando...' : editingBrand ? 'Atualizar' : 'Cadastrar Marca'}
               </button>
-            )}
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white px-6 py-2 rounded-lg font-bold transition-colors flex items-center gap-2"
-            >
-              <Save className="w-4 h-4" />
-              {saving ? 'Salvando...' : editingBrand ? 'Atualizar' : 'Cadastrar Marca'}
-            </button>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
@@ -148,20 +155,24 @@ export default function BrandManager() {
                     <td className="px-4 py-3 font-mono text-indigo-600 font-bold">{brand.code}</td>
                     <td className="px-4 py-3 text-stone-800 font-medium">{brand.name}</td>
                     <td className="px-4 py-3 text-right space-x-2">
-                      <button
-                        onClick={() => startEdit(brand)}
-                        className="p-1.5 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                        title="Editar"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => removeBrand(brand.id)}
-                        className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                        title="Excluir"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {canManage && (
+                        <>
+                          <button
+                            onClick={() => startEdit(brand)}
+                            className="p-1.5 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                            title="Editar"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => removeBrand(brand.id)}
+                            className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                            title="Excluir"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </>
+                      )}
                     </td>
                   </tr>
                 ))}
