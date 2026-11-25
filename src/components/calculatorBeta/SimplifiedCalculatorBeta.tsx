@@ -429,7 +429,9 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
           </div>
         )}
 
-        {(selectedPriceWarnings.unpriced.length > 0 || selectedPriceWarnings.manual.length > 0) && (
+        {(selectedPriceWarnings.unpriced.length > 0 ||
+          selectedPriceWarnings.manual.length > 0 ||
+          selectedPriceWarnings.custom.length > 0) && (
           <div
             role="alert"
             className="mt-4 flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
@@ -447,6 +449,12 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
                 <p>
                   <strong>Com valor informado por você:</strong>{' '}
                   {materialNames(selectedPriceWarnings.manual)}.
+                </p>
+              )}
+              {selectedPriceWarnings.custom.length > 0 && (
+                <p>
+                  <strong>Matéria-prima personalizada:</strong>{' '}
+                  {materialNames(selectedPriceWarnings.custom)}.
                 </p>
               )}
             </div>

@@ -9,6 +9,8 @@ export interface PriceWarnings {
   unpriced: RawMaterial[];
   /** Selecionados com valor informado pelo usuário (diferente da lista). */
   manual: RawMaterial[];
+  /** Matérias-primas personalizadas (informadas pelo usuário, fora do cadastro). */
+  custom: RawMaterial[];
 }
 
 /**
@@ -24,7 +26,11 @@ export function getPriceWarnings(
   );
   return {
     unpriced: chosen.filter(isUnpricedMaterial),
-    manual: chosen.filter((material) => material.isManualPrice && !isUnpricedMaterial(material)),
+    manual: chosen.filter(
+      (material) =>
+        material.isManualPrice && !material.isCustomMaterial && !isUnpricedMaterial(material)
+    ),
+    custom: chosen.filter((material) => material.isCustomMaterial),
   };
 }
 

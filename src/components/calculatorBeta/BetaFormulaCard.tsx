@@ -403,8 +403,9 @@ export default function BetaFormulaCard({
 
   const unpricedProducts = composition.rows.filter((row) => row.isUnpriced);
   const manualPriceProducts = composition.rows.filter(
-    (row) => row.isManualPrice && !row.isUnpriced
+    (row) => row.isManualPrice && !row.isUnpriced && !row.isCustom
   );
+  const customProducts = composition.rows.filter((row) => row.isCustom);
   const margin = summary ? summary.finalPrice - summary.baseCost : 0;
   const marginPercent = summary && summary.baseCost > 0 ? (margin / summary.baseCost) * 100 : 0;
 
@@ -1061,6 +1062,11 @@ export default function BetaFormulaCard({
                           }`}
                         />
                         {row.name}
+                        {row.isCustom && (
+                          <span className="ml-2 rounded bg-violet-100 px-1.5 py-0.5 text-xs font-bold text-violet-800">
+                            personalizada
+                          </span>
+                        )}
                         {row.isUnpriced && (
                           <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-bold text-amber-800">
                             sem preço
@@ -1126,7 +1132,9 @@ export default function BetaFormulaCard({
                   </span>
                 </li>
               </ul>
-              {(unpricedProducts.length > 0 || manualPriceProducts.length > 0) && (
+              {(unpricedProducts.length > 0 ||
+                manualPriceProducts.length > 0 ||
+                customProducts.length > 0) && (
                 <div className="space-y-1 border-t border-stone-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
                   {unpricedProducts.length > 0 && (
                     <p>
@@ -1139,6 +1147,13 @@ export default function BetaFormulaCard({
                     <p>
                       <strong>Valor informado por você:</strong>{' '}
                       {manualPriceProducts.map((row) => row.name).join(', ')}.
+                    </p>
+                  )}
+                  {customProducts.length > 0 && (
+                    <p>
+                      <strong>Matéria-prima personalizada:</strong>{' '}
+                      {customProducts.map((row) => row.name).join(', ')} — garantias e preço
+                      informados por você.
                     </p>
                   )}
                 </div>
