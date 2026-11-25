@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -38,7 +39,7 @@ function sourceFiles(dir: string): string[] {
 /** Pares (tabela da consulta, texto do select) encontrados no código. */
 function selectsByTable() {
   const found: { file: string; table: string; select: string }[] = [];
-  for (const file of sourceFiles(join(__dirname, '..', '..'))) {
+  for (const file of sourceFiles(join(dirname(fileURLToPath(import.meta.url)), '..', '..'))) {
     const text = readFileSync(file, 'utf8');
     const pattern = /\.from\(\s*'([a-z_]+)'\s*\)\s*\.select\(\s*([`'])([\s\S]*?)\2/g;
     for (const match of text.matchAll(pattern)) {
