@@ -412,6 +412,15 @@ export async function updateBrand(id: string, brand: Partial<Brand>): Promise<vo
 }
 
 export async function deleteBrand(id: string): Promise<void> {
+  const { count } = await supabase
+    .from('macro_materials')
+    .select('id', { count: 'exact', head: true })
+    .eq('brand_id', id);
+  if (count && count > 0) {
+    throw new Error(
+      `A marca está em ${count} produto${count > 1 ? 's' : ''}. Troque a marca desses produtos antes de excluir.`
+    );
+  }
   const { error } = await supabase.from('brands').delete().eq('id', id);
   if (error) throw error;
 }
@@ -890,10 +899,24 @@ export async function saveUnifiedProduct(p: Partial<UnifiedProduct>, id?: string
   throw new Error('Tipo de produto inválido.');
 }
 
-export async function deleteUnifiedProduct(id: string, type: NutrientType): Promise<void> {
-  if (type === 'macro') await deleteMacroMaterial(id);
-  else if (type === 'micro') await deleteMicroMaterial(id);
-  else if (type === 'finished') await deleteFinishedProduct(id);
+/**
+ * Exclui o produto. Macro ou micro usado em lista de preço, batida salva ou
+ * precificação é desativado em vez de apagado (decisão no banco).
+ */
+export async function deleteUnifiedProduct(
+  id: string,
+  type: NutrientType
+): Promise<'excluido' | 'desativado'> {
+  if (type === 'macro' || type === 'micro') {
+    const { data, error } = await supabase.rpc('excluir_ou_desativar_produto', {
+      p_tipo: type,
+      p_id: id,
+    });
+    if (error) throw error;
+    return data === 'desativado' ? 'desativado' : 'excluido';
+  }
+  if (type === 'finished') await deleteFinishedProduct(id);
+  return 'excluido';
 }
 
 export async function updateProductActiveStatus(

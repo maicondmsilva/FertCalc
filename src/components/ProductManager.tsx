@@ -315,17 +315,27 @@ export default function ProductManager({ canManage = true }: { canManage?: boole
 
   const handleDelete = async (id: string, type: NutrientType) => {
     const ok = await confirm({
-      title: 'Excluir Produto',
-      message: 'Tem certeza que deseja excluir este produto?',
+      title: 'Excluir produto?',
+      message:
+        'Se o produto nunca foi usado em lista de preço, batida ou precificação, ele será ' +
+        'excluído. Se já foi usado, será desativado: some das calculadoras e continua nos ' +
+        'registros antigos (pode ser reativado depois).',
       variant: 'danger',
+      confirmLabel: 'Continuar',
     });
     if (!ok) return;
     try {
-      await deleteUnifiedProduct(id, type);
-      showSuccess('Produto excluído com sucesso!');
+      const result = await deleteUnifiedProduct(id, type);
+      showSuccess(
+        result === 'desativado'
+          ? 'O produto já foi usado e foi desativado. Para usar de novo, reative-o.'
+          : 'Produto excluído.'
+      );
       await loadAll();
-    } catch {
-      showError('Erro ao excluir produto.');
+    } catch (error) {
+      showError(
+        `Erro ao excluir produto: ${error instanceof Error ? error.message : (error as { message?: string })?.message || 'tente novamente.'}`
+      );
     }
   };
 

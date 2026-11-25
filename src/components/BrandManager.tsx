@@ -70,7 +70,8 @@ export default function BrandManager({ canManage = true }: { canManage?: boolean
   const removeBrand = async (id: string) => {
     const ok = await confirm({
       title: 'Excluir marca?',
-      message: 'Esta marca pode estar vinculada a produtos. A ação não pode ser desfeita.',
+      message:
+        'A marca só pode ser excluída se nenhum produto a usar. A ação não pode ser desfeita.',
       variant: 'danger',
       confirmLabel: 'Excluir',
     });
@@ -79,8 +80,8 @@ export default function BrandManager({ canManage = true }: { canManage?: boolean
       await deleteBrand(id);
       showSuccess('Marca excluída com sucesso!');
       await loadBrands();
-    } catch {
-      showError('Erro ao excluir marca.');
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Erro ao excluir marca.');
     }
   };
 
