@@ -19,6 +19,8 @@ export enum NotificationType {
   CARREGAMENTO_APROVADO = 'CARREGAMENTO_APROVADO',
   CARREGAMENTO_EDITADO = 'CARREGAMENTO_EDITADO',
   CARREGAMENTO_EXCLUIDO = 'CARREGAMENTO_EXCLUIDO',
+  /** Mudança de etapa do carregamento, enviada pelo banco (gatilho). */
+  CARREGAMENTO_STATUS = 'CARREGAMENTO_STATUS',
 }
 
 export interface NotificationPayload {

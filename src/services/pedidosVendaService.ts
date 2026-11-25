@@ -1,3 +1,4 @@
+import { emptyOnError } from './queryErrors';
 import { supabase } from './supabase';
 import { PedidoVenda, PedidoVendaItem, CancelamentoPedido } from '../types';
 
@@ -482,7 +483,7 @@ export async function searchPedidosVenda(query: string): Promise<PedidoVenda[]> 
     .or(`numero_pedido.ilike.%${query}%,barra_pedido.ilike.%${query}%`)
     .order('criado_em', { ascending: false })
     .limit(20);
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'searchPedidosVenda');
   return data.map(mapPedido);
 }
 

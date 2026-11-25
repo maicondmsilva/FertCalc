@@ -1,3 +1,4 @@
+import { emptyOnError } from './queryErrors';
 import { supabase } from './supabase';
 import {
   Carregamento,
@@ -143,7 +144,7 @@ export async function getFiliais(): Promise<Filial[]> {
     .select('*')
     .eq('ativo', true)
     .order('name');
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getFiliais');
   return data.map(mapBranchToFilial);
 }
 
@@ -157,13 +158,13 @@ export async function getTransportadoras(): Promise<Transportadora[]> {
     .select('*')
     .eq('ativo', true)
     .order('nome');
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getTransportadoras');
   return data.map(mapTransportadora);
 }
 
 export async function getAllTransportadoras(): Promise<Transportadora[]> {
   const { data, error } = await supabase.from('transportadoras').select('*').order('nome');
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getAllTransportadoras');
   return data.map(mapTransportadora);
 }
 
@@ -216,9 +217,9 @@ export async function getCarregamentos(
       `
       *,
       branches(*),
-      transportadoras(*),
+      transportadoras!carregamentos_transportadora_id_fkey(*),
       locais_carregamento(*),
-      pedidos_venda!pedido_venda_id(
+      pedidos_venda!carregamentos_pedido_venda_id_fkey(
         cliente_nome_novo,
         produto_nome,
         data_vencimento,
@@ -260,7 +261,9 @@ export async function getCarregamentos(
 export async function getCarregamentoById(id: string): Promise<Carregamento | null> {
   const { data, error } = await supabase
     .from('carregamentos')
-    .select('*, branches(*), transportadoras(*), locais_carregamento(*)')
+    .select(
+      '*, branches(*), transportadoras!carregamentos_transportadora_id_fkey(*), locais_carregamento(*)'
+    )
     .eq('id', id)
     .single();
   if (error || !data) return null;
@@ -341,11 +344,11 @@ export async function deleteCarregamento(id: string, motivo: string): Promise<bo
 export async function getCotacoesCarregamento(carregamentoId: string): Promise<CotacaoFrete[]> {
   const { data, error } = await supabase
     .from('cotacoes_frete')
-    .select('*, transportadoras(*)')
+    .select('*, transportadoras!cotacoes_frete_transportadora_id_fkey(*)')
     .eq('carregamento_id', carregamentoId)
     .eq('arquivada', false)
     .order('criado_em', { ascending: false });
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getCotacoesCarregamento');
   return data.map((d) => ({
     ...mapCotacao(d),
     transportadora: d.transportadoras ? mapTransportadora(d.transportadoras) : undefined,
@@ -355,11 +358,11 @@ export async function getCotacoesCarregamento(carregamentoId: string): Promise<C
 export async function getCotacoesArquivadas(carregamentoId: string): Promise<CotacaoFrete[]> {
   const { data, error } = await supabase
     .from('cotacoes_frete')
-    .select('*, transportadoras(*)')
+    .select('*, transportadoras!cotacoes_frete_transportadora_id_fkey(*)')
     .eq('carregamento_id', carregamentoId)
     .eq('arquivada', true)
     .order('arquivada_em', { ascending: false });
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getCotacoesArquivadas');
   return data.map((d) => ({
     ...mapCotacao(d),
     transportadora: d.transportadoras ? mapTransportadora(d.transportadoras) : undefined,
@@ -521,9 +524,9 @@ export async function getCarregamentosRelatorio(
       `
       *,
       branches(*),
-      transportadoras(*),
+      transportadoras!carregamentos_transportadora_id_fkey(*),
       locais_carregamento(*),
-      pedidos_venda!pedido_venda_id(
+      pedidos_venda!carregamentos_pedido_venda_id_fkey(
         cliente_nome_novo,
         produto_nome,
         data_vencimento,
@@ -580,9 +583,9 @@ export async function getCarregamentosCalendario(
   const selectFields = `
       *,
       branches(*),
-      transportadoras(*),
+      transportadoras!carregamentos_transportadora_id_fkey(*),
       locais_carregamento(*),
-      pedidos_venda!pedido_venda_id(
+      pedidos_venda!carregamentos_pedido_venda_id_fkey(
         cliente_nome_novo,
         produto_nome,
         data_vencimento,
@@ -658,9 +661,9 @@ export async function getCarregamentosLogistica(filialIds?: string[]): Promise<C
       `
       *,
       branches(*),
-      transportadoras(*),
+      transportadoras!carregamentos_transportadora_id_fkey(*),
       locais_carregamento(*),
-      pedidos_venda!pedido_venda_id(
+      pedidos_venda!carregamentos_pedido_venda_id_fkey(
         cliente_nome_novo,
         produto_nome,
         data_vencimento,

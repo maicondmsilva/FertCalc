@@ -1,3 +1,4 @@
+import { emptyOnError } from './queryErrors';
 import { supabase } from './supabase';
 import { getManagersOfUser } from './db';
 import { PricingRecord, User } from '../types';
@@ -347,7 +348,7 @@ export const notifyCarregamentoExcluido = async (
 async function getAprovadoresCarregamentoIds(): Promise<string[]> {
   const { data, error } = await supabase.from('app_users').select('id, role, permissions');
 
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'None');
   return (data as Array<{ id: string; role: string; permissions?: Record<string, unknown> }>)
     .filter(
       (row) =>

@@ -59,4 +59,3 @@ describe('transportadoraAccessService', () => {
     expect(eq).toHaveBeenCalledWith('id', 'v1');
   });
 });
-

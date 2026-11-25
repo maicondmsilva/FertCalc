@@ -71,4 +71,3 @@ export async function desativarVinculoTransportadora(id: string): Promise<void> 
     .eq('id', id);
   if (error) throw error;
 }
-

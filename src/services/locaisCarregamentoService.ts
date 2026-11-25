@@ -1,3 +1,4 @@
+import { emptyOnError } from './queryErrors';
 import { supabase } from './supabase';
 import { assertDeleted, toDeleteError } from '../utils/deleteErrors';
 import { LocalCarregamento } from '../types/carregamento';
@@ -30,7 +31,7 @@ export async function getLocaisCarregamento(filialId?: string): Promise<LocalCar
   }
 
   const { data, error } = await query;
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getLocaisCarregamento');
   return data.map(mapLocal);
 }
 
@@ -46,7 +47,7 @@ export async function getLocaisAtivos(filialId?: string): Promise<LocalCarregame
   }
 
   const { data, error } = await query;
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getLocaisAtivos');
   return data.map(mapLocal);
 }
 
