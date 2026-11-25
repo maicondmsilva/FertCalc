@@ -19,6 +19,8 @@ import {
   Star,
   MapPin,
   Tag,
+  Atom,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   UnifiedProduct,
@@ -38,6 +40,10 @@ import {
   getProductUsage,
 } from '../services/db';
 import BrandManager from './BrandManager';
+import NutrientManager from './products/NutrientManager';
+import IncompatibilityManager from './IncompatibilityManager';
+import { getNutrientes, type Nutriente } from '../services/nutrientesService';
+import { normalizeMicronutrientKey } from '../utils/micronutrients';
 import { summarizeProducts, usageLabel } from './products/productManagerModel';
 import {
   getEmbalagens,
@@ -52,7 +58,7 @@ import CompatibilityCategoryManager from './CompatibilityCategoryManager';
 import { getLocaisAtivos } from '../services/locaisCarregamentoService';
 import { LocalCarregamento } from '../types/carregamento';
 
-type Tab = NutrientType | 'embalagem' | 'marca';
+type Tab = NutrientType | 'embalagem' | 'marca' | 'nutriente' | 'incompatibilidade';
 
 function nextCode(items: { code: string }[]): string {
   if (items.length === 0) return '1';
@@ -103,6 +109,7 @@ export default function ProductManager({
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
   const [tab, setTab] = useState<Tab>(initialTab);
   const [usage, setUsage] = useState<Record<string, number>>({});
+  const [nutrientes, setNutrientes] = useState<Nutriente[]>([]);
   const [products, setProducts] = useState<UnifiedProduct[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [categories, setCategories] = useState<CompatibilityCategory[]>([]);
@@ -158,6 +165,13 @@ export default function ProductManager({
     getProductUsage()
       .then(setUsage)
       .catch((error) => console.error('[produtos] uso:', error));
+    loadNutrientes();
+  };
+
+  const loadNutrientes = () => {
+    getNutrientes()
+      .then(setNutrientes)
+      .catch((error) => console.error('[produtos] nutrientes:', error));
   };
 
   const currentItems = products.filter((p) => p.type === (tab as NutrientType));
@@ -394,6 +408,12 @@ export default function ProductManager({
     { key: 'finished', label: 'Produto Acabado', icon: <Box className="w-4 h-4" /> },
     { key: 'embalagem', label: 'Embalagens', icon: <ShoppingBag className="w-4 h-4" /> },
     { key: 'marca', label: 'Marcas', icon: <Tag className="w-4 h-4" /> },
+    { key: 'nutriente', label: 'Nutrientes', icon: <Atom className="w-4 h-4" /> },
+    {
+      key: 'incompatibilidade',
+      label: 'Incompatibilidade',
+      icon: <AlertTriangle className="w-4 h-4" />,
+    },
   ];
   const summary = summarizeProducts(products, embalagens, new Set(brands.map((b) => b.id)));
   const kpis = [
@@ -413,10 +433,11 @@ export default function ProductManager({
         <div>
           <h1 className="text-2xl font-bold text-stone-800 flex items-center gap-2">
             <Package className="w-7 h-7 text-emerald-600" />
-            Produtos
+            Cadastro de Matéria-Prima
           </h1>
           <p className="text-sm text-stone-500">
-            Matérias-primas, produto acabado, embalagens e marcas usados nas calculadoras.
+            Matérias-primas, produto acabado, embalagens, marcas, nutrientes e incompatibilidades
+            usados nas calculadoras.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -433,7 +454,7 @@ export default function ProductManager({
               <Settings className="w-4 h-4" /> Categorias
             </button>
           )}
-          {canManage && tab !== 'marca' && (
+          {canManage && tab !== 'marca' && tab !== 'nutriente' && tab !== 'incompatibilidade' && (
             <button
               onClick={openCreate}
               className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors shadow-sm"
@@ -471,7 +492,7 @@ export default function ProductManager({
         ))}
       </div>
 
-      {tab !== 'marca' && (
+      {tab !== 'marca' && tab !== 'nutriente' && tab !== 'incompatibilidade' && (
         <div className="flex flex-col gap-3 sm:flex-row">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
@@ -497,7 +518,11 @@ export default function ProductManager({
         </div>
       )}
 
-      {tab === 'marca' ? (
+      {tab === 'incompatibilidade' ? (
+        <IncompatibilityManager canManage={canManage} />
+      ) : tab === 'nutriente' ? (
+        <NutrientManager nutrientes={nutrientes} canManage={canManage} onChanged={loadNutrientes} />
+      ) : tab === 'marca' ? (
         <BrandManager canManage={canManage} />
       ) : tab !== 'embalagem' ? (
         <div className="bg-white rounded-xl shadow-sm border border-stone-200 overflow-x-auto">
@@ -1087,7 +1112,7 @@ export default function ProductManager({
                 <div className="mt-4">
                   <div className="flex justify-between items-center mb-2">
                     <label className="block text-sm font-medium text-stone-600">
-                      Micronutrientes (Garantias Extras)
+                      Garantias extras (nutrientes do cadastro)
                     </label>
                     {!viewMode && (
                       <button
@@ -1103,14 +1128,34 @@ export default function ProductManager({
                   <div className="space-y-2 bg-stone-50 rounded-lg p-3 border border-stone-200">
                     {(form.microGuarantees || []).map((g, i) => (
                       <div key={i} className="flex gap-2 items-center">
-                        <input
-                          type="text"
+                        <select
                           disabled={viewMode}
-                          value={g.name}
+                          value={
+                            nutrientes.find(
+                              (n) =>
+                                normalizeMicronutrientKey(n.sigla) ===
+                                normalizeMicronutrientKey(g.name)
+                            )?.sigla ?? g.name
+                          }
                           onChange={(e) => updateGuarantee(i, 'name', e.target.value)}
-                          className="flex-1 px-2 py-1.5 border border-stone-300 rounded text-sm disabled:bg-stone-100"
-                          placeholder="Ex: Zinco, Boro..."
-                        />
+                          aria-label="Nutriente da garantia"
+                          className="flex-1 px-2 py-1.5 border border-stone-300 rounded text-sm bg-white disabled:bg-stone-100"
+                        >
+                          <option value="">Selecione o nutriente…</option>
+                          {nutrientes
+                            .filter((n) => n.ativo)
+                            .map((n) => (
+                              <option key={n.id} value={n.sigla}>
+                                {n.sigla} – {n.nome}
+                              </option>
+                            ))}
+                          {g.name &&
+                            !nutrientes.some(
+                              (n) =>
+                                normalizeMicronutrientKey(n.sigla) ===
+                                normalizeMicronutrientKey(g.name)
+                            ) && <option value={g.name}>{g.name} (fora do cadastro)</option>}
+                        </select>
                         <input
                           type="number"
                           disabled={viewMode}

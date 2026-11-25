@@ -91,6 +91,7 @@ import {
 import { saveFormulaWithProduct } from '../services/savedFormulaService';
 import { getSavedFormulaCompositionKey } from '../utils/savedFormulaWorkflow';
 import { setCalculationBatchSelection } from '../utils/calculationSelection';
+import { getNutrientes } from '../services/nutrientesService';
 
 interface UseCalculatorProps {
   initialData?: PricingRecord | null;
@@ -259,6 +260,12 @@ export function useCalculator({
   }, [currentUser.id]);
 
   // ─── Effects ──────────────────────────────────────────────
+
+  // Cadastro de nutrientes: o cálculo passa a reconhecer siglas, nomes e nomes
+  // alternativos cadastrados (ex.: um micro novo) como o mesmo nutriente.
+  useEffect(() => {
+    getNutrientes().catch((error) => console.error('[calculadora] nutrientes:', error));
+  }, []);
 
   useEffect(() => {
     if (initialData) {

@@ -21,7 +21,6 @@ const ExpenseCategoryManager = lazy(() => import('./ExpenseManagement/ExpenseCat
 const ExpenseDashboard = lazy(() => import('./ExpenseManagement/ExpenseDashboard'));
 const Goals = lazy(() => import('./Goals'));
 const History = lazy(() => import('./History'));
-const IncompatibilityManager = lazy(() => import('./IncompatibilityManager'));
 const ManagementReportsModule = lazy(() => import('./ManagementReportsModule'));
 const PedidosVenda = lazy(() => import('./PedidosVenda'));
 const PriceListManager = lazy(() => import('./PriceListManager'));
@@ -136,7 +135,13 @@ function AppContentRoute({
     if (activeTab === 'products' && hasPermission('priceLists'))
       return <ProductManager key="produtos" canManage={canManageCatalog} />;
     if (activeTab === 'incompatibilities' && hasPermission('priceLists')) {
-      return <IncompatibilityManager canManage={canManageCatalog} />;
+      return (
+        <ProductManager
+          key="incompatibilidade"
+          canManage={canManageCatalog}
+          initialTab="incompatibilidade"
+        />
+      );
     }
     if (activeTab === 'clients' && hasPermission('clients')) {
       return <ClientManager currentUser={currentUser} />;
