@@ -48,6 +48,8 @@ import {
   type NutrientStatus,
 } from './betaCalculatorModel';
 import BetaConditionsPanel from './BetaConditionsPanel';
+import GuaranteeBreakdownTable from './GuaranteeBreakdownTable';
+import { buildGuaranteeBreakdown } from '../../utils/guaranteeBreakdown';
 import type { BetaCalculator } from './SimplifiedCalculatorBeta';
 
 type Panel = 'conditions' | 'micros' | 'compare' | null;
@@ -400,6 +402,31 @@ export default function BetaFormulaCard({
     P: Number(npkDraft.p.replace(',', '.')) || 0,
     K: Number(npkDraft.k.replace(',', '.')) || 0,
   };
+
+  // Soma de cada garantia na batida (inclusive micros sem meta) e a origem de cada uma.
+  const guaranteeBreakdown = useMemo(
+    () =>
+      buildGuaranteeBreakdown([...(calculation.macros || []), ...(calculation.micros || [])], {
+        n: target.N,
+        p: target.P,
+        k: target.K,
+        s: Number(calculation.targetS) || 0,
+        ca: Number(calculation.targetCa) || 0,
+        mg: magnesiumTarget,
+        micros: calculation.targetMicros || {},
+      }),
+    [
+      calculation.macros,
+      calculation.micros,
+      calculation.targetS,
+      calculation.targetCa,
+      calculation.targetMicros,
+      target.N,
+      target.P,
+      target.K,
+      magnesiumTarget,
+    ]
+  );
 
   const unpricedProducts = composition.rows.filter((row) => row.isUnpriced);
   const manualPriceProducts = composition.rows.filter(
@@ -1028,6 +1055,7 @@ export default function BetaFormulaCard({
                 })}
               </div>
             )}
+            <GuaranteeBreakdownTable rows={guaranteeBreakdown} />
           </section>
         )}
 
