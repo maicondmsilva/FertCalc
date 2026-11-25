@@ -32,6 +32,25 @@ export function obterCarregamentosComSaldoAntigo(
     .sort((a, b) => diasEmAberto(b, hoje) - diasEmAberto(a, hoje));
 }
 
+/** Data prevista de carregamento já passou e a carga ainda não terminou. */
+export function obterCarregamentosAtrasados(
+  carregamentos: Carregamento[],
+  hoje = new Date()
+): Carregamento[] {
+  const inicioDoDia = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate()).getTime();
+  return carregamentos
+    .filter((carregamento) => {
+      if (STATUS_FINAL.has(carregamento.status) || !carregamento.data_prevista_carregamento) {
+        return false;
+      }
+      const prevista = new Date(`${carregamento.data_prevista_carregamento.slice(0, 10)}T00:00:00`);
+      return !Number.isNaN(prevista.getTime()) && prevista.getTime() < inicioDoDia;
+    })
+    .sort((a, b) =>
+      String(a.data_prevista_carregamento).localeCompare(String(b.data_prevista_carregamento))
+    );
+}
+
 function numeroCarregamento(carregamento: Carregamento) {
   return carregamento.numero != null
     ? formatCarregamentoId(carregamento.numero)
@@ -55,6 +74,7 @@ export default function AcompanhamentoOperacional({
   const comSaldoAntigo = obterCarregamentosComSaldoAntigo(ativos);
   const saldoTotal = ativos.reduce((total, item) => total + calcularSaldoOperacional(item), 0);
   const emExecucao = ativos.filter((item) => item.status === 'em_carregamento').length;
+  const atrasados = obterCarregamentosAtrasados(ativos);
 
   return (
     <section className="space-y-4" aria-labelledby="acompanhamento-operacional-title">
@@ -72,12 +92,19 @@ export default function AcompanhamentoOperacional({
         </span>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <div className="rounded-xl border border-violet-200 bg-violet-50 p-4">
           <TruckMetric
             icon={<Clock className="h-5 w-5" />}
             value={emExecucao}
             label="Em execução"
+          />
+        </div>
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+          <TruckMetric
+            icon={<AlertTriangle className="h-5 w-5" />}
+            value={atrasados.length}
+            label="Atrasados"
           />
         </div>
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
@@ -125,6 +152,35 @@ export default function AcompanhamentoOperacional({
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {atrasados.length > 0 && (
+        <div className="overflow-hidden rounded-xl border border-red-200 bg-white">
+          <div className="border-b border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-900">
+            Atrasados: data prevista já passou
+          </div>
+          <ul className="divide-y divide-stone-100">
+            {atrasados.slice(0, 8).map((carregamento) => (
+              <li
+                key={carregamento.id}
+                className="flex flex-col gap-1 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between"
+              >
+                <span className="font-bold text-stone-800">
+                  {numeroCarregamento(carregamento)} ·{' '}
+                  {carregamento.pedido_cliente_nome ||
+                    carregamento.cliente_nome ||
+                    'Cliente não informado'}
+                </span>
+                <span className="text-xs text-red-700">
+                  Previsto para{' '}
+                  {new Date(
+                    `${String(carregamento.data_prevista_carregamento).slice(0, 10)}T00:00:00`
+                  ).toLocaleDateString('pt-BR')}
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -185,7 +241,7 @@ export default function AcompanhamentoOperacional({
         </div>
       )}
 
-      {alertas.length === 0 && comSaldoAntigo.length === 0 && (
+      {alertas.length === 0 && comSaldoAntigo.length === 0 && atrasados.length === 0 && (
         <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
           <CheckCircle className="h-5 w-5" /> Nenhuma pendência operacional crítica no momento.
         </div>
