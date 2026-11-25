@@ -50,9 +50,7 @@ const mapRequest = (row: Record<string, unknown>): GuaranteeAuthorizationRequest
   createdAt: String(row.created_at),
   updatedAt: String(row.updated_at),
   consumedAt: row.consumed_at ? String(row.consumed_at) : undefined,
-  consumedByPricingId: row.consumed_by_pricing_id
-    ? String(row.consumed_by_pricing_id)
-    : undefined,
+  consumedByPricingId: row.consumed_by_pricing_id ? String(row.consumed_by_pricing_id) : undefined,
 });
 
 export async function createGuaranteeAuthorizationRequest(input: {

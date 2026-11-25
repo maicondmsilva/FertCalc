@@ -89,7 +89,20 @@ const STATUS_COLORS: Record<StatusCarregamento, string> = {
   cancelado: '#ef4444',
 };
 
-const MESES_PT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+const MESES_PT = [
+  'Jan',
+  'Fev',
+  'Mar',
+  'Abr',
+  'Mai',
+  'Jun',
+  'Jul',
+  'Ago',
+  'Set',
+  'Out',
+  'Nov',
+  'Dez',
+];
 
 // ─────────────────────────────────────────────────────────────
 //  Hook principal
@@ -116,7 +129,8 @@ const EMPTY_DATA: Omit<DashboardData, 'loading' | 'error' | 'refetch'> = {
 };
 
 export function useDashboard(currentUser: User): DashboardData {
-  const [data, setData] = useState<Omit<DashboardData, 'loading' | 'error' | 'refetch'>>(EMPTY_DATA);
+  const [data, setData] =
+    useState<Omit<DashboardData, 'loading' | 'error' | 'refetch'>>(EMPTY_DATA);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -146,7 +160,9 @@ export function useDashboard(currentUser: User): DashboardData {
         // Todos os carregamentos (para KPIs e gráficos)
         supabase
           .from('carregamentos')
-          .select('id, status, quantidade_total, criado_por, criado_em, valor_frete, transportadora_id, filial_id, transportadoras(nome), branches(name)')
+          .select(
+            'id, status, quantidade_total, criado_por, criado_em, valor_frete, transportadora_id, filial_id, transportadoras!carregamentos_transportadora_id_fkey(nome), branches(name)'
+          )
           .gte('criado_em', sixMonthsAgo),
 
         // Pedidos de venda do mês
@@ -156,16 +172,10 @@ export function useDashboard(currentUser: User): DashboardData {
           .gte('criado_em', firstDayOfMonth),
 
         // Cotações aguardando (status pendente)
-        supabase
-          .from('cotacoes_frete')
-          .select('id, status')
-          .eq('status', 'pendente'),
+        supabase.from('cotacoes_frete').select('id, status').eq('status', 'pendente'),
 
         // Carregamentos por mês (últimos 6 meses) — contagem
-        supabase
-          .from('carregamentos')
-          .select('criado_em, status')
-          .gte('criado_em', sixMonthsAgo),
+        supabase.from('carregamentos').select('criado_em, status').gte('criado_em', sixMonthsAgo),
 
         // Usuários ativos (admin/master only)
         isAdminOrMaster
@@ -200,9 +210,7 @@ export function useDashboard(currentUser: User): DashboardData {
         : carregamentos.filter((c) => c.criado_por === currentUser.id);
 
       // KPIs do mês atual
-      const carregamentosMesAtual = myCarregamentos.filter(
-        (c) => c.criado_em >= firstDayOfMonth
-      );
+      const carregamentosMesAtual = myCarregamentos.filter((c) => c.criado_em >= firstDayOfMonth);
 
       const pendentesAprovacao = myCarregamentos.filter(
         (c) => c.status === 'aguardando_liberacao'
@@ -215,9 +223,8 @@ export function useDashboard(currentUser: User): DashboardData {
       const freteValues = myCarregamentos
         .filter((c) => c.valor_frete != null)
         .map((c) => Number(c.valor_frete));
-      const freteMedia = freteValues.length > 0
-        ? freteValues.reduce((a, b) => a + b, 0) / freteValues.length
-        : 0;
+      const freteMedia =
+        freteValues.length > 0 ? freteValues.reduce((a, b) => a + b, 0) / freteValues.length : 0;
 
       // KPI pedidos de venda
       const pedidos = pedidosRes.status === 'fulfilled' ? (pedidosRes.value.data ?? []) : [];
@@ -230,7 +237,9 @@ export function useDashboard(currentUser: User): DashboardData {
 
       // Usuários ativos
       const usuariosData =
-        usuariosRes.status === 'fulfilled' ? (usuariosRes.value as { data: unknown[] | null }).data : null;
+        usuariosRes.status === 'fulfilled'
+          ? (usuariosRes.value as { data: unknown[] | null }).data
+          : null;
       const usuariosAtivos = usuariosData ? usuariosData.length : undefined;
 
       // Gastos cartão
@@ -244,9 +253,7 @@ export function useDashboard(currentUser: User): DashboardData {
 
       // ── Gráfico: carregamentos por mês ─────────────────────
       const mesCarregamentos =
-        carregamentosMesRes.status === 'fulfilled'
-          ? (carregamentosMesRes.value.data ?? [])
-          : [];
+        carregamentosMesRes.status === 'fulfilled' ? (carregamentosMesRes.value.data ?? []) : [];
 
       const graficoMes: GraficoMes[] = [];
       for (let i = 5; i >= 0; i--) {
@@ -293,9 +300,7 @@ export function useDashboard(currentUser: User): DashboardData {
         (c) => c.criado_em >= firstDayOfMonth && c.valor_frete != null
       )) {
         const tId = c.transportadora_id ?? 'desconhecida';
-        const tNome =
-          (c.transportadoras as { nome?: string } | null)?.nome ??
-          tId.slice(0, 8);
+        const tNome = (c.transportadoras as { nome?: string } | null)?.nome ?? tId.slice(0, 8);
         if (!transMap[tId]) transMap[tId] = { nome: tNome, valor: 0 };
         transMap[tId].valor += Number(c.valor_frete);
       }

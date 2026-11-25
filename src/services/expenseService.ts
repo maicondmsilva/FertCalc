@@ -1,3 +1,4 @@
+import { emptyOnError } from './queryErrors';
 import { supabase } from './supabase';
 import {
   CreditCardExpense,
@@ -73,7 +74,9 @@ function mapAudit(d: Record<string, unknown>): ExpenseAudit {
 export async function getExpenses(period?: ExpensePeriod): Promise<CreditCardExpense[]> {
   let query = supabase
     .from('credit_card_expenses')
-    .select('*, expense_categories(name), credit_cards(name,last_four)')
+    .select(
+      '*, expense_categories!credit_card_expenses_category_id_fkey(name), credit_cards(name,last_four)'
+    )
     .is('deleted_at', null)
     .order('date', { ascending: false });
 
@@ -82,14 +85,16 @@ export async function getExpenses(period?: ExpensePeriod): Promise<CreditCardExp
   }
 
   const { data, error } = await query;
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getExpenses');
   return data.map(mapExpense);
 }
 
 export async function getExpenseById(id: string): Promise<CreditCardExpense | null> {
   const { data, error } = await supabase
     .from('credit_card_expenses')
-    .select('*, expense_categories(name), credit_cards(name,last_four)')
+    .select(
+      '*, expense_categories!credit_card_expenses_category_id_fkey(name), credit_cards(name,last_four)'
+    )
     .eq('id', id)
     .is('deleted_at', null)
     .single();
@@ -120,7 +125,9 @@ export async function createExpense(
       period_month: expense.periodMonth,
       period_year: expense.periodYear,
     })
-    .select('*, expense_categories(name), credit_cards(name,last_four)')
+    .select(
+      '*, expense_categories!credit_card_expenses_category_id_fkey(name), credit_cards(name,last_four)'
+    )
     .single();
   if (error) throw error;
 
@@ -219,7 +226,7 @@ export async function getExpenseAudit(expenseId: string): Promise<ExpenseAudit[]
     .select('*')
     .eq('expense_id', expenseId)
     .order('created_at', { ascending: true });
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getExpenseAudit');
   return data.map(mapAudit);
 }
 
@@ -231,7 +238,7 @@ export async function getExpenseCategories(): Promise<ExpenseCategory[]> {
     .from('expense_categories')
     .select('*')
     .order('name', { ascending: true });
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getExpenseCategories');
   return data.map(mapCategory);
 }
 

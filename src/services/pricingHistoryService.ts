@@ -1,3 +1,4 @@
+import { emptyOnError } from './queryErrors';
 import { supabase } from './supabase';
 
 export interface PricingHistoryEntry {
@@ -28,7 +29,7 @@ export async function getPricingHistory(pricingId: string): Promise<PricingHisto
     .select('*')
     .eq('pricing_id', pricingId)
     .order('alterado_em', { ascending: false });
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getPricingHistory');
   return data.map(mapEntry);
 }
 

@@ -414,4 +414,3 @@ describe('chatService', () => {
     expect(statusCallback).not.toHaveBeenCalledWith('CLOSED');
   });
 });
-

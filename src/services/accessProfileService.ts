@@ -3,6 +3,7 @@
  * CRUD para perfis de acesso (templates de permissões reutilizáveis).
  */
 
+import { emptyOnError } from './queryErrors';
 import { supabase } from './supabase';
 
 export interface AccessProfile {
@@ -28,11 +29,8 @@ function mapProfile(row: Record<string, unknown>): AccessProfile {
 }
 
 export async function getAccessProfiles(): Promise<AccessProfile[]> {
-  const { data, error } = await supabase
-    .from('access_profiles')
-    .select('*')
-    .order('name');
-  if (error || !data) return [];
+  const { data, error } = await supabase.from('access_profiles').select('*').order('name');
+  if (error || !data) return emptyOnError(error, 'getAccessProfiles');
   return data.map(mapProfile);
 }
 

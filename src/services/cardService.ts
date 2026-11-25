@@ -1,3 +1,4 @@
+import { emptyOnError } from './queryErrors';
 import { supabase } from './supabase';
 import { CreditCard } from '../types/expense.types';
 
@@ -20,7 +21,7 @@ export async function getCards(): Promise<CreditCard[]> {
     .from('credit_cards')
     .select('*')
     .order('name', { ascending: true });
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getCards');
   return data.map(mapCard);
 }
 
@@ -31,7 +32,7 @@ export async function getCardsByUser(userId: string): Promise<CreditCard[]> {
     .eq('user_id', userId)
     .eq('active', true)
     .order('name', { ascending: true });
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getCardsByUser');
   return data.map(mapCard);
 }
 

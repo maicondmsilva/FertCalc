@@ -153,8 +153,8 @@ export default function CarregamentoModule({
         getAlertasCarregamento(currentUser.id),
       ]);
       const labels = [
-        'visao geral',
-        'painel de logistica',
+        'visão geral',
+        'painel de logística',
         'filiais',
         'transportadoras',
         'indicadores',
@@ -175,9 +175,15 @@ export default function CarregamentoModule({
       if (results[6].status === 'fulfilled') setPedidos(results[6].value);
       if (results[7].status === 'fulfilled') setAlertas(results[7].value);
 
+      results.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          console.error(`[carregamento] falha ao carregar ${labels[index]}:`, result.reason);
+        }
+      });
+
       if (failures.length > 0) {
         setLoadError(
-          `Algumas informacoes nao puderam ser carregadas: ${failures.join(', ')}. Tente novamente.`
+          `Algumas informações não puderam ser carregadas: ${failures.join(', ')}. Tente novamente.`
         );
       }
     } catch (err) {

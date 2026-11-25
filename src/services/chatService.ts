@@ -652,4 +652,3 @@ export function subscribeToChatMessages(
     void supabase.removeChannel(channel);
   };
 }
-

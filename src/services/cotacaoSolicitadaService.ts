@@ -1,3 +1,4 @@
+import { emptyOnError } from './queryErrors';
 import { supabase } from './supabase';
 import {
   CotacaoSolicitada,
@@ -251,7 +252,7 @@ export async function getResponsaveisByFilial(filialId?: string): Promise<string
     .select('id, role, permissions')
     .eq('ativo', true);
 
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getResponsaveisByFilial');
 
   return data
     .filter((u) => {

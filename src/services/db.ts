@@ -3,6 +3,7 @@
  * Central data access layer for all Supabase operations
  */
 
+import { emptyOnError } from './queryErrors';
 import { assertDeleted, toDeleteError } from '../utils/deleteErrors';
 import { supabase } from './supabase';
 import {
@@ -84,7 +85,7 @@ export async function saveAppSettings(settings: AppSettings): Promise<void> {
 // ============================================================
 export async function getUsers(): Promise<User[]> {
   const { data, error } = await supabase.from('app_users').select('*').order('name');
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getUsers');
   return data.map(mapUser);
 }
 
@@ -93,7 +94,7 @@ export async function getManagersOfUser(userId: string): Promise<User[]> {
     .from('app_users')
     .select('*')
     .contains('managed_user_ids', [userId]);
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getManagersOfUser');
   return data.map(mapUser);
 }
 
@@ -177,7 +178,7 @@ function mapUser(data: Record<string, unknown>): User {
 // ============================================================
 export async function getBranches(): Promise<Branch[]> {
   const { data, error } = await supabase.from('branches').select('*').order('id_numeric');
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getBranches');
   return data.map((d) => ({
     id: d.id,
     organizationId: d.organization_id,
@@ -222,7 +223,7 @@ export async function deleteBranch(id: string): Promise<void> {
 // ============================================================
 export async function getClients(): Promise<Client[]> {
   const { data, error } = await supabase.from('clients').select('*').order('name');
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getClients');
   return data.map(mapClient);
 }
 
@@ -306,7 +307,7 @@ function mapClient(data: Record<string, unknown>): Client {
 // ============================================================
 export async function getAgents(): Promise<Agent[]> {
   const { data, error } = await supabase.from('agents').select('*').order('name');
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getAgents');
   return data.map(mapAgent);
 }
 
@@ -378,7 +379,7 @@ function mapAgent(data: Record<string, unknown>): Agent {
 // ============================================================
 export async function getBrands(): Promise<Brand[]> {
   const { data, error } = await supabase.from('brands').select('*').order('name');
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getBrands');
   return data.map((d) => ({
     id: d.id,
     organizationId: d.organization_id,
@@ -423,7 +424,7 @@ export async function getMacroMaterials(): Promise<MacroMaterial[]> {
     supabase.from('macro_materials').select('*').order('name'),
     getExtraProductLocationAssignments(),
   ]);
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getMacroMaterials');
   return data.map((item) => ({
     ...mapMacro(item),
     ...(assignments && {
@@ -517,7 +518,7 @@ export async function getMicroMaterials(): Promise<MicroMaterial[]> {
     supabase.from('micro_materials').select('*').order('name'),
     getExtraProductLocationAssignments(),
   ]);
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getMicroMaterials');
   return data.map((item) => ({
     ...mapMicro(item),
     ...(assignments && {
@@ -681,7 +682,7 @@ function mapMicro(data: Record<string, unknown>): MicroMaterial {
 // ============================================================
 export async function getFinishedProducts(): Promise<FinishedProduct[]> {
   const { data, error } = await supabase.from('finished_products').select('*').order('name');
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getFinishedProducts');
   return data.map((d) => ({
     id: d.id,
     code: d.code,
@@ -916,7 +917,7 @@ export async function getIncompatibilityRules(): Promise<IncompatibilityRule[]> 
     .from('incompatibility_rules')
     .select('*')
     .order('created_at');
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getIncompatibilityRules');
   return data.map((d) => ({
     id: d.id,
     materialAId: d.material_a_id,
@@ -1001,7 +1002,7 @@ export async function getPriceLists(): Promise<PriceList[]> {
     .from('price_lists')
     .select('*')
     .order('created_at', { ascending: false });
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getPriceLists');
   return data.map(mapPriceList);
 }
 
@@ -1166,7 +1167,7 @@ export async function getPricingRecords(userId?: string): Promise<PricingRecord[
   let query = supabase.from('pricing_records').select('*');
   if (userId) query = query.eq('user_id', userId);
   const { data, error } = await query.order('created_at', { ascending: false });
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getPricingRecords');
   return data.map(mapPricingRecord);
 }
 
@@ -1433,7 +1434,7 @@ export async function getSavedFormulas(
     .from('saved_formulas')
     .select('*')
     .order('id_numeric', { ascending: true, nullsFirst: false });
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getSavedFormulas');
   return data
     .map((d) => ({
       id: d.id,
@@ -1534,7 +1535,7 @@ export async function getGoals(userId?: string): Promise<Goal[]> {
   let query = supabase.from('goals').select('*');
   if (userId) query = query.eq('user_id', userId);
   const { data, error } = await query.order('created_at', { ascending: false });
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getGoals');
   return data.map((d) => ({
     id: d.id,
     organizationId: d.organization_id,
@@ -1608,7 +1609,7 @@ export async function getNotifications(userId?: string): Promise<Notification[]>
   }
 
   const { data, error } = await query;
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getNotifications');
   return data.map((d) => ({
     id: d.id,
     userId: d.user_id,
@@ -1780,7 +1781,7 @@ export async function deleteCompatibilityCategory(id: string): Promise<void> {
 // ============================================================
 export async function getMgmtUnidades(): Promise<Unidade[]> {
   const { data, error } = await supabase.from('branches').select('*').order('id_numeric');
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getMgmtUnidades');
   return data.map(
     (b: Record<string, unknown>) =>
       ({
@@ -1810,7 +1811,7 @@ export async function deleteMgmtUnidade(id: string): Promise<void> {
 // ============================================================
 export async function getMgmtCategorias(): Promise<Categoria[]> {
   const { data, error } = await supabase.from('management_categorias').select('*').order('ordem');
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getMgmtCategorias');
   return data;
 }
 
@@ -1837,7 +1838,7 @@ export async function deleteMgmtCategoria(id: string): Promise<void> {
 // ============================================================
 export async function getMgmtIndicadores(): Promise<Indicador[]> {
   const { data, error } = await supabase.from('management_indicadores').select('*').order('ordem');
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getMgmtIndicadores');
   return data;
 }
 
@@ -1862,7 +1863,7 @@ export async function getMgmtLancamentos(filters?: {
   if (filters?.data) query = query.eq('data', filters.data);
   if (filters?.unidade_id) query = query.eq('unidade_id', filters.unidade_id);
   const { data, error } = await query;
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getMgmtLancamentos');
   return data;
 }
 
@@ -1885,7 +1886,7 @@ export async function deleteMgmtLancamento(id: string): Promise<void> {
 // ============================================================
 export async function getMgmtMetas(): Promise<MetaMensal[]> {
   const { data, error } = await supabase.from('management_metas').select('*');
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getMgmtMetas');
   return data;
 }
 
@@ -1904,7 +1905,7 @@ export async function deleteMgmtMeta(id: string): Promise<void> {
 // ============================================================
 export async function getMgmtConfigs(): Promise<ConfiguracaoIndicador[]> {
   const { data, error } = await supabase.from('management_configs').select('*');
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getMgmtConfigs');
   return data;
 }
 
@@ -1935,7 +1936,7 @@ export async function deleteMgmtConfig(unidade_id: string, indicador_id: string)
 // ============================================================
 export async function getMgmtDiasUteis(): Promise<DiasUteisMes[]> {
   const { data, error } = await supabase.from('management_dias_uteis').select('*');
-  if (error || !data) return [];
+  if (error || !data) return emptyOnError(error, 'getMgmtDiasUteis');
   return data;
 }
 
