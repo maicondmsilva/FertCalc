@@ -14,7 +14,7 @@ import {
 import PricingDetailModal from './PricingDetailModal';
 import NovoPedidoVendaModal from './NovoPedidoVendaModal';
 import {
-  getPricingRecords,
+  getApprovalQueuePricings,
   getGoals,
   getAppSettings,
   updatePricingRecord,
@@ -32,6 +32,7 @@ import { formatDatePtBr, getPricingDueDate } from '../utils/pricingDisplay';
 import { formatPricingMoney, getPricingCurrency } from '../utils/pricingCurrency';
 import { getPricingGuaranteeAuthorizationSummary } from '../utils/guaranteeAuthorization';
 import { canDecidePricing, describeApprovalError } from '../utils/pricingApprovalRules';
+import { filterPricingQueue, summarizeApprovals } from './approvals/approvalsModel';
 import {
   decideGuaranteeAuthorizationRequest,
   getGuaranteeAuthorizationRequests,
@@ -49,6 +50,8 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
     'pricings'
   );
   const [allPricings, setAllPricings] = useState<PricingRecord[]>([]);
+  const [search, setSearch] = useState('');
+  const [onlyDecidable, setOnlyDecidable] = useState(false);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [selectedPricing, setSelectedPricing] = useState<PricingRecord | null>(null);
   const [appSettings, setAppSettings] = useState<AppSettings>({
@@ -91,7 +94,10 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
     setAllPricings([]);
     setGoals([]);
     const [fetchedPricings, allGoals, settings, pendingGuaranteeRequests] = await Promise.all([
-      getPricingRecords(),
+      getApprovalQueuePricings().catch((error) => {
+        showError(describeApprovalError(error));
+        return [] as PricingRecord[];
+      }),
       getGoals(),
       getAppSettings(),
       canReviewGuarantees ? getGuaranteeAuthorizationRequests('pending') : Promise.resolve([]),
@@ -134,6 +140,17 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
   const pendingDeletionRequests = allPricings.filter(
     (p) => p.deletionRequest?.status === 'Pendente'
   );
+  const visiblePendingPricings = filterPricingQueue(pendingPricings, currentUser, {
+    search,
+    onlyDecidable,
+  });
+  const summary = summarizeApprovals({
+    pendingPricings,
+    pendingDeletions: pendingDeletionRequests,
+    goals: goals.length,
+    guarantees: guaranteeRequests.length,
+    user: currentUser,
+  });
 
   // Inicia o fluxo de reprovação (abre modal)
   const initiateRejection = (id: string) => {
@@ -309,9 +326,7 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
       loadData(); // Refresh to ensure sync
     } catch (err: unknown) {
       console.error('Erro ao processar aprovação da exclusão:', err);
-      showError(
-        `Erro ao processar aprovação da exclusão: ${err instanceof Error ? err.message : 'Erro no servidor'}`
-      );
+      showError(describeApprovalError(err));
     }
   };
 
@@ -350,8 +365,8 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
       });
       setGoals((prev) => prev.filter((g) => g.id !== id));
       showSuccess(`Meta ${newStatus.toLowerCase()} com sucesso!`);
-    } catch {
-      showError('Erro ao processar aprovação da meta.');
+    } catch (error) {
+      showError(describeApprovalError(error));
     }
   };
 
@@ -400,7 +415,7 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
       );
     } catch (error) {
       logger.error('Erro ao revisar autorização de garantias:', error);
-      showError('Não foi possível concluir a decisão. Atualize a página e tente novamente.');
+      showError(describeApprovalError(error));
     } finally {
       setSavingGuaranteeReview(false);
     }
@@ -439,33 +454,65 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
         </div>
       )}
 
-      <div className="flex gap-2">
-        <button
-          onClick={() => setActiveTab('pricings')}
-          className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'pricings' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200' : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-50'}`}
-        >
-          Precificações ({pendingPricings.length})
-        </button>
-        {canReviewGuarantees && (
-          <button
-            onClick={() => setActiveTab('guarantees')}
-            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'guarantees' ? 'bg-amber-600 text-white shadow-lg shadow-amber-200' : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-50'}`}
-          >
-            Garantias ({guaranteeRequests.length})
-          </button>
-        )}
-        <button
-          onClick={() => setActiveTab('goals')}
-          className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'goals' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200' : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-50'}`}
-        >
-          Metas ({goals.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('deletions')}
-          className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'deletions' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200' : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-50'}`}
-        >
-          Exclusões ({pendingDeletionRequests.length})
-        </button>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {(
+          [
+            {
+              id: 'pricings',
+              label: 'Precificações',
+              value: summary.pricings,
+              hint: canApprove ? `${summary.decidable} para você decidir` : 'aguardando aprovação',
+              show: true,
+            },
+            {
+              id: 'deletions',
+              label: 'Exclusões',
+              value: summary.deletions,
+              hint: 'pedidos de exclusão',
+              show: true,
+            },
+            {
+              id: 'goals',
+              label: 'Metas',
+              value: summary.goals,
+              hint: 'aguardando aprovação',
+              show: true,
+            },
+            {
+              id: 'guarantees',
+              label: 'Garantias',
+              value: summary.guarantees,
+              hint: 'composições fora da garantia',
+              show: canReviewGuarantees,
+            },
+          ] as const
+        )
+          .filter((card) => card.show)
+          .map((card) => (
+            <button
+              key={card.id}
+              type="button"
+              onClick={() => setActiveTab(card.id)}
+              aria-pressed={activeTab === card.id}
+              className={`rounded-2xl border p-4 text-left transition-all ${
+                activeTab === card.id
+                  ? 'border-emerald-500 bg-emerald-50 shadow-sm ring-1 ring-emerald-500'
+                  : 'border-stone-200 bg-white hover:border-stone-300 hover:bg-stone-50'
+              }`}
+            >
+              <span className="block text-xs font-bold uppercase tracking-wide text-stone-500">
+                {card.label}
+              </span>
+              <span
+                className={`mt-1 block text-3xl font-black ${
+                  card.value > 0 ? 'text-stone-900' : 'text-stone-300'
+                }`}
+              >
+                {card.value}
+              </span>
+              <span className="block text-xs text-stone-500">{card.hint}</span>
+            </button>
+          ))}
       </div>
 
       {activeTab === 'guarantees' && canReviewGuarantees && (
@@ -532,8 +579,36 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
 
       {activeTab === 'pricings' && (
         <div className="space-y-4">
+          {pendingPricings.length > 0 && (
+            <div className="flex flex-col gap-3 rounded-2xl border border-stone-200 bg-white p-3 sm:flex-row sm:items-center">
+              <input
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Buscar cliente, vendedor, código ou fórmula…"
+                aria-label="Buscar precificações pendentes"
+                className="h-10 flex-1 rounded-xl border border-stone-300 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+              {canApprove && (
+                <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-stone-700">
+                  <input
+                    type="checkbox"
+                    checked={onlyDecidable}
+                    onChange={(event) => setOnlyDecidable(event.target.checked)}
+                    className="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500"
+                  />
+                  Só as que eu posso decidir
+                </label>
+              )}
+            </div>
+          )}
+          {pendingPricings.length > 0 && visiblePendingPricings.length === 0 && (
+            <p className="rounded-xl border border-dashed border-stone-300 bg-white p-6 text-center text-sm text-stone-500">
+              Nenhuma precificação pendente com esse filtro.
+            </p>
+          )}
           {pendingPricings.length > 0 ? (
-            pendingPricings.map((p) => (
+            visiblePendingPricings.map((p) => (
               <div
                 key={p.id}
                 className="p-4 border border-stone-200 rounded-lg flex justify-between items-center bg-stone-50"

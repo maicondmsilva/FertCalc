@@ -401,8 +401,10 @@ export default function BetaFormulaCard({
     K: Number(npkDraft.k.replace(',', '.')) || 0,
   };
 
-  const unpricedProducts = composition.rows.filter((row) => row.isOutsidePriceList);
-  const manualPriceProducts = composition.rows.filter((row) => row.isManualPrice);
+  const unpricedProducts = composition.rows.filter((row) => row.isUnpriced);
+  const manualPriceProducts = composition.rows.filter(
+    (row) => row.isManualPrice && !row.isUnpriced
+  );
   const margin = summary ? summary.finalPrice - summary.baseCost : 0;
   const marginPercent = summary && summary.baseCost > 0 ? (margin / summary.baseCost) * 100 : 0;
 
@@ -1059,12 +1061,12 @@ export default function BetaFormulaCard({
                           }`}
                         />
                         {row.name}
-                        {row.isOutsidePriceList && (
+                        {row.isUnpriced && (
                           <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-bold text-amber-800">
                             sem preço
                           </span>
                         )}
-                        {row.isManualPrice && (
+                        {row.isManualPrice && !row.isUnpriced && (
                           <span className="ml-2 rounded bg-blue-100 px-1.5 py-0.5 text-xs font-bold text-blue-800">
                             preço manual
                           </span>
@@ -1128,14 +1130,14 @@ export default function BetaFormulaCard({
                 <div className="space-y-1 border-t border-stone-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
                   {unpricedProducts.length > 0 && (
                     <p>
-                      <strong>Sem preço na lista:</strong>{' '}
+                      <strong>Sem preço:</strong>{' '}
                       {unpricedProducts.map((row) => row.name).join(', ')}. O custo não inclui esses
-                      produtos.
+                      produtos — informe um valor em Configurar produtos.
                     </p>
                   )}
                   {manualPriceProducts.length > 0 && (
                     <p>
-                      <strong>Preço manual:</strong>{' '}
+                      <strong>Valor informado por você:</strong>{' '}
                       {manualPriceProducts.map((row) => row.name).join(', ')}.
                     </p>
                   )}

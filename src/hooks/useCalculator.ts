@@ -456,7 +456,8 @@ export function useCalculator({
         const listCurrency = listHasCurrency(rawList, requestedCurrency)
           ? requestedCurrency
           : (listCurrencies(rawList)[0] ?? 'BRL');
-        const selectedList = projectPriceList(rawList, listCurrency);
+        // Produtos da lista sem preço nesta moeda também aparecem (zerados).
+        const selectedList = projectPriceList(rawList, listCurrency, { includeUnpriced: true });
         const snapshotKey = `${selectedList.id}:${listCurrency}`;
         const currencySnapshot = getPriceListCurrencySnapshot(selectedList);
         const defaultFactor =
@@ -505,7 +506,8 @@ export function useCalculator({
             .map((material) => ({
               ...withOfficialListPrice(material),
               isOutsidePriceList: false,
-              selected: !material.isPremiumLine,
+              // Sem preço chega desmarcado: com custo zero o cálculo o escolheria "de graça".
+              selected: !material.isPremiumLine && !material.isMissingListPrice,
               quantity: 0,
               minQuantity:
                 catalogMacros.find((item) => item.id === material.id)?.minQuantity ??

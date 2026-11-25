@@ -1,3 +1,4 @@
+import { getPriceWarnings, materialNames } from '../../utils/unpricedMaterials';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
@@ -14,6 +15,7 @@ import type {
   SavedFormula,
   TargetFormula,
   User as AppUser,
+  RawMaterial,
 } from '../../types';
 import { useCalculator } from '../../hooks/useCalculator';
 import { useToast } from '../Toast';
@@ -151,6 +153,17 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
       }))
     );
   };
+
+  // Produtos marcados sem preço ou com valor digitado, somando todas as fórmulas.
+  const selectedPriceWarnings = (() => {
+    const byId = new Map<string, RawMaterial>();
+    calculations.forEach((calculation) =>
+      [...(calculation.macros || []), ...(calculation.micros || [])].forEach((material) => {
+        if (material.selected && !byId.has(material.id)) byId.set(material.id, material);
+      })
+    );
+    return getPriceWarnings([...byId.values()]);
+  })();
 
   const pendingIssues = [
     !factors.priceListId ? 'Selecione a lista de preço' : '',
@@ -413,6 +426,30 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
                 }`}
               />
             </label>
+          </div>
+        )}
+
+        {(selectedPriceWarnings.unpriced.length > 0 || selectedPriceWarnings.manual.length > 0) && (
+          <div
+            role="alert"
+            className="mt-4 flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+          >
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div className="space-y-1">
+              {selectedPriceWarnings.unpriced.length > 0 && (
+                <p>
+                  <strong>Selecionados sem preço:</strong>{' '}
+                  {materialNames(selectedPriceWarnings.unpriced)}. Entram zerados — informe um valor
+                  em Configurar produtos.
+                </p>
+              )}
+              {selectedPriceWarnings.manual.length > 0 && (
+                <p>
+                  <strong>Com valor informado por você:</strong>{' '}
+                  {materialNames(selectedPriceWarnings.manual)}.
+                </p>
+              )}
+            </div>
           </div>
         )}
 

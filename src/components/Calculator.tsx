@@ -25,6 +25,7 @@ import {
 import {
   PricingRecord,
   PriceListCurrency,
+  RawMaterial,
   SavedFormula,
   User as AppUser,
   Embalagem,
@@ -38,6 +39,7 @@ import { ConfirmDialog } from './ui/ConfirmDialog';
 import { PromptDialog } from './ui/PromptDialog';
 import { closeModalOnBackdrop } from '../utils/modalUtils';
 import { useCalculator } from '../hooks/useCalculator';
+import { getPriceWarnings, materialNames } from '../utils/unpricedMaterials';
 import { getCalculationMode } from '../utils/calculationMode';
 import { getCotacoesAprovadasByCliente } from '../services/cotacaoSolicitadaService';
 import { CotacaoSolicitada } from '../types/carregamento';
@@ -498,6 +500,17 @@ export default function Calculator({
       String(factors.appliedExchangeRate ?? factors.priceListExchangeRate ?? '').replace('.', ',')
     );
   }, [factors.priceListCurrency, factors.priceListExchangeRate, factors.priceListId]);
+
+  // Produtos marcados sem preço ou com valor digitado, somando todas as fórmulas.
+  const selectedPriceWarnings = (() => {
+    const byId = new Map<string, RawMaterial>();
+    calculations.forEach((calculation) =>
+      [...(calculation.macros || []), ...(calculation.micros || [])].forEach((material) => {
+        if (material.selected && !byId.has(material.id)) byId.set(material.id, material);
+      })
+    );
+    return getPriceWarnings([...byId.values()]);
+  })();
 
   const pendingIssues = [
     !isSimplified && !factors.client?.id ? 'Selecione o cliente' : '',
@@ -2623,6 +2636,31 @@ export default function Calculator({
               </p>
             </div>
 
+            {(selectedPriceWarnings.unpriced.length > 0 ||
+              selectedPriceWarnings.manual.length > 0) && (
+              <div
+                role="alert"
+                className="mb-5 space-y-1 rounded-xl border border-amber-600/60 bg-amber-950/40 p-3 text-xs text-amber-100"
+              >
+                <div className="mb-1 flex items-center gap-2 font-black uppercase text-amber-300">
+                  <AlertTriangle className="h-4 w-4" /> Atenção aos preços
+                </div>
+                {selectedPriceWarnings.unpriced.length > 0 && (
+                  <p>
+                    <strong>Selecionados sem preço:</strong>{' '}
+                    {materialNames(selectedPriceWarnings.unpriced)}. Entram com{' '}
+                    {pricingCurrencySymbol} 0,00 — informe um valor em Configurar produtos.
+                  </p>
+                )}
+                {selectedPriceWarnings.manual.length > 0 && (
+                  <p>
+                    <strong>Com valor informado por você:</strong>{' '}
+                    {materialNames(selectedPriceWarnings.manual)}.
+                  </p>
+                )}
+              </div>
+            )}
+
             {pendingIssues.length > 0 && (
               <div className="mb-5 rounded-xl border border-amber-700/60 bg-amber-950/40 p-3">
                 <div className="mb-2 flex items-center gap-2 text-xs font-black uppercase text-amber-300">
@@ -2640,12 +2678,11 @@ export default function Calculator({
               {calculations
                 .filter((c) => c.summary)
                 .map((calc) => {
-                  const unpricedCompositionProducts = [...calc.macros, ...calc.micros].filter(
-                    (material) => material.quantity > 0 && material.isOutsidePriceList
-                  );
-                  const manualPriceProducts = [...calc.macros, ...calc.micros].filter(
-                    (material) => material.quantity > 0 && material.isManualPrice
-                  );
+                  const usedPriceWarnings = getPriceWarnings([...calc.macros, ...calc.micros], {
+                    onlyUsed: true,
+                  });
+                  const unpricedCompositionProducts = usedPriceWarnings.unpriced;
+                  const manualPriceProducts = usedPriceWarnings.manual;
                   const comparisonAlternatives = comparisonAlternativesByCalculation[calc.id] || [];
                   const feasibleAlternatives = comparisonAlternatives.filter(
                     (alternative) => alternative.feasible && alternative.calculation.summary

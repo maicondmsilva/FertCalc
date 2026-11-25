@@ -79,6 +79,8 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
   const [selectedList, setSelectedList] = useState<PriceList | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [draft, setDraft] = useState<PriceListDraft | null>(null);
+  // Lista salva abre em visualização; o botão Editar libera a edição.
+  const [editing, setEditing] = useState(false);
   const [savedDraft, setSavedDraft] = useState<PriceListDraft | undefined>();
   const [saving, setSaving] = useState(false);
 
@@ -186,6 +188,7 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
     const opened = draftFromList(list);
     setSelectedList(list);
     setIsNew(false);
+    setEditing(false);
     setDraft(opened);
     setSavedDraft(draftFromList(list));
   };
@@ -207,6 +210,7 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
   };
 
   const discard = () => {
+    setEditing(false);
     if (isNew) {
       if (selectedList) {
         setIsNew(false);
@@ -258,6 +262,7 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
         setIsNew(false);
         setDraft(draftFromList(created));
         setSavedDraft(draftFromList(created));
+        setEditing(false);
         setArchivedTab(false);
         showSuccess('Lista de preço criada.');
       } else {
@@ -269,6 +274,7 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
         };
         setSelectedList(updated);
         setSavedDraft(draftFromList(updated));
+        setEditing(false);
         showSuccess('Lista de preço salva.');
       }
       setReloadToken((value) => value + 1);
@@ -537,6 +543,8 @@ export default function PriceListManager({ currentUser }: PriceListManagerProps)
             createdAt={isNew ? undefined : selectedList?.date}
             idNumeric={isNew ? undefined : selectedList?.idNumeric}
             canManage={canManage}
+            editing={editing}
+            onEdit={() => setEditing(true)}
             dirty={dirty}
             saving={saving}
             catalogMacros={catalogMacros}

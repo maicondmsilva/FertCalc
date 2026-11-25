@@ -19,6 +19,8 @@ export interface CompositionRow {
   value: number;
   isManualPrice: boolean;
   isOutsidePriceList: boolean;
+  /** Entrou na mistura com preço zero (fora da lista ou sem preço na moeda). */
+  isUnpriced: boolean;
 }
 
 export interface CompositionTable {
@@ -55,6 +57,7 @@ export function buildCompositionTable(
         value: (quantity / 1000) * price,
         isManualPrice: Boolean(material.isManualPrice),
         isOutsidePriceList: Boolean(material.isOutsidePriceList),
+        isUnpriced: !(price > 0),
       };
     })
     .sort((left, right) => right.value - left.value || right.quantity - left.quantity);

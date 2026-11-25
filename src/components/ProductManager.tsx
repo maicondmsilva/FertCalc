@@ -88,7 +88,7 @@ const emptyProduct = (type: NutrientType): Partial<UnifiedProduct> => ({
   extraLoadingLocationIds: [],
 });
 
-export default function ProductManager() {
+export default function ProductManager({ canManage = true }: { canManage?: boolean }) {
   const { showSuccess, showError } = useToast();
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
   const [tab, setTab] = useState<Tab>('macro');
@@ -315,17 +315,27 @@ export default function ProductManager() {
 
   const handleDelete = async (id: string, type: NutrientType) => {
     const ok = await confirm({
-      title: 'Excluir Produto',
-      message: 'Tem certeza que deseja excluir este produto?',
+      title: 'Excluir produto?',
+      message:
+        'Se o produto nunca foi usado em lista de preço, batida ou precificação, ele será ' +
+        'excluído. Se já foi usado, será desativado: some das calculadoras e continua nos ' +
+        'registros antigos (pode ser reativado depois).',
       variant: 'danger',
+      confirmLabel: 'Continuar',
     });
     if (!ok) return;
     try {
-      await deleteUnifiedProduct(id, type);
-      showSuccess('Produto excluído com sucesso!');
+      const result = await deleteUnifiedProduct(id, type);
+      showSuccess(
+        result === 'desativado'
+          ? 'O produto já foi usado e foi desativado. Para usar de novo, reative-o.'
+          : 'Produto excluído.'
+      );
       await loadAll();
-    } catch {
-      showError('Erro ao excluir produto.');
+    } catch (error) {
+      showError(
+        `Erro ao excluir produto: ${error instanceof Error ? error.message : (error as { message?: string })?.message || 'tente novamente.'}`
+      );
     }
   };
 
@@ -378,7 +388,12 @@ export default function ProductManager() {
           Gerenciador de Produtos
         </h1>
         <div className="flex gap-2">
-          {tab !== 'embalagem' && (
+          {!canManage && (
+            <span className="self-center rounded-full bg-stone-100 px-3 py-1 text-xs font-bold text-stone-600">
+              Somente leitura
+            </span>
+          )}
+          {canManage && tab !== 'embalagem' && (
             <button
               onClick={() => setIsCategoryModalOpen(true)}
               className="bg-stone-200 hover:bg-stone-300 text-stone-700 px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors shadow-sm"
@@ -386,12 +401,14 @@ export default function ProductManager() {
               <Settings className="w-4 h-4" /> Categorias
             </button>
           )}
-          <button
-            onClick={openCreate}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors shadow-sm"
-          >
-            <Plus className="w-4 h-4" /> {tab === 'embalagem' ? 'Nova Embalagem' : 'Novo Produto'}
-          </button>
+          {canManage && (
+            <button
+              onClick={openCreate}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors shadow-sm"
+            >
+              <Plus className="w-4 h-4" /> {tab === 'embalagem' ? 'Nova Embalagem' : 'Novo Produto'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -545,7 +562,7 @@ export default function ProductManager() {
                     )}
                     <td className="px-5 py-3 text-right">
                       <div className="flex justify-end gap-1">
-                        {(item.type === 'macro' || item.type === 'micro') && (
+                        {canManage && (item.type === 'macro' || item.type === 'micro') && (
                           <button
                             onClick={() => handleToggleProductActive(item)}
                             className="p-1.5 text-stone-400 hover:text-amber-600 hover:bg-amber-50 rounded"
@@ -564,18 +581,22 @@ export default function ProductManager() {
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={() => openEdit(item, false)}
-                          className="p-1.5 text-stone-400 hover:text-blue-600 hover:bg-blue-50 rounded"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(item.id, item.type!)}
-                          className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {canManage && (
+                          <>
+                            <button
+                              onClick={() => openEdit(item, false)}
+                              className="p-1.5 text-stone-400 hover:text-blue-600 hover:bg-blue-50 rounded"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(item.id, item.type!)}
+                              className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -648,31 +669,35 @@ export default function ProductManager() {
                     </td>
                     <td className="px-5 py-3 text-right">
                       <div className="flex justify-end gap-1">
-                        <button
-                          onClick={() => openEmbalagemEdit(emb)}
-                          className="p-1.5 text-stone-400 hover:text-blue-600 hover:bg-blue-50 rounded"
-                          title="Editar"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleToggleEmbalagemAtivo(emb)}
-                          className="p-1.5 text-stone-400 hover:text-amber-600 hover:bg-amber-50 rounded"
-                          title={emb.ativo ? 'Desativar' : 'Ativar'}
-                        >
-                          {emb.ativo ? (
-                            <ToggleRight className="w-4 h-4" />
-                          ) : (
-                            <ToggleLeft className="w-4 h-4" />
-                          )}
-                        </button>
-                        <button
-                          onClick={() => handleDeleteEmbalagem(emb.id)}
-                          className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded"
-                          title="Excluir"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {canManage && (
+                          <>
+                            <button
+                              onClick={() => openEmbalagemEdit(emb)}
+                              className="p-1.5 text-stone-400 hover:text-blue-600 hover:bg-blue-50 rounded"
+                              title="Editar"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleToggleEmbalagemAtivo(emb)}
+                              className="p-1.5 text-stone-400 hover:text-amber-600 hover:bg-amber-50 rounded"
+                              title={emb.ativo ? 'Desativar' : 'Ativar'}
+                            >
+                              {emb.ativo ? (
+                                <ToggleRight className="w-4 h-4" />
+                              ) : (
+                                <ToggleLeft className="w-4 h-4" />
+                              )}
+                            </button>
+                            <button
+                              onClick={() => handleDeleteEmbalagem(emb.id)}
+                              className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded"
+                              title="Excluir"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>

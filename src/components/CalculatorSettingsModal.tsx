@@ -1,3 +1,4 @@
+import { getPriceWarnings, materialNames } from '../utils/unpricedMaterials';
 import React, { useState, useEffect } from 'react';
 import { X, Search, GripVertical, ChevronUp, ChevronDown, RotateCcw } from 'lucide-react';
 import { TargetFormula, RawMaterial } from '../types';
@@ -294,6 +295,30 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
             {selectedSelectableCount}/{selectableProducts.length}
           </span>
         </label>
+        {(() => {
+          const warnings = getPriceWarnings(currentProducts as RawMaterial[]);
+          if (warnings.unpriced.length === 0 && warnings.manual.length === 0) return null;
+          return (
+            <div
+              role="alert"
+              className="space-y-1 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900"
+            >
+              {warnings.unpriced.length > 0 && (
+                <p>
+                  <strong>Sem preço ({currency === 'USD' ? 'US$' : 'R$'} 0,00):</strong>{' '}
+                  {materialNames(warnings.unpriced)}. O custo não inclui esses produtos — informe um
+                  valor no campo de preço.
+                </p>
+              )}
+              {warnings.manual.length > 0 && (
+                <p>
+                  <strong>Valor informado por você:</strong> {materialNames(warnings.manual)}. Vale
+                  só nesta precificação; a lista não muda.
+                </p>
+              )}
+            </div>
+          );
+        })()}
         {filtered.map((p) =>
           (() => {
             const isProtected =
@@ -389,6 +414,12 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
                     {isProtected && (
                       <div className="text-[10px] font-bold text-amber-700">
                         Protegido para preservar a descrição da formulação
+                      </div>
+                    )}
+                    {p.isMissingListPrice && !isOutsidePriceList && (
+                      <div className="text-[10px] font-bold text-red-700">
+                        Sem preço na lista em {currency === 'USD' ? 'dólar' : 'reais'}
+                        {p.isManualPrice ? ' · valor informado por você' : ' · aparece zerado'}
                       </div>
                     )}
                     {isOutsidePriceList && (

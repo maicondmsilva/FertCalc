@@ -61,6 +61,8 @@ export interface RawMaterial {
   priceUSD?: number;
   listPrice?: number;
   isManualPrice?: boolean;
+  /** Está na lista de preço, mas sem preço na moeda escolhida (aparece zerado). */
+  isMissingListPrice?: boolean;
   n: number;
   p: number;
   k: number;
