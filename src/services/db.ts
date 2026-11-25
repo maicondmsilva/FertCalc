@@ -1194,6 +1194,21 @@ export async function getPricingRecords(userId?: string): Promise<PricingRecord[
   return data.map(mapPricingRecord);
 }
 
+/**
+ * Precificações na fila de aprovação: aprovação pendente ou exclusão pendente
+ * (o banco já limita ao que o usuário pode ver). Evita carregar todo o histórico.
+ */
+export async function getApprovalQueuePricings(): Promise<PricingRecord[]> {
+  const { data, error } = await supabase
+    .from('pricing_records')
+    .select('*')
+    .neq('status', 'Excluída')
+    .or('approval_status.eq.Pendente,deletion_request->>status.eq.Pendente')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data || []).map(mapPricingRecord);
+}
+
 export async function createPricingRecord(
   record: Omit<PricingRecord, 'id'>
 ): Promise<PricingRecord> {
