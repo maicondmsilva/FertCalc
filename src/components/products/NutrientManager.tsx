@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
-import { Pencil, Plus, Save, X } from 'lucide-react';
+import { Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import {
   createNutriente,
+  deleteNutriente,
   type Nutriente,
   type NutrienteInput,
   updateNutriente,
 } from '../../services/nutrientesService';
 import { useToast } from '../Toast';
+import { useConfirm } from '../../hooks/useConfirm';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 
 interface NutrientManagerProps {
   nutrientes: Nutriente[];
@@ -38,6 +41,7 @@ export default function NutrientManager({
   onChanged,
 }: NutrientManagerProps) {
   const { showSuccess, showError } = useToast();
+  const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<NutrienteInput | null>(null);
   const [aliasesText, setAliasesText] = useState('');
@@ -94,8 +98,29 @@ export default function NutrientManager({
     }
   };
 
+  const remove = async (nutriente: Nutriente) => {
+    const ok = await confirm({
+      title: `Excluir ${nutriente.sigla} – ${nutriente.nome}?`,
+      message:
+        'Só é possível excluir se nenhum produto usa este nutriente nas garantias. ' +
+        'Se estiver em uso, desative-o (ele some da lista de novas garantias).',
+      variant: 'danger',
+      confirmLabel: 'Excluir',
+    });
+    if (!ok) return;
+    try {
+      await deleteNutriente(nutriente.id);
+      showSuccess(`Nutriente ${nutriente.sigla} excluído.`);
+      if (editingId === nutriente.id) close();
+      onChanged();
+    } catch (error) {
+      showError((error as { message?: string })?.message || 'Erro ao excluir nutriente.');
+    }
+  };
+
   return (
     <section className="space-y-4">
+      <ConfirmDialog {...confirmState} onConfirm={handleConfirm} onCancel={handleCancel} />
       <div className="flex flex-col gap-3 rounded-2xl border border-stone-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-stone-600">
           As garantias dos produtos são escolhidas desta lista. O cálculo entende a sigla, o nome e
@@ -204,7 +229,7 @@ export default function NutrientManager({
               <th className="px-4 py-3">Tipo</th>
               <th className="hidden px-4 py-3 md:table-cell">Nomes alternativos</th>
               <th className="px-4 py-3">Status</th>
-              {canManage && <th className="w-12 px-4 py-3" aria-label="Ações" />}
+              {canManage && <th className="w-24 px-4 py-3" aria-label="Ações" />}
             </tr>
           </thead>
           <tbody className="divide-y divide-stone-100">
@@ -238,6 +263,14 @@ export default function NutrientManager({
                       className="rounded p-1.5 text-stone-400 hover:bg-blue-50 hover:text-blue-600"
                     >
                       <Pencil className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void remove(nutriente)}
+                      title="Excluir"
+                      className="rounded p-1.5 text-stone-400 hover:bg-red-50 hover:text-red-600"
+                    >
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   </td>
                 )}

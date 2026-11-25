@@ -1,62 +1,48 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { closeModalOnBackdrop } from '../utils/modalUtils';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  Plus,
-  Trash2,
-  Edit3,
-  Search,
-  Eye,
-  Save,
-  X,
-  Package,
+  AlertTriangle,
+  Atom,
+  Box,
   Database,
   FlaskConical,
-  Box,
+  Package,
+  Plus,
+  Search,
   Settings,
   ShoppingBag,
-  ToggleLeft,
-  ToggleRight,
-  Star,
-  MapPin,
   Tag,
-  Atom,
-  AlertTriangle,
 } from 'lucide-react';
+import { Brand, CompatibilityCategory, Embalagem, NutrientType, UnifiedProduct } from '../types';
 import {
-  UnifiedProduct,
-  Brand,
-  MicroGuarantee,
-  NutrientType,
-  CompatibilityCategory,
-  Embalagem,
-} from '../types';
-import {
-  getUnifiedProducts,
-  saveUnifiedProduct,
   deleteUnifiedProduct,
-  updateProductActiveStatus,
   getBrands,
   getCompatibilityCategories,
   getProductUsage,
+  getUnifiedProducts,
+  saveUnifiedProduct,
+  updateProductActiveStatus,
 } from '../services/db';
-import BrandManager from './BrandManager';
-import NutrientManager from './products/NutrientManager';
-import IncompatibilityManager from './IncompatibilityManager';
-import { getNutrientes, type Nutriente } from '../services/nutrientesService';
-import { normalizeMicronutrientKey } from '../utils/micronutrients';
-import { summarizeProducts, usageLabel } from './products/productManagerModel';
 import {
-  getEmbalagens,
   createEmbalagem,
-  updateEmbalagem,
   deleteEmbalagem,
+  getEmbalagens,
+  updateEmbalagem,
 } from '../services/embalagensService';
+import { getNutrientes, type Nutriente } from '../services/nutrientesService';
+import { getLocaisAtivos } from '../services/locaisCarregamentoService';
+import { LocalCarregamento } from '../types/carregamento';
 import { useToast } from './Toast';
 import { useConfirm } from '../hooks/useConfirm';
 import { ConfirmDialog } from './ui/ConfirmDialog';
+import BrandManager from './BrandManager';
+import IncompatibilityManager from './IncompatibilityManager';
 import CompatibilityCategoryManager from './CompatibilityCategoryManager';
-import { getLocaisAtivos } from '../services/locaisCarregamentoService';
-import { LocalCarregamento } from '../types/carregamento';
+import NutrientManager from './products/NutrientManager';
+import ProductFormModal from './products/ProductFormModal';
+import EmbalagemFormModal from './products/EmbalagemFormModal';
+import { EmbalagemTable, ProductTable } from './products/CatalogTables';
+import { CatalogModal, fieldClass } from './products/catalogUi';
+import { summarizeProducts } from './products/productManagerModel';
 
 type Tab = NutrientType | 'embalagem' | 'marca' | 'nutriente' | 'incompatibilidade';
 
@@ -98,6 +84,10 @@ const emptyProduct = (type: NutrientType): Partial<UnifiedProduct> => ({
   extraLoadingLocationIds: [],
 });
 
+/**
+ * Cadastro de Matéria-Prima: orquestra as abas (macros, micros, produto acabado,
+ * embalagens, marcas, nutrientes e incompatibilidade), os dados e os modais.
+ */
 export default function ProductManager({
   canManage = true,
   initialTab = 'macro',
@@ -385,36 +375,21 @@ export default function ProductManager({
     }
   };
 
-  const addGuarantee = () =>
-    setForm((p) => ({
-      ...p,
-      microGuarantees: [...(p.microGuarantees || []), { name: '', value: 0 }],
-    }));
-  const updateGuarantee = (i: number, field: keyof MicroGuarantee, val: string | number) =>
-    setForm((p) => {
-      const g = [...(p.microGuarantees || [])];
-      g[i] = { ...g[i], [field]: val };
-      return { ...p, microGuarantees: g };
-    });
-  const removeGuarantee = (i: number) =>
-    setForm((p) => ({
-      ...p,
-      microGuarantees: (p.microGuarantees || []).filter((_, idx) => idx !== i),
-    }));
-
   const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
-    { key: 'macro', label: 'Macros', icon: <Database className="w-4 h-4" /> },
-    { key: 'micro', label: 'Micros', icon: <FlaskConical className="w-4 h-4" /> },
-    { key: 'finished', label: 'Produto Acabado', icon: <Box className="w-4 h-4" /> },
-    { key: 'embalagem', label: 'Embalagens', icon: <ShoppingBag className="w-4 h-4" /> },
-    { key: 'marca', label: 'Marcas', icon: <Tag className="w-4 h-4" /> },
-    { key: 'nutriente', label: 'Nutrientes', icon: <Atom className="w-4 h-4" /> },
+    { key: 'macro', label: 'Macros', icon: <Database className="h-4 w-4" /> },
+    { key: 'micro', label: 'Micros', icon: <FlaskConical className="h-4 w-4" /> },
+    { key: 'finished', label: 'Produto Acabado', icon: <Box className="h-4 w-4" /> },
+    { key: 'embalagem', label: 'Embalagens', icon: <ShoppingBag className="h-4 w-4" /> },
+    { key: 'marca', label: 'Marcas', icon: <Tag className="h-4 w-4" /> },
+    { key: 'nutriente', label: 'Nutrientes', icon: <Atom className="h-4 w-4" /> },
     {
       key: 'incompatibilidade',
       label: 'Incompatibilidade',
-      icon: <AlertTriangle className="w-4 h-4" />,
+      icon: <AlertTriangle className="h-4 w-4" />,
     },
   ];
+  const isProductTab = tab === 'macro' || tab === 'micro' || tab === 'finished';
+  const hasListTools = isProductTab || tab === 'embalagem';
   const summary = summarizeProducts(products, embalagens, new Set(brands.map((b) => b.id)));
   const kpis = [
     { label: 'Matérias-primas ativas', value: summary.ativos, tone: 'text-emerald-700' },
@@ -426,13 +401,28 @@ export default function ProductManager({
     },
     { label: 'Embalagens ativas', value: summary.embalagensAtivas, tone: 'text-blue-700' },
   ];
+  const tabCount = (key: Tab) =>
+    key === 'embalagem'
+      ? embalagens.length
+      : key === 'macro' || key === 'micro' || key === 'finished'
+        ? products.filter((product) => product.type === key).length
+        : key === 'nutriente'
+          ? nutrientes.length
+          : key === 'marca'
+            ? brands.length
+            : undefined;
+
+  const closeCategoryModal = () => {
+    setIsCategoryModalOpen(false);
+    void loadAll();
+  };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-5">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-stone-800 flex items-center gap-2">
-            <Package className="w-7 h-7 text-emerald-600" />
+          <h1 className="flex items-center gap-2 text-2xl font-black text-stone-900">
+            <Package className="h-7 w-7 text-emerald-600" />
             Cadastro de Matéria-Prima
           </h1>
           <p className="text-sm text-stone-500">
@@ -446,24 +436,27 @@ export default function ProductManager({
               Somente leitura
             </span>
           )}
-          {canManage && (tab === 'macro' || tab === 'micro' || tab === 'finished') && (
+          {canManage && isProductTab && tab !== 'finished' && (
             <button
+              type="button"
               onClick={() => setIsCategoryModalOpen(true)}
-              className="bg-stone-200 hover:bg-stone-300 text-stone-700 px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors shadow-sm"
+              className="inline-flex h-11 items-center gap-2 rounded-xl border border-stone-300 bg-white px-4 text-sm font-bold text-stone-700 hover:bg-stone-50"
             >
-              <Settings className="w-4 h-4" /> Categorias
+              <Settings className="h-4 w-4" /> Categorias
             </button>
           )}
-          {canManage && tab !== 'marca' && tab !== 'nutriente' && tab !== 'incompatibilidade' && (
+          {canManage && hasListTools && (
             <button
+              type="button"
               onClick={openCreate}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors shadow-sm"
+              className="inline-flex h-11 items-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-black text-white shadow-sm hover:bg-emerald-700"
             >
-              <Plus className="w-4 h-4" /> {tab === 'embalagem' ? 'Nova Embalagem' : 'Novo Produto'}
+              <Plus className="h-4 w-4" />
+              {tab === 'embalagem' ? 'Nova embalagem' : 'Novo produto'}
             </button>
           )}
         </div>
-      </div>
+      </header>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {kpis.map((kpi) => (
@@ -476,39 +469,58 @@ export default function ProductManager({
         ))}
       </div>
 
-      <div className="flex gap-1 overflow-x-auto border-b border-stone-200">
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`flex shrink-0 items-center gap-2 whitespace-nowrap px-4 py-2.5 font-semibold text-sm transition-colors relative ${tab === t.key ? 'text-emerald-700' : 'text-stone-500 hover:text-stone-700'}`}
-          >
-            {t.icon}
-            {t.label}
-            {tab === t.key && (
-              <div className="absolute bottom-0 left-0 w-full h-0.5 bg-emerald-600 rounded-t" />
-            )}
-          </button>
-        ))}
-      </div>
+      <nav
+        aria-label="Seções do cadastro"
+        className="-mx-1 flex gap-1 overflow-x-auto rounded-2xl border border-stone-200 bg-white p-1"
+      >
+        {tabs.map((item) => {
+          const count = tabCount(item.key);
+          const active = tab === item.key;
+          return (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => setTab(item.key)}
+              aria-current={active ? 'page' : undefined}
+              className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl px-3.5 py-2 text-sm font-bold transition-colors ${
+                active ? 'bg-emerald-600 text-white shadow-sm' : 'text-stone-600 hover:bg-stone-100'
+              }`}
+            >
+              {item.icon}
+              {item.label}
+              {count !== undefined && (
+                <span
+                  className={`rounded-full px-1.5 text-[11px] ${
+                    active ? 'bg-white/20 text-white' : 'bg-stone-100 text-stone-500'
+                  }`}
+                >
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </nav>
 
-      {tab !== 'marca' && tab !== 'nutriente' && tab !== 'incompatibilidade' && (
+      {hasListTools && (
         <div className="flex flex-col gap-3 sm:flex-row">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
             <input
-              type="text"
-              placeholder="Buscar por nome ou código..."
+              type="search"
+              placeholder={tab === 'embalagem' ? 'Buscar embalagem…' : 'Buscar por nome ou código…'}
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+              onChange={(event) => setSearch(event.target.value)}
+              aria-label="Buscar"
+              className={`${fieldClass} pl-9`}
             />
           </div>
           {(tab === 'macro' || tab === 'micro') && (
             <select
               value={statusFilter}
               onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
-              className="rounded-lg border border-stone-200 px-3 py-2 text-sm text-stone-700"
+              aria-label="Filtrar por status"
+              className={`${fieldClass} sm:w-48`}
             >
               <option value="all">Todos os status</option>
               <option value="active">Ativos</option>
@@ -524,872 +536,67 @@ export default function ProductManager({
         <NutrientManager nutrientes={nutrientes} canManage={canManage} onChanged={loadNutrientes} />
       ) : tab === 'marca' ? (
         <BrandManager canManage={canManage} />
-      ) : tab !== 'embalagem' ? (
-        <div className="bg-white rounded-xl shadow-sm border border-stone-200 overflow-x-auto">
-          <table className="w-full text-sm text-left">
-            <thead className="bg-stone-50 text-stone-500 uppercase font-bold text-xs border-b border-stone-100">
-              <tr>
-                <th className="px-5 py-3 w-20">Cód.</th>
-                <th className="px-5 py-3">Nome</th>
-                <th className="hidden px-5 py-3 md:table-cell">Categorias</th>
-                {tab === 'macro' && (
-                  <>
-                    <th className="px-5 py-3">Marca</th>
-                    <th className="px-5 py-3 text-center">N-P-K</th>
-                  </>
-                )}
-                {tab === 'micro' && <th className="px-5 py-3">Garantias</th>}
-                {tab === 'finished' && <th className="px-5 py-3">Descrição</th>}
-                <th className="px-5 py-3 text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-stone-100">
-              {tableLoading && (
-                <tr>
-                  <td colSpan={7} className="px-6 py-10 text-center text-stone-400">
-                    Carregando...
-                  </td>
-                </tr>
-              )}
-              {!tableLoading && filtered.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-6 py-10 text-center text-stone-400 italic">
-                    Nenhum produto encontrado.
-                  </td>
-                </tr>
-              )}
-              {!tableLoading &&
-                filtered.map((item) => (
-                  <tr
-                    key={item.id}
-                    className={`hover:bg-stone-50 transition-colors ${item.ativo === false ? 'opacity-60' : ''}`}
-                  >
-                    <td className="px-5 py-3 font-mono font-bold text-emerald-600">{item.code}</td>
-                    <td className="min-w-[12rem] px-5 py-3 font-medium text-stone-800">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span>{item.name}</span>
-                        {item.isPremiumLine && (
-                          <span className="flex items-center gap-0.5 bg-amber-50 text-amber-700 text-[10px] font-bold px-1.5 py-0.5 rounded border border-amber-200">
-                            <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500 shrink-0" />
-                            Premium
-                          </span>
-                        )}
-                        {item.availableInCalculatorWithoutPriceList && (
-                          <span className="rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">
-                            Extra em {item.extraLoadingLocationIds?.length || 0} local(is)
-                          </span>
-                        )}
-                        {(item.type === 'macro' || item.type === 'micro') && (
-                          <span
-                            className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${item.ativo === false ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-700'}`}
-                          >
-                            {item.ativo === false ? 'Inativo' : 'Ativo'}
-                          </span>
-                        )}
-                        {usageLabel(usage[item.id]) && (
-                          <span
-                            className="whitespace-nowrap rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-bold text-stone-600"
-                            title="Aparece em listas de preço, batidas ou precificações: ao excluir, o produto é desativado."
-                          >
-                            {usageLabel(usage[item.id])}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="hidden px-5 py-3 text-xs text-stone-500 md:table-cell">
-                      <div className="flex flex-wrap gap-1">
-                        {(item.categories || []).map((cid) => {
-                          const cName = categories.find((c) => c.id === cid)?.nome || cid;
-                          return (
-                            <span
-                              key={cid}
-                              className="bg-stone-100 px-1.5 py-0.5 rounded border border-stone-200"
-                            >
-                              {cName}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    </td>
-                    {tab === 'macro' && (
-                      <>
-                        <td className="px-5 py-3 text-stone-600">
-                          {brands.find((b) => b.id === item.brandId)?.name || '—'}
-                        </td>
-                        <td className="px-5 py-3 font-mono text-xs text-stone-700">
-                          {item.n}-{item.p}-{item.k}
-                        </td>
-                      </>
-                    )}
-                    {tab === 'micro' && (
-                      <td className="px-5 py-3">
-                        <div className="flex flex-wrap gap-1">
-                          {(item.microGuarantees || []).slice(0, 3).map((g, i) => (
-                            <span
-                              key={i}
-                              className="text-[10px] bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-100"
-                            >
-                              {g.name}: {g.value}%
-                            </span>
-                          ))}
-                        </div>
-                      </td>
-                    )}
-                    {tab === 'finished' && (
-                      <td className="px-5 py-3 text-stone-500 truncate max-w-xs">
-                        {item.description || '—'}
-                      </td>
-                    )}
-                    <td className="px-5 py-3 text-right">
-                      <div className="flex justify-end gap-1">
-                        {canManage && (item.type === 'macro' || item.type === 'micro') && (
-                          <button
-                            onClick={() => handleToggleProductActive(item)}
-                            className="p-1.5 text-stone-400 hover:text-amber-600 hover:bg-amber-50 rounded"
-                            title={item.ativo === false ? 'Ativar' : 'Desativar'}
-                          >
-                            {item.ativo === false ? (
-                              <ToggleLeft className="w-4 h-4" />
-                            ) : (
-                              <ToggleRight className="w-4 h-4" />
-                            )}
-                          </button>
-                        )}
-                        <button
-                          onClick={() => openEdit(item, true)}
-                          className="p-1.5 text-stone-400 hover:text-emerald-600 hover:bg-emerald-50 rounded"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        {canManage && (
-                          <>
-                            <button
-                              onClick={() => openEdit(item, false)}
-                              className="p-1.5 text-stone-400 hover:text-blue-600 hover:bg-blue-50 rounded"
-                            >
-                              <Edit3 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(item.id, item.type!)}
-                              className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded"
-                              title={usage[item.id] ? 'Desativar (produto em uso)' : 'Excluir'}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
-        </div>
+      ) : tab === 'embalagem' ? (
+        <EmbalagemTable
+          items={filteredEmbalagens}
+          loading={tableLoading}
+          canManage={canManage}
+          onEdit={openEmbalagemEdit}
+          onToggle={(item) => void handleToggleEmbalagemAtivo(item)}
+          onDelete={(item) => void handleDeleteEmbalagem(item.id)}
+        />
       ) : (
-        /* Embalagem table */
-        <div className="bg-white rounded-xl shadow-sm border border-stone-200 overflow-x-auto">
-          <table className="w-full text-sm text-left">
-            <thead className="bg-stone-50 text-stone-500 uppercase font-bold text-xs border-b border-stone-100">
-              <tr>
-                <th className="px-5 py-3 w-16">ID</th>
-                <th className="px-5 py-3">Nome</th>
-                <th className="px-5 py-3 text-center">Cobrar</th>
-                <th className="px-5 py-3 text-center">Descontar</th>
-                <th className="px-5 py-3 text-right">Valor Cobrar (R$/t)</th>
-                <th className="px-5 py-3 text-right">Valor Desconto (R$/t)</th>
-                <th className="px-5 py-3 text-center">Ativo</th>
-                <th className="px-5 py-3 text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-stone-100">
-              {tableLoading && (
-                <tr>
-                  <td colSpan={8} className="px-6 py-10 text-center text-stone-400">
-                    Carregando...
-                  </td>
-                </tr>
-              )}
-              {!tableLoading && filteredEmbalagens.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="px-6 py-10 text-center text-stone-400 italic">
-                    Nenhuma embalagem encontrada.
-                  </td>
-                </tr>
-              )}
-              {!tableLoading &&
-                filteredEmbalagens.map((emb) => (
-                  <tr key={emb.id} className="hover:bg-stone-50 transition-colors">
-                    <td className="px-5 py-3 font-mono text-xs text-stone-500">{emb.id_numeric}</td>
-                    <td className="px-5 py-3 font-medium text-stone-800">{emb.nome}</td>
-                    <td className="px-5 py-3 text-center">
-                      <span
-                        className={`text-xs font-bold px-2 py-0.5 rounded ${emb.cobrar ? 'bg-emerald-100 text-emerald-700' : 'bg-stone-100 text-stone-500'}`}
-                      >
-                        {emb.cobrar ? 'Sim' : 'Não'}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3 text-center">
-                      <span
-                        className={`text-xs font-bold px-2 py-0.5 rounded ${emb.descontar ? 'bg-blue-100 text-blue-700' : 'bg-stone-100 text-stone-500'}`}
-                      >
-                        {emb.descontar ? 'Sim' : 'Não'}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3 text-right font-mono">
-                      {emb.cobrar ? `R$ ${(emb.valor_cobrar || 0).toFixed(2)}` : '—'}
-                    </td>
-                    <td className="px-5 py-3 text-right font-mono">
-                      {emb.descontar ? `R$ ${(emb.valor_descontar || 0).toFixed(2)}` : '—'}
-                    </td>
-                    <td className="px-5 py-3 text-center">
-                      <span
-                        className={`text-xs font-bold px-2 py-0.5 rounded ${emb.ativo ? 'bg-emerald-100 text-emerald-700' : 'bg-stone-100 text-stone-400'}`}
-                      >
-                        {emb.ativo ? 'Ativo' : 'Inativo'}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3 text-right">
-                      <div className="flex justify-end gap-1">
-                        {canManage && (
-                          <>
-                            <button
-                              onClick={() => openEmbalagemEdit(emb)}
-                              className="p-1.5 text-stone-400 hover:text-blue-600 hover:bg-blue-50 rounded"
-                              title="Editar"
-                            >
-                              <Edit3 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleToggleEmbalagemAtivo(emb)}
-                              className="p-1.5 text-stone-400 hover:text-amber-600 hover:bg-amber-50 rounded"
-                              title={emb.ativo ? 'Desativar' : 'Ativar'}
-                            >
-                              {emb.ativo ? (
-                                <ToggleRight className="w-4 h-4" />
-                              ) : (
-                                <ToggleLeft className="w-4 h-4" />
-                              )}
-                            </button>
-                            <button
-                              onClick={() => handleDeleteEmbalagem(emb.id)}
-                              className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded"
-                              title="Excluir"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
-        </div>
+        <ProductTable
+          type={tab as NutrientType}
+          items={filtered}
+          loading={tableLoading}
+          brands={brands}
+          categories={categories}
+          usage={usage}
+          canManage={canManage}
+          onView={(item) => openEdit(item, true)}
+          onEdit={(item) => openEdit(item, false)}
+          onToggle={(item) => void handleToggleProductActive(item)}
+          onDelete={(item) => void handleDelete(item.id, item.type!)}
+        />
       )}
 
-      {isModalOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-          onMouseDown={(event) => closeModalOnBackdrop(event, () => setIsModalOpen(false), saving)}
-        >
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="px-6 py-4 border-b border-stone-100 flex justify-between items-center bg-emerald-600 text-white">
-              <h2 className="text-lg font-bold">
-                {viewMode ? 'Visualizar Produto' : editingId ? 'Editar Produto' : 'Novo Produto'}
-                <span className="ml-2 text-sm font-normal opacity-80">({tab.toUpperCase()})</span>
-              </h2>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="p-1 hover:bg-white/20 rounded-full"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-6 overflow-y-auto flex-1 space-y-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className={tab === 'finished' ? 'md:col-span-2' : ''}>
-                  <label className="block text-sm font-medium text-stone-600 mb-1">
-                    Nome do Produto <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    disabled={viewMode}
-                    value={form.name}
-                    onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-                    className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 disabled:bg-stone-50"
-                  />
-                </div>
+      <ProductFormModal
+        isOpen={isModalOpen}
+        type={(form.type || 'macro') as NutrientType}
+        form={form}
+        onChange={setForm}
+        viewMode={viewMode}
+        isEditing={!!editingId}
+        saving={saving}
+        brands={brands}
+        categories={categories}
+        nutrientes={nutrientes}
+        loadingLocations={loadingLocations}
+        onSave={() => void handleSave()}
+        onClose={() => setIsModalOpen(false)}
+      />
 
-                {(tab === 'macro' || tab === 'micro') && (
-                  <div>
-                    <label className="block text-sm font-medium text-stone-600 mb-1">
-                      Sufixo da Fórmula (ex: S, M, P)
-                    </label>
-                    <input
-                      type="text"
-                      disabled={viewMode}
-                      value={form.formulaSuffix || ''}
-                      onChange={(e) => setForm((p) => ({ ...p, formulaSuffix: e.target.value }))}
-                      className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 disabled:bg-stone-50"
-                    />
-                  </div>
-                )}
+      <EmbalagemFormModal
+        isOpen={isEmbalagemModalOpen}
+        form={embalagemForm}
+        onChange={setEmbalagemForm}
+        isEditing={!!editingEmbalagemId}
+        saving={savingEmbalagem}
+        onSave={() => void handleSaveEmbalagem()}
+        onClose={() => setIsEmbalagemModalOpen(false)}
+      />
 
-                {tab === 'macro' && (
-                  <div>
-                    <label className="block text-sm font-medium text-stone-600 mb-1">
-                      Marca do Produto
-                    </label>
-                    <select
-                      disabled={viewMode}
-                      value={form.brandId || ''}
-                      onChange={(e) => setForm((p) => ({ ...p, brandId: e.target.value }))}
-                      className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 disabled:bg-stone-50"
-                    >
-                      <option value="">— Nenhuma —</option>
-                      {brands.map((b) => (
-                        <option key={b.id} value={b.id}>
-                          {b.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-sm font-medium text-stone-600 mb-1">
-                    Quantidade Mínima (kg)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    disabled={viewMode}
-                    value={form.minQuantity || 0}
-                    onChange={(e) =>
-                      setForm((p) => ({ ...p, minQuantity: Number(e.target.value) }))
-                    }
-                    className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 disabled:bg-stone-50"
-                  />
-                </div>
-
-                {(tab === 'macro' || tab === 'micro') && (
-                  <div>
-                    <label className="block text-sm font-medium text-stone-600 mb-1">
-                      Quantidade Máxima (kg)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      disabled={viewMode}
-                      value={form.maxQuantity || 0}
-                      onChange={(e) =>
-                        setForm((p) => ({ ...p, maxQuantity: Number(e.target.value) }))
-                      }
-                      className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 disabled:bg-stone-50"
-                    />
-                    <p className="mt-1 text-xs text-stone-500">Use zero para deixar sem limite.</p>
-                  </div>
-                )}
-
-                {(tab === 'macro' || tab === 'micro') && (
-                  <div className="space-y-3 pt-6">
-                    <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-stone-700">
-                      <input
-                        type="checkbox"
-                        disabled={viewMode}
-                        checked={!!form.isPremiumLine}
-                        onChange={(e) =>
-                          setForm((p) => ({ ...p, isPremiumLine: e.target.checked }))
-                        }
-                        className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
-                      />
-                      Pertence à Linha Diferenciada (Premium)
-                    </label>
-                    <label className="flex items-start gap-2 cursor-pointer text-sm font-medium text-stone-700">
-                      <input
-                        type="checkbox"
-                        disabled={viewMode}
-                        checked={!!form.availableInCalculatorWithoutPriceList}
-                        onChange={(e) =>
-                          setForm((p) => ({
-                            ...p,
-                            availableInCalculatorWithoutPriceList: e.target.checked,
-                            extraLoadingLocationIds: e.target.checked
-                              ? p.extraLoadingLocationIds || []
-                              : [],
-                          }))
-                        }
-                        className="mt-0.5 h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500"
-                      />
-                      <span>
-                        Exibir como produto extra na calculadora
-                        <span className="block text-xs font-normal text-stone-500">
-                          Usuários autorizados verão o produto mesmo quando ele não estiver na lista
-                          de preços.
-                        </span>
-                      </span>
-                    </label>
-                    {form.availableInCalculatorWithoutPriceList && (
-                      <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-3">
-                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                          <div>
-                            <p className="flex items-center gap-1.5 text-sm font-bold text-blue-900">
-                              <MapPin className="h-4 w-4" /> Locais de carregamento
-                            </p>
-                            <p className="text-xs text-blue-700">
-                              Selecione onde este produto ficará disponível como extra.
-                            </p>
-                          </div>
-                          {!viewMode && loadingLocations.length > 0 && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setForm((previous) => ({
-                                  ...previous,
-                                  extraLoadingLocationIds:
-                                    previous.extraLoadingLocationIds?.length ===
-                                    loadingLocations.length
-                                      ? []
-                                      : loadingLocations.map((location) => location.id),
-                                }))
-                              }
-                              className="rounded-lg border border-blue-200 bg-white px-2.5 py-1 text-xs font-bold text-blue-700 hover:bg-blue-100"
-                            >
-                              {form.extraLoadingLocationIds?.length === loadingLocations.length
-                                ? 'Limpar seleção'
-                                : 'Selecionar todos'}
-                            </button>
-                          )}
-                        </div>
-                        <div className="grid max-h-44 grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">
-                          {loadingLocations.map((location) => (
-                            <label
-                              key={location.id}
-                              className="flex cursor-pointer items-start gap-2 rounded-lg border border-blue-100 bg-white p-2 text-sm text-stone-700 hover:border-blue-300"
-                            >
-                              <input
-                                type="checkbox"
-                                disabled={viewMode}
-                                checked={(form.extraLoadingLocationIds || []).includes(location.id)}
-                                onChange={(event) =>
-                                  setForm((previous) => ({
-                                    ...previous,
-                                    extraLoadingLocationIds: event.target.checked
-                                      ? [...(previous.extraLoadingLocationIds || []), location.id]
-                                      : (previous.extraLoadingLocationIds || []).filter(
-                                          (id) => id !== location.id
-                                        ),
-                                  }))
-                                }
-                                className="mt-0.5 h-4 w-4 rounded text-blue-600 focus:ring-blue-500"
-                              />
-                              <span>
-                                <span className="block font-semibold">{location.nome}</span>
-                                {(location.cidade || location.estado) && (
-                                  <span className="block text-xs text-stone-500">
-                                    {[location.cidade, location.estado].filter(Boolean).join(' — ')}
-                                  </span>
-                                )}
-                              </span>
-                            </label>
-                          ))}
-                          {loadingLocations.length === 0 && (
-                            <p className="text-xs text-red-600">
-                              Nenhum local de carregamento ativo foi encontrado.
-                            </p>
-                          )}
-                        </div>
-                        {(form.extraLoadingLocationIds || []).length === 0 && (
-                          <p className="mt-2 text-xs font-semibold text-red-600">
-                            Selecione ao menos um local para salvar.
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {(tab === 'macro' || tab === 'micro') && (
-                <div>
-                  <label className="block text-sm font-medium text-stone-600 mb-2 flex justify-between">
-                    Categorias Compartilhadas
-                  </label>
-                  <div className="flex flex-wrap gap-3 mt-1 bg-stone-50 p-3 rounded-lg border border-stone-200">
-                    {categories
-                      .filter((c) => c.ativo)
-                      .map((c) => (
-                        <label
-                          key={c.id}
-                          className="flex items-center gap-2 cursor-pointer text-sm font-medium text-stone-700 bg-white px-2 py-1 rounded shadow-sm border border-stone-100 hover:border-emerald-300"
-                        >
-                          <input
-                            type="checkbox"
-                            disabled={viewMode}
-                            checked={(form.categories || []).includes(c.id)}
-                            onChange={(e) =>
-                              setForm((p) => ({
-                                ...p,
-                                categories: e.target.checked
-                                  ? [...(p.categories || []), c.id]
-                                  : (p.categories || []).filter((id) => id !== c.id),
-                              }))
-                            }
-                            className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
-                          />
-                          {c.nome}
-                        </label>
-                      ))}
-                    {categories.filter((c) => c.ativo).length === 0 && (
-                      <span className="text-xs text-stone-400">
-                        Nenhuma categoria ativa cadastrada.
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {tab === 'macro' && (
-                <div>
-                  <label className="block text-sm font-medium text-stone-600 mb-2">
-                    Garantias N-P-K-S-Ca (%)
-                  </label>
-                  <div className="grid grid-cols-5 gap-3">
-                    {(['n', 'p', 'k', 's', 'ca'] as const).map((f) => (
-                      <div key={f}>
-                        <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
-                          {f}
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="0.01"
-                          disabled={viewMode}
-                          value={(form as any)[f] || 0}
-                          onChange={(e) => setForm((p) => ({ ...p, [f]: Number(e.target.value) }))}
-                          className="w-full px-2 py-2 border border-stone-300 rounded-lg text-sm focus:ring-1 focus:ring-emerald-500 disabled:bg-stone-50"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {tab === 'finished' && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-stone-600 mb-1">
-                      Preço (R$)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      disabled={viewMode}
-                      value={form.price || ''}
-                      onChange={(e) => setForm((p) => ({ ...p, price: Number(e.target.value) }))}
-                      className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 disabled:bg-stone-50"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-stone-600 mb-1">
-                      Descrição
-                    </label>
-                    <textarea
-                      disabled={viewMode}
-                      value={form.description || ''}
-                      onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
-                      rows={3}
-                      className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 disabled:bg-stone-50 resize-none"
-                    />
-                  </div>
-                </>
-              )}
-
-              {(tab === 'macro' || tab === 'micro') && (
-                <div className="mt-4">
-                  <div className="flex justify-between items-center mb-2">
-                    <label className="block text-sm font-medium text-stone-600">
-                      Garantias extras (nutrientes do cadastro)
-                    </label>
-                    {!viewMode && (
-                      <button
-                        type="button"
-                        onClick={addGuarantee}
-                        className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded hover:bg-emerald-200 flex items-center gap-1"
-                      >
-                        <Plus className="w-3 h-3" />
-                        Add
-                      </button>
-                    )}
-                  </div>
-                  <div className="space-y-2 bg-stone-50 rounded-lg p-3 border border-stone-200">
-                    {(form.microGuarantees || []).map((g, i) => (
-                      <div key={i} className="flex gap-2 items-center">
-                        <select
-                          disabled={viewMode}
-                          value={
-                            nutrientes.find(
-                              (n) =>
-                                normalizeMicronutrientKey(n.sigla) ===
-                                normalizeMicronutrientKey(g.name)
-                            )?.sigla ?? g.name
-                          }
-                          onChange={(e) => updateGuarantee(i, 'name', e.target.value)}
-                          aria-label="Nutriente da garantia"
-                          className="flex-1 px-2 py-1.5 border border-stone-300 rounded text-sm bg-white disabled:bg-stone-100"
-                        >
-                          <option value="">Selecione o nutriente…</option>
-                          {nutrientes
-                            .filter((n) => n.ativo)
-                            .map((n) => (
-                              <option key={n.id} value={n.sigla}>
-                                {n.sigla} – {n.nome}
-                              </option>
-                            ))}
-                          {g.name &&
-                            !nutrientes.some(
-                              (n) =>
-                                normalizeMicronutrientKey(n.sigla) ===
-                                normalizeMicronutrientKey(g.name)
-                            ) && <option value={g.name}>{g.name} (fora do cadastro)</option>}
-                        </select>
-                        <input
-                          type="number"
-                          disabled={viewMode}
-                          value={g.value}
-                          onChange={(e) => updateGuarantee(i, 'value', Number(e.target.value))}
-                          className="w-20 px-2 py-1.5 border border-stone-300 rounded text-sm disabled:bg-stone-100"
-                          placeholder="%"
-                        />
-                        {!viewMode && (
-                          <button
-                            type="button"
-                            onClick={() => removeGuarantee(i)}
-                            className="text-red-400 hover:text-red-600"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                    {(form.microGuarantees || []).length === 0 && (
-                      <p className="text-xs text-stone-400 italic text-center py-1">
-                        Nenhuma garantia extra adicionada.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-            <div className="px-6 py-4 bg-stone-50 border-t border-stone-100 flex justify-end gap-3">
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="px-4 py-2 text-stone-600 font-medium hover:bg-stone-200 rounded-lg transition-colors"
-              >
-                {viewMode ? 'Fechar' : 'Cancelar'}
-              </button>
-              {!viewMode && (
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="px-5 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 disabled:bg-emerald-400 transition-colors flex items-center gap-2"
-                >
-                  <Save className="w-4 h-4" />
-                  {saving ? 'Salvando...' : 'Salvar Produto'}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Category Manager Modal shared */}
-      {isCategoryModalOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4"
-          onMouseDown={(event) =>
-            closeModalOnBackdrop(event, () => {
-              setIsCategoryModalOpen(false);
-              loadAll();
-            })
-          }
-        >
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col relative">
-            <button
-              onClick={() => {
-                setIsCategoryModalOpen(false);
-                loadAll();
-              }}
-              className="absolute top-4 right-4 p-1 bg-stone-100/50 hover:bg-stone-200 rounded-full transition-colors z-[70]"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <div className="p-0 overflow-y-auto flex-1">
-              <CompatibilityCategoryManager />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Embalagem Modal */}
-      {isEmbalagemModalOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-          onMouseDown={(event) =>
-            closeModalOnBackdrop(event, () => setIsEmbalagemModalOpen(false), savingEmbalagem)
-          }
-        >
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col">
-            <div className="px-6 py-4 border-b border-stone-100 flex justify-between items-center bg-emerald-600 text-white">
-              <h2 className="text-lg font-bold">
-                {editingEmbalagemId ? 'Editar Embalagem' : 'Nova Embalagem'}
-              </h2>
-              <button
-                onClick={() => setIsEmbalagemModalOpen(false)}
-                className="p-1 hover:bg-white/20 rounded-full"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-stone-600 mb-1">
-                  Nome <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={embalagemForm.nome || ''}
-                  onChange={(e) => setEmbalagemForm((p) => ({ ...p, nome: e.target.value }))}
-                  placeholder="Ex: Saco 50kg, Big Bag 1t"
-                  className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-stone-600 mb-1">Cobrar</label>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setEmbalagemForm((p) => ({
-                        ...p,
-                        cobrar: !p.cobrar,
-                      }))
-                    }
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${embalagemForm.cobrar ? 'bg-emerald-100 text-emerald-700 border border-emerald-300' : 'bg-stone-100 text-stone-500 border border-stone-200'}`}
-                  >
-                    {embalagemForm.cobrar ? (
-                      <ToggleRight className="w-4 h-4" />
-                    ) : (
-                      <ToggleLeft className="w-4 h-4" />
-                    )}
-                    {embalagemForm.cobrar ? 'Sim' : 'Não'}
-                  </button>
-                  <p className="text-xs text-stone-400 mt-1">Acrescenta ao preço</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-stone-600 mb-1">Descontar</label>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setEmbalagemForm((p) => ({
-                        ...p,
-                        descontar: !p.descontar,
-                      }))
-                    }
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${embalagemForm.descontar ? 'bg-blue-100 text-blue-700 border border-blue-300' : 'bg-stone-100 text-stone-500 border border-stone-200'}`}
-                  >
-                    {embalagemForm.descontar ? (
-                      <ToggleRight className="w-4 h-4" />
-                    ) : (
-                      <ToggleLeft className="w-4 h-4" />
-                    )}
-                    {embalagemForm.descontar ? 'Sim' : 'Não'}
-                  </button>
-                  <p className="text-xs text-stone-400 mt-1">Desconta do preço</p>
-                </div>
-              </div>
-              {(embalagemForm.cobrar || embalagemForm.descontar) && (
-                <div className="grid grid-cols-2 gap-4">
-                  {embalagemForm.cobrar && (
-                    <div>
-                      <label className="block text-sm font-medium text-stone-600 mb-1">
-                        Valor a Cobrar (R$/t)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={embalagemForm.valor_cobrar ?? 0}
-                        onChange={(e) =>
-                          setEmbalagemForm((p) => ({
-                            ...p,
-                            valor_cobrar: Number(e.target.value),
-                          }))
-                        }
-                        className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-                      />
-                    </div>
-                  )}
-                  {embalagemForm.descontar && (
-                    <div>
-                      <label className="block text-sm font-medium text-stone-600 mb-1">
-                        Valor do Desconto (R$/t)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={embalagemForm.valor_descontar ?? 0}
-                        onChange={(e) =>
-                          setEmbalagemForm((p) => ({
-                            ...p,
-                            valor_descontar: Number(e.target.value),
-                          }))
-                        }
-                        className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-              <div>
-                <label className="block text-sm font-medium text-stone-600 mb-1">Ativo</label>
-                <button
-                  type="button"
-                  onClick={() => setEmbalagemForm((p) => ({ ...p, ativo: !p.ativo }))}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${embalagemForm.ativo !== false ? 'bg-emerald-100 text-emerald-700 border border-emerald-300' : 'bg-stone-100 text-stone-500 border border-stone-200'}`}
-                >
-                  {embalagemForm.ativo !== false ? (
-                    <ToggleRight className="w-4 h-4" />
-                  ) : (
-                    <ToggleLeft className="w-4 h-4" />
-                  )}
-                  {embalagemForm.ativo !== false ? 'Ativo' : 'Inativo'}
-                </button>
-              </div>
-            </div>
-            <div className="px-6 py-4 bg-stone-50 border-t border-stone-100 flex justify-end gap-3">
-              <button
-                onClick={() => setIsEmbalagemModalOpen(false)}
-                className="px-4 py-2 text-stone-600 font-medium hover:bg-stone-200 rounded-lg transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleSaveEmbalagem}
-                disabled={savingEmbalagem}
-                className="px-5 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 disabled:bg-emerald-400 transition-colors flex items-center gap-2"
-              >
-                <Save className="w-4 h-4" />
-                {savingEmbalagem ? 'Salvando...' : 'Salvar Embalagem'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <CatalogModal
+        isOpen={isCategoryModalOpen}
+        size="xl"
+        title="Categorias de matéria-prima"
+        subtitle="Agrupam produtos que podem substituir uns aos outros na calculadora."
+        icon={<Settings className="h-5 w-5" />}
+        onClose={closeCategoryModal}
+      >
+        <CompatibilityCategoryManager />
+      </CatalogModal>
 
       <ConfirmDialog {...confirmState} onConfirm={handleConfirm} onCancel={handleCancel} />
     </div>

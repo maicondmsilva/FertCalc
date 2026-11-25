@@ -73,3 +73,9 @@ export async function updateNutriente(id: string, input: NutrienteInput): Promis
   const { error } = await supabase.from('nutrientes').update(toDb(input)).eq('id', id);
   if (error) throw error;
 }
+
+/** Exclui o nutriente; o banco recusa (com a quantidade) se algum produto usa a garantia. */
+export async function deleteNutriente(id: string): Promise<void> {
+  const { error } = await supabase.rpc('excluir_nutriente', { p_id: id });
+  if (error) throw error;
+}
