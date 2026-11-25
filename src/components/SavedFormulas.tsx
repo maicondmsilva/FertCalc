@@ -61,6 +61,7 @@ import {
 } from '../utils/savedFormulaWorkflow';
 import Calculator from './Calculator';
 import { formatPricingMoney } from '../utils/pricingCurrency';
+import { listHasCurrency, projectPriceList } from '../utils/priceListCurrency';
 import { saveOrSharePdf } from '../utils/pdfDelivery';
 
 interface SavedFormulasProps {
@@ -907,6 +908,8 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
   const [locais, setLocais] = useState<LocalCarregamento[]>([]);
   const [selectedLocalId, setSelectedLocalId] = useState<string>('');
   const [selectedPriceListId, setSelectedPriceListId] = useState<string>('');
+  // A mesma lista pode ter preços em reais e em dólar: o usuário escolhe a moeda.
+  const [listCurrency, setListCurrency] = useState<PriceListCurrency>('BRL');
   const [selectedFormulas, setSelectedFormulas] = useState<string[]>([]);
   const [formulaSearch, setFormulaSearch] = useState('');
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -1062,6 +1065,7 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
   };
 
   const compatiblePriceLists = getPriceListsForLoadingLocation(priceLists, selectedLocalId)
+    .filter((list) => listHasCurrency(list, listCurrency))
     .slice()
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
@@ -1072,7 +1076,7 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
         ? current
         : firstCompatibleList?.id || ''
     );
-  }, [selectedLocalId, priceLists]);
+  }, [selectedLocalId, priceLists, listCurrency]);
 
   useEffect(() => {
     setSelectedFormulas((current) =>
@@ -1113,7 +1117,11 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
     });
   };
 
-  const selectedList = compatiblePriceLists.find((l) => l.id === selectedPriceListId);
+  const selectedRawList = compatiblePriceLists.find((l) => l.id === selectedPriceListId);
+  // Lista vista na moeda escolhida: preços e produtos daquela moeda.
+  const selectedList = selectedRawList
+    ? projectPriceList(selectedRawList, listCurrency)
+    : undefined;
   const selectedCurrency = getListCurrency(selectedList);
   const sourceFormulas = view === 'ativas' ? formulas : archivedFormulas;
 
@@ -1202,11 +1210,46 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
                 ))}
               </select>
             </label>
-            <label className="block">
-              <span className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-stone-500">
-                <Database className="h-4 w-4" /> Tabela de preços
-              </span>
+            <div>
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <label
+                  htmlFor="saved-formulas-price-list"
+                  className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-stone-500"
+                >
+                  <Database className="h-4 w-4" /> Tabela de preços
+                </label>
+                <div
+                  role="radiogroup"
+                  aria-label="Moeda da tabela de preços"
+                  className="inline-flex rounded-lg bg-stone-100 p-0.5"
+                >
+                  {(
+                    [
+                      { value: 'BRL', label: 'R$' },
+                      { value: 'USD', label: 'US$' },
+                    ] as const
+                  ).map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={listCurrency === option.value}
+                      onClick={() => setListCurrency(option.value)}
+                      className={`rounded-md px-2.5 py-0.5 text-xs font-bold transition-colors ${
+                        listCurrency === option.value
+                          ? option.value === 'USD'
+                            ? 'bg-blue-600 text-white shadow-sm'
+                            : 'bg-emerald-600 text-white shadow-sm'
+                          : 'text-stone-600 hover:bg-white'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <select
+                id="saved-formulas-price-list"
                 value={selectedPriceListId}
                 onChange={(e) => setSelectedPriceListId(e.target.value)}
                 className={selectClass}
@@ -1219,11 +1262,15 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
                   ))
                 ) : (
                   <option value="">
-                    {selectedLocalId ? 'Sem tabela para este local' : 'Selecione o local primeiro'}
+                    {!selectedLocalId
+                      ? 'Selecione o local primeiro'
+                      : listCurrency === 'USD'
+                        ? 'Sem tabela em dólar para este local'
+                        : 'Sem tabela para este local'}
                   </option>
                 )}
               </select>
-            </label>
+            </div>
             <label className="block md:col-span-2 xl:col-span-1">
               <span className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-stone-500">
                 <Search className="h-4 w-4" /> Pesquisar
@@ -1364,7 +1411,7 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
               </button>
             </div>
             <Calculator
-              key={`${formulaInEditor.id}-${selectedLocalId}-${selectedPriceListId}`}
+              key={`${formulaInEditor.id}-${selectedLocalId}-${selectedPriceListId}-${listCurrency}`}
               currentUser={currentUser}
               isSimplified
               disableConditions
@@ -1372,6 +1419,7 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
               initialBranchId={locais.find((local) => local.id === selectedLocalId)?.filial_id}
               initialLoadingLocationId={selectedLocalId}
               initialPriceListId={selectedPriceListId}
+              initialPriceListCurrency={listCurrency}
               onSavedFormulaSuccess={() => {
                 setFormulaInEditor(null);
                 void loadData();

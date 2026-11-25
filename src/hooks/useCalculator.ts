@@ -98,6 +98,8 @@ interface UseCalculatorProps {
   initialBranchId?: string;
   initialLoadingLocationId?: string;
   initialPriceListId?: string;
+  /** Moeda da lista ao abrir a partir de uma batida salva. */
+  initialPriceListCurrency?: PriceListCurrency;
   onClearEditing?: () => void;
   onSaveSuccess?: (record: PricingRecord) => void;
   onSavedFormulaSuccess?: () => void;
@@ -114,6 +116,7 @@ export function useCalculator({
   initialBranchId,
   initialLoadingLocationId,
   initialPriceListId,
+  initialPriceListCurrency,
   onClearEditing,
   onSaveSuccess,
   onSavedFormulaSuccess,
@@ -287,6 +290,7 @@ export function useCalculator({
         branchId: initialBranchId || prev.branchId,
         local_carregamento_id: initialLoadingLocationId || prev.local_carregamento_id,
         priceListId: initialPriceListId || prev.priceListId,
+        priceListCurrency: initialPriceListCurrency || prev.priceListCurrency,
       }));
       setCalculations([
         {
@@ -306,6 +310,7 @@ export function useCalculator({
             branchId: initialBranchId || factors.branchId,
             local_carregamento_id: initialLoadingLocationId || factors.local_carregamento_id,
             priceListId: initialPriceListId || factors.priceListId,
+            priceListCurrency: initialPriceListCurrency || factors.priceListCurrency,
           },
           macros: initialFormulaToLoad.macros,
           micros: initialFormulaToLoad.micros,
@@ -314,7 +319,13 @@ export function useCalculator({
       setFormulaProductSelections({});
       setFormulaProductSnapshots({});
     }
-  }, [initialFormulaToLoad, initialBranchId, initialLoadingLocationId, initialPriceListId]);
+  }, [
+    initialFormulaToLoad,
+    initialBranchId,
+    initialLoadingLocationId,
+    initialPriceListId,
+    initialPriceListCurrency,
+  ]);
 
   useEffect(() => {
     const loadData = async () => {

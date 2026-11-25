@@ -22,7 +22,13 @@ import {
   RefreshCw,
   Clock3,
 } from 'lucide-react';
-import { PricingRecord, SavedFormula, User as AppUser, Embalagem } from '../types';
+import {
+  PricingRecord,
+  PriceListCurrency,
+  SavedFormula,
+  User as AppUser,
+  Embalagem,
+} from '../types';
 import { useToast } from './Toast';
 import { formatGuarantee, formatNPK } from '../utils/formatters';
 import { FertigranPComparisonModal } from './FertigranPComparisonModal';
@@ -76,6 +82,7 @@ interface CalculatorProps {
   initialBranchId?: string;
   initialLoadingLocationId?: string;
   initialPriceListId?: string;
+  initialPriceListCurrency?: PriceListCurrency;
   onClearEditing?: () => void;
   onSaveSuccess?: (record: PricingRecord) => void;
   onSavedFormulaSuccess?: () => void;
@@ -90,6 +97,7 @@ export default function Calculator({
   initialBranchId,
   initialLoadingLocationId,
   initialPriceListId,
+  initialPriceListCurrency,
   onClearEditing,
   onSaveSuccess,
   onSavedFormulaSuccess,
@@ -178,6 +186,7 @@ export default function Calculator({
     initialBranchId,
     initialLoadingLocationId,
     initialPriceListId,
+    initialPriceListCurrency,
     onClearEditing,
     onSaveSuccess,
     onSavedFormulaSuccess,
