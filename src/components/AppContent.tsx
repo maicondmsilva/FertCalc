@@ -9,7 +9,6 @@ const AgentManager = lazy(() => import('./AgentManager'));
 const AlertCenter = lazy(() => import('./AlertCenter'));
 const Approvals = lazy(() => import('./Approvals'));
 const BranchManager = lazy(() => import('./BranchManager'));
-const BrandManager = lazy(() => import('./BrandManager'));
 const Calculator = lazy(() => import('./Calculator'));
 const CarregamentoModule = lazy(() => import('./Carregamento'));
 const ClientManager = lazy(() => import('./ClientManager'));
@@ -133,9 +132,9 @@ function AppContentRoute({
       return <PriceListManager currentUser={currentUser} />;
     }
     if (activeTab === 'materials_brand' && hasPermission('priceLists'))
-      return <BrandManager canManage={canManageCatalog} />;
+      return <ProductManager key="marcas" canManage={canManageCatalog} initialTab="marca" />;
     if (activeTab === 'products' && hasPermission('priceLists'))
-      return <ProductManager canManage={canManageCatalog} />;
+      return <ProductManager key="produtos" canManage={canManageCatalog} />;
     if (activeTab === 'incompatibilities' && hasPermission('priceLists')) {
       return <IncompatibilityManager canManage={canManageCatalog} />;
     }

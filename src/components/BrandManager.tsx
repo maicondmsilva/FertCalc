@@ -90,7 +90,7 @@ export default function BrandManager({ canManage = true }: { canManage?: boolean
       <ConfirmDialog {...confirmState} onConfirm={handleConfirm} onCancel={handleCancel} />
       <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
         <h2 className="text-xl font-bold text-stone-800 mb-6 flex items-center">
-          <Tag className="w-5 h-5 mr-2 text-indigo-600" />
+          <Tag className="w-5 h-5 mr-2 text-emerald-600" />
           {editingBrand ? 'Editar Marca' : 'Cadastro de Marcas de Produtos'}
         </h2>
 
@@ -108,7 +108,7 @@ export default function BrandManager({ canManage = true }: { canManage?: boolean
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSave()}
-                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
                 placeholder="Ex: Yara, Mosaic, Heringer..."
               />
             </div>
@@ -124,7 +124,7 @@ export default function BrandManager({ canManage = true }: { canManage?: boolean
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white px-6 py-2 rounded-lg font-bold transition-colors flex items-center gap-2"
+                className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white px-6 py-2 rounded-lg font-bold transition-colors flex items-center gap-2"
               >
                 <Save className="w-4 h-4" />
                 {saving ? 'Salvando...' : editingBrand ? 'Atualizar' : 'Cadastrar Marca'}
@@ -153,7 +153,7 @@ export default function BrandManager({ canManage = true }: { canManage?: boolean
               {!loading &&
                 brands.map((brand) => (
                   <tr key={brand.id} className="hover:bg-stone-50 transition-colors">
-                    <td className="px-4 py-3 font-mono text-indigo-600 font-bold">{brand.code}</td>
+                    <td className="px-4 py-3 font-mono text-emerald-600 font-bold">{brand.code}</td>
                     <td className="px-4 py-3 text-stone-800 font-medium">{brand.name}</td>
                     <td className="px-4 py-3 text-right space-x-2">
                       {canManage && (
