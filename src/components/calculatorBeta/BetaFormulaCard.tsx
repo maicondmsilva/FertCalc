@@ -48,7 +48,7 @@ import {
   type NutrientStatus,
 } from './betaCalculatorModel';
 import BetaConditionsPanel from './BetaConditionsPanel';
-import GuaranteeBreakdownTable from './GuaranteeBreakdownTable';
+import GuaranteeSumStrip from './GuaranteeSumStrip';
 import { buildGuaranteeBreakdown } from '../../utils/guaranteeBreakdown';
 import type { BetaCalculator } from './SimplifiedCalculatorBeta';
 
@@ -1055,7 +1055,6 @@ export default function BetaFormulaCard({
                 })}
               </div>
             )}
-            <GuaranteeBreakdownTable rows={guaranteeBreakdown} />
           </section>
         )}
 
@@ -1160,6 +1159,7 @@ export default function BetaFormulaCard({
                   </span>
                 </li>
               </ul>
+              <GuaranteeSumStrip rows={guaranteeBreakdown} />
               {(unpricedProducts.length > 0 ||
                 manualPriceProducts.length > 0 ||
                 customProducts.length > 0) && (
