@@ -32,7 +32,11 @@ import { formatDatePtBr, getPricingDueDate } from '../utils/pricingDisplay';
 import { formatPricingMoney, getPricingCurrency } from '../utils/pricingCurrency';
 import { getPricingGuaranteeAuthorizationSummary } from '../utils/guaranteeAuthorization';
 import { canDecidePricing, describeApprovalError } from '../utils/pricingApprovalRules';
-import { filterPricingQueue, summarizeApprovals } from './approvals/approvalsModel';
+import {
+  filterPricingQueue,
+  pricingCustomMaterials,
+  summarizeApprovals,
+} from './approvals/approvalsModel';
 import {
   decideGuaranteeAuthorizationRequest,
   getGuaranteeAuthorizationRequests,
@@ -619,6 +623,13 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
                     Solicitado por: {p.userName} | Vendedor: @{p.userCode}
                   </p>
                   <p className="text-xs font-bold text-emerald-600 mt-1">Status: {p.status}</p>
+                  {pricingCustomMaterials(p).length > 0 && (
+                    <div className="mt-2 rounded-md border border-violet-300 bg-violet-50 px-2 py-1 text-xs text-violet-900">
+                      <span className="font-bold">Matéria-prima personalizada:</span>{' '}
+                      {pricingCustomMaterials(p).join(', ')} — garantias e preço informados pelo
+                      vendedor.
+                    </div>
+                  )}
                   {getPricingGuaranteeAuthorizationSummary(p).hasAuthorizedDivergence && (
                     <div className="mt-2 rounded-md border border-amber-300 bg-amber-100 px-2 py-1 text-xs text-amber-900">
                       <div className="flex items-center gap-1 font-bold">

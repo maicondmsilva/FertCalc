@@ -21,6 +21,8 @@ export interface CompositionRow {
   isOutsidePriceList: boolean;
   /** Entrou na mistura com preço zero (fora da lista ou sem preço na moeda). */
   isUnpriced: boolean;
+  /** Matéria-prima informada pelo usuário (fora do cadastro). */
+  isCustom: boolean;
 }
 
 export interface CompositionTable {
@@ -58,6 +60,7 @@ export function buildCompositionTable(
         isManualPrice: Boolean(material.isManualPrice),
         isOutsidePriceList: Boolean(material.isOutsidePriceList),
         isUnpriced: !(price > 0),
+        isCustom: Boolean(material.isCustomMaterial),
       };
     })
     .sort((left, right) => right.value - left.value || right.quantity - left.quantity);

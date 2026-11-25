@@ -63,6 +63,8 @@ export interface RawMaterial {
   isManualPrice?: boolean;
   /** Está na lista de preço, mas sem preço na moeda escolhida (aparece zerado). */
   isMissingListPrice?: boolean;
+  /** Matéria-prima informada pelo usuário na calculadora (não está no cadastro). */
+  isCustomMaterial?: boolean;
   n: number;
   p: number;
   k: number;

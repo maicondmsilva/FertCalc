@@ -1867,6 +1867,19 @@ export function useCalculator({
       showError(batidaBlock);
       return;
     }
+    // Batida é reaproveitada depois: produto fora do cadastro deixaria a batida quebrada.
+    const customUsed = [...(selectedCalc.macros || []), ...(selectedCalc.micros || [])].filter(
+      (material) => material.isCustomMaterial && Number(material.quantity) > 0
+    );
+    if (customUsed.length > 0) {
+      showError(
+        `A batida usa matéria-prima personalizada (${customUsed
+          .map((material) => material.name)
+          .join(', ')}), que não está no cadastro. Ela pode ser salva como precificação; para ` +
+          'salvar como batida, cadastre o produto em Cadastro de Matéria-Prima.'
+      );
+      return;
+    }
 
     const isRevision = initialFormulaToLoad?.isRevisionFromSavedFormula === true;
     const defaultName = isRevision
@@ -1906,8 +1919,13 @@ export function useCalculator({
             targetCa: selectedCalc.targetCa,
             targetS: selectedCalc.targetS,
             targetMicros: selectedCalc.targetMicros,
-            macros: stripTemporaryMaterialPrices(selectedCalc.macros || macros),
-            micros: stripTemporaryMaterialPrices(selectedCalc.micros || micros),
+            // Personalizadas não estão no cadastro: não entram na batida.
+            macros: stripTemporaryMaterialPrices(
+              (selectedCalc.macros || macros).filter((material) => !material.isCustomMaterial)
+            ),
+            micros: stripTemporaryMaterialPrices(
+              (selectedCalc.micros || micros).filter((material) => !material.isCustomMaterial)
+            ),
           };
 
           if (isRevision && initialFormulaToLoad) {

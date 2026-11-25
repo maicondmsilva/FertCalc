@@ -65,3 +65,23 @@ export function summarizeApprovals(input: {
     guarantees: input.guarantees,
   };
 }
+
+/** Nomes das matérias-primas personalizadas usadas na precificação (fora do cadastro). */
+export function pricingCustomMaterials(pricing: PricingRecord): string[] {
+  const names = new Set<string>();
+  const collect = (
+    materials?: { name?: string; isCustomMaterial?: boolean; quantity?: number }[]
+  ) =>
+    (materials || []).forEach((material) => {
+      if (material.isCustomMaterial && Number(material.quantity) > 0 && material.name) {
+        names.add(material.name);
+      }
+    });
+  collect(pricing.macros);
+  collect(pricing.micros);
+  (pricing.calculations || []).forEach((calculation) => {
+    collect(calculation.macros);
+    collect(calculation.micros);
+  });
+  return [...names];
+}

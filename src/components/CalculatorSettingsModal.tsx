@@ -1,6 +1,16 @@
 import { getPriceWarnings, materialNames } from '../utils/unpricedMaterials';
+import CustomMaterialForm, { buildCustomMaterial } from './calculator/CustomMaterialForm';
 import React, { useState, useEffect } from 'react';
-import { X, Search, GripVertical, ChevronUp, ChevronDown, RotateCcw } from 'lucide-react';
+import {
+  X,
+  Search,
+  GripVertical,
+  ChevronUp,
+  ChevronDown,
+  RotateCcw,
+  FlaskConical,
+  Trash2,
+} from 'lucide-react';
 import { TargetFormula, RawMaterial } from '../types';
 import { microGuaranteePercentToKg } from '../utils/microGuarantee';
 import { closeModalOnBackdrop } from '../utils/modalUtils';
@@ -46,12 +56,14 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [microPercentInputs, setMicroPercentInputs] = useState<Record<string, string>>({});
   const [priceInputs, setPriceInputs] = useState<Record<string, string>>({});
+  const [showCustomForm, setShowCustomForm] = useState(false);
 
   useEffect(() => {
     if (isOpen && formula) {
       setLocalFormula(JSON.parse(JSON.stringify(formula)));
       setSearch('');
       setActiveTab('macros');
+      setShowCustomForm(false);
       setMicroPercentInputs(
         Object.fromEntries(
           (formula.micros || [])
@@ -102,13 +114,22 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
     const savedArr = localFormula[arrKey] || [];
     const globalSource = type === 'macro' ? globalMacros : globalMicros;
 
-    const isSelected = savedArr.some((p) => p.id === productId);
+    // Na lista com selected=false (ex.: sem preço, Premium) conta como desmarcado.
+    const existing = savedArr.find((p) => p.id === productId);
+    const isSelected = !!existing && existing.selected !== false;
 
-    if (isSelected) {
-      // Deselect -> remove from array
+    if (existing && !isSelected) {
       setLocalFormula({
         ...localFormula,
-        [arrKey]: savedArr.filter((p) => p.id !== productId),
+        [arrKey]: savedArr.map((p) => (p.id === productId ? { ...p, selected: true } : p)),
+      });
+    } else if (isSelected) {
+      // Personalizada só desmarca (sumiria, pois não está no cadastro); as demais saem da lista.
+      setLocalFormula({
+        ...localFormula,
+        [arrKey]: existing?.isCustomMaterial
+          ? savedArr.map((p) => (p.id === productId ? { ...p, selected: false } : p))
+          : savedArr.filter((p) => p.id !== productId),
       });
     } else {
       // Select -> add to array
@@ -162,8 +183,12 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
           );
         })
       : savedProducts.filter((product) => isProtected(product.id));
+    // Personalizadas continuam na fórmula (marcadas ou não), pois não estão no cadastro.
+    const customProducts = savedProducts
+      .filter((product) => product.isCustomMaterial)
+      .map((product) => ({ ...product, selected: selectAll }));
 
-    setLocalFormula({ ...localFormula, [arrKey]: nextProducts });
+    setLocalFormula({ ...localFormula, [arrKey]: [...nextProducts, ...customProducts] });
   };
 
   const handleConfirm = () => {
@@ -222,6 +247,35 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
     });
   };
 
+  const addCustomMaterial = (draft: Parameters<typeof buildCustomMaterial>[0]) => {
+    if (!localFormula) return;
+    const material = buildCustomMaterial(draft, productOrder.macro.length);
+    setLocalFormula({
+      ...localFormula,
+      macros: [...(localFormula.macros || []), material],
+      summary: undefined,
+    });
+    setProductOrder((current) => ({ ...current, macro: [...current.macro, material.id] }));
+    setPriceInputs((current) => ({
+      ...current,
+      [material.id]: String(material.price).replace('.', ','),
+    }));
+    setShowCustomForm(false);
+  };
+
+  const removeCustomMaterial = (productId: string) => {
+    if (!localFormula) return;
+    setLocalFormula({
+      ...localFormula,
+      macros: (localFormula.macros || []).filter((material) => material.id !== productId),
+      summary: undefined,
+    });
+    setProductOrder((current) => ({
+      ...current,
+      macro: current.macro.filter((id) => id !== productId),
+    }));
+  };
+
   const renderProducts = (f: TargetFormula, type: 'macro' | 'micro') => {
     const savedProducts = type === 'macro' ? f.macros || [] : f.micros || [];
     const globalSource = type === 'macro' ? globalMacros : globalMicros;
@@ -240,6 +294,12 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
               quantity: 0,
             };
       })
+      .concat(
+        // Personalizadas não estão no cadastro: vêm só da fórmula.
+        savedProducts.filter(
+          (saved) => saved.isCustomMaterial && !globalSource.some((g) => g.id === saved.id)
+        )
+      )
       .sort((a, b) => productOrder[type].indexOf(a.id) - productOrder[type].indexOf(b.id));
 
     const filtered = currentProducts.filter((p) =>
@@ -297,7 +357,12 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
         </label>
         {(() => {
           const warnings = getPriceWarnings(currentProducts as RawMaterial[]);
-          if (warnings.unpriced.length === 0 && warnings.manual.length === 0) return null;
+          if (
+            warnings.unpriced.length === 0 &&
+            warnings.manual.length === 0 &&
+            warnings.custom.length === 0
+          )
+            return null;
           return (
             <div
               role="alert"
@@ -314,6 +379,12 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
                 <p>
                   <strong>Valor informado por você:</strong> {materialNames(warnings.manual)}. Vale
                   só nesta precificação; a lista não muda.
+                </p>
+              )}
+              {warnings.custom.length > 0 && (
+                <p>
+                  <strong>Matéria-prima personalizada:</strong> {materialNames(warnings.custom)}.
+                  Garantias e preço informados por você; não está no cadastro.
                 </p>
               )}
             </div>
@@ -416,6 +487,21 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
                         Protegido para preservar a descrição da formulação
                       </div>
                     )}
+                    {p.isCustomMaterial && (
+                      <div className="flex items-center gap-2 text-[10px] font-bold text-violet-700">
+                        Personalizada · vale só nesta precificação
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            removeCustomMaterial(p.id);
+                          }}
+                          className="inline-flex items-center gap-0.5 rounded px-1 text-red-600 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-3 w-3" /> Remover
+                        </button>
+                      </div>
+                    )}
                     {p.isMissingListPrice && !isOutsidePriceList && (
                       <div className="text-[10px] font-bold text-red-700">
                         Sem preço na lista em {currency === 'USD' ? 'dólar' : 'reais'}
@@ -430,7 +516,12 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
                   </div>
                   <div className="col-start-2 text-xs text-stone-500 sm:col-start-3">
                     {type === 'macro'
-                      ? `N ${p.n}% · P ${p.p}% · K ${p.k}% · S ${p.s || 0}% · Ca ${p.ca || 0}%`
+                      ? [
+                          `N ${p.n}% · P ${p.p}% · K ${p.k}% · S ${p.s || 0}% · Ca ${p.ca || 0}%`,
+                          ...(p.microGuarantees || [])
+                            .filter((g: { name: string; value: number }) => g.name)
+                            .map((g: { name: string; value: number }) => `${g.name} ${g.value}%`),
+                        ].join(' · ')
                       : p.microGuarantees?.length
                         ? p.microGuarantees
                             .map((g: { name: string; value: number }) => `${g.name} ${g.value}%`)
@@ -451,7 +542,8 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
                     >
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                         <label className="flex min-w-0 flex-1 flex-col gap-1 font-semibold text-stone-600">
-                          Preço temporário ({currency === 'USD' ? 'US$' : 'R$'}/t)
+                          {p.isCustomMaterial ? 'Preço' : 'Preço temporário'} (
+                          {currency === 'USD' ? 'US$' : 'R$'}/t)
                           <input
                             type="text"
                             inputMode="decimal"
@@ -474,10 +566,12 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
                           />
                         </label>
                         <div className="flex items-center justify-between gap-3 sm:justify-end">
-                          <span className="text-[10px] text-stone-500">
-                            Lista: {currency === 'USD' ? 'US$' : 'R$'}{' '}
-                            {Number(p.listPrice ?? p.price ?? 0).toFixed(2)}
-                          </span>
+                          {!p.isCustomMaterial && (
+                            <span className="text-[10px] text-stone-500">
+                              Lista: {currency === 'USD' ? 'US$' : 'R$'}{' '}
+                              {Number(p.listPrice ?? p.price ?? 0).toFixed(2)}
+                            </span>
+                          )}
                           {p.isManualPrice && (
                             <button
                               type="button"
@@ -758,6 +852,24 @@ export const CalculatorSettingsModal: React.FC<CalculatorSettingsModalProps> = (
                   </button>
                 </div>
               </div>
+              {activeTab === 'macros' &&
+                (showCustomForm ? (
+                  <div className="mb-4">
+                    <CustomMaterialForm
+                      currency={currency}
+                      onAdd={addCustomMaterial}
+                      onCancel={() => setShowCustomForm(false)}
+                    />
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowCustomForm(true)}
+                    className="mb-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-violet-300 bg-violet-50/50 px-4 py-3 text-sm font-bold text-violet-800 hover:border-violet-400 hover:bg-violet-50"
+                  >
+                    <FlaskConical className="h-4 w-4" /> Adicionar matéria-prima personalizada
+                  </button>
+                ))}
               {renderProducts(localFormula, activeTab === 'macros' ? 'macro' : 'micro')}
             </div>
           )}

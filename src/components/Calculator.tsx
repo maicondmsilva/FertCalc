@@ -2637,7 +2637,8 @@ export default function Calculator({
             </div>
 
             {(selectedPriceWarnings.unpriced.length > 0 ||
-              selectedPriceWarnings.manual.length > 0) && (
+              selectedPriceWarnings.manual.length > 0 ||
+              selectedPriceWarnings.custom.length > 0) && (
               <div
                 role="alert"
                 className="mb-5 space-y-1 rounded-xl border border-amber-600/60 bg-amber-950/40 p-3 text-xs text-amber-100"
@@ -2656,6 +2657,13 @@ export default function Calculator({
                   <p>
                     <strong>Com valor informado por você:</strong>{' '}
                     {materialNames(selectedPriceWarnings.manual)}.
+                  </p>
+                )}
+                {selectedPriceWarnings.custom.length > 0 && (
+                  <p>
+                    <strong>Matéria-prima personalizada:</strong>{' '}
+                    {materialNames(selectedPriceWarnings.custom)} — garantias e preço informados por
+                    você.
                   </p>
                 )}
               </div>
@@ -2683,6 +2691,7 @@ export default function Calculator({
                   });
                   const unpricedCompositionProducts = usedPriceWarnings.unpriced;
                   const manualPriceProducts = usedPriceWarnings.manual;
+                  const customCompositionProducts = usedPriceWarnings.custom;
                   const comparisonAlternatives = comparisonAlternativesByCalculation[calc.id] || [];
                   const feasibleAlternatives = comparisonAlternatives.filter(
                     (alternative) => alternative.feasible && alternative.calculation.summary
@@ -2734,6 +2743,22 @@ export default function Calculator({
                               {manualPriceProducts.map((material) => material.name).join(', ')}
                             </strong>
                             . O preço oficial da lista não foi alterado.
+                          </p>
+                        </div>
+                      )}
+
+                      {customCompositionProducts.length > 0 && (
+                        <div
+                          role="alert"
+                          className="rounded-lg border border-violet-500/60 bg-violet-950/50 p-3 text-xs text-violet-100"
+                        >
+                          <div className="mb-1 flex items-center gap-2 font-black uppercase text-violet-300">
+                            <AlertTriangle className="h-4 w-4" /> Matéria-prima personalizada
+                          </div>
+                          <p>
+                            A composição usa{' '}
+                            <strong>{materialNames(customCompositionProducts)}</strong>, com
+                            garantias e preço informados pelo usuário (fora do cadastro).
                           </p>
                         </div>
                       )}

@@ -11,6 +11,15 @@ export function withOfficialListPrice(material: RawMaterial): RawMaterial {
 
 export function applyTemporaryMaterialPrice(material: RawMaterial, price: number): RawMaterial {
   const normalizedPrice = Number.isFinite(price) && price >= 0 ? price : 0;
+  // Personalizada não tem preço de lista: o valor digitado é o preço dela.
+  if (material.isCustomMaterial) {
+    return {
+      ...material,
+      price: normalizedPrice,
+      listPrice: normalizedPrice,
+      isManualPrice: false,
+    };
+  }
   const listPrice = material.listPrice ?? material.price;
   return {
     ...material,
