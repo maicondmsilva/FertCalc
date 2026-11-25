@@ -9,17 +9,18 @@ vi.mock('../../services/nutrientesService', () => ({
 }));
 
 import NutrientManager from './NutrientManager';
+import type { Nutriente } from '../../services/nutrientesService';
 import { ToastProvider } from '../Toast';
 
 const nutrientes = [
   { id: 'zn', sigla: 'Zn', nome: 'Zinco', tipo: 'micro', aliases: [], ordem: 20, ativo: true },
   { id: 'fe', sigla: 'Fe', nome: 'Ferro', tipo: 'micro', aliases: [], ordem: 50, ativo: true },
-] as const;
+] as Nutriente[];
 
 const renderManager = (onChanged = vi.fn(), canManage = true) =>
   render(
     <ToastProvider>
-      <NutrientManager nutrientes={[...nutrientes]} canManage={canManage} onChanged={onChanged} />
+      <NutrientManager nutrientes={nutrientes} canManage={canManage} onChanged={onChanged} />
     </ToastProvider>
   );
 
