@@ -919,6 +919,18 @@ export async function deleteUnifiedProduct(
   return 'excluido';
 }
 
+/** Em quantas listas de preço, batidas e precificações cada matéria-prima aparece. */
+export async function getProductUsage(): Promise<Record<string, number>> {
+  const { data, error } = await supabase.rpc('uso_produtos');
+  if (error) throw error;
+  return Object.fromEntries(
+    ((data || []) as { produto_id: string; usos: number }[]).map((row) => [
+      row.produto_id,
+      Number(row.usos) || 0,
+    ])
+  );
+}
+
 export async function updateProductActiveStatus(
   id: string,
   type: Extract<NutrientType, 'macro' | 'micro'>,

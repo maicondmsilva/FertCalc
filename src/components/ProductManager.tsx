@@ -18,6 +18,7 @@ import {
   ToggleRight,
   Star,
   MapPin,
+  Tag,
 } from 'lucide-react';
 import {
   UnifiedProduct,
@@ -34,7 +35,10 @@ import {
   updateProductActiveStatus,
   getBrands,
   getCompatibilityCategories,
+  getProductUsage,
 } from '../services/db';
+import BrandManager from './BrandManager';
+import { summarizeProducts, usageLabel } from './products/productManagerModel';
 import {
   getEmbalagens,
   createEmbalagem,
@@ -48,7 +52,7 @@ import CompatibilityCategoryManager from './CompatibilityCategoryManager';
 import { getLocaisAtivos } from '../services/locaisCarregamentoService';
 import { LocalCarregamento } from '../types/carregamento';
 
-type Tab = NutrientType | 'embalagem';
+type Tab = NutrientType | 'embalagem' | 'marca';
 
 function nextCode(items: { code: string }[]): string {
   if (items.length === 0) return '1';
@@ -88,10 +92,17 @@ const emptyProduct = (type: NutrientType): Partial<UnifiedProduct> => ({
   extraLoadingLocationIds: [],
 });
 
-export default function ProductManager({ canManage = true }: { canManage?: boolean }) {
+export default function ProductManager({
+  canManage = true,
+  initialTab = 'macro',
+}: {
+  canManage?: boolean;
+  initialTab?: Tab;
+}) {
   const { showSuccess, showError } = useToast();
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
-  const [tab, setTab] = useState<Tab>('macro');
+  const [tab, setTab] = useState<Tab>(initialTab);
+  const [usage, setUsage] = useState<Record<string, number>>({});
   const [products, setProducts] = useState<UnifiedProduct[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [categories, setCategories] = useState<CompatibilityCategory[]>([]);
@@ -143,6 +154,10 @@ export default function ProductManager({ canManage = true }: { canManage?: boole
     setEmbalagens(embs);
     setLoadingLocations(locations);
     setTableLoading(false);
+    // Uso em listas/batidas/precificações: só informativo, a tela funciona sem ele.
+    getProductUsage()
+      .then(setUsage)
+      .catch((error) => console.error('[produtos] uso:', error));
   };
 
   const currentItems = products.filter((p) => p.type === (tab as NutrientType));
@@ -374,26 +389,43 @@ export default function ProductManager({ canManage = true }: { canManage?: boole
     }));
 
   const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
-    { key: 'macro', label: 'Macronutrientes', icon: <Database className="w-4 h-4" /> },
-    { key: 'micro', label: 'Micronutrientes', icon: <FlaskConical className="w-4 h-4" /> },
-    { key: 'finished', label: 'Produto Acabado (PA)', icon: <Box className="w-4 h-4" /> },
-    { key: 'embalagem', label: 'Embalagem', icon: <ShoppingBag className="w-4 h-4" /> },
+    { key: 'macro', label: 'Macros', icon: <Database className="w-4 h-4" /> },
+    { key: 'micro', label: 'Micros', icon: <FlaskConical className="w-4 h-4" /> },
+    { key: 'finished', label: 'Produto Acabado', icon: <Box className="w-4 h-4" /> },
+    { key: 'embalagem', label: 'Embalagens', icon: <ShoppingBag className="w-4 h-4" /> },
+    { key: 'marca', label: 'Marcas', icon: <Tag className="w-4 h-4" /> },
+  ];
+  const summary = summarizeProducts(products, embalagens, new Set(brands.map((b) => b.id)));
+  const kpis = [
+    { label: 'Matérias-primas ativas', value: summary.ativos, tone: 'text-emerald-700' },
+    { label: 'Inativas', value: summary.inativos, tone: 'text-stone-500' },
+    {
+      label: 'Macros sem marca',
+      value: summary.macrosSemMarca,
+      tone: summary.macrosSemMarca > 0 ? 'text-amber-700' : 'text-stone-500',
+    },
+    { label: 'Embalagens ativas', value: summary.embalagensAtivas, tone: 'text-blue-700' },
   ];
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-stone-800 flex items-center gap-2">
-          <Package className="w-7 h-7 text-emerald-600" />
-          Gerenciador de Produtos
-        </h1>
-        <div className="flex gap-2">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-stone-800 flex items-center gap-2">
+            <Package className="w-7 h-7 text-emerald-600" />
+            Produtos
+          </h1>
+          <p className="text-sm text-stone-500">
+            Matérias-primas, produto acabado, embalagens e marcas usados nas calculadoras.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
           {!canManage && (
             <span className="self-center rounded-full bg-stone-100 px-3 py-1 text-xs font-bold text-stone-600">
               Somente leitura
             </span>
           )}
-          {canManage && tab !== 'embalagem' && (
+          {canManage && (tab === 'macro' || tab === 'micro' || tab === 'finished') && (
             <button
               onClick={() => setIsCategoryModalOpen(true)}
               className="bg-stone-200 hover:bg-stone-300 text-stone-700 px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors shadow-sm"
@@ -401,7 +433,7 @@ export default function ProductManager({ canManage = true }: { canManage?: boole
               <Settings className="w-4 h-4" /> Categorias
             </button>
           )}
-          {canManage && (
+          {canManage && tab !== 'marca' && (
             <button
               onClick={openCreate}
               className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors shadow-sm"
@@ -412,12 +444,23 @@ export default function ProductManager({ canManage = true }: { canManage?: boole
         </div>
       </div>
 
-      <div className="flex gap-1 border-b border-stone-200">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {kpis.map((kpi) => (
+          <div key={kpi.label} className="rounded-2xl border border-stone-200 bg-white p-4">
+            <span className="block text-xs font-bold uppercase tracking-wide text-stone-500">
+              {kpi.label}
+            </span>
+            <span className={`mt-1 block text-3xl font-black ${kpi.tone}`}>{kpi.value}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex gap-1 overflow-x-auto border-b border-stone-200">
         {tabs.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`flex items-center gap-2 px-5 py-2.5 font-semibold text-sm transition-colors relative ${tab === t.key ? 'text-emerald-700' : 'text-stone-500 hover:text-stone-700'}`}
+            className={`flex shrink-0 items-center gap-2 whitespace-nowrap px-4 py-2.5 font-semibold text-sm transition-colors relative ${tab === t.key ? 'text-emerald-700' : 'text-stone-500 hover:text-stone-700'}`}
           >
             {t.icon}
             {t.label}
@@ -428,38 +471,42 @@ export default function ProductManager({ canManage = true }: { canManage?: boole
         ))}
       </div>
 
-      <div className="flex gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
-          <input
-            type="text"
-            placeholder="Buscar por nome ou código..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-          />
+      {tab !== 'marca' && (
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+            <input
+              type="text"
+              placeholder="Buscar por nome ou código..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+            />
+          </div>
+          {(tab === 'macro' || tab === 'micro') && (
+            <select
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
+              className="rounded-lg border border-stone-200 px-3 py-2 text-sm text-stone-700"
+            >
+              <option value="all">Todos os status</option>
+              <option value="active">Ativos</option>
+              <option value="inactive">Inativos</option>
+            </select>
+          )}
         </div>
-        {(tab === 'macro' || tab === 'micro') && (
-          <select
-            value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
-            className="rounded-lg border border-stone-200 px-3 py-2 text-sm text-stone-700"
-          >
-            <option value="all">Todos os status</option>
-            <option value="active">Ativos</option>
-            <option value="inactive">Inativos</option>
-          </select>
-        )}
-      </div>
+      )}
 
-      {tab !== 'embalagem' ? (
-        <div className="bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden">
+      {tab === 'marca' ? (
+        <BrandManager canManage={canManage} />
+      ) : tab !== 'embalagem' ? (
+        <div className="bg-white rounded-xl shadow-sm border border-stone-200 overflow-x-auto">
           <table className="w-full text-sm text-left">
             <thead className="bg-stone-50 text-stone-500 uppercase font-bold text-xs border-b border-stone-100">
               <tr>
                 <th className="px-5 py-3 w-20">Cód.</th>
                 <th className="px-5 py-3">Nome</th>
-                <th className="px-5 py-3">Categorias</th>
+                <th className="hidden px-5 py-3 md:table-cell">Categorias</th>
                 {tab === 'macro' && (
                   <>
                     <th className="px-5 py-3">Marca</th>
@@ -493,8 +540,8 @@ export default function ProductManager({ canManage = true }: { canManage?: boole
                     className={`hover:bg-stone-50 transition-colors ${item.ativo === false ? 'opacity-60' : ''}`}
                   >
                     <td className="px-5 py-3 font-mono font-bold text-emerald-600">{item.code}</td>
-                    <td className="px-5 py-3 font-medium text-stone-800">
-                      <div className="flex items-center gap-1.5">
+                    <td className="min-w-[12rem] px-5 py-3 font-medium text-stone-800">
+                      <div className="flex flex-wrap items-center gap-1.5">
                         <span>{item.name}</span>
                         {item.isPremiumLine && (
                           <span className="flex items-center gap-0.5 bg-amber-50 text-amber-700 text-[10px] font-bold px-1.5 py-0.5 rounded border border-amber-200">
@@ -514,9 +561,17 @@ export default function ProductManager({ canManage = true }: { canManage?: boole
                             {item.ativo === false ? 'Inativo' : 'Ativo'}
                           </span>
                         )}
+                        {usageLabel(usage[item.id]) && (
+                          <span
+                            className="whitespace-nowrap rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-bold text-stone-600"
+                            title="Aparece em listas de preço, batidas ou precificações: ao excluir, o produto é desativado."
+                          >
+                            {usageLabel(usage[item.id])}
+                          </span>
+                        )}
                       </div>
                     </td>
-                    <td className="px-5 py-3 text-xs text-stone-500">
+                    <td className="hidden px-5 py-3 text-xs text-stone-500 md:table-cell">
                       <div className="flex flex-wrap gap-1">
                         {(item.categories || []).map((cid) => {
                           const cName = categories.find((c) => c.id === cid)?.nome || cid;
@@ -592,6 +647,7 @@ export default function ProductManager({ canManage = true }: { canManage?: boole
                             <button
                               onClick={() => handleDelete(item.id, item.type!)}
                               className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded"
+                              title={usage[item.id] ? 'Desativar (produto em uso)' : 'Excluir'}
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -606,7 +662,7 @@ export default function ProductManager({ canManage = true }: { canManage?: boole
         </div>
       ) : (
         /* Embalagem table */
-        <div className="bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden">
+        <div className="bg-white rounded-xl shadow-sm border border-stone-200 overflow-x-auto">
           <table className="w-full text-sm text-left">
             <thead className="bg-stone-50 text-stone-500 uppercase font-bold text-xs border-b border-stone-100">
               <tr>
