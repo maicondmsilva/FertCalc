@@ -1,5 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Save, Tag, Edit2 } from 'lucide-react';
+import { Plus, Trash2, Save, Edit2 } from 'lucide-react';
+import {
+  InfoBar,
+  ReadOnlyNotice,
+  fieldClass,
+  primaryButton,
+  secondaryButton,
+} from './products/catalogUi';
 import { Brand } from '../types';
 import { getBrands, createBrand, updateBrand, deleteBrand } from '../services/db';
 import { useToast } from './Toast';
@@ -86,108 +93,109 @@ export default function BrandManager({ canManage = true }: { canManage?: boolean
   };
 
   return (
-    <div className="space-y-6">
+    <section className="space-y-4">
       <ConfirmDialog {...confirmState} onConfirm={handleConfirm} onCancel={handleCancel} />
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
-        <h2 className="text-xl font-bold text-stone-800 mb-6 flex items-center">
-          <Tag className="w-5 h-5 mr-2 text-emerald-600" />
-          {editingBrand ? 'Editar Marca' : 'Cadastro de Marcas de Produtos'}
-        </h2>
+      <InfoBar>
+        Marcas dos macros. Uma marca usada por produtos não pode ser excluída — troque a marca
+        desses produtos antes.
+      </InfoBar>
 
-        {!canManage && (
-          <p className="mb-6 rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-600">
-            Somente leitura: apenas admin ou master pode alterar este cadastro.
-          </p>
-        )}
-        {canManage && (
-          <div className="flex gap-4 mb-8">
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-stone-600 mb-1">Nome da Marca</label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSave()}
-                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-                placeholder="Ex: Yara, Mosaic, Heringer..."
-              />
-            </div>
-            <div className="flex items-end gap-2">
-              {editingBrand && (
-                <button
-                  onClick={cancelEdit}
-                  className="border border-stone-300 text-stone-600 px-4 py-2 rounded-lg hover:bg-stone-50 transition-colors font-medium"
-                >
-                  Cancelar
-                </button>
-              )}
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white px-6 py-2 rounded-lg font-bold transition-colors flex items-center gap-2"
-              >
-                <Save className="w-4 h-4" />
-                {saving ? 'Salvando...' : editingBrand ? 'Atualizar' : 'Cadastrar Marca'}
-              </button>
-            </div>
+      {canManage ? (
+        <div className="flex flex-col gap-3 rounded-2xl border border-stone-200 bg-white p-4 sm:flex-row sm:items-end">
+          <div className="flex-1">
+            <label
+              htmlFor="brand-name"
+              className="mb-1 block text-xs font-bold uppercase tracking-wide text-stone-500"
+            >
+              {editingBrand ? `Editar marca ${editingBrand.code}` : 'Nova marca'}
+            </label>
+            <input
+              id="brand-name"
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSave()}
+              className={fieldClass}
+              placeholder="Ex.: Yara, Mosaic, Heringer…"
+            />
           </div>
-        )}
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
-            <thead className="bg-stone-50 text-stone-500 uppercase font-bold text-xs border-b border-stone-100">
-              <tr>
-                <th className="px-4 py-3 w-24">Cód.</th>
-                <th className="px-4 py-3">Nome da Marca</th>
-                <th className="px-4 py-3 text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-stone-100">
-              {loading && (
-                <tr>
-                  <td colSpan={3} className="px-4 py-8 text-center text-stone-400">
-                    Carregando...
-                  </td>
-                </tr>
-              )}
-              {!loading &&
-                brands.map((brand) => (
-                  <tr key={brand.id} className="hover:bg-stone-50 transition-colors">
-                    <td className="px-4 py-3 font-mono text-emerald-600 font-bold">{brand.code}</td>
-                    <td className="px-4 py-3 text-stone-800 font-medium">{brand.name}</td>
-                    <td className="px-4 py-3 text-right space-x-2">
-                      {canManage && (
-                        <>
-                          <button
-                            onClick={() => startEdit(brand)}
-                            className="p-1.5 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                            title="Editar"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => removeBrand(brand.id)}
-                            className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                            title="Excluir"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              {!loading && brands.length === 0 && (
-                <tr>
-                  <td colSpan={3} className="px-4 py-8 text-center text-stone-400 italic">
-                    Nenhuma marca cadastrada.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+          <div className="flex gap-2">
+            {editingBrand && (
+              <button type="button" onClick={cancelEdit} className={secondaryButton}>
+                Cancelar
+              </button>
+            )}
+            <button type="button" onClick={handleSave} disabled={saving} className={primaryButton}>
+              {editingBrand ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+              {saving ? 'Salvando…' : editingBrand ? 'Salvar' : 'Cadastrar marca'}
+            </button>
+          </div>
         </div>
+      ) : (
+        <ReadOnlyNotice />
+      )}
+
+      <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white">
+        <table className="w-full text-left text-sm">
+          <thead className="border-b border-stone-100 bg-stone-50 text-xs font-bold uppercase text-stone-500">
+            <tr>
+              <th className="w-28 px-4 py-3">Código</th>
+              <th className="px-4 py-3">Marca</th>
+              {canManage && <th className="w-24 px-4 py-3" aria-label="Ações" />}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-stone-100">
+            {loading && (
+              <tr>
+                <td colSpan={3} className="px-4 py-10 text-center text-stone-400">
+                  Carregando…
+                </td>
+              </tr>
+            )}
+            {!loading &&
+              brands.map((brand) => (
+                <tr
+                  key={brand.id}
+                  className={`transition-colors hover:bg-stone-50 ${
+                    editingBrand?.id === brand.id ? 'bg-emerald-50/60' : ''
+                  }`}
+                >
+                  <td className="px-4 py-3 font-mono font-bold text-emerald-700">{brand.code}</td>
+                  <td className="px-4 py-3 font-semibold text-stone-900">{brand.name}</td>
+                  {canManage && (
+                    <td className="px-4 py-3">
+                      <div className="flex justify-end gap-0.5">
+                        <button
+                          type="button"
+                          onClick={() => startEdit(brand)}
+                          className="rounded-lg p-2 text-stone-400 hover:bg-blue-50 hover:text-blue-600"
+                          title="Editar"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeBrand(brand.id)}
+                          className="rounded-lg p-2 text-stone-400 hover:bg-red-50 hover:text-red-600"
+                          title="Excluir"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            {!loading && brands.length === 0 && (
+              <tr>
+                <td colSpan={3} className="px-4 py-10 text-center text-stone-400">
+                  Nenhuma marca cadastrada.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
-    </div>
+    </section>
   );
 }

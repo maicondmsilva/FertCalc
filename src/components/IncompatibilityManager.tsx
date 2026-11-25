@@ -11,6 +11,7 @@ import {
 import { useToast } from './Toast';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { useConfirm } from '../hooks/useConfirm';
+import { InfoBar, ReadOnlyNotice, fieldClass, primaryButton } from './products/catalogUi';
 
 export default function IncompatibilityManager({ canManage = true }: { canManage?: boolean }) {
   const { showSuccess, showError } = useToast();
@@ -103,140 +104,113 @@ export default function IncompatibilityManager({ canManage = true }: { canManage
       r.materialBName.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const materialSelect = (
+    id: string,
+    label: string,
+    value: string,
+    onChange: (value: string) => void
+  ) => (
+    <div className="flex-1">
+      <label
+        htmlFor={id}
+        className="mb-1 block text-xs font-bold uppercase tracking-wide text-stone-500"
+      >
+        {label}
+      </label>
+      <select
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={fieldClass}
+      >
+        <option value="">Selecione…</option>
+        {allMaterials.map((m) => (
+          <option key={m.id} value={m.id}>
+            {m.name} ({m.type})
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+
   return (
-    <div className="space-y-6">
+    <section className="space-y-4">
       <ConfirmDialog {...confirmState} onConfirm={handleConfirm} onCancel={handleCancel} />
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
-        <h2 className="text-xl font-bold text-stone-800 mb-6 flex items-center">
-          <AlertTriangle className="w-5 h-5 mr-2 text-amber-500" />
-          Regras de Incompatibilidade
-        </h2>
+      <InfoBar>
+        <span className="flex items-start gap-2">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+          Matérias-primas que não podem ser misturadas. A calculadora alerta ou impede o uso
+          conjunto delas.
+        </span>
+      </InfoBar>
 
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6 text-sm text-amber-800">
-          <p>
-            Defina quais matérias-primas não podem ser misturadas. A calculadora irá alertar ou
-            impedir o uso conjunto desses materiais.
-          </p>
+      {canManage ? (
+        <div className="flex flex-col gap-3 rounded-2xl border border-stone-200 bg-white p-4 lg:flex-row lg:items-end">
+          {materialSelect('incompat-a', 'Matéria-prima A', selectedMaterialA, setSelectedMaterialA)}
+          <div className="hidden pb-3 text-stone-400 lg:block" aria-hidden="true">
+            <X className="h-5 w-5" />
+          </div>
+          {materialSelect('incompat-b', 'Matéria-prima B', selectedMaterialB, setSelectedMaterialB)}
+          <button
+            type="button"
+            onClick={handleAddRule}
+            disabled={!selectedMaterialA || !selectedMaterialB || saving}
+            className={primaryButton}
+          >
+            <Plus className="h-4 w-4" />
+            {saving ? 'Salvando…' : 'Adicionar regra'}
+          </button>
         </div>
+      ) : (
+        <ReadOnlyNotice />
+      )}
 
-        {!canManage && (
-          <p className="mb-6 rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-600">
-            Somente leitura: apenas admin ou master pode alterar este cadastro.
-          </p>
-        )}
-        {canManage && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end mb-8 bg-stone-50 p-4 rounded-lg border border-stone-200">
-            <div>
-              <label className="block text-sm font-medium text-stone-600 mb-1">
-                Matéria Prima A
-              </label>
-              <select
-                value={selectedMaterialA}
-                onChange={(e) => setSelectedMaterialA(e.target.value)}
-                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500"
-              >
-                <option value="">Selecione...</option>
-                {allMaterials.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name} ({m.type})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex justify-center pb-2">
-              <X className="text-stone-400" />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-stone-600 mb-1">
-                Matéria Prima B
-              </label>
-              <select
-                value={selectedMaterialB}
-                onChange={(e) => setSelectedMaterialB(e.target.value)}
-                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500"
-              >
-                <option value="">Selecione...</option>
-                {allMaterials.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name} ({m.type})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="md:col-span-3 mt-2">
-              <button
-                onClick={handleAddRule}
-                disabled={!selectedMaterialA || !selectedMaterialB}
-                className="w-full bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg font-bold transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Adicionar Regra de Incompatibilidade
-              </button>
-            </div>
-          </div>
-        )}
-
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h3 className="font-bold text-stone-700">Regras Cadastradas ({rules.length})</h3>
-            <div className="relative w-64">
-              <input
-                type="text"
-                placeholder="Buscar regra..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-3 py-1.5 text-sm border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500"
-              />
-              <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
-            </div>
-          </div>
-
-          <div className="border border-stone-200 rounded-lg overflow-hidden">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-stone-50 text-stone-500 uppercase font-bold text-xs">
-                <tr>
-                  <th className="px-4 py-3">Matéria A</th>
-                  <th className="px-4 py-3 text-center">Incompatível com</th>
-                  <th className="px-4 py-3">Matéria B</th>
-                  <th className="px-4 py-3 text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-100">
-                {filteredRules.map((rule) => (
-                  <tr key={rule.id} className="hover:bg-stone-50">
-                    <td className="px-4 py-3 font-medium text-stone-800">{rule.materialAName}</td>
-                    <td className="px-4 py-3 text-center text-red-500 font-bold">
-                      <X className="w-4 h-4 inline" />
-                    </td>
-                    <td className="px-4 py-3 font-medium text-stone-800">{rule.materialBName}</td>
-                    <td className="px-4 py-3 text-right">
-                      {canManage && (
-                        <button
-                          onClick={() => removeRule(rule.id)}
-                          className="text-stone-400 hover:text-red-600 transition-colors"
-                          title="Remover regra"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-                {filteredRules.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="px-4 py-8 text-center text-stone-400 italic">
-                      Nenhuma regra encontrada.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <h3 className="text-sm font-black text-stone-800">Regras cadastradas ({rules.length})</h3>
+        <div className="relative sm:w-72">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+          <input
+            type="search"
+            placeholder="Buscar regra…"
+            aria-label="Buscar regra"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className={`${fieldClass} pl-9`}
+          />
         </div>
       </div>
-    </div>
+
+      <ul className="space-y-2">
+        {filteredRules.map((rule) => (
+          <li
+            key={rule.id}
+            className="flex items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-white px-4 py-3"
+          >
+            <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
+              <span className="font-semibold text-stone-900">{rule.materialAName}</span>
+              <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-bold text-red-600">
+                não misturar com
+              </span>
+              <span className="font-semibold text-stone-900">{rule.materialBName}</span>
+            </div>
+            {canManage && (
+              <button
+                type="button"
+                onClick={() => removeRule(rule.id)}
+                className="rounded-lg p-2 text-stone-400 hover:bg-red-50 hover:text-red-600"
+                title="Remover regra"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            )}
+          </li>
+        ))}
+        {filteredRules.length === 0 && (
+          <li className="rounded-2xl border border-dashed border-stone-300 bg-white px-6 py-10 text-center text-sm text-stone-400">
+            {rules.length === 0 ? 'Nenhuma regra cadastrada.' : 'Nenhuma regra encontrada.'}
+          </li>
+        )}
+      </ul>
+    </section>
   );
 }
