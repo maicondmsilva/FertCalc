@@ -269,7 +269,7 @@ export async function deleteClient(id: string): Promise<void> {
   if (error) throw error;
 }
 
-function clientToDb(client: Partial<Client>) {
+export function clientToDb(client: Partial<Client>) {
   const d: Record<string, unknown> = {};
   if (client.code !== undefined) d.code = client.code;
   if (client.name !== undefined) d.name = client.name;
@@ -285,7 +285,7 @@ function clientToDb(client: Partial<Client>) {
   return d;
 }
 
-function mapClient(data: Record<string, unknown>): Client {
+export function mapClient(data: Record<string, unknown>): Client {
   return {
     id: data.id,
     organizationId: data.organization_id,
@@ -348,7 +348,7 @@ export async function deleteAgent(id: string): Promise<void> {
   if (error) throw error;
 }
 
-function agentToDb(agent: Partial<Agent>) {
+export function agentToDb(agent: Partial<Agent>) {
   const d: Record<string, unknown> = {};
   if (agent.code !== undefined) d.code = agent.code;
   if (agent.name !== undefined) d.name = agent.name;
@@ -360,7 +360,7 @@ function agentToDb(agent: Partial<Agent>) {
   return d;
 }
 
-function mapAgent(data: Record<string, unknown>): Agent {
+export function mapAgent(data: Record<string, unknown>): Agent {
   return {
     id: data.id,
     organizationId: data.organization_id,
