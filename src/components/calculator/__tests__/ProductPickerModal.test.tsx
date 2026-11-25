@@ -1,0 +1,383 @@
+import React from 'react';
+import { describe, it, expect, vi } from 'vitest';
+import { render } from '@testing-library/react';
+import { screen, fireEvent } from '@testing-library/dom';
+import { ProductPickerModal as CalculatorSettingsModal } from '../ProductPickerModal';
+
+describe('ProductPickerModal (Calculadora teste)', () => {
+  const mockGlobalMacros: any[] = [
+    { id: '1', name: 'Ureia', n: 45, p: 0, k: 0, selected: false },
+    { id: '2', name: 'MAP', n: 11, p: 52, k: 0, selected: true },
+  ];
+
+  const mockFormula: any = {
+    id: 'f1',
+    formula: '04-14-08',
+    macros: [],
+    micros: [],
+  };
+
+  it('renders nothing when isOpen is false', () => {
+    const { container } = render(
+      <CalculatorSettingsModal
+        isOpen={false}
+        onClose={vi.fn()}
+        formula={mockFormula}
+        globalMacros={mockGlobalMacros}
+        globalMicros={[]}
+        onConfirm={vi.fn()}
+      />
+    );
+    expect(container.firstChild).toBeNull();
+  });
+
+  it('renders modal content when isOpen is true', () => {
+    render(
+      <CalculatorSettingsModal
+        isOpen={true}
+        onClose={vi.fn()}
+        formula={mockFormula}
+        globalMacros={mockGlobalMacros}
+        globalMicros={[]}
+        onConfirm={vi.fn()}
+      />
+    );
+    expect(screen.getByText('Produtos da Fórmula')).toBeDefined();
+    expect(screen.getByText('Ureia')).toBeDefined();
+    expect(screen.getByText('MAP')).toBeDefined();
+  });
+
+  it('calls onConfirm with updated local formula when confirmed', () => {
+    const handleConfirm = vi.fn();
+    render(
+      <CalculatorSettingsModal
+        isOpen={true}
+        onClose={vi.fn()}
+        formula={mockFormula}
+        globalMacros={mockGlobalMacros}
+        globalMicros={[]}
+        onConfirm={handleConfirm}
+      />
+    );
+
+    // Toggle Ureia selection
+    const ureiaCard = screen.getByText('Ureia');
+    fireEvent.click(ureiaCard);
+    expect(screen.getByText('Selecionado')).toBeDefined();
+
+    const confirmButton = screen.getByText('Confirmar Seleção');
+    fireEvent.click(confirmButton);
+
+    expect(handleConfirm).toHaveBeenCalledTimes(1);
+    const updatedFormula = handleConfirm.mock.calls[0][0];
+
+    // Check if Ureia was marked as selected
+    const ureiaInFormula = updatedFormula.macros.find((m: any) => m.name === 'Ureia');
+    expect(ureiaInFormula.selected).toBe(true);
+  });
+
+  it('shows friendly message when there are no materials in database', () => {
+    render(
+      <CalculatorSettingsModal
+        isOpen={true}
+        onClose={vi.fn()}
+        formula={mockFormula}
+        globalMacros={[]}
+        globalMicros={[]}
+        hasNoMaterialsInDatabase={true}
+        onConfirm={vi.fn()}
+      />
+    );
+
+    expect(
+      screen.getByText(
+        'Nenhuma matéria-prima cadastrada. Acesse o cadastro de produtos para adicionar.'
+      )
+    ).toBeDefined();
+  });
+
+  it('does not allow a protected material to be changed', () => {
+    const handleConfirm = vi.fn();
+    const protectedFormula = {
+      ...mockFormula,
+      macros: [{ ...mockGlobalMacros[0], selected: true, minQty: 10, maxQty: 20 }],
+    };
+
+    render(
+      <CalculatorSettingsModal
+        isOpen={true}
+        onClose={vi.fn()}
+        formula={protectedFormula}
+        globalMacros={mockGlobalMacros}
+        globalMicros={[]}
+        protectedMaterialIds={['1']}
+        onConfirm={handleConfirm}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Ureia'));
+    fireEvent.click(screen.getByText('Confirmar Seleção'));
+
+    expect(screen.getByText('Protegido para preservar a descrição da formulação')).toBeDefined();
+    expect(handleConfirm.mock.calls[0][0].macros[0]).toMatchObject({
+      id: '1',
+      selected: true,
+      minQty: 10,
+      maxQty: 20,
+    });
+  });
+
+  it('shows and allows selecting an extra product outside the price list', () => {
+    const handleConfirm = vi.fn();
+    const extraMacro = {
+      ...mockGlobalMacros[0],
+      id: 'extra-1',
+      name: 'Produto especial',
+      isOutsidePriceList: true,
+    };
+
+    render(
+      <CalculatorSettingsModal
+        isOpen={true}
+        onClose={vi.fn()}
+        formula={mockFormula}
+        globalMacros={[...mockGlobalMacros, extraMacro]}
+        globalMicros={[]}
+        onConfirm={handleConfirm}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Produto especial'));
+    fireEvent.click(screen.getByText('Confirmar Seleção'));
+
+    expect(
+      screen.getByText('Produto extra · sem preço na lista atual (seleção permitida)')
+    ).toBeDefined();
+    expect(handleConfirm.mock.calls[0][0].macros).toEqual([
+      expect.objectContaining({ id: 'extra-1', selected: true, isOutsidePriceList: true }),
+    ]);
+  });
+
+  it('converts a desired micro guarantee into a fixed quantity in kg', () => {
+    const handleConfirm = vi.fn();
+    const micro: any = {
+      id: 'micro-1',
+      name: 'Boro 5%',
+      type: 'micro',
+      selected: false,
+      microGuarantees: [{ name: 'B', value: 5 }],
+      minQty: 0,
+      maxQty: 0,
+      minQuantity: 0,
+      quantity: 0,
+    };
+
+    render(
+      <CalculatorSettingsModal
+        isOpen={true}
+        onClose={vi.fn()}
+        formula={mockFormula}
+        globalMacros={mockGlobalMacros}
+        globalMicros={[micro]}
+        onConfirm={handleConfirm}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Micronutrientes'));
+    fireEvent.click(screen.getByText('Boro 5%'));
+    fireEvent.change(screen.getByLabelText('Informar por'), { target: { value: 'percent' } });
+    const desiredGuaranteeInput = screen.getByLabelText(/^Garantia final desejada/);
+    fireEvent.change(desiredGuaranteeInput, {
+      target: { value: '0,25' },
+    });
+    expect(desiredGuaranteeInput).toHaveValue('0,25');
+    fireEvent.click(screen.getByText('Confirmar Seleção'));
+
+    expect(handleConfirm.mock.calls[0][0].micros[0]).toMatchObject({
+      minQty: 50,
+      maxQty: 50,
+      microInputMode: 'percent',
+      selectedMicroGuarantee: 'B',
+      desiredGuaranteePercent: 0.25,
+    });
+  });
+
+  it('persists a custom order and can restore the price-list order', () => {
+    const handleConfirm = vi.fn();
+    render(
+      <CalculatorSettingsModal
+        isOpen={true}
+        onClose={vi.fn()}
+        formula={{
+          ...mockFormula,
+          macros: [
+            { ...mockGlobalMacros[0], selected: true, materialOrder: 1 },
+            { ...mockGlobalMacros[1], selected: true, materialOrder: 0 },
+          ],
+        }}
+        globalMacros={mockGlobalMacros}
+        globalMicros={[]}
+        onConfirm={handleConfirm}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Confirmar Seleção'));
+    expect(handleConfirm.mock.calls[0][0].macros.map((item: any) => item.id)).toEqual(['2', '1']);
+  });
+
+  it('aplica mínimo e máximo do cadastro ao selecionar um produto', () => {
+    const handleConfirm = vi.fn();
+    const product = {
+      ...mockGlobalMacros[0],
+      minQuantity: 10,
+      maxQuantity: 80,
+      minQty: 0,
+      maxQty: 0,
+    };
+    render(
+      <CalculatorSettingsModal
+        isOpen={true}
+        onClose={vi.fn()}
+        formula={mockFormula}
+        globalMacros={[product]}
+        globalMicros={[]}
+        onConfirm={handleConfirm}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Ureia'));
+    fireEvent.click(screen.getByText('Confirmar Seleção'));
+
+    expect(handleConfirm.mock.calls[0][0].macros[0]).toMatchObject({
+      minQty: 10,
+      maxQty: 80,
+    });
+  });
+
+  it('faz a quantidade fixa prevalecer e restaura os padrões ao limpá-la', () => {
+    const handleConfirm = vi.fn();
+    const product = {
+      ...mockGlobalMacros[0],
+      minQuantity: 10,
+      maxQuantity: 80,
+      minQty: 0,
+      maxQty: 0,
+    };
+    render(
+      <CalculatorSettingsModal
+        isOpen={true}
+        onClose={vi.fn()}
+        formula={mockFormula}
+        globalMacros={[product]}
+        globalMicros={[]}
+        onConfirm={handleConfirm}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Ureia'));
+    const fixedInput = screen.getByPlaceholderText('Auto');
+    fireEvent.change(fixedInput, { target: { value: '25' } });
+    expect(fixedInput).toHaveProperty('value', '25');
+    fireEvent.change(fixedInput, { target: { value: '' } });
+    fireEvent.click(screen.getByText('Confirmar Seleção'));
+
+    expect(handleConfirm.mock.calls[0][0].macros[0]).toMatchObject({
+      minQty: 10,
+      maxQty: 80,
+    });
+  });
+
+  it('impede confirmar quando o mínimo supera o máximo', () => {
+    const handleConfirm = vi.fn();
+    const product = {
+      ...mockGlobalMacros[0],
+      minQuantity: 10,
+      maxQuantity: 80,
+      minQty: 0,
+      maxQty: 0,
+    };
+    render(
+      <CalculatorSettingsModal
+        isOpen={true}
+        onClose={vi.fn()}
+        formula={mockFormula}
+        globalMacros={[product]}
+        globalMicros={[]}
+        onConfirm={handleConfirm}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Ureia'));
+    fireEvent.change(screen.getByPlaceholderText('Ex: 10'), { target: { value: '90' } });
+
+    expect(
+      screen.getByText('Revise os limites: o mínimo não pode superar o máximo.')
+    ).toBeDefined();
+    const confirmButton = screen.getByText('Confirmar Seleção');
+    expect(confirmButton).toHaveProperty('disabled', true);
+    fireEvent.click(confirmButton);
+    expect(handleConfirm).not.toHaveBeenCalled();
+  });
+});
+
+describe('ProductPickerModal: busca por garantia e filtros', () => {
+  const macros: any[] = [
+    {
+      id: 'kcl',
+      name: 'KCL',
+      type: 'macro',
+      n: 0,
+      p: 0,
+      k: 60,
+      price: 2800,
+      microGuarantees: [{ name: 'Zn', value: 1 }],
+    },
+    {
+      id: 'ureia',
+      name: 'Ureia',
+      type: 'macro',
+      n: 45,
+      p: 0,
+      k: 0,
+      price: 3000,
+      microGuarantees: [],
+    },
+    {
+      id: 'sa',
+      name: 'Sulfato de Amônio',
+      type: 'macro',
+      n: 20,
+      s: 22,
+      p: 0,
+      k: 0,
+      price: 0,
+      isMissingListPrice: true,
+      microGuarantees: [],
+    },
+  ];
+  const formula: any = { id: 'f', formula: '10-10-10', macros: [], micros: [] };
+
+  it('busca "zn" mostra só o que tem zinco e o filtro "Sem preço" isola o produto zerado', () => {
+    render(
+      <CalculatorSettingsModal
+        isOpen
+        onClose={vi.fn()}
+        formula={formula}
+        globalMacros={macros}
+        globalMicros={[]}
+        onConfirm={vi.fn()}
+      />
+    );
+    fireEvent.change(screen.getByLabelText('Buscar produto ou garantia'), {
+      target: { value: 'zn' },
+    });
+    expect(screen.getByText('KCL')).toBeDefined();
+    expect(screen.queryByText('Ureia')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Buscar produto ou garantia'), {
+      target: { value: '' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Sem preço \(1\)/ }));
+    expect(screen.getByText('Sulfato de Amônio')).toBeDefined();
+    expect(screen.queryByText('KCL')).toBeNull();
+  });
+});

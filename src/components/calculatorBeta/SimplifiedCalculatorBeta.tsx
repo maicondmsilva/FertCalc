@@ -19,7 +19,7 @@ import type {
 } from '../../types';
 import { useCalculator } from '../../hooks/useCalculator';
 import { useToast } from '../Toast';
-import { CalculatorSettingsModal } from '../CalculatorSettingsModal';
+import { ProductPickerModal } from '../calculator/ProductPickerModal';
 import { FertigranPComparisonModal } from '../FertigranPComparisonModal';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { PromptDialog } from '../ui/PromptDialog';
@@ -561,7 +561,7 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
           }}
         />
       )}
-      <CalculatorSettingsModal
+      <ProductPickerModal
         isOpen={isSettingsOpen}
         onClose={closeSettings}
         formula={calculations.find((calculation) => calculation.id === activeFormulaId) || null}
