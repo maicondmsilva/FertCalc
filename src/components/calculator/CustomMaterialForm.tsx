@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { FlaskConical, Plus, Trash2, X } from 'lucide-react';
 import type { MicroGuarantee, RawMaterial } from '../../types';
 import type { Nutriente } from '../../services/nutrientesService';
+import { NumericInput } from '../ui/NumericInput';
 
 export interface CustomMaterialDraft {
   name: string;
@@ -83,11 +84,6 @@ const input =
   'h-10 rounded-lg border border-stone-300 bg-white px-2.5 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-blue-500';
 const labelClass = 'text-[11px] font-bold uppercase tracking-wide text-stone-500';
 
-const numberValue = (value: string) => {
-  const parsed = Number(value.replace(',', '.'));
-  return Number.isFinite(parsed) ? parsed : 0;
-};
-
 export default function CustomMaterialForm({
   currency,
   onAdd,
@@ -160,10 +156,9 @@ export default function CustomMaterialForm({
         {(['n', 'p', 'k', 's', 'ca'] as const).map((key) => (
           <label key={key}>
             <span className={labelClass}>{key === 'ca' ? 'Ca' : key.toUpperCase()} %</span>
-            <input
-              inputMode="decimal"
-              value={String(draft[key])}
-              onChange={(event) => set({ [key]: numberValue(event.target.value) })}
+            <NumericInput
+              value={draft[key]}
+              onValueChange={(value) => set({ [key]: value })}
               className={`${input} mt-1 w-full text-center font-mono`}
             />
           </label>
@@ -205,14 +200,13 @@ export default function CustomMaterialForm({
                   </option>
                 ))}
               </select>
-              <input
-                inputMode="decimal"
+              <NumericInput
                 aria-label="Garantia em %"
-                value={String(guarantee.value)}
-                onChange={(event) =>
+                value={guarantee.value}
+                onValueChange={(value) =>
                   set({
                     microGuarantees: draft.microGuarantees.map((item, i) =>
-                      i === index ? { ...item, value: numberValue(event.target.value) } : item
+                      i === index ? { ...item, value } : item
                     ),
                   })
                 }
@@ -239,28 +233,25 @@ export default function CustomMaterialForm({
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <label>
           <span className={labelClass}>Preço ({symbol}/t)</span>
-          <input
-            inputMode="decimal"
-            value={String(draft.price)}
-            onChange={(event) => set({ price: numberValue(event.target.value) })}
+          <NumericInput
+            value={draft.price}
+            onValueChange={(value) => set({ price: value })}
             className={`${input} mt-1 w-full text-right font-mono`}
           />
         </label>
         <label>
           <span className={labelClass}>Mínimo (kg)</span>
-          <input
-            inputMode="decimal"
-            value={String(draft.minQty)}
-            onChange={(event) => set({ minQty: numberValue(event.target.value) })}
+          <NumericInput
+            value={draft.minQty}
+            onValueChange={(value) => set({ minQty: value })}
             className={`${input} mt-1 w-full text-right font-mono`}
           />
         </label>
         <label>
           <span className={labelClass}>Máximo (kg, 0 = sem limite)</span>
-          <input
-            inputMode="decimal"
-            value={String(draft.maxQty)}
-            onChange={(event) => set({ maxQty: numberValue(event.target.value) })}
+          <NumericInput
+            value={draft.maxQty}
+            onValueChange={(value) => set({ maxQty: value })}
             className={`${input} mt-1 w-full text-right font-mono`}
           />
         </label>

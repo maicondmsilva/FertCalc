@@ -1361,7 +1361,7 @@ export function formatPricingCod(cod?: number): string {
   return String(cod);
 }
 
-function mapPricingRecord(d: Record<string, unknown>): PricingRecord {
+export function mapPricingRecord(d: Record<string, unknown>): PricingRecord {
   return {
     id: d.id,
     organizationId: d.organization_id,

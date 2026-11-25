@@ -18,6 +18,8 @@ import type {
   RawMaterial,
 } from '../../types';
 import { useCalculator } from '../../hooks/useCalculator';
+import BetaProfitabilityModal from './BetaProfitabilityModal';
+import { canCheckProfitability } from './profitabilityModel';
 import { useToast } from '../Toast';
 import { ProductPickerModal } from '../calculator/ProductPickerModal';
 import { FertigranPComparisonModal } from '../FertigranPComparisonModal';
@@ -106,6 +108,9 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
     currentUser.role === 'master' || currentUser.role === 'admin' || currentUser.role === 'manager';
   const canCompareFormulas = isManagerOrAbove || permissions.calculator_fertigranP !== false;
   const canSaveFormula = isManagerOrAbove || permissions.calculator_saveFormula !== false;
+  const canProfitability = canCheckProfitability(currentUser);
+  const [profitabilityCalcId, setProfitabilityCalcId] = useState<string | null>(null);
+  const profitabilityIndex = calculations.findIndex((item) => item.id === profitabilityCalcId);
 
   const isUsdPriceList = factors.priceListCurrency === 'USD';
   const hasValidExchangeRate = !isUsdPriceList || isValidExchangeRate(factors.appliedExchangeRate);
@@ -505,6 +510,9 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
               setIsFertigranPModalOpen(true);
             }}
             onDuplicate={() => duplicateCalculation(calculation)}
+            onOpenProfitability={
+              canProfitability ? () => setProfitabilityCalcId(calculation.id) : undefined
+            }
           />
         ))}
         {calculations.length === 0 && (
@@ -545,6 +553,16 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
           )}
         </div>
       </div>
+
+      {profitabilityIndex >= 0 && calculations[profitabilityIndex].summary && (
+        <BetaProfitabilityModal
+          calc={calculations[profitabilityIndex]}
+          calcIndex={profitabilityIndex}
+          savedPricingId={calculator.savedPricingId}
+          currentUser={currentUser}
+          onClose={() => setProfitabilityCalcId(null)}
+        />
+      )}
 
       {currentComparisonFormula && (
         <FertigranPComparisonModal
