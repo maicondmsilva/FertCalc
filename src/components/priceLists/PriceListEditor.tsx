@@ -7,6 +7,7 @@ import {
   FileSpreadsheet,
   FileText,
   GripVertical,
+  Pencil,
   Plus,
   Search,
   X,
@@ -38,6 +39,9 @@ interface PriceListEditorProps {
   createdAt?: string;
   idNumeric?: number;
   canManage: boolean;
+  /** Lista já salva abre em visualização; o botão Editar libera os campos. */
+  editing: boolean;
+  onEdit: () => void;
   dirty: boolean;
   saving: boolean;
   catalogMacros: MacroMaterial[];
@@ -65,6 +69,8 @@ export function PriceListEditor({
   createdAt,
   idNumeric,
   canManage,
+  editing,
+  onEdit,
   dirty,
   saving,
   catalogMacros,
@@ -84,7 +90,8 @@ export function PriceListEditor({
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
 
-  const readOnly = !canManage || Boolean(archivedAt);
+  const readOnly = !canManage || Boolean(archivedAt) || (!isNew && !editing);
+  const canStartEditing = canManage && !archivedAt && !isNew && !editing;
   const symbol = draft.currency === 'USD' ? 'US$' : 'R$';
   const items = tab === 'macro' ? draft.macros : draft.micros;
   const visibleItems = useMemo(
@@ -165,9 +172,11 @@ export function PriceListEditor({
                 ? 'Arquivada'
                 : isNew
                   ? 'Nova lista'
-                  : readOnly
-                    ? 'Somente leitura'
-                    : 'Editando'}
+                  : editing
+                    ? 'Editando'
+                    : canManage
+                      ? 'Visualizando'
+                      : 'Somente leitura'}
             </span>
             {!isNew && (
               <span className="text-xs text-stone-400">
@@ -183,7 +192,16 @@ export function PriceListEditor({
         </div>
         {!isNew && (
           <div className="flex flex-wrap gap-2">
-            {canManage && (
+            {canStartEditing && (
+              <button
+                type="button"
+                onClick={onEdit}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-emerald-600 px-4 text-sm font-black text-white shadow-sm hover:bg-emerald-700"
+              >
+                <Pencil className="h-4 w-4" /> Editar
+              </button>
+            )}
+            {canManage && !editing && (
               <button
                 type="button"
                 onClick={onDuplicate}
@@ -209,6 +227,7 @@ export function PriceListEditor({
               </button>
             )}
             {canManage &&
+              !editing &&
               (archivedAt ? (
                 <button
                   type="button"
@@ -489,7 +508,7 @@ export function PriceListEditor({
                   : `${zeroItems.length} matérias-primas sem preço em reais`}
               </>
             ) : draft.currency === 'USD' && missingUsd.length > 0 ? (
-              `${missingUsd.length} sem preço em dólar: não aparecem na calculadora em US$.`
+              `${missingUsd.length} sem preço em dólar: aparecem zerados na calculadora em US$.`
             ) : dirty ? (
               'Há alterações não salvas.'
             ) : (
@@ -503,7 +522,7 @@ export function PriceListEditor({
               disabled={saving}
               className="h-11 rounded-xl border border-stone-300 bg-white px-5 text-sm font-bold text-stone-700 hover:bg-stone-100 disabled:opacity-50"
             >
-              {isNew ? 'Cancelar' : 'Descartar alterações'}
+              {isNew ? 'Cancelar' : 'Cancelar edição'}
             </button>
             <button
               type="button"
