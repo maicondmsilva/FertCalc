@@ -469,6 +469,18 @@ export default function BetaFormulaCard({
       magnesiumTarget,
     ]
   );
+  /**
+   * Ca, S e Mg só aparecem se entraram na batida (ou se têm alvo, para
+   * mostrar que ficaram zerados).
+   */
+  const secondaryTiles = (
+    [
+      { nutrient: 'Ca', obtained: summary?.resultingCa, target: Number(calculation.targetCa) || 0 },
+      { nutrient: 'S', obtained: summary?.resultingS, target: Number(calculation.targetS) || 0 },
+      { nutrient: 'Mg', obtained: summary?.resultingMg, target: magnesiumTarget },
+    ] as const
+  ).filter((tile) => Number(tile.obtained) > 0.0001 || tile.target > 0);
+
   /** Micros que entraram na batida e os que têm alvo (mesmo zerados), nos cartões menores. */
   const microsInBatch = guaranteeBreakdown.filter(
     (row) => row.kind === 'micro' && (row.obtained > 0 || row.target > 0)
@@ -705,7 +717,7 @@ export default function BetaFormulaCard({
                   </option>
                 ))}
               </select>
-              <div className="relative min-w-[150px] max-w-sm flex-1">
+              <div className="relative w-full min-w-[150px] sm:w-[220px]">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
                 <input
                   type="text"
@@ -716,7 +728,7 @@ export default function BetaFormulaCard({
                   }}
                   onFocus={() => setIsLoadOpen(true)}
                   onBlur={closeSuggestionsLater}
-                  placeholder="Buscar batida ou produto…"
+                  placeholder="Buscar batida ou produto"
                   aria-label="Carregar batida ou produto formulado"
                   className="h-10 w-full rounded-lg border border-stone-300 bg-white pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
@@ -1080,21 +1092,14 @@ export default function BetaFormulaCard({
               <GuaranteeTile nutrient="N" obtained={summary.resultingN} target={target.N} large />
               <GuaranteeTile nutrient="P" obtained={summary.resultingP} target={target.P} large />
               <GuaranteeTile nutrient="K" obtained={summary.resultingK} target={target.K} large />
-              <GuaranteeTile
-                nutrient="Ca"
-                obtained={summary.resultingCa}
-                target={Number(calculation.targetCa) || 0}
-              />
-              <GuaranteeTile
-                nutrient="S"
-                obtained={summary.resultingS}
-                target={Number(calculation.targetS) || 0}
-              />
-              <GuaranteeTile
-                nutrient="Mg"
-                obtained={summary.resultingMg}
-                target={magnesiumTarget}
-              />
+              {secondaryTiles.map((tile) => (
+                <GuaranteeTile
+                  key={tile.nutrient}
+                  nutrient={tile.nutrient}
+                  obtained={tile.obtained}
+                  target={tile.target}
+                />
+              ))}
             </div>
             {microsInBatch.length > 0 && (
               <div className="mt-1.5 grid grid-cols-4 gap-1.5 @2xl:grid-cols-6 @4xl:grid-cols-8 @6xl:grid-cols-10">
