@@ -51,7 +51,7 @@ import {
 import BetaConditionsPanel from './BetaConditionsPanel';
 import GuaranteeSumStrip from './GuaranteeSumStrip';
 import { isZeroText } from '../ui/NumericInput';
-import { buildGuaranteeBreakdown } from '../../utils/guaranteeBreakdown';
+import { buildGuaranteeBreakdown, type GuaranteeRow } from '../../utils/guaranteeBreakdown';
 import type { BetaCalculator } from './SimplifiedCalculatorBeta';
 
 type Panel = 'conditions' | 'micros' | 'compare' | null;
@@ -157,12 +157,12 @@ function GuaranteeTile({
   );
   const badge = STATUS_BADGE[status];
   return (
-    <div className={`rounded-xl border p-3 ${large ? style.box : 'border-stone-200 bg-white'}`}>
+    <div
+      className={`rounded-xl border px-3 py-2 ${large ? style.box : 'border-stone-200 bg-white'}`}
+      title={style.label}
+    >
       <div className="flex items-center justify-between gap-2">
-        <span className={`text-sm font-black ${style.text}`}>
-          {nutrient}
-          {large && <span className="hidden font-bold @6xl:inline"> · {style.label}</span>}
-        </span>
+        <span className={`text-sm font-black ${style.text}`}>{nutrient}</span>
         {badge && (
           <span className={`flex items-center gap-0.5 text-xs font-bold ${badge.className}`}>
             {status === 'met' && <Check className="h-3.5 w-3.5" />}
@@ -171,13 +171,40 @@ function GuaranteeTile({
         )}
       </div>
       <p
-        className={`mt-1 font-black tabular-nums text-stone-900 ${large ? 'text-2xl' : 'text-xl'}`}
+        className={`mt-0.5 font-black tabular-nums text-stone-900 ${large ? 'text-xl' : 'text-lg'}`}
       >
         {obtained === undefined ? '—' : formatGuarantee(obtained)}
         <span className="ml-0.5 text-sm font-bold text-stone-400">%</span>
       </p>
-      <p className="text-xs text-stone-500">
+      <p className="text-[11px] text-stone-500">
         {Number(target) > 0 ? `alvo ${formatGuarantee(target)} %` : 'sem alvo'}
+      </p>
+    </div>
+  );
+}
+
+/** Micro que entrou na batida: cartão menor que os macros, só com a sigla. */
+function MicroTile({ row }: { row: GuaranteeRow }) {
+  const hasTarget = row.target > 0;
+  const status = hasTarget ? getMicronutrientTargetStatus(row.target, row.obtained) : null;
+  const tone =
+    status === 'met'
+      ? 'border-emerald-200 bg-emerald-50'
+      : hasTarget
+        ? 'border-amber-200 bg-amber-50'
+        : 'border-cyan-100 bg-cyan-50/60';
+  return (
+    <div className={`rounded-lg border px-2.5 py-1.5 ${tone}`}>
+      <div className="flex items-center justify-between gap-1">
+        <span className="text-xs font-black text-cyan-800">{row.label}</span>
+        {status === 'met' && <Check className="h-3 w-3 text-emerald-700" aria-label="no alvo" />}
+      </div>
+      <p className="text-base font-black tabular-nums text-stone-900">
+        {formatGuarantee(row.obtained)}
+        <span className="ml-0.5 text-xs font-bold text-stone-400">%</span>
+      </p>
+      <p className="text-[10px] leading-tight text-stone-500">
+        {hasTarget ? `alvo ${formatGuarantee(row.target)} %` : 'sem alvo'}
       </p>
     </div>
   );
@@ -432,6 +459,10 @@ export default function BetaFormulaCard({
       magnesiumTarget,
     ]
   );
+  /** Micros que entraram na batida (com ou sem alvo), para os cartões menores. */
+  const microsInBatch = guaranteeBreakdown.filter(
+    (row) => row.kind === 'micro' && row.obtained > 0
+  );
 
   const unpricedProducts = composition.rows.filter((row) => row.isUnpriced);
   const manualPriceProducts = composition.rows.filter(
@@ -566,155 +597,159 @@ export default function BetaFormulaCard({
           </div>
         </header>
 
-        {/* Alvos */}
+        {/* Alvos: N-P-K e secundários na mesma linha; busca e categoria abaixo */}
         {!isFreeProducts && (
-          <div className="grid gap-4 @6xl:grid-cols-[minmax(0,1fr)_auto]">
-            <div>
-              <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-stone-500">
-                Fórmula alvo (N-P-K)
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                {(['n', 'p', 'k'] as const).map((field, position) => {
-                  const nutrient = field.toUpperCase() as 'N' | 'P' | 'K';
-                  const style = NUTRIENT_STYLES[nutrient];
-                  return (
-                    <React.Fragment key={field}>
-                      {position > 0 && <span className="font-bold text-stone-300">–</span>}
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-end gap-x-6 gap-y-2">
+              <div>
+                <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-stone-500">
+                  Fórmula alvo (N-P-K)
+                </p>
+                <div className="flex items-center gap-1.5">
+                  {(['n', 'p', 'k'] as const).map((field, position) => {
+                    const nutrient = field.toUpperCase() as 'N' | 'P' | 'K';
+                    const style = NUTRIENT_STYLES[nutrient];
+                    return (
+                      <React.Fragment key={field}>
+                        {position > 0 && <span className="font-bold text-stone-300">–</span>}
+                        <label
+                          className={`flex h-10 w-[92px] items-center gap-1.5 rounded-lg border px-2.5 ${style.box}`}
+                        >
+                          <span className={`text-xs font-black ${style.text}`}>{nutrient}</span>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={npkDraft[field]}
+                            onChange={(event) => {
+                              updateNpk(field, event.target.value);
+                              setIsLoadOpen(true);
+                            }}
+                            onFocus={() => {
+                              setIsLoadOpen(true);
+                              // "00" some ao clicar para digitar direto (a fórmula não muda).
+                              if (isZeroText(npkDraft[field]))
+                                setNpkDraft((current) => ({ ...current, [field]: '' }));
+                            }}
+                            onBlur={() => {
+                              closeSuggestionsLater();
+                              setNpkDraft((current) =>
+                                current[field].trim() === ''
+                                  ? splitFormulaTarget(calculation.formula)
+                                  : current
+                              );
+                            }}
+                            placeholder="00"
+                            aria-label={`${style.label} alvo`}
+                            className={`w-full min-w-0 bg-transparent text-right text-lg font-black tabular-nums placeholder:text-stone-300 focus:outline-none ${style.text}`}
+                          />
+                        </label>
+                      </React.Fragment>
+                    );
+                  })}
+                </div>
+              </div>
+              <div>
+                <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-stone-500">
+                  Secundários alvo
+                </p>
+                <div className="flex items-center gap-1.5">
+                  {(['Ca', 'S', 'Mg'] as const).map((nutrient) => {
+                    const style = NUTRIENT_STYLES[nutrient];
+                    return (
                       <label
-                        className={`flex h-12 w-[112px] items-center gap-2 rounded-xl border px-3 ${style.box}`}
+                        key={nutrient}
+                        className={`flex h-10 w-[88px] items-center gap-1.5 rounded-lg border px-2.5 ${style.box}`}
                       >
                         <span className={`text-xs font-black ${style.text}`}>{nutrient}</span>
                         <input
                           type="text"
                           inputMode="decimal"
-                          value={npkDraft[field]}
-                          onChange={(event) => {
-                            updateNpk(field, event.target.value);
-                            setIsLoadOpen(true);
-                          }}
-                          onFocus={() => {
-                            setIsLoadOpen(true);
-                            // "00" some ao clicar para digitar direto (a fórmula não muda).
-                            if (isZeroText(npkDraft[field]))
-                              setNpkDraft((current) => ({ ...current, [field]: '' }));
-                          }}
-                          onBlur={() => {
-                            closeSuggestionsLater();
-                            setNpkDraft((current) =>
-                              current[field].trim() === ''
-                                ? splitFormulaTarget(calculation.formula)
-                                : current
-                            );
-                          }}
-                          placeholder="00"
-                          aria-label={`${style.label} alvo`}
-                          className={`w-full min-w-0 bg-transparent text-right text-xl font-black tabular-nums placeholder:text-stone-300 focus:outline-none ${style.text}`}
+                          value={secondaryValue(nutrient)}
+                          onChange={(event) => updateSecondary(nutrient, event.target.value)}
+                          onBlur={() =>
+                            setSecondaryInputs((current) => {
+                              const next = { ...current };
+                              delete next[nutrient];
+                              return next;
+                            })
+                          }
+                          placeholder="0"
+                          aria-label={`${style.label} alvo em porcentagem`}
+                          className="w-full min-w-0 bg-transparent text-right text-[15px] font-bold tabular-nums text-stone-900 focus:outline-none"
                         />
+                        <span className="text-xs font-bold text-stone-400">%</span>
                       </label>
-                    </React.Fragment>
-                  );
-                })}
-                <div className="relative min-w-[180px] flex-1">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
-                  <input
-                    type="text"
-                    value={loadSearch}
-                    onChange={(event) => {
-                      setLoadSearch(event.target.value);
-                      setIsLoadOpen(true);
-                    }}
-                    onFocus={() => setIsLoadOpen(true)}
-                    onBlur={closeSuggestionsLater}
-                    placeholder="Carregar batida ou produto formulado…"
-                    className="h-12 w-full rounded-xl border border-stone-300 bg-white pl-9 pr-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                  {showSuggestions && (
-                    <div className="absolute left-0 top-full z-30 mt-1 max-h-72 w-full min-w-[300px] overflow-y-auto rounded-xl border border-stone-200 bg-white shadow-xl">
-                      {!isSearchingByText && (
-                        <p className="border-b border-stone-100 bg-stone-50 px-3 py-2 text-xs font-bold uppercase tracking-wide text-stone-500">
-                          Sugestões pelo N-P-K digitado
-                        </p>
-                      )}
-                      {suggestions.length === 0 ? (
-                        <p className="p-3 text-sm text-stone-500">Nenhuma batida encontrada.</p>
-                      ) : (
-                        suggestions.map((product) => (
-                          <button
-                            key={product.id}
-                            type="button"
-                            onMouseDown={(event) => event.preventDefault()}
-                            onClick={() => loadProduct(product)}
-                            className="block w-full border-b border-stone-100 px-3 py-2 text-left last:border-0 hover:bg-stone-50"
-                          >
-                            <span className="block text-sm font-bold text-stone-800">
-                              {product.nome}
-                            </span>
-                            <span className="text-xs text-emerald-700">
-                              {product.formula_npk || 'Fórmula não informada'}
-                            </span>
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  )}
+                    );
+                  })}
                 </div>
-                <select
-                  value={calculation.category || 'all'}
-                  onChange={(event) =>
-                    updateCalculation(calculation.id, 'category', event.target.value)
-                  }
-                  className="h-12 rounded-xl border border-stone-300 bg-white px-3 text-[15px] text-stone-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  aria-label="Categoria da fórmula"
-                >
-                  <option value="all">Categoria: Todas</option>
-                  {compCategories.map((category: { id: string; nome: string }) => (
-                    <option key={category.id} value={category.id}>
-                      {category.nome}
-                    </option>
-                  ))}
-                </select>
               </div>
-              {calculation.formula && !composeFormulaTarget(npkDraft) && (
-                <p className="mt-1.5 text-sm text-stone-600">
-                  Produto carregado: <strong>{calculation.formula}</strong>
-                </p>
-              )}
             </div>
-            <div>
-              <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-stone-500">
-                Secundários alvo
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative min-w-[200px] max-w-md flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+                <input
+                  type="text"
+                  value={loadSearch}
+                  onChange={(event) => {
+                    setLoadSearch(event.target.value);
+                    setIsLoadOpen(true);
+                  }}
+                  onFocus={() => setIsLoadOpen(true)}
+                  onBlur={closeSuggestionsLater}
+                  placeholder="Carregar batida ou produto formulado…"
+                  className="h-10 w-full rounded-lg border border-stone-300 bg-white pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+                {showSuggestions && (
+                  <div className="absolute left-0 top-full z-30 mt-1 max-h-72 w-full min-w-[300px] overflow-y-auto rounded-xl border border-stone-200 bg-white shadow-xl">
+                    {!isSearchingByText && (
+                      <p className="border-b border-stone-100 bg-stone-50 px-3 py-2 text-xs font-bold uppercase tracking-wide text-stone-500">
+                        Sugestões pelo N-P-K digitado
+                      </p>
+                    )}
+                    {suggestions.length === 0 ? (
+                      <p className="p-3 text-sm text-stone-500">Nenhuma batida encontrada.</p>
+                    ) : (
+                      suggestions.map((product) => (
+                        <button
+                          key={product.id}
+                          type="button"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => loadProduct(product)}
+                          className="block w-full border-b border-stone-100 px-3 py-2 text-left last:border-0 hover:bg-stone-50"
+                        >
+                          <span className="block text-sm font-bold text-stone-800">
+                            {product.nome}
+                          </span>
+                          <span className="text-xs text-emerald-700">
+                            {product.formula_npk || 'Fórmula não informada'}
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+              <select
+                value={calculation.category || 'all'}
+                onChange={(event) =>
+                  updateCalculation(calculation.id, 'category', event.target.value)
+                }
+                className="h-10 rounded-lg border border-stone-300 bg-white px-2.5 text-sm text-stone-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                aria-label="Categoria da fórmula"
+              >
+                <option value="all">Categoria: Todas</option>
+                {compCategories.map((category: { id: string; nome: string }) => (
+                  <option key={category.id} value={category.id}>
+                    {category.nome}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {calculation.formula && !composeFormulaTarget(npkDraft) && (
+              <p className="mt-1.5 text-sm text-stone-600">
+                Produto carregado: <strong>{calculation.formula}</strong>
               </p>
-              <div className="grid grid-cols-3 gap-2">
-                {(['Ca', 'S', 'Mg'] as const).map((nutrient) => {
-                  const style = NUTRIENT_STYLES[nutrient];
-                  return (
-                    <label
-                      key={nutrient}
-                      className={`flex h-12 w-full items-center gap-1.5 rounded-xl border px-3 @6xl:w-[104px] ${style.box}`}
-                    >
-                      <span className={`text-xs font-black ${style.text}`}>{nutrient}</span>
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        value={secondaryValue(nutrient)}
-                        onChange={(event) => updateSecondary(nutrient, event.target.value)}
-                        onBlur={() =>
-                          setSecondaryInputs((current) => {
-                            const next = { ...current };
-                            delete next[nutrient];
-                            return next;
-                          })
-                        }
-                        placeholder="0"
-                        aria-label={`${style.label} alvo em porcentagem`}
-                        className="w-full min-w-0 bg-transparent text-right text-[17px] font-bold tabular-nums text-stone-900 focus:outline-none"
-                      />
-                      <span className="text-xs font-bold text-stone-400">%</span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
+            )}
           </div>
         )}
 
@@ -1055,29 +1090,11 @@ export default function BetaFormulaCard({
                 target={magnesiumTarget}
               />
             </div>
-            {activeMicroTargets.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-2">
-                {activeMicroTargets.map((name) => {
-                  const targetValue = Number(getMicroTarget(name) || 0);
-                  const obtained = getCalculatedMicronutrientValue(summary.resultingMicros, name);
-                  const met = getMicronutrientTargetStatus(targetValue, obtained) === 'met';
-                  return (
-                    <span
-                      key={name}
-                      className={`rounded-lg border px-2.5 py-1 text-sm font-bold tabular-nums ${
-                        met
-                          ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                          : 'border-amber-200 bg-amber-50 text-amber-800'
-                      }`}
-                    >
-                      {name} {formatGuarantee(obtained)}
-                      <span className="font-medium text-stone-500">
-                        {' '}
-                        / {formatGuarantee(targetValue)}
-                      </span>
-                    </span>
-                  );
-                })}
+            {microsInBatch.length > 0 && (
+              <div className="mt-2 grid grid-cols-4 gap-1.5 @2xl:grid-cols-6 @4xl:grid-cols-8">
+                {microsInBatch.map((row) => (
+                  <MicroTile key={row.key} row={row} />
+                ))}
               </div>
             )}
           </section>
