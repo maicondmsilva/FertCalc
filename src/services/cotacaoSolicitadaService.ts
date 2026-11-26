@@ -1,5 +1,6 @@
 import { emptyOnError } from './queryErrors';
 import { supabase } from './supabase';
+import { todayKey } from '../utils/quoteValidity';
 import {
   CotacaoSolicitada,
   StatusCotacaoSolicitada,
@@ -90,6 +91,7 @@ function mapCotacaoSolicitada(d: Record<string, unknown>): CotacaoSolicitada {
     obs_responsavel: d.obs_responsavel as string | undefined,
     cotado_em: d.cotado_em as string | undefined,
     aprovado_em: d.aprovado_em as string | undefined,
+    validade_ate: (d.validade_ate as string | null | undefined) ?? null,
     precificacao_id: d.precificacao_id as string | undefined,
     criado_em: d.criado_em as string,
     atualizado_em: d.atualizado_em as string,
@@ -158,6 +160,10 @@ export async function getCotacoesAprovadas(userId: string): Promise<CotacaoSolic
   return (data as Record<string, unknown>[]).map(mapCotacaoSolicitada);
 }
 
+/**
+ * Cotações aprovadas que o solicitante ainda pode vincular na precificação:
+ * dentro da validade definida pela logística (sem validade = antigas, liberadas).
+ */
 export async function getCotacoesAprovadasByCliente(
   userId: string,
   clienteId?: string
@@ -167,6 +173,7 @@ export async function getCotacoesAprovadasByCliente(
     .select(SELECT_FIELDS)
     .eq('status', 'aprovado')
     .eq('solicitado_por', userId)
+    .or(`validade_ate.is.null,validade_ate.gte.${todayKey()}`)
     .order('aprovado_em', { ascending: false });
 
   if (clienteId) {
@@ -268,4 +275,14 @@ export async function getResponsaveisByFilial(filialId?: string): Promise<string
       return ids.includes(filialId);
     })
     .map((u) => u.id as string);
+}
+
+/** Cotações aprovadas e dentro da validade do usuário logado (para a precificação). */
+export async function getMinhasCotacoesDisponiveis(
+  clienteId?: string
+): Promise<CotacaoSolicitada[]> {
+  const { data } = await supabase.auth.getSession();
+  const userId = data.session?.user?.id;
+  if (!userId) return [];
+  return getCotacoesAprovadasByCliente(userId, clienteId);
 }

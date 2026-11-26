@@ -18,7 +18,12 @@ export type StatusCarregamento =
 export type TipoLiberacao = 'total' | 'parcial';
 
 export type StatusCotacao =
-  'pendente' | 'respondida' | 'recusada' | 'aprovada' | 'reprovada' | 'expirada';
+  | 'pendente'
+  | 'respondida'
+  | 'recusada'
+  | 'aprovada'
+  | 'reprovada'
+  | 'expirada';
 
 // ── Filial ────────────────────────────────────────────────────
 export interface Filial {
@@ -208,7 +213,11 @@ export interface LocalCarregamento {
 
 // ── Cotação Solicitada (independente) ─────────────────────────
 export type StatusCotacaoSolicitada =
-  'aguardando' | 'em_analise' | 'cotado' | 'aprovado' | 'cancelado';
+  | 'aguardando'
+  | 'em_analise'
+  | 'cotado'
+  | 'aprovado'
+  | 'cancelado';
 
 export interface CotacaoSolicitada {
   id: string;
@@ -240,6 +249,8 @@ export interface CotacaoSolicitada {
   obs_responsavel?: string;
   cotado_em?: string;
   aprovado_em?: string;
+  /** Até quando a cotação aprovada fica disponível para o solicitante (AAAA-MM-DD). */
+  validade_ate?: string | null;
   precificacao_id?: string;
   criado_em: string;
   atualizado_em: string;

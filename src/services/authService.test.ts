@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { getSessionMock } = vi.hoisted(() => ({
+const { getSessionMock, refreshSessionMock } = vi.hoisted(() => ({
   getSessionMock: vi.fn(),
+  refreshSessionMock: vi.fn(),
 }));
 
 const { signInWithPasswordMock, setSessionMock, signOutMock, profileByIdMock } = vi.hoisted(() => ({
@@ -15,6 +16,7 @@ vi.mock('./supabase', () => ({
   supabase: {
     auth: {
       getSession: getSessionMock,
+      refreshSession: refreshSessionMock,
       signInWithPassword: signInWithPasswordMock,
       setSession: setSessionMock,
       signOut: signOutMock,
@@ -50,6 +52,7 @@ import {
   passwordUpdateErrorMessage,
   restoreSession,
   signIn,
+  signOut,
   TOO_MANY_ATTEMPTS,
 } from './authService';
 
@@ -306,7 +309,7 @@ describe('adminDeleteAuthUser', () => {
 
     await expect(adminDeleteAuthUser('user-1')).resolves.toEqual({
       success: false,
-      error: 'Usuário não autenticado',
+      error: expect.stringContaining('sessão foi encerrada'),
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -379,5 +382,64 @@ describe('mensagens de autenticação', () => {
       user: null,
       error: INVALID_CREDENTIALS,
     });
+  });
+});
+
+describe('sessão encerrada em outro aparelho', () => {
+  const payload = {
+    user_id: 'user-1',
+    email: 'usuario@example.com',
+    name: 'Usuário',
+    nickname: 'usuario',
+    role: 'user',
+    ativo: true,
+    managed_user_ids: [],
+    permissions: {},
+    filiais_permitidas: [],
+  };
+
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+    getSessionMock.mockReset();
+    refreshSessionMock.mockReset();
+    getSessionMock.mockResolvedValue({ data: { session: { access_token: 'token-antigo' } } });
+  });
+
+  it('renova a sessão e tenta de novo quando a função responde 401', async () => {
+    refreshSessionMock.mockResolvedValue({
+      data: { session: { access_token: 'token-novo' } },
+      error: null,
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({}) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ success: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(adminUpdateAuthUser(payload)).resolves.toEqual({ success: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1][1].headers.Authorization).toBe('Bearer token-novo');
+  });
+
+  it('pede para entrar de novo quando a sessão não pode ser renovada', async () => {
+    refreshSessionMock.mockResolvedValue({
+      data: { session: null },
+      error: { message: 'Session not found' },
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({}) })
+    );
+
+    const result = await adminUpdateAuthUser(payload);
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/Entre novamente/);
+  });
+
+  it('sair encerra só a sessão deste aparelho', async () => {
+    signOutMock.mockReset();
+    signOutMock.mockResolvedValue({ error: null });
+    await signOut();
+    expect(signOutMock).toHaveBeenCalledWith({ scope: 'local' });
   });
 });
