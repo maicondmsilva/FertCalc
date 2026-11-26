@@ -94,6 +94,34 @@ export async function saveRegion(
   }
 }
 
+/** Transfere a precificação para outra região (registra no histórico). */
+export async function transferPricingRegion(
+  pricingId: string,
+  regionId: string,
+  reason: string
+): Promise<void> {
+  const { error } = await supabase.rpc('transferir_precificacao_regiao', {
+    p_pricing_id: pricingId,
+    p_region_id: regionId,
+    p_motivo: reason.trim(),
+  });
+  if (error) throw error;
+}
+
+/** Mensagem do banco sobre região da precificação, em linguagem do usuário. */
+export function pricingRegionErrorMessage(error: unknown): string {
+  const raw = String((error as { message?: string })?.message || '');
+  if (
+    /Escolha a região|suas regiões|só muda pela transferência|já está nesta região|motivo|inativa|fora do seu acesso|não tem permissão para transferir|excluída não pode/i.test(
+      raw
+    )
+  )
+    return raw;
+  if (/row-level|permission|42501/i.test(raw))
+    return 'Seu usuário não tem permissão para esta ação.';
+  return 'Não foi possível concluir. Tente novamente.';
+}
+
 /** Exclui se não estiver em uso; senão desativa. */
 export async function deleteOrDeactivateRegion(id: string): Promise<'excluida' | 'desativada'> {
   const { data, error } = await supabase.rpc('excluir_ou_desativar_regiao', { p_region_id: id });

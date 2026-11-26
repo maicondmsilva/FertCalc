@@ -1350,6 +1350,8 @@ function pricingRecordToDb(r: Partial<PricingRecord>) {
   if (r.transferToUserName !== undefined) d.transfer_to_user_name = r.transferToUserName;
   if (r.deletionRequest !== undefined) d.deletion_request = r.deletionRequest;
   if (r.rejectionObservation !== undefined) d.rejection_observation = r.rejectionObservation;
+  // A região só vai no cadastro; depois muda apenas pela transferência.
+  if (r.regionId !== undefined) d.region_id = r.regionId || null;
   return d;
 }
 
@@ -1385,6 +1387,7 @@ export function mapPricingRecord(d: Record<string, unknown>): PricingRecord {
     transferToUserName: d.transfer_to_user_name,
     deletionRequest: d.deletion_request,
     rejectionObservation: d.rejection_observation,
+    regionId: (d.region_id as string | null) ?? null,
   } as PricingRecord;
 }
 

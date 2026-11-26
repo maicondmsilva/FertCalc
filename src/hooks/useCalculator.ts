@@ -1618,6 +1618,8 @@ export function useCalculator({
       },
       calculations: selectedCalculations,
       history: [...(initialData?.history || []), historyEntry],
+      // Região: só no cadastro; depois muda apenas pela transferência de região.
+      regionId: initialData ? undefined : mergedFactors.regionId || undefined,
     };
 
     // === BLOCO 1: Apenas o save no banco ===
