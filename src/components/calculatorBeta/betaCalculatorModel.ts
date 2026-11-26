@@ -266,3 +266,20 @@ export const formatMoney = (value: number | undefined, currency: 'BRL' | 'USD' =
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+
+/**
+ * Com agente informado, toda fórmula selecionada precisa de comissão em
+ * Condições (regra da calculadora de teste). Retorna a mensagem ou null.
+ */
+export function agentCommissionProblem(
+  calculations: Pick<TargetFormula, 'selected' | 'formula' | 'factors'>[],
+  agent?: { id?: string } | null
+): string | null {
+  if (!agent?.id) return null;
+  const missing = calculations.filter(
+    (calculation) => calculation.selected && !(Number(calculation.factors?.commission) > 0)
+  );
+  if (missing.length === 0) return null;
+  const names = missing.map((calculation) => calculation.formula || 'sem fórmula').join(', ');
+  return `Com agente informado, informe a comissão em Condições: ${names}.`;
+}

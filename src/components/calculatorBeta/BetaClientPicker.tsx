@@ -1,13 +1,15 @@
 import React, { useMemo, useState } from 'react';
 import { Search, UserRound, X } from 'lucide-react';
-import type { Client } from '../../types';
+import type { Agent, Client } from '../../types';
 import { matchesRegistrySearch } from '../registry/registryModel';
 
 const EMPTY_CLIENT = { id: '', code: '', name: '', document: '' };
 
+type Party = Client | Agent;
+
 /**
- * Cliente da precificação (obrigatório para salvar). Busca por nome, código,
- * documento, fazenda ou cidade; mostra o escolhido com opção de trocar.
+ * Cliente ou agente da precificação. Busca por nome, código, documento,
+ * fazenda ou cidade; mostra o escolhido com opção de trocar.
  */
 export default function BetaClientPicker({
   clients,
@@ -16,13 +18,17 @@ export default function BetaClientPicker({
   onSearchChange,
   onSelect,
   disabled = false,
+  noun = 'cliente',
+  inputId = 'beta-client',
 }: {
-  clients: Client[];
+  clients: Party[];
   selected?: { id?: string; code?: string; name?: string; document?: string };
   search: string;
   onSearchChange: (value: string) => void;
-  onSelect: (client: Client | typeof EMPTY_CLIENT) => void;
+  onSelect: (party: Party | typeof EMPTY_CLIENT) => void;
   disabled?: boolean;
+  noun?: 'cliente' | 'agente';
+  inputId?: string;
 }) {
   const [open, setOpen] = useState(false);
   const results = useMemo(
@@ -51,7 +57,7 @@ export default function BetaClientPicker({
               onSelect(EMPTY_CLIENT);
               onSearchChange('');
             }}
-            aria-label="Trocar cliente"
+            aria-label={`Trocar ${noun}`}
             className="rounded-lg p-1.5 text-emerald-700 hover:bg-emerald-100"
           >
             <X className="h-4 w-4" />
@@ -65,7 +71,7 @@ export default function BetaClientPicker({
     <div className="relative">
       <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
       <input
-        id="beta-client"
+        id={inputId}
         value={search}
         disabled={disabled}
         onChange={(event) => {
@@ -74,13 +80,13 @@ export default function BetaClientPicker({
         }}
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
-        placeholder="Buscar cliente por nome, código, documento ou fazenda"
+        placeholder={`Buscar ${noun} por nome, código ou documento`}
         className="h-11 w-full rounded-xl border border-stone-300 bg-white pl-9 pr-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-emerald-500"
       />
       {open && search.trim() && (
         <ul className="absolute left-0 right-0 top-full z-30 mt-1 max-h-72 overflow-y-auto rounded-xl border border-stone-200 bg-white shadow-xl">
           {results.length === 0 ? (
-            <li className="px-3 py-3 text-sm text-stone-500">Nenhum cliente encontrado.</li>
+            <li className="px-3 py-3 text-sm text-stone-500">Nenhum {noun} encontrado.</li>
           ) : (
             results.map((client) => (
               <li key={client.id}>
@@ -98,7 +104,7 @@ export default function BetaClientPicker({
                   <span className="text-xs text-stone-500">
                     cód. {client.code}
                     {client.document ? ` · ${client.document}` : ''}
-                    {client.fazenda ? ` · ${client.fazenda}` : ''}
+                    {'fazenda' in client && client.fazenda ? ` · ${client.fazenda}` : ''}
                   </span>
                 </button>
               </li>
