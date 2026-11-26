@@ -8,6 +8,8 @@ interface AppAccessGateProps {
   isPasswordReset: boolean;
   onLogin: (user: User) => void;
   onPasswordChanged: (user: User) => void;
+  /** Sair da tela de primeiro acesso. */
+  onLogout?: () => void;
   children: (currentUser: User) => ReactNode;
 }
 
@@ -16,6 +18,7 @@ export default function AppAccessGate({
   isPasswordReset,
   onLogin,
   onPasswordChanged,
+  onLogout,
   children,
 }: AppAccessGateProps) {
   if (isPasswordReset) return <ResetPassword />;
@@ -27,6 +30,7 @@ export default function AppAccessGate({
         onLogin={onLogin}
         forceChangePasswordUserId={currentUser.id}
         onPasswordChanged={onPasswordChanged}
+        onSignOut={onLogout}
       />
     );
   }

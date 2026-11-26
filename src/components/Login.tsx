@@ -1,387 +1,320 @@
 import React, { useState } from 'react';
-import { Lock, Mail, Leaf, ShieldCheck, KeyRound } from 'lucide-react';
-import { User } from '../types';
-import { signIn, resetPassword } from '../services/authService';
-import { updateUser } from '../services/db';
-import { supabase } from '../services/supabase';
-import { startBrowserSession } from '../services/authStorage';
+import { ArrowLeft, KeyRound, LogOut, MailCheck } from 'lucide-react';
+import type { User } from '../types';
+import AuthLayout from './auth/AuthLayout';
+import {
+  AuthAlert,
+  AuthField,
+  NewPasswordFields,
+  PasswordInput,
+  SubmitButton,
+  authInputClass,
+} from './auth/AuthFields';
+import { isValidEmail, loginProblem, newPasswordProblem } from './auth/passwordRules';
 
 interface LoginProps {
   onLogin: (user: User) => void;
+  /** Usuário logado que precisa trocar a senha provisória antes de entrar. */
   forceChangePasswordUserId?: string;
   onPasswordChanged?: (user: User) => void;
+  /** Sair da tela de primeiro acesso (volta para o login). */
+  onSignOut?: () => void;
 }
 
+type View = 'login' | 'forgot';
+
+// Serviços carregados sob demanda: a tela abre sem esperar o cliente do banco.
+const authService = () => import('../services/authService');
+
+/**
+ * Acesso ao sistema: entrar, recuperar senha e trocar a senha provisória no
+ * primeiro acesso. As regras ficam em auth/passwordRules e a comunicação com o
+ * Supabase em services/authService.
+ */
 export default function Login({
   onLogin,
   forceChangePasswordUserId,
   onPasswordChanged,
+  onSignOut,
 }: LoginProps) {
-  const [view, setView] = useState<'login' | 'forgot'>('login');
-  const [resetMessage, setResetMessage] = useState('');
-  const [emailOrNickname, setEmailOrNickname] = useState('');
-  const [resetEmail, setResetEmail] = useState('');
+  if (forceChangePasswordUserId) {
+    return (
+      <FirstAccess
+        userId={forceChangePasswordUserId}
+        onPasswordChanged={onPasswordChanged}
+        onSignOut={onSignOut}
+      />
+    );
+  }
+  return <SignIn onLogin={onLogin} />;
+}
+
+function SignIn({ onLogin }: { onLogin: (user: User) => void }) {
+  const [view, setView] = useState<View>('login');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const isForceChange = !!forceChangePasswordUserId;
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-
-    startBrowserSession();
-    const { user, error: authError } = await signIn(emailOrNickname, password);
-
-    if (authError) {
-      setError(authError);
-    } else if (user) {
-      onLogin(user);
-    }
-
-    setLoading(false);
-  };
-
-  const handleEmailReset = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    setResetMessage('');
-
-    const { success, message } = await resetPassword(resetEmail.trim());
-
-    if (success) {
-      setResetMessage(message);
-    } else {
-      setError(message);
-    }
-
-    setLoading(false);
-  };
-
-  const handleForceChangePassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newPassword.length < 6) {
-      setError('A senha deve ter no mínimo 6 caracteres.');
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const problem = loginProblem(identifier, password);
+    if (problem) {
+      setError(problem);
       return;
     }
-    if (newPassword !== confirmPassword) {
-      setError('As senhas não coincidem.');
-      return;
-    }
-
     setLoading(true);
     setError('');
-
     try {
-      // 1. Atualizar a senha no Supabase Auth para a sessão ativa
-      const { error: authError } = await supabase.auth.updateUser({ password: newPassword });
-      if (authError) {
-        throw new Error(authError.message);
+      const [{ startBrowserSession }, { signIn }] = await Promise.all([
+        import('../services/authStorage'),
+        authService(),
+      ]);
+      startBrowserSession();
+      const { user, error: authError } = await signIn(identifier, password);
+      if (authError || !user) {
+        setError(authError || 'Não foi possível entrar agora. Tente novamente.');
+        setPassword('');
+        return;
       }
+      onLogin(user);
+    } catch {
+      setError('Sem conexão com o servidor. Verifique a internet.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      // 2. Atualizar no banco de dados
-      await updateUser(forceChangePasswordUserId!, { requer_alteracao_senha: false });
+  if (view === 'forgot') {
+    return (
+      <ForgotPassword
+        initialEmail={isValidEmail(identifier) ? identifier.trim() : ''}
+        onBack={() => {
+          setView('login');
+          setError('');
+        }}
+      />
+    );
+  }
 
-      // 3. Carregar o perfil atualizado do app_users
-      const { data: userProfile, error: dbError } = await supabase
-        .from('app_users')
-        .select('*')
-        .eq('id', forceChangePasswordUserId)
-        .single();
+  return (
+    <AuthLayout
+      title="Bem-vindo de volta"
+      subtitle="Entre com seu e-mail ou usuário para continuar."
+    >
+      <form onSubmit={submit} className="space-y-5" noValidate>
+        {error && <AuthAlert kind="error">{error}</AuthAlert>}
+        <AuthField label="E-mail ou usuário">
+          {(id) => (
+            <input
+              id={id}
+              type="text"
+              inputMode="email"
+              value={identifier}
+              onChange={(event) => setIdentifier(event.target.value)}
+              autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              autoFocus
+              placeholder="seu@email.com ou joao.silva"
+              disabled={loading}
+              className={authInputClass}
+            />
+          )}
+        </AuthField>
+        <AuthField
+          label="Senha"
+          action={
+            <button
+              type="button"
+              onClick={() => {
+                setView('forgot');
+                setError('');
+              }}
+              className="text-sm font-bold text-emerald-700 hover:text-emerald-800"
+            >
+              Esqueceu a senha?
+            </button>
+          }
+        >
+          {(id) => (
+            <PasswordInput
+              id={id}
+              value={password}
+              onChange={setPassword}
+              autoComplete="current-password"
+              placeholder="••••••••"
+              disabled={loading}
+            />
+          )}
+        </AuthField>
+        <SubmitButton loading={loading} loadingLabel="Entrando…">
+          Entrar
+        </SubmitButton>
+        <p className="text-center text-xs text-stone-500">
+          A sessão fica ativa enquanto o navegador estiver aberto.
+        </p>
+      </form>
+    </AuthLayout>
+  );
+}
 
-      if (dbError || !userProfile) {
-        throw new Error('Falha ao recarregar perfil após a atualização.');
+function ForgotPassword({ initialEmail, onBack }: { initialEmail: string; onBack: () => void }) {
+  const [email, setEmail] = useState(initialEmail);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [sentTo, setSentTo] = useState('');
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!isValidEmail(email)) {
+      setError('Informe um e-mail válido.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const { resetPassword } = await authService();
+      const { success, message } = await resetPassword(email.trim().toLowerCase());
+      if (success) setSentTo(email.trim());
+      else setError(message);
+    } catch {
+      setError('Sem conexão com o servidor. Verifique a internet.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const back = (
+    <button
+      type="button"
+      onClick={onBack}
+      className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-stone-300 bg-white text-[15px] font-bold text-stone-700 hover:bg-stone-50"
+    >
+      <ArrowLeft className="h-4 w-4" /> Voltar para o login
+    </button>
+  );
+
+  if (sentTo) {
+    return (
+      <AuthLayout title="Confira seu e-mail">
+        <div className="space-y-5">
+          <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+            <MailCheck className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+            <p role="status">
+              Se <strong>{sentTo}</strong> estiver cadastrado, você vai receber um link para criar
+              uma nova senha. Veja também a caixa de spam.
+            </p>
+          </div>
+          {back}
+        </div>
+      </AuthLayout>
+    );
+  }
+
+  return (
+    <AuthLayout
+      title="Recuperar senha"
+      subtitle="Enviaremos um link para você criar uma nova senha."
+    >
+      <form onSubmit={submit} className="space-y-5" noValidate>
+        {error && <AuthAlert kind="error">{error}</AuthAlert>}
+        <AuthField label="E-mail de cadastro">
+          {(id) => (
+            <input
+              id={id}
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              autoComplete="email"
+              autoFocus
+              placeholder="seu@email.com"
+              disabled={loading}
+              className={authInputClass}
+            />
+          )}
+        </AuthField>
+        <SubmitButton loading={loading} loadingLabel="Enviando…">
+          Enviar link
+        </SubmitButton>
+        {back}
+      </form>
+    </AuthLayout>
+  );
+}
+
+function FirstAccess({
+  userId,
+  onPasswordChanged,
+  onSignOut,
+}: {
+  userId: string;
+  onPasswordChanged?: (user: User) => void;
+  onSignOut?: () => void;
+}) {
+  const [password, setPassword] = useState('');
+  const [confirmation, setConfirmation] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const problem = newPasswordProblem(password, confirmation);
+    if (problem) {
+      setError(problem);
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const { completeFirstAccess } = await authService();
+      const { user, error: saveError } = await completeFirstAccess(userId, password);
+      if (saveError || !user) {
+        setError(saveError || 'Não foi possível salvar a nova senha.');
+        return;
       }
-
-      const updatedUser: User = {
-        id: userProfile.id,
-        idNumeric: userProfile.id_numeric,
-        email: userProfile.email,
-        name: userProfile.name,
-        nickname: userProfile.nickname || userProfile.custom_code || '',
-        ativo: !!userProfile.ativo,
-        role: userProfile.role,
-        managedUserIds: userProfile.managed_user_ids || [],
-        filiais_permitidas: userProfile.filiais_permitidas || [],
-        permissions: userProfile.permissions || {},
-        requer_alteracao_senha: false,
-      };
-
-      if (onPasswordChanged) {
-        onPasswordChanged(updatedUser);
-      }
-    } catch (err: any) {
-      setError(err.message || 'Erro ao redefinir a senha.');
+      onPasswordChanged?.(user);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-stone-100 px-4">
-      <div
-        className={`max-w-md w-full bg-white rounded-2xl shadow-xl p-8 border ${
-          isForceChange ? 'border-amber-300 shadow-amber-100/50' : 'border-stone-200'
-        } transition-all duration-300`}
-      >
-        <div className="text-center mb-8">
-          <div
-            className={`inline-flex items-center justify-center w-16 h-16 rounded-full mb-4 ${
-              isForceChange ? 'bg-amber-100' : 'bg-emerald-100'
-            }`}
-          >
-            {isForceChange ? (
-              <ShieldCheck className="w-8 h-8 text-amber-600 animate-pulse" aria-hidden="true" />
-            ) : (
-              <Leaf className="w-8 h-8 text-emerald-600" aria-hidden="true" />
-            )}
-          </div>
-          <h1 className="text-3xl font-black text-stone-800 tracking-tight">
-            FertCalc{' '}
-            <span className={isForceChange ? 'text-amber-500' : 'text-emerald-600'}>Pro</span>
-          </h1>
-          <p className="text-stone-500 text-sm mt-2 font-medium">
-            {isForceChange
-              ? 'Primeiro Acesso - Defina sua Nova Senha'
-              : view === 'login'
-                ? 'Entre com suas credenciais'
-                : 'Recupere sua senha'}
-          </p>
+    <AuthLayout
+      title="Crie sua senha"
+      subtitle="Primeiro acesso: troque a senha provisória antes de continuar."
+      tone="amber"
+    >
+      <form onSubmit={submit} className="space-y-5" noValidate>
+        <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <KeyRound className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>
+            Por segurança, a senha enviada pelo administrador só vale para este primeiro acesso.
+          </span>
         </div>
-
-        {isForceChange ? (
-          <form onSubmit={handleForceChangePassword} className="space-y-6" noValidate>
-            {error && (
-              <div
-                role="alert"
-                className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100"
-              >
-                {error}
-              </div>
-            )}
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-xs text-amber-800 space-y-2">
-              <div className="flex items-start gap-2">
-                <KeyRound className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                <span>
-                  <strong>Atenção:</strong> Por motivos de segurança, você deve definir uma nova
-                  senha personalizada no seu primeiro acesso antes de prosseguir para o painel.
-                </span>
-              </div>
-            </div>
-
-            <div>
-              <label
-                htmlFor="new-password"
-                className="block text-sm font-medium text-stone-700 mb-1"
-              >
-                Nova Senha
-              </label>
-              <div className="relative">
-                <Lock
-                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-stone-400 w-4 h-4"
-                  aria-hidden="true"
-                />
-                <input
-                  id="new-password"
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none transition-all text-stone-800"
-                  placeholder="Mínimo 6 caracteres"
-                  required
-                />
-              </div>
-            </div>
-
-            <div>
-              <label
-                htmlFor="confirm-password"
-                className="block text-sm font-medium text-stone-700 mb-1"
-              >
-                Confirme a Nova Senha
-              </label>
-              <div className="relative">
-                <Lock
-                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-stone-400 w-4 h-4"
-                  aria-hidden="true"
-                />
-                <input
-                  id="confirm-password"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none transition-all text-stone-800"
-                  placeholder="Repita a nova senha"
-                  required
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              aria-busy={loading}
-              className="w-full bg-amber-500 hover:bg-amber-600 disabled:bg-amber-400 text-white font-bold py-3 rounded-lg transition-all shadow-lg shadow-amber-200 active:scale-[0.98]"
-            >
-              {loading ? 'Salvando...' : 'Salvar Senha e Acessar'}
-            </button>
-          </form>
-        ) : view === 'login' ? (
-          <form onSubmit={handleLogin} className="space-y-6" noValidate>
-            {error && (
-              <div
-                role="alert"
-                className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100"
-              >
-                {error}
-              </div>
-            )}
-            <div>
-              <label
-                htmlFor="login-email"
-                className="block text-sm font-medium text-stone-700 mb-1"
-              >
-                E-mail ou usuário
-              </label>
-              <div className="relative">
-                <Mail
-                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-stone-400 w-4 h-4"
-                  aria-hidden="true"
-                />
-                <input
-                  id="login-email"
-                  type="text"
-                  value={emailOrNickname}
-                  onChange={(e) => setEmailOrNickname(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none transition-all text-stone-800"
-                  placeholder="seu@email.com ou joao.silva"
-                  autoComplete="username"
-                  required
-                />
-              </div>
-            </div>
-            <div>
-              <label
-                htmlFor="login-password"
-                className="block text-sm font-medium text-stone-700 mb-1"
-              >
-                Senha
-              </label>
-              <div className="relative">
-                <Lock
-                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-stone-400 w-4 h-4"
-                  aria-hidden="true"
-                />
-                <input
-                  id="login-password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none transition-all text-stone-800"
-                  placeholder="••••••••"
-                  autoComplete="current-password"
-                  required
-                />
-              </div>
-              <div className="mt-3 flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setView('forgot');
-                    setError('');
-                    setResetMessage('');
-                  }}
-                  className="text-xs text-emerald-600 hover:text-emerald-700 font-bold"
-                >
-                  Esqueceu a senha?
-                </button>
-              </div>
-              <p className="mt-2 text-[10px] leading-4 text-stone-400">
-                Sua sessão continuará ativa enquanto o navegador estiver aberto.
-              </p>
-            </div>
-            <button
-              type="submit"
-              disabled={loading}
-              aria-busy={loading}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-bold py-3 rounded-lg transition-all shadow-lg shadow-emerald-200 active:scale-[0.98]"
-            >
-              {loading ? 'Verificando...' : 'Acessar Sistema'}
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={handleEmailReset} className="space-y-6" noValidate>
-            {error && (
-              <div
-                role="alert"
-                className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100"
-              >
-                {error}
-              </div>
-            )}
-            {resetMessage && (
-              <div
-                role="status"
-                className="p-3 bg-emerald-50 text-emerald-600 text-sm rounded-lg border border-emerald-100"
-              >
-                {resetMessage}
-              </div>
-            )}
-            <div>
-              <label
-                htmlFor="reset-email"
-                className="block text-sm font-medium text-stone-700 mb-1"
-              >
-                E-mail de Cadastro
-              </label>
-              <div className="relative">
-                <Mail
-                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-stone-400 w-4 h-4"
-                  aria-hidden="true"
-                />
-                <input
-                  id="reset-email"
-                  type="email"
-                  value={resetEmail}
-                  onChange={(e) => setResetEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none transition-all text-stone-800"
-                  placeholder="seu@email.com"
-                  autoComplete="email"
-                  required
-                />
-              </div>
-              <p className="text-[10px] text-stone-400 mt-2">
-                Enviaremos um link de recuperação para o e-mail informado acima.
-              </p>
-            </div>
-            <div className="space-y-3">
-              <button
-                type="submit"
-                disabled={loading || !!resetMessage}
-                aria-busy={loading}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-bold py-3 rounded-lg transition-all shadow-lg shadow-emerald-200"
-              >
-                {loading ? 'Processando...' : 'Enviar Link de Recuperação'}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setView('login');
-                  setError('');
-                }}
-                className="w-full bg-stone-100 hover:bg-stone-200 text-stone-600 font-bold py-2 rounded-lg transition-all"
-              >
-                Voltar para o Login
-              </button>
-            </div>
-          </form>
+        {error && <AuthAlert kind="error">{error}</AuthAlert>}
+        <NewPasswordFields
+          password={password}
+          confirmation={confirmation}
+          onPasswordChange={setPassword}
+          onConfirmationChange={setConfirmation}
+          disabled={loading}
+        />
+        <SubmitButton loading={loading} loadingLabel="Salvando…" tone="amber">
+          Salvar senha e entrar
+        </SubmitButton>
+        {onSignOut && (
+          <button
+            type="button"
+            onClick={onSignOut}
+            disabled={loading}
+            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-bold text-stone-600 hover:bg-stone-100"
+          >
+            <LogOut className="h-4 w-4" /> Sair e entrar com outra conta
+          </button>
         )}
-      </div>
-    </div>
+      </form>
+    </AuthLayout>
   );
 }
