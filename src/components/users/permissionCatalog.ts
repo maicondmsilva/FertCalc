@@ -51,6 +51,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { id: 'history_editPricing', label: 'Editar precificação existente' },
       { id: 'history_delete', label: 'Excluir precificação' },
       { id: 'pricing_viewAllRegions', label: 'Ver precificações de todas as regiões' },
+      { id: 'history_transferRegion', label: 'Transferir precificação entre regiões' },
     ],
   },
   {

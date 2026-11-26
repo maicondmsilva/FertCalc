@@ -62,6 +62,8 @@ import {
   type FormulaComparisonAlternative,
 } from '../utils/formulaComparison';
 import { isWithinGuaranteeRange, parseFormulaTarget } from '../domain/pricing-engine';
+import PricingRegionField, { pricingRegionProblem } from './regions/PricingRegionField';
+import { defaultRegionId, useMyRegions } from '../hooks/useMyRegions';
 
 const formatPricingMoney = (value: number | undefined, currency: 'BRL' | 'USD' = 'BRL') =>
   Number(value || 0).toLocaleString('pt-BR', {
@@ -512,7 +514,21 @@ export default function Calculator({
     return getPriceWarnings([...byId.values()]);
   })();
 
+  // Região da precificação: escolhida ao criar; em uma salva, só pela transferência.
+  const myRegions = useMyRegions(currentUser);
+  const regionSelectable = !isSimplified && !initialData;
+  const regionValid = myRegions.options.some((region) => region.id === factors.regionId);
+  useEffect(() => {
+    if (!regionSelectable || myRegions.loading || regionValid) return;
+    const fallback = defaultRegionId(myRegions.options, myRegions.principalId);
+    if ((factors.regionId || '') !== fallback) {
+      setFactors((previous) => ({ ...previous, regionId: fallback || undefined }));
+    }
+  }, [regionSelectable, myRegions, regionValid, factors.regionId, setFactors]);
+  const regionProblem = regionSelectable ? pricingRegionProblem(myRegions, factors.regionId) : null;
+
   const pendingIssues = [
+    regionProblem || '',
     !isSimplified && !factors.client?.id ? 'Selecione o cliente' : '',
     // A calculadora simplificada não salva precificação, então não precisa de filial.
     !isSimplified && !factors.branchId ? 'Informe a filial' : '',
@@ -821,7 +837,7 @@ export default function Calculator({
             )}
 
             <div
-              className={`grid grid-cols-1 gap-4 mt-6 pt-6 border-t border-stone-100 ${isSimplified ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}
+              className={`grid grid-cols-1 gap-4 mt-6 pt-6 border-t border-stone-100 ${isSimplified ? 'md:grid-cols-2' : 'md:grid-cols-2 xl:grid-cols-4'}`}
             >
               {!isSimplified && (
                 <div>
@@ -846,6 +862,19 @@ export default function Calculator({
                     ))}
                   </select>
                 </div>
+              )}
+              {!isSimplified && (
+                <PricingRegionField
+                  id="calculator-region"
+                  compact
+                  regions={myRegions}
+                  value={factors.regionId}
+                  lockedRegionId={initialData ? (initialData.regionId ?? null) : undefined}
+                  onChange={(regionId) =>
+                    setFactors((previous) => ({ ...previous, regionId: regionId || undefined }))
+                  }
+                  disabled={Boolean(isLocked)}
+                />
               )}
               <div>
                 <label className="block text-sm font-medium text-stone-600 mb-1 flex items-center">
@@ -3161,8 +3190,15 @@ export default function Calculator({
               {canSavePricing && (
                 <button
                   type="button"
-                  onClick={() => void savePricing()}
+                  onClick={() => {
+                    if (regionProblem) {
+                      showError(regionProblem);
+                      return;
+                    }
+                    void savePricing();
+                  }}
                   disabled={Boolean(isLocked) || !hasValidExchangeRate || isSavingPricing}
+                  title={regionProblem || undefined}
                   className="mt-3 inline-flex w-full min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-emerald-950/30 hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-stone-600"
                 >
                   <Save className="h-4 w-4" />{' '}

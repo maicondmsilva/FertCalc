@@ -544,6 +544,8 @@ export interface PricingFactors {
   client: Client;
   agent: Agent;
   branchId: string;
+  /** Região escolhida ao salvar a precificação. */
+  regionId?: string;
   priceListId: string;
   priceListCurrency?: PriceListCurrency;
   priceListExchangeRate?: number;
@@ -633,6 +635,8 @@ export interface PricingRecord {
   formattedCod?: string;
   transferToUserId?: string;
   transferToUserName?: string;
+  /** Região em que a precificação foi salva (muda só pela transferência). */
+  regionId?: string | null;
   rejectionObservation?: string;
   deletionRequest?: {
     reason: string;

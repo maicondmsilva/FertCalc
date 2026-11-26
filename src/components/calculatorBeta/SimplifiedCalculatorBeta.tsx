@@ -24,6 +24,8 @@ import type {
 import { useCalculator } from '../../hooks/useCalculator';
 import BetaProfitabilityModal from './BetaProfitabilityModal';
 import BetaClientPicker from './BetaClientPicker';
+import PricingRegionField, { pricingRegionProblem } from '../regions/PricingRegionField';
+import { defaultRegionId, useMyRegions } from '../../hooks/useMyRegions';
 import { canCheckProfitability } from './profitabilityModel';
 import { useToast } from '../Toast';
 import { ProductPickerModal } from '../calculator/ProductPickerModal';
@@ -305,13 +307,26 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
       setFactors((previous) => ({ ...previous, branchId: onlyBranch }));
     }
   }, [pricingMode, branchIsValid, branchOptions, factors.branchId, setFactors]);
+  // Região: a principal já vem marcada; com uma só, fica fixa.
+  const myRegions = useMyRegions(currentUser);
+  const regionValid = myRegions.options.some((region) => region.id === factors.regionId);
+  useEffect(() => {
+    if (!pricingMode || myRegions.loading || regionValid) return;
+    const fallback = defaultRegionId(myRegions.options, myRegions.principalId);
+    if ((factors.regionId || '') !== fallback) {
+      setFactors((previous) => ({ ...previous, regionId: fallback || undefined }));
+    }
+  }, [pricingMode, myRegions, regionValid, factors.regionId, setFactors]);
+  const regionProblem = pricingRegionProblem(myRegions, factors.regionId);
   const saveProblem = !pricingMode
     ? null
     : !branchIsValid
       ? 'Escolha a filial para salvar a precificação.'
-      : !factors.client?.id
-        ? 'Escolha o cliente para salvar a precificação.'
-        : commissionProblem;
+      : regionProblem
+        ? regionProblem
+        : !factors.client?.id
+          ? 'Escolha o cliente para salvar a precificação.'
+          : commissionProblem;
 
   return (
     <div className="@container w-full space-y-5 pb-[max(3rem,env(safe-area-inset-bottom))]">
@@ -359,14 +374,14 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
                   <p className="text-sm font-black text-stone-900">Precificação</p>
                   <p className="text-xs text-stone-500">
                     {pricingMode
-                      ? 'Informe filial, agente e cliente para salvar a precificação.'
-                      : 'Ligue para informar filial, agente e cliente e salvar a precificação.'}
+                      ? 'Informe filial, região, agente e cliente para salvar a precificação.'
+                      : 'Ligue para informar filial, região, agente e cliente e salvar a precificação.'}
                   </p>
                 </div>
               </div>
             </div>
             {pricingMode && (
-              <div className="grid grid-cols-1 gap-3 @2xl:grid-cols-2 @5xl:grid-cols-[minmax(0,14rem)_minmax(0,1fr)_minmax(0,1fr)]">
+              <div className="grid grid-cols-1 gap-3 @2xl:grid-cols-2 @5xl:grid-cols-[minmax(0,13rem)_minmax(0,14rem)_minmax(0,1fr)_minmax(0,1fr)]">
                 <div>
                   <label
                     htmlFor="beta-branch"
@@ -398,6 +413,15 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
                     ))}
                   </select>
                 </div>
+                <PricingRegionField
+                  id="beta-region"
+                  regions={myRegions}
+                  value={factors.regionId}
+                  onChange={(regionId) =>
+                    setFactors((previous) => ({ ...previous, regionId: regionId || undefined }))
+                  }
+                  disabled={Boolean(isLocked)}
+                />
                 <div>
                   <label
                     htmlFor="beta-agent"
@@ -442,9 +466,20 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
                     disabled={Boolean(isLocked)}
                   />
                 </div>
+                {myRegions.orgHasRegions &&
+                  !myRegions.loading &&
+                  myRegions.options.length === 0 && (
+                    <p
+                      className="text-xs font-semibold text-red-700 @2xl:col-span-2 @5xl:col-span-4"
+                      role="alert"
+                    >
+                      Você não tem região. Peça ao administrador para vincular uma em Usuários →
+                      Regiões; sem região não é possível salvar a precificação.
+                    </p>
+                  )}
                 {commissionProblem && (
                   <p
-                    className="text-xs font-semibold text-amber-700 @2xl:col-span-2 @5xl:col-span-3"
+                    className="text-xs font-semibold text-amber-700 @2xl:col-span-2 @5xl:col-span-4"
                     role="status"
                   >
                     {commissionProblem}
@@ -730,7 +765,11 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
                 void savePricing();
               }}
               disabled={
-                Boolean(isLocked) || !hasValidExchangeRate || isSavingPricing || selectedCount === 0
+                Boolean(isLocked) ||
+                !hasValidExchangeRate ||
+                isSavingPricing ||
+                selectedCount === 0 ||
+                (myRegions.orgHasRegions && myRegions.options.length === 0)
               }
               title={saveProblem || undefined}
               className="inline-flex h-11 items-center gap-2 rounded-xl bg-emerald-700 px-4 text-sm font-black text-white shadow-sm hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-stone-300"

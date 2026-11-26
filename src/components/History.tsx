@@ -17,8 +17,12 @@ import {
   XCircle,
   MapPin,
   Copy,
+  ArrowLeftRight,
 } from 'lucide-react';
 import NovoPedidoVendaModal from './NovoPedidoVendaModal';
+import TransferRegionModal from './regions/TransferRegionModal';
+import { useMyRegions } from '../hooks/useMyRegions';
+import { pricingRegionErrorMessage, transferPricingRegion } from '../services/regionService';
 import {
   getPricingRecords,
   updatePricingRecord,
@@ -73,6 +77,12 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
     currentUser.role === 'master' ||
     currentUser.role === 'admin' ||
     (historyPermissions.history_delete ?? historyPermissions.history_changeStatus) !== false;
+  const canTransferRegion =
+    currentUser.role === 'master' ||
+    currentUser.role === 'admin' ||
+    historyPermissions.history_transferRegion === true;
+  const regionName = (id?: string | null) =>
+    myRegions.all.find((region) => region.id === id)?.name || '';
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
   const [pricings, setPricings] = useState<PricingRecord[]>([]);
   const [appSettings, setAppSettings] = useState<AppSettings>({
@@ -133,6 +143,11 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
   };
   const [filter, setFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  // Região: filtro, nome em cada cartão e transferência (permissão própria).
+  const myRegions = useMyRegions(currentUser);
+  const [regionFilter, setRegionFilter] = useState('');
+  const [transferring, setTransferring] = useState<PricingRecord | null>(null);
+  const [transferSaving, setTransferSaving] = useState(false);
   const [guaranteeFilter, setGuaranteeFilter] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -153,6 +168,11 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
       clientName.toLowerCase().includes(filter.toLowerCase()) ||
       agentName.toLowerCase().includes(filter.toLowerCase());
     const matchesStatus = statusFilter ? p.status === statusFilter : true;
+    const matchesRegion = !regionFilter
+      ? true
+      : regionFilter === 'none'
+        ? !p.regionId
+        : p.regionId === regionFilter;
     const hasAuthorizedDivergence =
       getPricingGuaranteeAuthorizationSummary(p).hasAuthorizedDivergence;
     const matchesGuarantee =
@@ -167,7 +187,7 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
 
     const matchesDate = (!start || pricingDate >= start) && (!end || pricingDate <= end);
 
-    return matchesName && matchesStatus && matchesGuarantee && matchesDate;
+    return matchesName && matchesStatus && matchesRegion && matchesGuarantee && matchesDate;
   });
   const tabPricings = filteredPricings.filter((p) =>
     activeTab === 'deleted' ? p.status === 'Excluída' : p.status !== 'Excluída'
@@ -178,7 +198,7 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeTab, endDate, filter, guaranteeFilter, startDate, statusFilter]);
+  }, [activeTab, endDate, filter, guaranteeFilter, regionFilter, startDate, statusFilter]);
 
   const stats = {
     total: pricings.length,
@@ -648,6 +668,23 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
               <option value="Fechada">Fechada</option>
               <option value="Perdida">Perdida</option>
             </select>
+            {myRegions.orgHasRegions && (
+              <select
+                value={regionFilter}
+                onChange={(e) => setRegionFilter(e.target.value)}
+                aria-label="Filtrar por região"
+                className="px-4 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              >
+                <option value="">Todas as regiões</option>
+                <option value="none">Sem região</option>
+                {myRegions.all.map((region) => (
+                  <option key={region.id} value={region.id}>
+                    {region.name}
+                    {region.ativo ? '' : ' (inativa)'}
+                  </option>
+                ))}
+              </select>
+            )}
             <select
               value={guaranteeFilter}
               onChange={(e) => setGuaranteeFilter(e.target.value)}
@@ -709,6 +746,16 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                     <p className="text-[10px] font-bold text-emerald-600 uppercase">
                       Precificação: {p.formattedCod}
                     </p>
+                    {myRegions.orgHasRegions && (
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                          p.regionId ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
+                        }`}
+                      >
+                        <MapPin className="h-3 w-3" />
+                        {regionName(p.regionId) || 'Sem região'}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <span
@@ -1038,6 +1085,19 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                     📋
                   </button>
                 )}
+                {p.status !== 'Excluída' && canTransferRegion && myRegions.orgHasRegions && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setTransferring(p);
+                    }}
+                    className="p-2.5 hover:bg-blue-100 text-blue-700 rounded-full transition-all active:scale-95 bg-blue-50/50"
+                    title="Transferir região"
+                    aria-label="Transferir região"
+                  >
+                    <ArrowLeftRight className="w-5 h-5" />
+                  </button>
+                )}
                 {p.status !== 'Excluída' && canDeletePricing && (
                   <button
                     onClick={(e) => {
@@ -1192,6 +1252,29 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
         </div>
       )}
 
+      {transferring && (
+        <TransferRegionModal
+          pricing={transferring}
+          regions={myRegions.all}
+          saving={transferSaving}
+          onClose={() => !transferSaving && setTransferring(null)}
+          onConfirm={async (regionId, reason) => {
+            setTransferSaving(true);
+            try {
+              await transferPricingRegion(transferring.id, regionId, reason);
+              showSuccess(
+                `Precificação transferida para ${regionName(regionId) || 'a nova região'}.`
+              );
+              setTransferring(null);
+              await loadData();
+            } catch (error) {
+              showError(pricingRegionErrorMessage(error));
+            } finally {
+              setTransferSaving(false);
+            }
+          }}
+        />
+      )}
       {showNovoPedido && novoPedidoPricing && (
         <NovoPedidoVendaModal
           pricing={novoPedidoPricing}
