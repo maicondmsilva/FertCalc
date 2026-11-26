@@ -607,10 +607,10 @@ export default function BetaFormulaCard({
           </div>
         </header>
 
-        {/* Alvos: N-P-K em cima; secundários, busca e categoria na linha de baixo */}
+        {/* Alvos na mesma linha: N-P-K, secundários, categoria e busca */}
         {!isFreeProducts && (
           <div className="space-y-2">
-            <div className="flex flex-wrap items-end gap-x-6 gap-y-2">
+            <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
               <div>
                 <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-stone-500">
                   Fórmula alvo (N-P-K)
@@ -623,7 +623,7 @@ export default function BetaFormulaCard({
                       <React.Fragment key={field}>
                         {position > 0 && <span className="font-bold text-stone-300">–</span>}
                         <label
-                          className={`flex h-10 w-[92px] items-center gap-1.5 rounded-lg border px-2.5 ${style.box}`}
+                          className={`flex h-10 w-[82px] items-center gap-1 rounded-lg border px-2 ${style.box}`}
                         >
                           <span className={`text-xs font-black ${style.text}`}>{nutrient}</span>
                           <input
@@ -658,19 +658,14 @@ export default function BetaFormulaCard({
                   })}
                 </div>
               </div>
-            </div>
-            <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
               <div>
-                <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-stone-500">
-                  Secundários alvo
-                </p>
                 <div className="flex items-center gap-1.5">
                   {(['Ca', 'S', 'Mg'] as const).map((nutrient) => {
                     const style = NUTRIENT_STYLES[nutrient];
                     return (
                       <label
                         key={nutrient}
-                        className={`flex h-10 w-[88px] items-center gap-1.5 rounded-lg border px-2.5 ${style.box}`}
+                        className={`flex h-10 w-[78px] items-center gap-1 rounded-lg border px-2 ${style.box}`}
                       >
                         <span className={`text-xs font-black ${style.text}`}>{nutrient}</span>
                         <input
@@ -695,7 +690,22 @@ export default function BetaFormulaCard({
                   })}
                 </div>
               </div>
-              <div className="relative min-w-[200px] max-w-sm flex-1">
+              <select
+                value={calculation.category || 'all'}
+                onChange={(event) =>
+                  updateCalculation(calculation.id, 'category', event.target.value)
+                }
+                className="h-10 rounded-lg border border-stone-300 bg-white px-2.5 text-sm text-stone-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                aria-label="Categoria da fórmula"
+              >
+                <option value="all">Categoria: Todas</option>
+                {compCategories.map((category: { id: string; nome: string }) => (
+                  <option key={category.id} value={category.id}>
+                    {category.nome}
+                  </option>
+                ))}
+              </select>
+              <div className="relative min-w-[150px] max-w-sm flex-1">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
                 <input
                   type="text"
@@ -706,7 +716,8 @@ export default function BetaFormulaCard({
                   }}
                   onFocus={() => setIsLoadOpen(true)}
                   onBlur={closeSuggestionsLater}
-                  placeholder="Carregar batida ou produto formulado…"
+                  placeholder="Buscar batida ou produto…"
+                  aria-label="Carregar batida ou produto formulado"
                   className="h-10 w-full rounded-lg border border-stone-300 bg-white pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
                 {showSuggestions && (
@@ -739,21 +750,6 @@ export default function BetaFormulaCard({
                   </div>
                 )}
               </div>
-              <select
-                value={calculation.category || 'all'}
-                onChange={(event) =>
-                  updateCalculation(calculation.id, 'category', event.target.value)
-                }
-                className="h-10 rounded-lg border border-stone-300 bg-white px-2.5 text-sm text-stone-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                aria-label="Categoria da fórmula"
-              >
-                <option value="all">Categoria: Todas</option>
-                {compCategories.map((category: { id: string; nome: string }) => (
-                  <option key={category.id} value={category.id}>
-                    {category.nome}
-                  </option>
-                ))}
-              </select>
             </div>
             {calculation.formula && !composeFormulaTarget(npkDraft) && (
               <p className="mt-1.5 text-sm text-stone-600">
