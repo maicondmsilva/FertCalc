@@ -58,6 +58,16 @@ export default function Goals({ currentUser }: GoalsProps) {
     setLoading(false);
   };
 
+  // Permissões de metas (admin e master sempre podem; o banco confere).
+  const goalPermissions = (currentUser.permissions || {}) as Record<string, unknown>;
+  const isAdminUser = currentUser.role === 'master' || currentUser.role === 'admin';
+  const canCreateForOthers = isAdminUser || goalPermissions.goals_create === true;
+  const canApproveGoals = isAdminUser || goalPermissions.goals_edit === true;
+  const canDeleteGoal = (goal: Goal) =>
+    isAdminUser ||
+    goalPermissions.goals_delete === true ||
+    (goal.userId === currentUser.id && goal.status === 'Pendente');
+
   const userGoals = useMemo(() => {
     if (currentUser.role === 'master' || currentUser.role === 'admin') return goals;
     if (currentUser.role === 'manager') {
@@ -102,12 +112,7 @@ export default function Goals({ currentUser }: GoalsProps) {
     }
     setLoading(true);
     try {
-      const userId =
-        currentUser.role === 'master' ||
-        currentUser.role === 'admin' ||
-        currentUser.role === 'manager'
-          ? newGoal.userId || currentUser.id
-          : currentUser.id;
+      const userId = canCreateForOthers ? newGoal.userId || currentUser.id : currentUser.id;
       const userName = allUsers.find((u) => u.id === userId)?.name || currentUser.name;
       await createGoal({
         userId,
@@ -265,9 +270,7 @@ export default function Goals({ currentUser }: GoalsProps) {
         <div className="bg-white p-6 rounded-xl border border-stone-200 shadow-sm space-y-4">
           <h3 className="font-bold text-stone-800">Configurar Objetivo</h3>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {(currentUser.role === 'master' ||
-              currentUser.role === 'admin' ||
-              currentUser.role === 'manager') && (
+            {canCreateForOthers && (
               <div>
                 <label className="block text-xs font-bold text-stone-500 mb-1">Vendedor</label>
                 <select
@@ -280,8 +283,7 @@ export default function Goals({ currentUser }: GoalsProps) {
                     .filter(
                       (u) =>
                         u.role === 'user' &&
-                        (currentUser.role !== 'manager' ||
-                          (currentUser.managedUserIds || []).includes(u.id))
+                        (isAdminUser || (currentUser.managedUserIds || []).includes(u.id))
                     )
                     .map((u) => (
                       <option key={u.id} value={u.id}>
@@ -448,9 +450,8 @@ export default function Goals({ currentUser }: GoalsProps) {
               </div>
               <div className="px-6 py-4 bg-stone-50 flex justify-between items-center">
                 <div className="flex gap-2">
-                  {(currentUser.role === 'master' ||
-                    currentUser.role === 'admin' ||
-                    currentUser.role === 'manager') &&
+                  {canApproveGoals &&
+                    (isAdminUser || goal.userId !== currentUser.id) &&
                     goal.status === 'Pendente' && (
                       <>
                         <button
@@ -470,13 +471,16 @@ export default function Goals({ currentUser }: GoalsProps) {
                       </>
                     )}
                 </div>
-                <button
-                  onClick={() => handleDeleteGoal(goal.id)}
-                  className="p-2 text-stone-400 hover:text-red-500 transition-colors"
-                  title="Excluir"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                {canDeleteGoal(goal) && (
+                  <button
+                    onClick={() => handleDeleteGoal(goal.id)}
+                    className="p-2 text-stone-400 hover:text-red-500 transition-colors"
+                    title="Excluir"
+                    aria-label="Excluir meta"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
           );
