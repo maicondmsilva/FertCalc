@@ -97,6 +97,7 @@ describe('situação, meta e atividades', () => {
       pricing({ status: 'Perdida' }),
       pricing({ status: 'Excluída' }),
     ]);
+    expect(items.find((item) => item.key === 'approved')?.tons).toBe(10);
     expect(items.map((item) => [item.key, item.count])).toEqual([
       ['approved', 1],
       ['awaitingApproval', 1],

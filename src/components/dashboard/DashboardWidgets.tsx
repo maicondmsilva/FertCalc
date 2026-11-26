@@ -18,7 +18,7 @@ import {
   type GoalProgress,
   type StatusBreakdownItem,
 } from '../../utils/pricingDashboard';
-import { getPricingTotalSaleValue } from '../../utils/pricingMetrics';
+import { getPricingTotalSaleValue, getPricingTotalTons } from '../../utils/pricingMetrics';
 
 export const brl = (value: number, digits = 2) =>
   value.toLocaleString('pt-BR', {
@@ -171,17 +171,66 @@ export function GoalCard({ progress }: { progress: GoalProgress | null }) {
   );
 }
 
+export type DashboardMetric = 'value' | 'tons';
+
+/** Alterna entre valor (R$) e volume (t). */
+export function MetricToggle({
+  value,
+  onChange,
+  label,
+}: {
+  value: DashboardMetric;
+  onChange: (metric: DashboardMetric) => void;
+  label: string;
+}) {
+  return (
+    <div className="inline-flex rounded-lg bg-stone-100 p-0.5" role="radiogroup" aria-label={label}>
+      {(
+        [
+          ['value', 'R$'],
+          ['tons', 't'],
+        ] as const
+      ).map(([metric, text]) => (
+        <button
+          key={metric}
+          type="button"
+          role="radio"
+          aria-checked={value === metric}
+          onClick={() => onChange(metric)}
+          className={`min-w-9 rounded-md px-2.5 py-1 text-xs font-black transition ${
+            value === metric
+              ? 'bg-white text-stone-900 shadow-sm'
+              : 'text-stone-500 hover:text-stone-800'
+          }`}
+        >
+          {text}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+const compactTons = (value: number) =>
+  `${value.toLocaleString('pt-BR', { maximumFractionDigits: value >= 100 ? 0 : 1 })} t`;
+
 export function SalesTrendChart({
   data,
 }: {
-  data: { period: string; month: string; year: number; value: number }[];
+  data: { period: string; month: string; year: number; value: number; tons: number }[];
 }) {
-  const total = data.reduce((sum, item) => sum + item.value, 0);
+  const [metric, setMetric] = useState<DashboardMetric>('value');
+  const totalValue = data.reduce((sum, item) => sum + item.value, 0);
+  const totalTons = data.reduce((sum, item) => sum + item.tons, 0);
   return (
     <section className={`${card} p-5`}>
-      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-base font-black text-stone-900">Vendas aprovadas — 6 meses</h2>
-        <p className="text-xs text-stone-500">Total {formatCompactBRL(total)}</p>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="text-base font-black text-stone-900">Vendas aprovadas — 6 meses</h2>
+          <p className="text-xs text-stone-500">
+            Total {formatCompactBRL(totalValue)} · {tons(totalTons)}
+          </p>
+        </div>
+        <MetricToggle value={metric} onChange={setMetric} label="Mostrar vendas em" />
       </div>
       <div className="h-60" role="img" aria-label="Vendas aprovadas por mês nos últimos 6 meses">
         <ResponsiveContainer width="100%" height="100%">
@@ -196,9 +245,11 @@ export function SalesTrendChart({
             <YAxis
               axisLine={false}
               tickLine={false}
-              width={56}
+              width={64}
               tick={{ fill: '#a8a29e', fontSize: 11 }}
-              tickFormatter={(value: number) => formatCompactBRL(value).replace('R$ ', '')}
+              tickFormatter={(value: number) =>
+                metric === 'tons' ? compactTons(value) : formatCompactBRL(value).replace('R$ ', '')
+              }
             />
             <Tooltip
               cursor={{ fill: '#f5f5f4' }}
@@ -207,15 +258,31 @@ export function SalesTrendChart({
                 border: '1px solid #e7e5e4',
                 boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.08)',
               }}
-              formatter={(value: number) => [brl(value), 'Vendas']}
+              formatter={(
+                _value: number,
+                _name: string,
+                item: { payload?: { value: number; tons: number } }
+              ) => [
+                `${brl(item.payload?.value ?? 0)} · ${tons(item.payload?.tons ?? 0)}`,
+                'Vendas',
+              ]}
               labelFormatter={(_, payload) => {
                 const item = payload?.[0]?.payload as { month: string; year: number } | undefined;
                 return item ? `${item.month} ${item.year}` : '';
               }}
             />
-            <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+            <Bar dataKey={metric} radius={[6, 6, 0, 0]} isAnimationActive={false}>
               {data.map((entry, index) => (
-                <Cell key={entry.period} fill={index === data.length - 1 ? '#10b981' : '#d6d3d1'} />
+                <Cell
+                  key={entry.period}
+                  fill={
+                    index === data.length - 1
+                      ? metric === 'tons'
+                        ? '#8b5cf6'
+                        : '#10b981'
+                      : '#d6d3d1'
+                  }
+                />
               ))}
             </Bar>
           </BarChart>
@@ -239,7 +306,8 @@ export function StatusBreakdownCard({ items }: { items: StatusBreakdownItem[] })
       <div className="mb-4 flex items-baseline justify-between">
         <h2 className="text-base font-black text-stone-900">Situação das propostas</h2>
         <span className="text-xs text-stone-500">
-          {total} {total === 1 ? 'proposta' : 'propostas'}
+          {total} {total === 1 ? 'proposta' : 'propostas'} ·{' '}
+          {tons(items.reduce((sum, item) => sum + item.tons, 0))}
         </span>
       </div>
       {total > 0 ? (
@@ -264,7 +332,10 @@ export function StatusBreakdownCard({ items }: { items: StatusBreakdownItem[] })
                 <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${STATUS_COLOR[item.key]}`} />
                 <span className="min-w-0 flex-1 truncate text-stone-700">{item.label}</span>
                 <span className="font-black tabular-nums text-stone-900">{item.count}</span>
-                <span className="w-24 text-right text-xs tabular-nums text-stone-500">
+                <span className="w-16 text-right text-xs font-bold tabular-nums text-stone-700">
+                  {compactTons(item.tons)}
+                </span>
+                <span className="w-20 text-right text-xs tabular-nums text-stone-500">
                   {formatCompactBRL(item.value)}
                 </span>
               </li>
@@ -343,20 +414,39 @@ type RankingTab = {
   key: string;
   label: string;
   items: CommercialRankingItem[];
+  /** Fórmulas começam por volume; as demais por valor. */
   byVolume?: boolean;
 };
 
-/** Rankings em abas (vendedores, filiais, clientes, fórmulas) num só cartão. */
+const RANKING_SIZE = 5;
+
+/** Rankings em abas (vendedores, filiais, clientes, fórmulas), por valor ou toneladas. */
 export function RankingTabs({ tabs }: { tabs: RankingTab[] }) {
   const [active, setActive] = useState(tabs[0]?.key);
   const current = tabs.find((tab) => tab.key === active) || tabs[0];
+  const [metricByTab, setMetricByTab] = useState<Record<string, DashboardMetric>>({});
   if (!current) return null;
-  const metric = (item: CommercialRankingItem) => (current.byVolume ? item.tons : item.salesValue);
-  const largest = Math.max(0, ...current.items.map(metric));
+  const metricKey: DashboardMetric =
+    metricByTab[current.key] ?? (current.byVolume ? 'tons' : 'value');
+  const measure = (item: CommercialRankingItem) =>
+    metricKey === 'tons' ? item.tons : item.salesValue;
+  const items = [...current.items]
+    .sort((left, right) => measure(right) - measure(left))
+    .slice(0, RANKING_SIZE);
+  const largest = Math.max(0, ...items.map(measure));
   return (
     <section className={`${card} p-5`}>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-base font-black text-stone-900">Ranking do mês</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-base font-black text-stone-900">Ranking do mês</h2>
+          <MetricToggle
+            value={metricKey}
+            onChange={(metric) =>
+              setMetricByTab((currentMetrics) => ({ ...currentMetrics, [current.key]: metric }))
+            }
+            label="Ordenar ranking por"
+          />
+        </div>
         <div
           className="-mx-1 flex max-w-full gap-1 overflow-x-auto rounded-xl bg-stone-100 p-1"
           role="tablist"
@@ -379,9 +469,9 @@ export function RankingTabs({ tabs }: { tabs: RankingTab[] }) {
           ))}
         </div>
       </div>
-      {current.items.length > 0 ? (
+      {items.length > 0 ? (
         <ol className="space-y-4" role="tabpanel">
-          {current.items.map((item, index) => (
+          {items.map((item, index) => (
             <li key={item.id}>
               <div className="mb-1.5 flex items-end justify-between gap-3">
                 <div className="min-w-0">
@@ -390,18 +480,18 @@ export function RankingTabs({ tabs }: { tabs: RankingTab[] }) {
                     {item.name}
                   </p>
                   <p className="text-xs text-stone-500">
-                    {current.byVolume ? brl(item.salesValue, 0) : tons(item.tons)} ·{' '}
+                    {metricKey === 'tons' ? brl(item.salesValue, 0) : tons(item.tons)} ·{' '}
                     {item.salesCount} {item.salesCount === 1 ? 'venda' : 'vendas'}
                   </p>
                 </div>
                 <p className="whitespace-nowrap text-sm font-black tabular-nums text-stone-900">
-                  {current.byVolume ? tons(item.tons) : brl(item.salesValue, 0)}
+                  {metricKey === 'tons' ? tons(item.tons) : brl(item.salesValue, 0)}
                 </p>
               </div>
               <div className="h-1.5 overflow-hidden rounded-full bg-stone-100">
                 <div
-                  className={`h-full rounded-full ${current.byVolume ? 'bg-violet-500' : 'bg-emerald-500'}`}
-                  style={{ width: `${largest > 0 ? (metric(item) / largest) * 100 : 0}%` }}
+                  className={`h-full rounded-full ${metricKey === 'tons' ? 'bg-violet-500' : 'bg-emerald-500'}`}
+                  style={{ width: `${largest > 0 ? (measure(item) / largest) * 100 : 0}%` }}
                 />
               </div>
             </li>
@@ -451,6 +541,7 @@ export function RecentActivityCard({ items }: { items: PricingRecord[] }) {
                     {item.status}
                   </span>
                   <p className="mt-0.5 text-xs font-bold tabular-nums text-stone-700">
+                    {compactTons(getPricingTotalTons(item))} ·{' '}
                     {formatCompactBRL(getPricingTotalSaleValue(item))}
                   </p>
                 </div>

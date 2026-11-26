@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render } from '@testing-library/react';
-import { screen, fireEvent } from '@testing-library/dom';
+import { screen, fireEvent, within } from '@testing-library/dom';
 import type { DashboardData } from '../useDashboardData';
 
 const state: { current: DashboardData } = {
@@ -110,5 +110,37 @@ describe('Dashboard', () => {
     render(<Dashboard currentUser={seller} />);
     expect(screen.queryByRole('tab', { name: 'Vendedores' })).toBeNull();
     expect(screen.getByRole('tab', { name: 'Filiais' })).toBeTruthy();
+  });
+
+  it('ranking alterna entre valor e toneladas', () => {
+    state.current = {
+      ...state.current,
+      pricings: [
+        pricing({
+          userId: 'a',
+          userName: 'Valor Alto',
+          factors: { totalTons: 5 },
+          summary: { totalSaleValue: 90000 },
+        }),
+        pricing({
+          userId: 'b',
+          userName: 'Volume Alto',
+          factors: { totalTons: 50 },
+          summary: { totalSaleValue: 10000 },
+        }),
+      ] as never,
+    };
+    render(<Dashboard currentUser={manager} />);
+    const first = () =>
+      screen.getAllByRole('listitem').find((li) => /^1\./.test(li.textContent || ''));
+    expect(first()?.textContent).toContain('Valor Alto');
+    fireEvent.click(
+      within(screen.getByRole('radiogroup', { name: 'Ordenar ranking por' })).getByRole('radio', {
+        name: 't',
+      })
+    );
+    expect(
+      screen.getAllByRole('listitem').some((li) => /^1\.Volume Alto/.test(li.textContent || ''))
+    ).toBe(true);
   });
 });
