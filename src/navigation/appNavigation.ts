@@ -69,14 +69,7 @@ registerRoutes('pricing', [
   'agents',
   'pedidos_venda',
 ]);
-registerRoutes('config', [
-  'branches',
-  'settings',
-  'users',
-  'access_profiles',
-  'access_levels',
-  'alert_center',
-]);
+registerRoutes('config', ['branches', 'settings', 'users', 'access_profiles', 'alert_center']);
 registerRoutes('managementReports', [
   'managementReports_dashboard',
   'managementReports_lancamentos',
@@ -206,12 +199,6 @@ export function getNavigationItems(
       {
         id: 'access_profiles',
         label: 'Perfis de Acesso',
-        icon: ShieldCheck,
-        permission: 'accessProfiles',
-      },
-      {
-        id: 'access_levels',
-        label: 'Níveis de Acesso',
         icon: ShieldCheck,
         permission: 'accessProfiles',
       },

@@ -61,60 +61,6 @@ export async function getAccessLevels(): Promise<AccessLevel[]> {
   return data.map((row) => mapAccessLevel(row));
 }
 
-export async function createAccessLevel(
-  payload: Omit<AccessLevel, 'id' | 'created_at' | 'updated_at' | 'is_system'> & {
-    is_system?: boolean;
-  }
-): Promise<AccessLevel> {
-  const { data, error } = await supabase
-    .from('access_levels')
-    .insert({
-      code: payload.code.toLowerCase(),
-      name: payload.name,
-      description: payload.description ?? null,
-      hierarchy_level: payload.hierarchy_level,
-      default_permissions: payload.default_permissions ?? {},
-      is_system: payload.is_system ?? false,
-    })
-    .select('*')
-    .single();
-  if (error || !data) throw error ?? new Error('Falha ao criar nível de acesso');
-  return mapAccessLevel(data);
-}
-
-export async function updateAccessLevel(
-  id: string,
-  payload: Partial<Omit<AccessLevel, 'id' | 'created_at' | 'updated_at' | 'is_system'>>
-): Promise<boolean> {
-  const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
-  if (payload.code !== undefined) updates.code = payload.code.toLowerCase();
-  if (payload.name !== undefined) updates.name = payload.name;
-  if (payload.description !== undefined) updates.description = payload.description;
-  if (payload.hierarchy_level !== undefined) updates.hierarchy_level = payload.hierarchy_level;
-  if (payload.default_permissions !== undefined)
-    updates.default_permissions = payload.default_permissions;
-  const { error } = await supabase.from('access_levels').update(updates).eq('id', id);
-  return !error;
-}
-
-export async function deleteAccessLevel(id: string): Promise<boolean> {
-  const { data: level, error: levelError } = await supabase
-    .from('access_levels')
-    .select('id, code, is_system')
-    .eq('id', id)
-    .single();
-  if (levelError || !level) return false;
-  if (level.is_system) throw new Error('Níveis de sistema não podem ser excluídos.');
-
-  const { count, error: countError } = await supabase
-    .from('app_users')
-    .select('id', { count: 'exact', head: true })
-    .eq('role', level.code);
-  if (countError) throw countError;
-  if ((count ?? 0) > 0) {
-    throw new Error('Este nível está em uso por usuários e não pode ser excluído.');
-  }
-
-  const { error } = await supabase.from('access_levels').delete().eq('id', id);
-  return !error;
-}
+// Níveis são fixos: as regras de segurança do banco dependem da hierarquia de
+// cada um (alterar o número mudava o poder de todos com aquele nível). Por isso
+// não há mais criar/editar/excluir pelo app; o banco também bloqueia.

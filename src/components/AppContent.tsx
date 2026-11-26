@@ -3,7 +3,6 @@ import type { PricingRecord, SavedFormula, User } from '../types';
 import type { ActiveModule } from '../navigation/appNavigation';
 import Home from './Home';
 
-const AccessLevelManager = lazy(() => import('./AccessLevelManager'));
 const AccessProfileManager = lazy(() => import('./AccessProfileManager'));
 const AgentManager = lazy(() => import('./AgentManager'));
 const AlertCenter = lazy(() => import('./AlertCenter'));
@@ -161,9 +160,6 @@ function AppContentRoute({
     }
     if (activeTab === 'access_profiles' && hasPermission('accessProfiles')) {
       return <AccessProfileManager />;
-    }
-    if (activeTab === 'access_levels' && hasPermission('accessProfiles')) {
-      return <AccessLevelManager />;
     }
     if (
       activeTab === 'alert_center' &&
