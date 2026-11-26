@@ -147,8 +147,9 @@ describe('formula comparison preparation', () => {
     expect(alternatives).toHaveLength(2);
     expect(alternatives.every(({ feasible }) => feasible)).toBe(true);
     expect(alternatives.every(({ deviationScore }) => Number.isFinite(deviationScore))).toBe(true);
+    // Sem redução, mira a fórmula-alvo da origem (não o que ela obteve).
     expect(alternatives[0].calculation).toMatchObject({
-      formula: '0.00-10.00-0.00',
+      formula: '00-10-00',
       targetN: 0,
       targetP: 10,
       targetK: 0,

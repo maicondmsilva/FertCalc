@@ -78,6 +78,8 @@ export interface RawMaterial {
   categories?: string[];
   formulaSuffix?: string;
   isPremiumLine?: boolean;
+  /** Marcado à mão fora do filtro (📌): continua marcado ao trocar o filtro. */
+  pinned?: boolean;
   isFertigranP?: boolean;
   minQuantity?: number;
   maxQuantity?: number;
