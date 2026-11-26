@@ -9,10 +9,25 @@ interface NotificationCardProps {
   autoClose?: boolean;
 }
 
-export const NotificationCard: React.FC<NotificationCardProps> = ({ 
-  notification, 
-  onClose, 
-  autoClose = true 
+/**
+ * Endereço do próprio sistema troca de página sem recarregar (recarregar
+ * refazia a conferência da sessão); endereço externo abre normalmente.
+ */
+export function navigateInsideApp(url: string): void {
+  const target = new URL(url, window.location.origin);
+  if (target.origin !== window.location.origin) {
+    window.location.href = target.href;
+    return;
+  }
+  window.history.pushState({}, '', `${target.pathname}${target.search}${target.hash}`);
+  // O roteador escuta este evento e mostra a página nova.
+  window.dispatchEvent(new PopStateEvent('popstate'));
+}
+
+export const NotificationCard: React.FC<NotificationCardProps> = ({
+  notification,
+  onClose,
+  autoClose = true,
 }) => {
   useEffect(() => {
     if (autoClose) {
@@ -30,28 +45,28 @@ export const NotificationCard: React.FC<NotificationCardProps> = ({
           bg: 'bg-green-50 dark:bg-green-900/20',
           border: 'border-green-500',
           icon: <CheckCircle className="w-5 h-5 text-green-500" />,
-          text: 'text-green-800 dark:text-green-300'
+          text: 'text-green-800 dark:text-green-300',
         };
       case NotificationType.PRICING_UPDATED:
         return {
           bg: 'bg-blue-50 dark:bg-blue-900/20',
           border: 'border-blue-500',
           icon: <Edit className="w-5 h-5 text-blue-500" />,
-          text: 'text-blue-800 dark:text-blue-300'
+          text: 'text-blue-800 dark:text-blue-300',
         };
       case NotificationType.PRICING_DELETED:
         return {
           bg: 'bg-red-50 dark:bg-red-900/20',
           border: 'border-red-500',
           icon: <Trash2 className="w-5 h-5 text-red-500" />,
-          text: 'text-red-800 dark:text-red-300'
+          text: 'text-red-800 dark:text-red-300',
         };
       case NotificationType.TRANSFER_ACCEPTED:
         return {
           bg: 'bg-yellow-50 dark:bg-yellow-900/20',
           border: 'border-yellow-500',
           icon: <ArrowRightLeft className="w-5 h-5 text-yellow-500" />,
-          text: 'text-yellow-800 dark:text-yellow-300'
+          text: 'text-yellow-800 dark:text-yellow-300',
         };
       case NotificationType.SYSTEM_INFO:
       default:
@@ -59,19 +74,15 @@ export const NotificationCard: React.FC<NotificationCardProps> = ({
           bg: 'bg-gray-50 dark:bg-gray-800',
           border: 'border-gray-500',
           icon: <Info className="w-5 h-5 text-gray-500 dark:text-gray-400" />,
-          text: 'text-gray-800 dark:text-gray-300'
+          text: 'text-gray-800 dark:text-gray-300',
         };
     }
   };
 
   const style = getStyle();
 
-  const handleClick = (e: React.MouseEvent) => {
-    if (notification.action_url) {
-      // Handle navigation logic or just let the user handle it
-      // Replace this with standard router navigation if needed
-      window.location.href = notification.action_url;
-    }
+  const handleClick = () => {
+    if (notification.action_url) navigateInsideApp(notification.action_url);
   };
 
   const handleCloseClick = (e: React.MouseEvent) => {
@@ -90,13 +101,9 @@ export const NotificationCard: React.FC<NotificationCardProps> = ({
     >
       <div className="flex items-start justify-between">
         <div className="flex items-center space-x-3">
-          <div className="flex-shrink-0">
-            {style.icon}
-          </div>
+          <div className="flex-shrink-0">{style.icon}</div>
           <div className="flex-1">
-            <h4 className={`text-sm font-semibold ${style.text}`}>
-              {notification.title}
-            </h4>
+            <h4 className={`text-sm font-semibold ${style.text}`}>{notification.title}</h4>
             <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
               {notification.message}
             </p>

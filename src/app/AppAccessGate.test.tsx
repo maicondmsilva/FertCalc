@@ -7,6 +7,10 @@ vi.mock('../components/ResetPassword', () => ({
   default: () => <div>Redefinir senha</div>,
 }));
 
+vi.mock('../components/auth/SessionSplash', () => ({
+  default: () => <div>Carregando sessão</div>,
+}));
+
 vi.mock('../components/Login', () => ({
   default: ({
     forceChangePasswordUserId,
@@ -39,11 +43,13 @@ const user = (overrides: Partial<User> = {}): User =>
 const renderGate = (
   currentUser: User | null,
   isPasswordReset = false,
-  onPasswordChanged = vi.fn()
+  onPasswordChanged = vi.fn(),
+  restoring = false
 ) =>
   render(
     <AppAccessGate
       currentUser={currentUser}
+      restoring={restoring}
       isPasswordReset={isPasswordReset}
       onLogin={vi.fn()}
       onPasswordChanged={onPasswordChanged}
@@ -55,6 +61,17 @@ const renderGate = (
 afterEach(cleanup);
 
 describe('AppAccessGate', () => {
+  it('enquanto confere a sessão mostra carregando, não o login', () => {
+    renderGate(null, false, vi.fn(), true);
+    expect(screen.getByText('Carregando sessão')).toBeInTheDocument();
+    expect(screen.queryByText('Entrar')).toBeNull();
+  });
+
+  it('sem sessão depois de conferir mostra o login', () => {
+    renderGate(null, false, vi.fn(), false);
+    expect(screen.getByText('Entrar')).toBeInTheDocument();
+  });
+
   it('mantém a redefinição de senha acessível sem autenticação', () => {
     renderGate(null, true);
     expect(screen.getByText('Redefinir senha')).toBeInTheDocument();

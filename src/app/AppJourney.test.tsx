@@ -57,7 +57,9 @@ describe('jornada de autenticação da aplicação', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText('Tela de login')).toBeInTheDocument();
+    // Primeiro confere a sessão salva (carregando), depois mostra o login.
+    expect(screen.getByRole('status', { name: 'Carregando' })).toBeInTheDocument();
+    expect(await screen.findByText('Tela de login')).toBeInTheDocument();
     expect(screen.queryByText(/Área autenticada/)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Entrar no FertCalc' }));

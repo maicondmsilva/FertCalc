@@ -2,9 +2,12 @@ import type { ReactNode } from 'react';
 import type { User } from '../types';
 import Login from '../components/Login';
 import ResetPassword from '../components/ResetPassword';
+import SessionSplash from '../components/auth/SessionSplash';
 
 interface AppAccessGateProps {
   currentUser: User | null;
+  /** Conferindo a sessão salva: mostra carregando, não o login. */
+  restoring?: boolean;
   isPasswordReset: boolean;
   onLogin: (user: User) => void;
   onPasswordChanged: (user: User) => void;
@@ -15,6 +18,7 @@ interface AppAccessGateProps {
 
 export default function AppAccessGate({
   currentUser,
+  restoring = false,
   isPasswordReset,
   onLogin,
   onPasswordChanged,
@@ -22,6 +26,7 @@ export default function AppAccessGate({
   children,
 }: AppAccessGateProps) {
   if (isPasswordReset) return <ResetPassword />;
+  if (!currentUser && restoring) return <SessionSplash />;
   if (!currentUser) return <Login onLogin={onLogin} />;
 
   if (currentUser.requer_alteracao_senha) {
