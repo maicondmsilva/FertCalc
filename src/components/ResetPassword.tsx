@@ -71,7 +71,7 @@ export default function ResetPassword() {
   const goToLogin = (
     <a
       href="/"
-      className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-emerald-600 text-[15px] font-black text-white shadow-lg shadow-emerald-600/25 hover:bg-emerald-700"
+      className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-white text-[15px] font-black text-emerald-900 shadow-lg shadow-black/10 hover:bg-emerald-50"
     >
       Ir para o login
     </a>
@@ -81,7 +81,7 @@ export default function ResetPassword() {
     return (
       <AuthLayout title="Senha alterada">
         <div className="space-y-5">
-          <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+          <div className="flex items-start gap-3 rounded-2xl border border-emerald-300/40 bg-emerald-400/15 p-4 text-sm text-emerald-50">
             <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
             <p role="status">Pronto! Agora entre com a sua nova senha.</p>
           </div>
@@ -95,7 +95,7 @@ export default function ResetPassword() {
     return (
       <AuthLayout title="Redefinir senha">
         {status === 'checking' ? (
-          <p role="status" className="flex items-center gap-2 text-sm text-stone-500">
+          <p role="status" className="flex items-center gap-2 text-sm text-emerald-100/80">
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Verificando o link de
             recuperação…
           </p>

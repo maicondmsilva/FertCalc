@@ -98,10 +98,7 @@ function SignIn({ onLogin }: { onLogin: (user: User) => void }) {
   }
 
   return (
-    <AuthLayout
-      title="Bem-vindo de volta"
-      subtitle="Entre com seu e-mail ou usuário para continuar."
-    >
+    <AuthLayout title="Entrar">
       <form onSubmit={submit} className="space-y-5" noValidate>
         {error && <AuthAlert kind="error">{error}</AuthAlert>}
         <AuthField label="E-mail ou usuário">
@@ -132,7 +129,7 @@ function SignIn({ onLogin }: { onLogin: (user: User) => void }) {
                 setView('forgot');
                 setError('');
               }}
-              className="text-sm font-bold text-emerald-700 hover:text-emerald-800"
+              className="text-sm font-bold text-emerald-200 hover:text-white"
             >
               Esqueceu a senha?
             </button>
@@ -152,7 +149,7 @@ function SignIn({ onLogin }: { onLogin: (user: User) => void }) {
         <SubmitButton loading={loading} loadingLabel="Entrando…">
           Entrar
         </SubmitButton>
-        <p className="text-center text-xs text-stone-500">
+        <p className="text-center text-xs text-emerald-100/60">
           A sessão fica ativa enquanto o navegador estiver aberto.
         </p>
       </form>
@@ -190,7 +187,7 @@ function ForgotPassword({ initialEmail, onBack }: { initialEmail: string; onBack
     <button
       type="button"
       onClick={onBack}
-      className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-stone-300 bg-white text-[15px] font-bold text-stone-700 hover:bg-stone-50"
+      className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-white/20 text-[15px] font-bold text-white hover:bg-white/10"
     >
       <ArrowLeft className="h-4 w-4" /> Voltar para o login
     </button>
@@ -200,7 +197,7 @@ function ForgotPassword({ initialEmail, onBack }: { initialEmail: string; onBack
     return (
       <AuthLayout title="Confira seu e-mail">
         <div className="space-y-5">
-          <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+          <div className="flex items-start gap-3 rounded-2xl border border-emerald-300/40 bg-emerald-400/15 p-4 text-sm text-emerald-50">
             <MailCheck className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
             <p role="status">
               Se <strong>{sentTo}</strong> estiver cadastrado, você vai receber um link para criar
@@ -287,7 +284,7 @@ function FirstAccess({
       tone="amber"
     >
       <form onSubmit={submit} className="space-y-5" noValidate>
-        <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <div className="flex items-start gap-2.5 rounded-xl border border-amber-300/40 bg-amber-400/15 px-4 py-3 text-sm text-amber-100">
           <KeyRound className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <span>
             Por segurança, a senha enviada pelo administrador só vale para este primeiro acesso.
@@ -309,7 +306,7 @@ function FirstAccess({
             type="button"
             onClick={onSignOut}
             disabled={loading}
-            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-bold text-stone-600 hover:bg-stone-100"
+            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-bold text-emerald-100 hover:bg-white/10"
           >
             <LogOut className="h-4 w-4" /> Sair e entrar com outra conta
           </button>

@@ -3,7 +3,7 @@ import { AlertCircle, CheckCircle2, Circle, Eye, EyeOff, Loader2 } from 'lucide-
 import { passwordChecks, passwordStrength, STRENGTH_LABEL } from './passwordRules';
 
 export const authInputClass =
-  'h-12 w-full rounded-xl border border-stone-300 bg-white px-4 text-[15px] text-stone-900 placeholder:text-stone-400 transition focus:border-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-500/15 disabled:bg-stone-100';
+  'h-12 w-full rounded-xl border border-white/20 bg-white/10 px-4 text-[15px] text-white placeholder:text-emerald-100/50 transition focus:border-emerald-300 focus:bg-white/15 focus:outline-none focus:ring-4 focus:ring-emerald-300/20 disabled:opacity-60';
 
 export function AuthAlert({
   kind,
@@ -19,8 +19,8 @@ export function AuthAlert({
       role={error ? 'alert' : 'status'}
       className={`flex items-start gap-2.5 rounded-xl border px-4 py-3 text-sm ${
         error
-          ? 'border-red-200 bg-red-50 text-red-800'
-          : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+          ? 'border-red-300/40 bg-red-500/15 text-red-100'
+          : 'border-emerald-300/40 bg-emerald-400/15 text-emerald-50'
       }`}
     >
       <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
@@ -44,13 +44,13 @@ export function AuthField({
   return (
     <div>
       <div className="mb-1.5 flex items-baseline justify-between gap-2">
-        <label htmlFor={id} className="text-sm font-bold text-stone-700">
+        <label htmlFor={id} className="text-sm font-bold text-emerald-50">
           {label}
         </label>
         {action}
       </div>
       {children(id)}
-      {hint && <div className="mt-1.5 text-xs text-stone-500">{hint}</div>}
+      {hint && <div className="mt-1.5 text-xs text-emerald-100/70">{hint}</div>}
     </div>
   );
 }
@@ -96,7 +96,7 @@ export function PasswordInput({
           onClick={() => setVisible((current) => !current)}
           aria-label={visible ? 'Ocultar senha' : 'Mostrar senha'}
           aria-pressed={visible}
-          className="absolute right-1.5 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-lg text-stone-500 hover:bg-stone-100 hover:text-stone-800"
+          className="absolute right-1.5 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-lg text-emerald-100 hover:bg-white/10 hover:text-white"
         >
           {visible ? (
             <EyeOff className="h-[18px] w-[18px]" />
@@ -106,7 +106,7 @@ export function PasswordInput({
         </button>
       </div>
       {capsLock && (
-        <p className="mt-1.5 text-xs font-semibold text-amber-700" role="status">
+        <p className="mt-1.5 text-xs font-semibold text-amber-200" role="status">
           Caps Lock está ligado.
         </p>
       )}
@@ -129,14 +129,14 @@ export function SubmitButton({
 }) {
   const color =
     tone === 'amber'
-      ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/25 focus-visible:ring-amber-500/30'
-      : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/25 focus-visible:ring-emerald-500/30';
+      ? 'bg-amber-400 text-amber-950 hover:bg-amber-300 focus-visible:ring-amber-300/40'
+      : 'bg-white text-emerald-900 hover:bg-emerald-50 focus-visible:ring-white/40';
   return (
     <button
       type="submit"
       disabled={loading || disabled}
       aria-busy={loading}
-      className={`inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl text-[15px] font-black text-white shadow-lg transition focus-visible:outline-none focus-visible:ring-4 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60 ${color}`}
+      className={`inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl text-[15px] font-black shadow-lg shadow-black/10 transition focus-visible:outline-none focus-visible:ring-4 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60 ${color}`}
     >
       {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
       {loading ? loadingLabel : children}
@@ -159,7 +159,7 @@ export function NewPasswordFields({
   disabled?: boolean;
 }) {
   const strength = passwordStrength(password);
-  const bar = ['bg-stone-200', 'bg-red-500', 'bg-amber-500', 'bg-emerald-500', 'bg-emerald-600'][
+  const bar = ['bg-white/20', 'bg-red-400', 'bg-amber-400', 'bg-emerald-300', 'bg-emerald-300'][
     strength
   ];
   const mismatch = confirmation.length > 0 && confirmation !== password;
@@ -174,11 +174,11 @@ export function NewPasswordFields({
                 {[1, 2, 3, 4].map((step) => (
                   <span
                     key={step}
-                    className={`h-full flex-1 rounded-full ${step <= strength ? bar : 'bg-stone-200'}`}
+                    className={`h-full flex-1 rounded-full ${step <= strength ? bar : 'bg-white/20'}`}
                   />
                 ))}
               </div>
-              <span className="w-16 text-right font-bold text-stone-600">
+              <span className="w-16 text-right font-bold text-emerald-50">
                 {STRENGTH_LABEL[strength]}
               </span>
             </div>
@@ -186,7 +186,7 @@ export function NewPasswordFields({
               {passwordChecks(password).map((check) => (
                 <li
                   key={check.id}
-                  className={`flex items-center gap-1.5 ${check.ok ? 'text-emerald-700' : 'text-stone-500'}`}
+                  className={`flex items-center gap-1.5 ${check.ok ? 'text-emerald-200' : 'text-emerald-100/60'}`}
                 >
                   {check.ok ? (
                     <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
@@ -214,7 +214,7 @@ export function NewPasswordFields({
         label="Confirme a nova senha"
         hint={
           mismatch ? (
-            <span className="font-semibold text-red-600">As senhas não coincidem.</span>
+            <span className="font-semibold text-red-200">As senhas não coincidem.</span>
           ) : undefined
         }
       >
