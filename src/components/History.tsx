@@ -67,6 +67,12 @@ interface HistoryProps {
 
 export default function History({ onEdit, currentUser }: HistoryProps) {
   const { showSuccess, showError } = useToast();
+  // Excluir: permissão própria; sem ela definida, vale "Alterar status" (o banco confere).
+  const historyPermissions = (currentUser.permissions || {}) as Record<string, unknown>;
+  const canDeletePricing =
+    currentUser.role === 'master' ||
+    currentUser.role === 'admin' ||
+    (historyPermissions.history_delete ?? historyPermissions.history_changeStatus) !== false;
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
   const [pricings, setPricings] = useState<PricingRecord[]>([]);
   const [appSettings, setAppSettings] = useState<AppSettings>({
@@ -254,6 +260,10 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
   };
 
   const handleDelete = async (id: string) => {
+    if (!canDeletePricing) {
+      showError('Seu usuário não tem permissão para excluir precificações.');
+      return;
+    }
     const pricing = pricings.find((p) => p.id === id);
     if (!pricing) return;
 
@@ -1028,21 +1038,18 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                     📋
                   </button>
                 )}
-                {p.status !== 'Excluída' &&
-                  (currentUser.role === 'master' ||
-                    currentUser.role === 'admin' ||
-                    (currentUser.permissions as any)?.history_changeStatus !== false) && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(p.id);
-                      }}
-                      className="p-2.5 hover:bg-red-100 text-red-600 rounded-full transition-all active:scale-95 bg-red-50/50"
-                      title={p.approvalStatus === 'Aprovada' ? 'Solicitar Exclusão' : 'Excluir'}
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
-                  )}
+                {p.status !== 'Excluída' && canDeletePricing && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(p.id);
+                    }}
+                    className="p-2.5 hover:bg-red-100 text-red-600 rounded-full transition-all active:scale-95 bg-red-50/50"
+                    title={p.approvalStatus === 'Aprovada' ? 'Solicitar Exclusão' : 'Excluir'}
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                )}
                 <ChevronRight className="w-6 h-6 text-stone-300 ml-1" />
               </div>
             </div>

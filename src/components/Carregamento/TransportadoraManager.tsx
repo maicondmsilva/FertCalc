@@ -13,6 +13,11 @@ import TransportadoraAccessManager from './TransportadoraAccessManager';
 
 export function TransportadoraManager({ currentUser }: { currentUser: User }) {
   const { showSuccess, showError } = useToast();
+  // Criar e editar (inclui desativar) seguem as permissões; admin e master sempre.
+  const transportadoraPermissions = (currentUser.permissions || {}) as Record<string, unknown>;
+  const isAdminUser = currentUser.role === 'master' || currentUser.role === 'admin';
+  const canCreate = isAdminUser || transportadoraPermissions.transportadoras_create === true;
+  const canEdit = isAdminUser || transportadoraPermissions.transportadoras_edit === true;
   const [lista, setLista] = useState<Transportadora[]>([]);
   const [loading, setLoading] = useState(false);
   const [editando, setEditando] = useState<Transportadora | null>(null);
@@ -108,13 +113,15 @@ export function TransportadoraManager({ currentUser }: { currentUser: User }) {
             Gerencie as transportadoras disponíveis para cotação de frete
           </p>
         </div>
-        <button
-          onClick={abrirCriacao}
-          className="flex items-center gap-2 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-colors"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          Nova Transportadora
-        </button>
+        {canCreate && (
+          <button
+            onClick={abrirCriacao}
+            className="flex items-center gap-2 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Nova Transportadora
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -160,24 +167,28 @@ export function TransportadoraManager({ currentUser }: { currentUser: User }) {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <div className="flex justify-end gap-1">
-                      <button
-                        onClick={() => abrirEdicao(t)}
-                        className="px-2.5 py-1 text-xs font-bold bg-blue-50 text-blue-700 rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors"
-                      >
-                        Editar
-                      </button>
-                      <button
-                        onClick={() => alternarAtivo(t)}
-                        className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-colors ${
-                          t.ativo
-                            ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
-                            : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                        }`}
-                      >
-                        {t.ativo ? 'Desativar' : 'Ativar'}
-                      </button>
-                    </div>
+                    {canEdit ? (
+                      <div className="flex justify-end gap-1">
+                        <button
+                          onClick={() => abrirEdicao(t)}
+                          className="px-2.5 py-1 text-xs font-bold bg-blue-50 text-blue-700 rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors"
+                        >
+                          Editar
+                        </button>
+                        <button
+                          onClick={() => alternarAtivo(t)}
+                          className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-colors ${
+                            t.ativo
+                              ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
+                              : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                          }`}
+                        >
+                          {t.ativo ? 'Desativar' : 'Ativar'}
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-stone-400">Somente leitura</span>
+                    )}
                   </td>
                 </tr>
               ))}

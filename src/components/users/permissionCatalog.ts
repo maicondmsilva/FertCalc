@@ -21,6 +21,9 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     items: [
       { id: 'dashboard', label: 'Dashboard' },
       { id: 'goals', label: 'Metas' },
+      { id: 'goals_create', label: 'Metas — criar para outros' },
+      { id: 'goals_edit', label: 'Metas — aprovar e alterar' },
+      { id: 'goals_delete', label: 'Metas — excluir' },
       { id: 'managementReports', label: 'Relatórios gerenciais' },
     ],
   },
@@ -46,6 +49,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { id: 'calculator_overrideGuaranteeDivergence', label: 'Autorizar garantia divergente' },
       { id: 'history_changeStatus', label: 'Alterar status' },
       { id: 'history_editPricing', label: 'Editar precificação existente' },
+      { id: 'history_delete', label: 'Excluir precificação' },
       { id: 'pricing_viewAllRegions', label: 'Ver precificações de todas as regiões' },
     ],
   },
@@ -91,6 +95,8 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { id: 'carregamento_configurar_filiais', label: 'Configurar filiais do carregamento' },
       { id: 'carregamento_admin', label: 'Administrar o módulo' },
       { id: 'carregamento_ver_arquivadas', label: 'Ver cotações arquivadas' },
+      { id: 'transportadoras_create', label: 'Transportadoras — criar' },
+      { id: 'transportadoras_edit', label: 'Transportadoras — editar e desativar' },
     ],
   },
   {
