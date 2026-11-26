@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   Beaker,
+  Building2,
   Calculator as CalculatorIcon,
   Database,
   FlaskConical,
@@ -42,7 +43,11 @@ import {
   type FormulaComparisonAlternative,
 } from '../../utils/formulaComparison';
 import BetaFormulaCard from './BetaFormulaCard';
-import { agentCommissionProblem, filterPriceLists } from './betaCalculatorModel';
+import {
+  agentCommissionProblem,
+  filterPriceLists,
+  pricingBranchOptions,
+} from './betaCalculatorModel';
 
 interface SimplifiedCalculatorBetaProps {
   currentUser: AppUser;
@@ -95,6 +100,7 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
     setAgentSearch,
     savePricing,
     isSavingPricing,
+    branches,
     isLocked,
   } = calculator;
 
@@ -286,6 +292,27 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
     ? agentCommissionProblem(calculations, factors.agent)
     : null;
 
+  // Filial: aparece junto com agente e cliente; com uma só opção, já vem marcada.
+  const branchOptions = useMemo(
+    () => pricingBranchOptions(branches || [], currentUser.filiais_permitidas),
+    [branches, currentUser.filiais_permitidas]
+  );
+  const branchIsValid = branchOptions.some((branch) => branch.id === factors.branchId);
+  useEffect(() => {
+    if (!pricingMode || branchIsValid) return;
+    const onlyBranch = branchOptions.length === 1 ? branchOptions[0].id : '';
+    if ((factors.branchId || '') !== onlyBranch) {
+      setFactors((previous) => ({ ...previous, branchId: onlyBranch }));
+    }
+  }, [pricingMode, branchIsValid, branchOptions, factors.branchId, setFactors]);
+  const saveProblem = !pricingMode
+    ? null
+    : !branchIsValid
+      ? 'Escolha a filial para salvar a precificação.'
+      : !factors.client?.id
+        ? 'Escolha o cliente para salvar a precificação.'
+        : commissionProblem;
+
   return (
     <div className="@container w-full space-y-5 pb-[max(3rem,env(safe-area-inset-bottom))]">
       {/* Cabeçalho da página */}
@@ -332,14 +359,45 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
                   <p className="text-sm font-black text-stone-900">Precificação</p>
                   <p className="text-xs text-stone-500">
                     {pricingMode
-                      ? 'Informe agente e cliente para salvar a precificação.'
-                      : 'Ligue para informar agente e cliente e salvar a precificação.'}
+                      ? 'Informe filial, agente e cliente para salvar a precificação.'
+                      : 'Ligue para informar filial, agente e cliente e salvar a precificação.'}
                   </p>
                 </div>
               </div>
             </div>
             {pricingMode && (
-              <div className="grid grid-cols-1 gap-3 @2xl:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 @2xl:grid-cols-2 @5xl:grid-cols-[minmax(0,14rem)_minmax(0,1fr)_minmax(0,1fr)]">
+                <div>
+                  <label
+                    htmlFor="beta-branch"
+                    className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-stone-500"
+                  >
+                    <Building2 className="h-4 w-4" /> Filial
+                    <span className="font-medium normal-case tracking-normal text-stone-400">
+                      (obrigatória)
+                    </span>
+                  </label>
+                  <select
+                    id="beta-branch"
+                    value={branchIsValid ? factors.branchId : ''}
+                    onChange={(event) =>
+                      setFactors((previous) => ({ ...previous, branchId: event.target.value }))
+                    }
+                    disabled={Boolean(isLocked) || branchOptions.length === 0}
+                    className="h-11 w-full rounded-xl border border-stone-300 bg-white px-3 text-sm font-semibold text-stone-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:bg-stone-100"
+                  >
+                    <option value="">
+                      {branchOptions.length === 0
+                        ? 'Nenhuma filial liberada'
+                        : 'Selecione a filial'}
+                    </option>
+                    {branchOptions.map((branch) => (
+                      <option key={branch.id} value={branch.id}>
+                        {branch.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div>
                   <label
                     htmlFor="beta-agent"
@@ -385,7 +443,10 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
                   />
                 </div>
                 {commissionProblem && (
-                  <p className="text-xs font-semibold text-amber-700 @2xl:col-span-2" role="status">
+                  <p
+                    className="text-xs font-semibold text-amber-700 @2xl:col-span-2 @5xl:col-span-3"
+                    role="status"
+                  >
                     {commissionProblem}
                   </p>
                 )}
@@ -662,8 +723,8 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
             <button
               type="button"
               onClick={() => {
-                if (commissionProblem) {
-                  showError(commissionProblem);
+                if (saveProblem) {
+                  showError(saveProblem);
                   return;
                 }
                 void savePricing();
@@ -671,7 +732,7 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
               disabled={
                 Boolean(isLocked) || !hasValidExchangeRate || isSavingPricing || selectedCount === 0
               }
-              title={!factors.client?.id ? 'Escolha o cliente para salvar' : undefined}
+              title={saveProblem || undefined}
               className="inline-flex h-11 items-center gap-2 rounded-xl bg-emerald-700 px-4 text-sm font-black text-white shadow-sm hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-stone-300"
             >
               <Save className="h-4 w-4" />

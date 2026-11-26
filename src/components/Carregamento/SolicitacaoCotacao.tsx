@@ -46,6 +46,13 @@ import {
 } from '../../services/notificationService';
 import { useToast } from '../Toast';
 import HistoricoModificacoes from '../HistoricoModificacoes';
+import AuditTimeline from '../AuditTimeline';
+import {
+  defaultValidity,
+  quoteValidity,
+  todayKey,
+  validityProblem,
+} from '../../utils/quoteValidity';
 import { subscribeToOrderLoadingChanges } from '../../services/orderLoadingSubscription';
 import { closeModalOnBackdrop } from '../../utils/modalUtils';
 
@@ -271,6 +278,22 @@ function DetalheModal({ cotacao, onClose }: { cotacao: CotacaoSolicitada; onClos
                   <p className="text-xs font-bold text-stone-400 uppercase mb-0.5">Prazo (dias)</p>
                   <p className="text-stone-700">{cotacao.prazo_entrega_dias ?? '—'}</p>
                 </div>
+                {cotacao.status === 'aprovado' && (
+                  <div className="col-span-2">
+                    <p className="text-xs font-bold text-stone-400 uppercase mb-0.5">
+                      Disponibilidade
+                    </p>
+                    <p
+                      className={`font-semibold ${
+                        quoteValidity(cotacao.validade_ate).expired
+                          ? 'text-red-600'
+                          : 'text-emerald-700'
+                      }`}
+                    >
+                      {quoteValidity(cotacao.validade_ate).label}
+                    </p>
+                  </div>
+                )}
               </div>
               {cotacao.obs_responsavel && (
                 <div>
@@ -322,6 +345,10 @@ function PainelResponsavel({
     cotacao.prazo_entrega_dias != null ? String(cotacao.prazo_entrega_dias) : ''
   );
   const [obsResponsavel, setObsResponsavel] = useState(cotacao.obs_responsavel ?? '');
+  // Até quando o solicitante pode usar a cotação aprovada — definido por quem cota.
+  const [validadeAte, setValidadeAte] = useState(
+    (cotacao.validade_ate || '').slice(0, 10) || defaultValidity(7)
+  );
   const [saving, setSaving] = useState(false);
   const [modoEdicao, setModoEdicao] = useState(false);
   const [showModalRecusa, setShowModalRecusa] = useState(false);
@@ -353,17 +380,24 @@ function PainelResponsavel({
       showError('Informe o valor do frete por tonelada.');
       return;
     }
+    const validadeErro = validityProblem(validadeAte);
+    if (validadeErro) {
+      showError(validadeErro);
+      return;
+    }
     setSaving(true);
     try {
       const cotadoEm = new Date().toISOString();
+      const transportadoraNome = transportadoras.find((t) => t.id === transportadoraId)?.nome;
       await updateCotacaoSolicitada(cotacao.id, {
         status: 'cotado',
         transportadora_id: transportadoraId,
-        transportadora_nome: transportadoras.find((t) => t.id === transportadoraId)?.nome,
+        transportadora_nome: transportadoraNome,
         valor_frete: valorTotalFrete,
         valor_frete_unitario: fretePorTonNum,
         prazo_entrega_dias: prazoDias ? parseInt(prazoDias, 10) : undefined,
         obs_responsavel: obsResponsavel || undefined,
+        validade_ate: validadeAte,
         cotado_em: cotadoEm,
       });
       await registrarAuditLog({
@@ -374,8 +408,11 @@ function PainelResponsavel({
         dados_novos: {
           status: 'cotado',
           transportadora_id: transportadoraId,
+          transportadora_nome: transportadoraNome,
           valor_frete_unitario: fretePorTonNum,
           valor_frete: valorTotalFrete,
+          prazo_entrega_dias: prazoDias ? parseInt(prazoDias, 10) : undefined,
+          validade_ate: validadeAte,
           cotado_em: cotadoEm,
         } as Record<string, unknown>,
         motivo: `Cotação informada por ${currentUser.name ?? currentUser.id}`,
@@ -410,7 +447,14 @@ function PainelResponsavel({
       valor_frete_unitario: fretePorTonNum,
       prazo_entrega_dias: prazoDias ? parseInt(prazoDias, 10) : undefined,
       obs_responsavel: obsResponsavel || undefined,
+      validade_ate: validadeAte,
     };
+    const validadeErro = validityProblem(validadeAte);
+    if (validadeErro) {
+      showError(validadeErro);
+      setSaving(false);
+      return;
+    }
     try {
       await updateCotacaoSolicitada(cotacao.id, updates);
       const { registrarAuditLog } = await import('../../services/auditLogService');
@@ -435,19 +479,29 @@ function PainelResponsavel({
   };
 
   const handleAprovar = async () => {
+    const validadeErro = validityProblem(validadeAte);
+    if (validadeErro) {
+      showError(validadeErro);
+      return;
+    }
     setSaving(true);
     try {
       const aprovadoEm = new Date().toISOString();
       await updateCotacaoSolicitada(cotacao.id, {
         status: 'aprovado',
         aprovado_em: aprovadoEm,
+        validade_ate: validadeAte,
       });
       await registrarAuditLog({
         tabela: 'cotacoes_solicitadas',
         registro_id: cotacao.id,
         acao: 'UPDATE',
         dados_anteriores: { status: cotacao.status } as Record<string, unknown>,
-        dados_novos: { status: 'aprovado', aprovado_em: aprovadoEm } as Record<string, unknown>,
+        dados_novos: {
+          status: 'aprovado',
+          aprovado_em: aprovadoEm,
+          validade_ate: validadeAte,
+        } as Record<string, unknown>,
         motivo: `Cotação aprovada por ${currentUser.name ?? currentUser.id}`,
         usuario_id: currentUser.id,
         usuario_nome: currentUser.name ?? currentUser.id,
@@ -715,6 +769,28 @@ function PainelResponsavel({
                 </div>
 
                 <div>
+                  <label
+                    htmlFor="cotacao-validade"
+                    className="block text-xs font-bold text-stone-500 uppercase mb-1"
+                  >
+                    Disponível até <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="cotacao-validade"
+                    type="date"
+                    min={todayKey()}
+                    value={validadeAte}
+                    onChange={(e) => setValidadeAte(e.target.value)}
+                    disabled={!modoEdicao && cotacao.status === 'cotado'}
+                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none disabled:opacity-60"
+                  />
+                  <p className="mt-1 text-xs text-stone-500">
+                    Depois desta data a cotação não aparece mais para o solicitante vincular na
+                    precificação.
+                  </p>
+                </div>
+
+                <div>
                   <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
                     Observações do Responsável
                   </label>
@@ -751,6 +827,29 @@ function PainelResponsavel({
             </div>
           )}
 
+          {canAprovar && cotacao.status === 'cotado' && !modoEdicao && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+              <label
+                htmlFor="cotacao-validade-aprovacao"
+                className="block text-xs font-bold uppercase text-emerald-800 mb-1"
+              >
+                Disponível para o solicitante até <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="cotacao-validade-aprovacao"
+                type="date"
+                min={todayKey()}
+                value={validadeAte}
+                onChange={(e) => setValidadeAte(e.target.value)}
+                className="w-full px-3 py-2 border border-emerald-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-emerald-500 outline-none"
+              />
+              <p className="mt-1 text-xs text-emerald-700">
+                {quoteValidity(validadeAte).label}. Depois disso a cotação some da busca da
+                precificação.
+              </p>
+            </div>
+          )}
+
           {/* Ações */}
           <div className="flex gap-2">
             {canAprovar && cotacao.status === 'cotado' && (
@@ -780,32 +879,14 @@ function PainelResponsavel({
             <div className="border-t border-stone-100 pt-4 mt-4">
               <p className="text-xs font-bold text-stone-400 uppercase mb-3 flex items-center gap-1.5">
                 <History className="w-3.5 h-3.5" />
-                Histórico de Alterações
+                Histórico
               </p>
-              <div className="space-y-2 max-h-40 overflow-y-auto">
-                {historico.map((entry, i) => (
-                  <div key={entry.id ?? i} className="flex gap-2.5 text-xs">
-                    <div className="w-1.5 h-1.5 rounded-full bg-stone-300 mt-1.5 flex-shrink-0" />
-                    <div>
-                      <span className="font-bold text-stone-600">{entry.usuario_nome}</span>
-                      <span className="text-stone-400 mx-1">·</span>
-                      <span className="text-stone-400">
-                        {entry.criado_em ? new Date(entry.criado_em).toLocaleString('pt-BR') : ''}
-                      </span>
-                      <span className="ml-1 text-stone-500 capitalize">
-                        ({entry.acao.toLowerCase()})
-                      </span>
-                      {entry.motivo && (
-                        <p className="text-stone-500 italic mt-0.5">"{entry.motivo}"</p>
-                      )}
-                      {entry.campos_alterados && entry.campos_alterados.length > 0 && (
-                        <p className="text-stone-400 mt-0.5">
-                          Alterou: {entry.campos_alterados.join(', ')}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ))}
+              <div className="max-h-64 overflow-y-auto pr-1">
+                <AuditTimeline
+                  entries={historico}
+                  names={Object.fromEntries(transportadoras.map((t) => [t.id, t.nome] as const))}
+                  compact
+                />
               </div>
             </div>
           )}

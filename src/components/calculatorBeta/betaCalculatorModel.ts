@@ -283,3 +283,17 @@ export function agentCommissionProblem(
   const names = missing.map((calculation) => calculation.formula || 'sem fórmula').join(', ');
   return `Com agente informado, informe a comissão em Condições: ${names}.`;
 }
+
+/**
+ * Filiais que o usuário pode escolher ao salvar a precificação: só as ativas e,
+ * quando o cadastro do usuário limita as filiais, só as permitidas.
+ */
+export function pricingBranchOptions<T extends { id: string; ativo?: boolean }>(
+  branches: T[],
+  allowedIds?: string[] | null
+): T[] {
+  const allowed = new Set((allowedIds || []).filter(Boolean));
+  return branches.filter(
+    (branch) => branch.ativo !== false && (allowed.size === 0 || allowed.has(branch.id))
+  );
+}

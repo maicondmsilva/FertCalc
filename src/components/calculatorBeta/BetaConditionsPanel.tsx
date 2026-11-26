@@ -1,9 +1,13 @@
-import React from 'react';
-import { CalendarClock, Package, Percent, Truck, X } from 'lucide-react';
+import React, { useState } from 'react';
+import { CalendarClock, Link2, Package, Percent, Search, Truck, X } from 'lucide-react';
 import type { Embalagem, PricingFactors, TargetFormula } from '../../types';
 import { calculateInterestDays } from '../../domain/pricing-engine';
 import { formatMoney } from './betaCalculatorModel';
 import type { BetaCalculator } from './SimplifiedCalculatorBeta';
+import type { CotacaoSolicitada } from '../../types/carregamento';
+import { getMinhasCotacoesDisponiveis } from '../../services/cotacaoSolicitadaService';
+import { quoteValidity } from '../../utils/quoteValidity';
+import { closeModalOnBackdrop } from '../../utils/modalUtils';
 
 interface BetaConditionsPanelProps {
   calculation: TargetFormula;
@@ -151,6 +155,43 @@ export default function BetaConditionsPanel({
     return 0;
   };
 
+  // Cotação de frete aprovada (Carregamento → Cotações): preenche o frete e fica
+  // registrada na precificação. Só aparecem as do usuário, dentro da validade.
+  const [quotePickerOpen, setQuotePickerOpen] = useState(false);
+  const [quotes, setQuotes] = useState<CotacaoSolicitada[]>([]);
+  const [quotesLoading, setQuotesLoading] = useState(false);
+  const [quotesError, setQuotesError] = useState('');
+  const clientId = globalFactors.client?.id || undefined;
+  const isFob = (factors.tipoFrete ?? 'CIF') === 'FOB';
+
+  const openQuotePicker = async () => {
+    setQuotePickerOpen(true);
+    setQuotesLoading(true);
+    setQuotesError('');
+    try {
+      setQuotes(await getMinhasCotacoesDisponiveis(clientId));
+    } catch {
+      setQuotes([]);
+      setQuotesError('Não foi possível carregar as cotações. Tente novamente.');
+    } finally {
+      setQuotesLoading(false);
+    }
+  };
+
+  const linkQuote = (quote: CotacaoSolicitada) => {
+    set('tipoFrete', 'CIF');
+    set('freight', Number(quote.valor_frete_unitario) || 0);
+    set('cotacaoFreteId', quote.id);
+    set('cotacaoFreteNumero', quote.numero_cotacao);
+    setQuotePickerOpen(false);
+  };
+
+  const unlinkQuote = () => {
+    set('cotacaoFreteId', '');
+    set('cotacaoFreteNumero', '');
+    set('freight', 0);
+  };
+
   const paymentCondition = factors.paymentCondition || 'vencimento';
   const interestDays = calculateInterestDays(
     factors.dueDate,
@@ -269,8 +310,31 @@ export default function BetaConditionsPanel({
               />
             </Field>
           </div>
-          {(factors.tipoFrete ?? 'CIF') === 'FOB' && (
+          {isFob ? (
             <p className="mt-2 text-sm text-stone-500">FOB: o frete não entra no preço.</p>
+          ) : factors.cotacaoFreteNumero ? (
+            <div className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+              <Link2 className="h-4 w-4 shrink-0" />
+              <span className="min-w-0 flex-1 truncate">
+                Cotação <strong>{factors.cotacaoFreteNumero}</strong> vinculada ·{' '}
+                {formatMoney(Number(factors.freight) || 0, 'BRL')}/t
+              </span>
+              <button
+                type="button"
+                onClick={unlinkQuote}
+                className="rounded-lg px-2 py-1 text-xs font-bold text-emerald-700 hover:bg-white hover:text-red-600"
+              >
+                Desvincular
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void openQuotePicker()}
+              className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-blue-200 bg-white text-sm font-bold text-blue-700 hover:bg-blue-50"
+            >
+              <Search className="h-4 w-4" /> Vincular cotação aprovada
+            </button>
           )}
         </Group>
 
@@ -453,6 +517,102 @@ export default function BetaConditionsPanel({
           )}
         </span>
       </div>
+
+      {quotePickerOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
+          onMouseDown={(event) => closeModalOnBackdrop(event, () => setQuotePickerOpen(false))}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Vincular cotação de frete"
+            className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl"
+          >
+            <div className="flex items-start justify-between gap-3 border-b border-stone-100 px-5 py-4">
+              <div>
+                <p className="flex items-center gap-2 text-base font-black text-stone-900">
+                  <Truck className="h-5 w-5 text-blue-600" /> Vincular cotação de frete
+                </p>
+                <p className="text-sm text-stone-500">
+                  {clientId
+                    ? `Cotações aprovadas para ${globalFactors.client?.name || 'o cliente'}, dentro da validade.`
+                    : 'Cotações aprovadas que você solicitou, dentro da validade. Escolha o cliente para filtrar.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setQuotePickerOpen(false)}
+                className="rounded-lg p-1.5 text-stone-500 hover:bg-stone-100"
+                aria-label="Fechar"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {quotesLoading ? (
+                <p className="py-8 text-center text-sm text-stone-400">Carregando cotações…</p>
+              ) : quotesError ? (
+                <p className="py-8 text-center text-sm text-red-600">{quotesError}</p>
+              ) : quotes.length === 0 ? (
+                <p className="py-8 text-center text-sm text-stone-500">
+                  Nenhuma cotação aprovada e dentro da validade
+                  {clientId ? ' para este cliente' : ''}. Solicite em Carregamento → Cotações.
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {quotes.map((quote) => {
+                    const validity = quoteValidity(quote.validade_ate);
+                    return (
+                      <li
+                        key={quote.id}
+                        className="flex flex-wrap items-center gap-3 rounded-xl border border-stone-200 p-3"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-black text-stone-900">
+                            {quote.numero_cotacao}
+                            <span className="ml-2 font-semibold text-stone-500">
+                              {quote.cliente_nome || 'Cliente não informado'}
+                            </span>
+                          </p>
+                          <p className="text-xs text-stone-500">
+                            {quote.transportadora?.nome ||
+                              quote.transportadora_nome ||
+                              'Transportadora'}
+                            {quote.prazo_entrega_dias != null
+                              ? ` · entrega em ${quote.prazo_entrega_dias} dia(s)`
+                              : ''}
+                            {quote.fazenda ? ` · ${quote.fazenda}` : ''}
+                          </p>
+                          <p
+                            className={`text-xs font-semibold ${
+                              validity.daysLeft !== null && validity.daysLeft <= 2
+                                ? 'text-amber-700'
+                                : 'text-emerald-700'
+                            }`}
+                          >
+                            {validity.label}
+                          </p>
+                        </div>
+                        <span className="text-base font-black tabular-nums text-stone-900">
+                          {formatMoney(Number(quote.valor_frete_unitario) || 0, 'BRL')}/t
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => linkQuote(quote)}
+                          className="h-10 rounded-xl bg-emerald-600 px-4 text-sm font-bold text-white hover:bg-emerald-700"
+                        >
+                          Vincular
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

@@ -87,6 +87,40 @@ export async function completeFirstAccess(
   }
 }
 
+const SESSION_ENDED =
+  'Sua sessão foi encerrada (saída em outro aparelho ou guia). Entre novamente para continuar.';
+
+/**
+ * Chama uma função administrativa (edge function) com o token atual. Se a
+ * resposta for 401 — token vencido ou sessão encerrada em outro aparelho —
+ * renova a sessão e tenta uma vez de novo. Sem sessão renovável, devolve null
+ * e a tela pede para entrar novamente.
+ */
+export async function postAdminFunction(
+  name: string,
+  body: unknown
+): Promise<globalThis.Response | null> {
+  const call = (token: string) =>
+    fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${name}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify(body),
+    });
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) return null;
+  const first = await call(token);
+  if (first.status !== 401) return first;
+  const { data: refreshed, error } = await supabase.auth.refreshSession();
+  const freshToken = refreshed.session?.access_token;
+  if (error || !freshToken) return null;
+  return call(freshToken);
+}
+
 export interface AuthResult {
   user: User | null;
   error: string | null;
@@ -123,21 +157,8 @@ export async function adminUpdateAuthUser(
   payload: UpdateAuthUserPayload
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData.session?.access_token;
-    if (!token) return { success: false, error: 'Usuário não autenticado' };
-    const response = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-update-user`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify(payload),
-      }
-    );
+    const response = await postAdminFunction('admin-update-user', payload);
+    if (!response) return { success: false, error: SESSION_ENDED };
     const body = (await response.json().catch(() => ({}))) as { error?: string };
     if (response.status === 404) {
       return {
@@ -146,9 +167,7 @@ export async function adminUpdateAuthUser(
           'Serviço de atualização de usuários indisponível. Publique a função admin-update-user.',
       };
     }
-    if (response.status === 401) {
-      return { success: false, error: 'Sessão inválida ou expirada. Entre novamente.' };
-    }
+    if (response.status === 401) return { success: false, error: SESSION_ENDED };
     if (response.status === 403) {
       return { success: false, error: body.error || 'Sem permissão para alterar este usuário.' };
     }
@@ -215,12 +234,12 @@ export async function signIn(email: string, password: string): Promise<AuthResul
     // Perfil pelo id da sessão (o id do app_users é o mesmo do Supabase Auth).
     const profile = await getAppUserById(data.user.id);
     if (!profile) {
-      await supabase.auth.signOut();
+      await supabase.auth.signOut({ scope: 'local' });
       return { user: null, error: 'Perfil de usuário não encontrado. Contate o administrador.' };
     }
 
     if (!profile.ativo && profile.role !== 'master') {
-      await supabase.auth.signOut();
+      await supabase.auth.signOut({ scope: 'local' });
       return {
         user: null,
         error: 'Esta conta está desativada. Entre em contato com o administrador.',
@@ -239,7 +258,9 @@ export async function signIn(email: string, password: string): Promise<AuthResul
  */
 export async function signOut(): Promise<void> {
   try {
-    await supabase.auth.signOut();
+    // Só este aparelho: o padrão ("global") derrubava a sessão do usuário em
+    // todos os aparelhos, e as telas abertas passavam a falhar ao salvar.
+    await supabase.auth.signOut({ scope: 'local' });
   } catch (err) {
     logger.error('[authService] Error in signOut:', err);
   }
@@ -285,7 +306,7 @@ export async function restoreSession(): Promise<User | null> {
 
     const profile = await getAppUserById(session.user.id);
     if (!profile || (!profile.ativo && profile.role !== 'master')) {
-      await supabase.auth.signOut();
+      await supabase.auth.signOut({ scope: 'local' });
       return null;
     }
 
@@ -311,22 +332,8 @@ export async function createAuthUser(
         ? { email: payloadOrEmail, password: passwordArg ?? '' }
         : payloadOrEmail;
 
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData.session?.access_token;
-
-    if (!token) {
-      return { success: false, error: 'Usuário não autenticado' };
-    }
-
-    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-create-user`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-      },
-      body: JSON.stringify(payload),
-    });
+    const res = await postAdminFunction('admin-create-user', payload);
+    if (!res) return { success: false, error: SESSION_ENDED };
 
     let responseBody: { user_id?: string; userId?: string; code?: string; error?: string } = {};
     const contentType =
@@ -351,7 +358,7 @@ export async function createAuthUser(
       } else if (res.status === 403) {
         message = 'Apenas usuários com nível Master/Admin podem criar novos usuários.';
       } else if (res.status === 401) {
-        message = 'Sessão inválida ou expirada. Faça login novamente.';
+        message = SESSION_ENDED;
       } else if (res.status === 422) {
         if (responseBody.code === 'email_exists') {
           message = 'Este e-mail já está cadastrado no autenticador.';
@@ -411,25 +418,11 @@ export async function adminUpdateAuthPassword(
   newPassword: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData.session?.access_token;
-
-    if (!token) {
-      return { success: false, error: 'Usuário não autenticado' };
-    }
-
-    const res = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-update-password`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({ user_id: userId, new_password: newPassword }),
-      }
-    );
+    const res = await postAdminFunction('admin-update-password', {
+      user_id: userId,
+      new_password: newPassword,
+    });
+    if (!res) return { success: false, error: SESSION_ENDED };
 
     if (!res.ok) {
       const err = (await res.json()) as { error?: string };
@@ -454,22 +447,8 @@ export async function adminDeleteAuthUser(
   userId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData.session?.access_token;
-
-    if (!token) {
-      return { success: false, error: 'Usuário não autenticado' };
-    }
-
-    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-delete-user`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-      },
-      body: JSON.stringify({ user_id: userId }),
-    });
+    const res = await postAdminFunction('admin-delete-user', { user_id: userId });
+    if (!res) return { success: false, error: SESSION_ENDED };
 
     if (!res.ok) {
       const err = (await res.json()) as { error?: string };
