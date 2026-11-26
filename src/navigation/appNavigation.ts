@@ -4,6 +4,7 @@ import {
   Beaker,
   Bell,
   Building2,
+  Map as MapIcon,
   Calendar,
   CheckCircle2,
   ClipboardCheck,
@@ -69,7 +70,14 @@ registerRoutes('pricing', [
   'agents',
   'pedidos_venda',
 ]);
-registerRoutes('config', ['branches', 'settings', 'users', 'access_profiles', 'alert_center']);
+registerRoutes('config', [
+  'branches',
+  'regions',
+  'settings',
+  'users',
+  'access_profiles',
+  'alert_center',
+]);
 registerRoutes('managementReports', [
   'managementReports_dashboard',
   'managementReports_lancamentos',
@@ -203,6 +211,7 @@ export function getNavigationItems(
         permission: 'accessProfiles',
       },
       { id: 'branches', label: 'Filiais e Locais', icon: Building2, permission: 'branches' },
+      { id: 'regions', label: 'Regiões', icon: MapIcon, permission: 'regions_manage' },
       { id: 'settings', label: 'Personalização', icon: Settings, permission: 'settings' },
       { id: 'alert_center', label: 'Central de Alertas', icon: Bell, permission: 'alertas' },
     ];
