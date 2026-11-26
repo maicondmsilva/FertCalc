@@ -9,6 +9,7 @@ import { convertPricingMoneyToBRL } from './pricingCurrency';
 export interface PricingDashboardStats {
   totalValue: number;
   totalValueInProgress: number;
+  tonsInProgress: number;
   count: number;
   closedCount: number;
   inProgressCount: number;
@@ -101,6 +102,7 @@ export function calculatePricingDashboardStats(pricings: PricingRecord[]): Prici
       (sum, pricing) => sum + getPricingTotalSaleValue(pricing),
       0
     ),
+    tonsInProgress: inProgress.reduce((sum, pricing) => sum + getPricingTotalTons(pricing), 0),
     count: pricings.length,
     closedCount: approvedClosed.length,
     inProgressCount: inProgress.length,
@@ -264,6 +266,7 @@ export interface StatusBreakdownItem {
   label: string;
   count: number;
   value: number;
+  tons: number;
 }
 
 /**
@@ -273,15 +276,16 @@ export interface StatusBreakdownItem {
  */
 export function buildStatusBreakdown(pricings: PricingRecord[]): StatusBreakdownItem[] {
   const groups: Record<StatusBreakdownItem['key'], StatusBreakdownItem> = {
-    approved: { key: 'approved', label: 'Fechadas e aprovadas', count: 0, value: 0 },
+    approved: { key: 'approved', label: 'Fechadas e aprovadas', count: 0, value: 0, tons: 0 },
     awaitingApproval: {
       key: 'awaitingApproval',
       label: 'Fechadas aguardando aprovação',
       count: 0,
       value: 0,
+      tons: 0,
     },
-    inProgress: { key: 'inProgress', label: 'Em andamento', count: 0, value: 0 },
-    lost: { key: 'lost', label: 'Perdidas', count: 0, value: 0 },
+    inProgress: { key: 'inProgress', label: 'Em andamento', count: 0, value: 0, tons: 0 },
+    lost: { key: 'lost', label: 'Perdidas', count: 0, value: 0, tons: 0 },
   };
   withoutDeleted(pricings).forEach((pricing) => {
     const key: StatusBreakdownItem['key'] | null =
@@ -297,6 +301,7 @@ export function buildStatusBreakdown(pricings: PricingRecord[]): StatusBreakdown
     if (!key) return;
     groups[key].count += 1;
     groups[key].value += getPricingTotalSaleValue(pricing);
+    groups[key].tons += getPricingTotalTons(pricing);
   });
   return Object.values(groups);
 }

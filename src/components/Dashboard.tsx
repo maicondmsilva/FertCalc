@@ -25,7 +25,7 @@ import {
   isCurrentPeriod,
   toPeriodKey,
 } from '../utils/pricingDashboard';
-import { getPricingTotalSaleValue } from '../utils/pricingMetrics';
+import { getPricingTotalSaleValue, getPricingTotalTons } from '../utils/pricingMetrics';
 import { useDashboardData } from './dashboard/useDashboardData';
 import {
   DashboardSkeleton,
@@ -85,14 +85,16 @@ export default function Dashboard({ currentUser }: DashboardProps) {
       goal: calculateGoalProgress(goals, pricings, currentUser.id, selectedPeriod),
       status: buildStatusBreakdown(monthPricings),
       recent: getRecentActivity(monthPricings, 5),
-      trend: getSixPeriodsEndingAt(selectedPeriod).map((month) => ({
-        ...month,
-        value: filterPricingsByPeriod(pricings, month.period)
-          .filter(
-            (pricing) => pricing.status === 'Fechada' && pricing.approvalStatus === 'Aprovada'
-          )
-          .reduce((sum, pricing) => sum + getPricingTotalSaleValue(pricing), 0),
-      })),
+      trend: getSixPeriodsEndingAt(selectedPeriod).map((month) => {
+        const approved = filterPricingsByPeriod(pricings, month.period).filter(
+          (pricing) => pricing.status === 'Fechada' && pricing.approvalStatus === 'Aprovada'
+        );
+        return {
+          ...month,
+          value: approved.reduce((sum, pricing) => sum + getPricingTotalSaleValue(pricing), 0),
+          tons: approved.reduce((sum, pricing) => sum + getPricingTotalTons(pricing), 0),
+        };
+      }),
       rankings: [
         ...(isManagerOrAbove
           ? [
@@ -102,7 +104,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
                 items: buildCommercialRanking(monthPricings, (pricing) => ({
                   id: pricing.userId,
                   name: pricing.userName || 'Vendedor não informado',
-                })).slice(0, 5),
+                })),
               },
             ]
           : []),
@@ -112,7 +114,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
           items: buildCommercialRanking(monthPricings, (pricing) => {
             const id = pricing.factors?.branchId || 'not-informed';
             return { id, name: branchNames.get(id) || 'Filial não informada' };
-          }).slice(0, 5),
+          }),
         },
         {
           key: 'clients',
@@ -123,13 +125,13 @@ export default function Dashboard({ currentUser }: DashboardProps) {
               id: client?.id || client?.name || 'not-informed',
               name: client?.name || 'Cliente não informado',
             };
-          }).slice(0, 5),
+          }),
         },
         {
           key: 'formulas',
           label: 'Fórmulas',
           byVolume: true,
-          items: buildFormulaRanking(monthPricings).slice(0, 5),
+          items: buildFormulaRanking(monthPricings),
         },
       ],
     };
@@ -225,7 +227,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
                 tone="bg-blue-100 text-blue-700"
                 label="Em negociação"
                 value={brl(stats.totalValueInProgress)}
-                detail={`${stats.inProgressCount} ${stats.inProgressCount === 1 ? 'proposta' : 'propostas'} em andamento`}
+                detail={`${tons(stats.tonsInProgress)} · ${stats.inProgressCount} ${stats.inProgressCount === 1 ? 'proposta' : 'propostas'} em andamento`}
               />
               <KpiCard
                 icon={TrendingUp}
