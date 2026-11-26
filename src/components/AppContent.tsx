@@ -11,6 +11,7 @@ const BranchManager = lazy(() => import('./BranchManager'));
 const Calculator = lazy(() => import('./Calculator'));
 const CarregamentoModule = lazy(() => import('./Carregamento'));
 const ClientManager = lazy(() => import('./ClientManager'));
+const RegionManager = lazy(() => import('./regions/RegionManager'));
 const CommissionReport = lazy(() => import('./CommissionReport'));
 const Dashboard = lazy(() => import('./Dashboard'));
 const ApproveExpenses = lazy(() => import('./ExpenseManagement/ApproveExpenses'));
@@ -151,6 +152,9 @@ function AppContentRoute({
   }
 
   if (activeModule === 'config') {
+    if (activeTab === 'regions' && hasPermission('regions_manage')) {
+      return <RegionManager />;
+    }
     if (activeTab === 'branches' && hasPermission('branches')) {
       return <BranchManager currentUser={currentUser} />;
     }

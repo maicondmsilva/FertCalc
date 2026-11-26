@@ -153,6 +153,7 @@ const PERMISSION_GROUPS: PermissionGroup[] = [
       { id: 'branches_edit', label: 'Filiais — Editar' },
       { id: 'branches_delete', label: 'Filiais — Excluir' },
       { id: 'settings', label: 'Personalização' },
+      { id: 'regions_manage', label: 'Regiões — Gerenciar' },
       { id: 'users', label: 'Usuários' },
       { id: 'accessProfiles', label: 'Perfis de Acesso' },
       { id: 'alertas', label: 'Central de Alertas' },

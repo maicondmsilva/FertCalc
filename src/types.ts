@@ -130,6 +130,7 @@ export interface User {
     branches: boolean;
     users: boolean;
     accessProfiles?: boolean;
+    regions_manage?: boolean;
     accessLevels?: boolean;
     settings: boolean;
     approvals: boolean;
@@ -813,4 +814,13 @@ export interface ComparisonHistory {
     garantias_finais?: Record<string, unknown>;
   };
   created_at?: string;
+}
+
+/** Região comercial (independente da filial). */
+export interface Region {
+  id: string;
+  organizationId?: string;
+  name: string;
+  code?: string | null;
+  ativo: boolean;
 }
