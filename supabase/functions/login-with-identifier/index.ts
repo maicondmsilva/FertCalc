@@ -8,6 +8,15 @@ function jsonResponse(body: Record<string, unknown>, status: number) {
   });
 }
 
+/** IP de quem chamou (primeiro da cadeia do proxy). */
+function clientIp(req: Request): string {
+  return (
+    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    req.headers.get('x-real-ip')?.trim() ||
+    'desconhecido'
+  );
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
@@ -31,6 +40,20 @@ Deno.serve(async (req: Request) => {
     const authClient = createClient(url, anonKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
+    const ip = clientIp(req);
+
+    // Muitas falhas recentes para este usuário ou IP: bloqueia antes de testar a senha.
+    const { data: limited, error: limitError } = await admin.rpc('login_is_rate_limited', {
+      p_identifier: identifier,
+      p_ip: ip,
+    });
+    if (limitError) return jsonResponse({ error: 'Unavailable' }, 503);
+    if (limited) return jsonResponse({ error: 'Too many attempts' }, 429);
+
+    const fail = async () => {
+      await admin.rpc('login_record_failure', { p_identifier: identifier, p_ip: ip });
+      return jsonResponse({ error: 'Invalid credentials' }, 401);
+    };
 
     const { data: profiles, error: profileError } = await admin
       .from('app_users')
@@ -38,18 +61,15 @@ Deno.serve(async (req: Request) => {
       .eq('nickname', identifier)
       .eq('ativo', true)
       .limit(2);
-    if (profileError || profiles?.length !== 1) {
-      return jsonResponse({ error: 'Invalid credentials' }, 401);
-    }
+    if (profileError || profiles?.length !== 1) return await fail();
 
     const { data, error } = await authClient.auth.signInWithPassword({
       email: profiles[0].email,
       password,
     });
-    if (error || !data.session) {
-      return jsonResponse({ error: 'Invalid credentials' }, 401);
-    }
+    if (error || !data.session) return await fail();
 
+    await admin.rpc('login_clear_failures', { p_identifier: identifier });
     return jsonResponse(
       {
         access_token: data.session.access_token,
