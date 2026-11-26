@@ -1,1452 +1,789 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Users,
-  Plus,
-  Trash2,
-  Save,
-  User as UserIcon,
-  Edit2,
-  X,
-  ShieldCheck,
-  Search,
-  Building2,
+  AlertTriangle,
   KeyRound,
-  Eye,
-  EyeOff,
-  Copy,
-  Check,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  Trash2,
+  Users,
 } from 'lucide-react';
-import { User, Branch } from '../types';
-import { getUsers, deleteUser, getBranches } from '../services/db';
-import { closeModalOnBackdrop } from '../utils/modalUtils';
+import type { Branch, Region, User } from '../types';
+import { deleteUser, getBranches, getUsers } from '../services/db';
 import {
-  createAuthUser,
-  adminUpdateAuthPassword,
   adminDeleteAuthUser,
+  adminUpdateAuthPassword,
   adminUpdateAuthUser,
+  createAuthUser,
 } from '../services/authService';
-import { useToast } from './Toast';
-import { useConfirm } from '../hooks/useConfirm';
-import { ConfirmDialog } from './ui/ConfirmDialog';
-import { AccessProfile, getAccessProfiles } from '../services/accessProfileService';
-import { useAccessLevels } from '../hooks/useAccessLevels';
+import { type AccessProfile, getAccessProfiles } from '../services/accessProfileService';
+import { listRegions, listUserRegions, setUserRegions } from '../services/regionService';
 import {
   canChangeUserRole,
   getUserManagementCapabilities,
-  UserManagementCapabilities,
+  type UserManagementCapabilities,
 } from '../services/hierarchyService';
+import { useAccessLevels } from '../hooks/useAccessLevels';
+import { usePagination } from '../hooks/usePagination';
+import { useConfirm } from '../hooks/useConfirm';
+import { useToast } from './Toast';
+import { ConfirmDialog } from './ui/ConfirmDialog';
+import Pagination from './ui/Pagination';
+import { hasUserPermission } from '../navigation/appNavigation';
+import { navigateInsideApp } from './notifications/NotificationCard';
+import UserFormModal from './users/UserFormModal';
+import ResetPasswordModal from './users/ResetPasswordModal';
+import {
+  buildUserRows,
+  effectivePrincipal,
+  fallbackPermissionsForRole,
+  filterUserRows,
+  initials,
+  needsRegion,
+  type UserDraft,
+  type UserFilters,
+  type UserRegionLink,
+  type UserRow,
+  userStats,
+} from './users/userModel';
 
 interface UserManagerProps {
   currentUser: User;
 }
 
-// ---------------------------------------------------------------------------
-// Permission groups — mirrors AccessProfileManager.tsx
-// ---------------------------------------------------------------------------
-interface PermissionItem {
-  id: string;
-  label: string;
-}
-interface PermissionGroup {
-  title: string;
-  headerClass: string;
-  items: PermissionItem[];
-}
-
-const PERMISSION_GROUPS: PermissionGroup[] = [
-  {
-    title: '📊 Painel',
-    headerClass: 'bg-emerald-700 text-white',
-    items: [
-      { id: 'dashboard', label: 'Dashboard' },
-      { id: 'goals', label: 'Metas' },
-      { id: 'managementReports', label: 'Rel. Gerenciais' },
-    ],
-  },
-  {
-    title: '💬 Comunicação',
-    headerClass: 'bg-cyan-700 text-white',
-    items: [{ id: 'chat_access', label: 'Acessar Chat Interno' }],
-  },
-  {
-    title: '🧮 Precificação',
-    headerClass: 'bg-blue-700 text-white',
-    items: [
-      { id: 'calculator', label: 'Calculadora' },
-      { id: 'simplified_calculator', label: 'Calculadora Simplificada' },
-      { id: 'simplified_calculator_beta', label: 'Calculadora Teste' },
-      { id: 'history', label: 'Situação / Precificações' },
-      { id: 'savedFormulas', label: 'Fórmulas Salvas' },
-      { id: 'produtosFormulados', label: 'Produtos Formulados' },
-      { id: 'pricingBySeller', label: 'Precificação por Vendedor' },
-      { id: 'calculator_savePricing', label: 'Salvar Precificação' },
-      { id: 'calculator_generatePDF', label: 'Gerar PDF' },
-      { id: 'calculator_saveFormula', label: 'Salvar Fórmula' },
-      { id: 'calculator_fertigranP', label: 'Comparador de Fórmulas' },
-      { id: 'calculator_profitabilityCheck', label: 'Análise de Rentabilidade' },
-      { id: 'calculator_extraProducts', label: 'Ver produtos extras fora da lista de preços' },
-      { id: 'calculator_overrideGuaranteeDivergence', label: 'Autorizar garantia divergente' },
-      { id: 'history_changeStatus', label: 'Alterar Status' },
-      { id: 'history_editPricing', label: 'Editar Precificação Existente' },
-      { id: 'savedFormulas_delete', label: 'Excluir Batidas Salvas' },
-      { id: 'savedFormulas_report', label: 'Gerar Relatório de Preços' },
-    ],
-  },
-  {
-    title: '✅ Aprovações',
-    headerClass: 'bg-teal-700 text-white',
-    items: [
-      { id: 'approvals', label: 'Aprovações' },
-      { id: 'approvals_canApprove', label: 'Aprovar / Reprovar' },
-    ],
-  },
-  {
-    title: '💳 Financeiro / Cartão',
-    headerClass: 'bg-purple-700 text-white',
-    items: [{ id: 'expenses', label: 'Gastos Cartão' }],
-  },
-  {
-    title: '🚛 Logística',
-    headerClass: 'bg-amber-600 text-white',
-    items: [
-      { id: 'carregamento', label: 'Carregamento (Visualizar)' },
-      { id: 'carregamento_solicitar_cotacao', label: 'Solicitar Cotação de Frete' },
-      { id: 'carregamento_tratar_cotacao', label: 'Tratar / Responder Cotações' },
-      { id: 'carregamento_aprovar_cotacao', label: 'Aprovar Cotações de Frete' },
-      { id: 'carregamento_liberar', label: 'Liberar Carregamento' },
-      { id: 'carregamento_logistica', label: 'Painel de Logística' },
-      { id: 'carregamento_informar_transportador', label: 'Informar Transportador (CIF)' },
-      { id: 'carregamento_relatorios', label: 'Relatórios Carregamento' },
-      { id: 'carregamento_cancelar', label: 'Cancelar Carregamentos' },
-      { id: 'carregamento_all_filiais', label: 'Ver Todas as Filiais' },
-      { id: 'carregamento_configurar_filiais', label: 'Configurar Filiais do Carregamento' },
-      { id: 'carregamento_admin', label: 'Admin do Módulo' },
-      { id: 'carregamento_ver_arquivadas', label: 'Ver Cotações Arquivadas' },
-    ],
-  },
-  {
-    title: '📋 Relatórios',
-    headerClass: 'bg-indigo-700 text-white',
-    items: [
-      { id: 'reports', label: 'Relatórios' },
-      { id: 'pricingReport', label: 'Rel. Precificação' },
-      { id: 'commissionReport', label: 'Rel. Comissão' },
-    ],
-  },
-  {
-    title: '🗄️ Cadastros',
-    headerClass: 'bg-rose-700 text-white',
-    items: [
-      { id: 'clients', label: 'Clientes' },
-      { id: 'clients_create', label: 'Clientes — Criar' },
-      { id: 'clients_edit', label: 'Clientes — Editar' },
-      { id: 'clients_delete', label: 'Clientes — Excluir' },
-      { id: 'agents', label: 'Representantes' },
-      { id: 'agents_create', label: 'Representantes — Criar' },
-      { id: 'agents_edit', label: 'Representantes — Editar' },
-      { id: 'agents_delete', label: 'Representantes — Excluir' },
-      { id: 'priceLists', label: 'Listas de Preço' },
-      { id: 'priceLists_create', label: 'Listas — Criar' },
-      { id: 'priceLists_edit', label: 'Listas — Editar' },
-      { id: 'priceLists_delete', label: 'Listas — Excluir' },
-      { id: 'macro', label: 'Materiais Macro' },
-      { id: 'macro_create', label: 'Macro — Criar' },
-      { id: 'macro_edit', label: 'Macro — Editar' },
-      { id: 'macro_delete', label: 'Macro — Excluir' },
-      { id: 'micro', label: 'Materiais Micro' },
-      { id: 'micro_create', label: 'Micro — Criar' },
-      { id: 'micro_edit', label: 'Micro — Editar' },
-      { id: 'micro_delete', label: 'Micro — Excluir' },
-      { id: 'produtosFormulados_edit', label: 'Produtos Formulados — Editar' },
-    ],
-  },
-  {
-    title: '⚙️ Configurações',
-    headerClass: 'bg-stone-700 text-white',
-    items: [
-      { id: 'branches', label: 'Filiais' },
-      { id: 'branches_create', label: 'Filiais — Criar' },
-      { id: 'branches_edit', label: 'Filiais — Editar' },
-      { id: 'branches_delete', label: 'Filiais — Excluir' },
-      { id: 'settings', label: 'Personalização' },
-      { id: 'regions_manage', label: 'Regiões — Gerenciar' },
-      { id: 'users', label: 'Usuários' },
-      { id: 'accessProfiles', label: 'Perfis de Acesso' },
-      { id: 'alertas', label: 'Central de Alertas' },
-    ],
-  },
+const FALLBACK_LEVELS = [
+  { code: 'user', name: 'Vendedor' },
+  { code: 'manager', name: 'Gerente' },
+  { code: 'admin', name: 'Administrador' },
+  { code: 'master', name: 'Master' },
 ];
 
-// ---------------------------------------------------------------------------
-// Password strength helper
-// ---------------------------------------------------------------------------
-function getPasswordStrength(password: string): {
-  level: 0 | 1 | 2 | 3;
-  label: string;
-  color: string;
-} {
-  if (!password) return { level: 0, label: '', color: '' };
-  let score = 0;
-  if (password.length >= 8) score++;
-  if (password.length >= 12) score++;
-  if (/[A-Z]/.test(password) && /[a-z]/.test(password)) score++;
-  if (/[0-9]/.test(password)) score++;
-  if (/[^A-Za-z0-9]/.test(password)) score++;
-  if (score <= 1) return { level: 1, label: 'Fraca', color: 'bg-red-500' };
-  if (score <= 3) return { level: 2, label: 'Média', color: 'bg-amber-500' };
-  return { level: 3, label: 'Forte', color: 'bg-emerald-500' };
-}
+const ROLE_CHIP: Record<string, string> = {
+  master: 'bg-stone-900 text-white',
+  admin: 'bg-red-100 text-red-700',
+  manager: 'bg-violet-100 text-violet-700',
+  transportadora: 'bg-amber-100 text-amber-700',
+};
 
-function PasswordStrengthBar({ password }: { password: string }) {
-  const { level, label, color } = getPasswordStrength(password);
-  if (!password) return null;
+const STATUS_CHIP: Record<UserRow['status'], { label: string; className: string }> = {
+  ativo: { label: 'Ativo', className: 'bg-emerald-50 text-emerald-700' },
+  inativo: { label: 'Inativo', className: 'bg-stone-100 text-stone-500' },
+  primeiro_acesso: { label: 'Primeiro acesso', className: 'bg-amber-50 text-amber-700' },
+};
+
+function Kpi({
+  label,
+  value,
+  hint,
+  tone,
+}: {
+  label: string;
+  value: number;
+  hint: string;
+  tone: string;
+}) {
   return (
-    <div className="mt-1.5 space-y-1">
-      <div className="flex gap-1">
-        {[1, 2, 3].map((i) => (
-          <div
-            key={i}
-            className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
-              i <= level ? color : 'bg-stone-200'
-            }`}
-          />
-        ))}
-      </div>
-      <p
-        className={`text-[10px] font-medium ${
-          level === 1 ? 'text-red-600' : level === 2 ? 'text-amber-600' : 'text-emerald-600'
-        }`}
-      >
-        Força: {label}
-      </p>
+    <div className="rounded-2xl border border-stone-200 bg-white p-4">
+      <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{label}</p>
+      <p className={`mt-1 text-2xl font-black ${tone}`}>{value}</p>
+      <p className="text-xs text-stone-500">{hint}</p>
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// UI helpers
-// ---------------------------------------------------------------------------
-function getRoleBadgeClass(role: string): string {
-  switch (role) {
-    case 'master':
-      return 'bg-purple-100 text-purple-700';
-    case 'admin':
-      return 'bg-red-100 text-red-700';
-    case 'manager':
-      return 'bg-blue-100 text-blue-700';
-    case 'transportadora':
-      return 'bg-amber-100 text-amber-700';
-    default:
-      return 'bg-green-100 text-green-700';
-  }
-}
+const errorText = (error: unknown) =>
+  error instanceof Error ? error.message : String(error || '');
 
-function getInitials(name: string): string {
-  return name
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((n) => n[0].toUpperCase())
-    .join('');
-}
-
-function getAvatarBg(role: string): string {
-  switch (role) {
-    case 'master':
-      return 'bg-purple-500';
-    case 'admin':
-      return 'bg-red-500';
-    case 'manager':
-      return 'bg-blue-500';
-    case 'transportadora':
-      return 'bg-amber-500';
-    default:
-      return 'bg-green-500';
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
+/** Usuários: lista com indicadores e filtros; ficha em abas (Dados, Acesso, Regiões, Permissões). */
 export default function UserManager({ currentUser }: UserManagerProps) {
   const { showSuccess, showError } = useToast();
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
+  const { levels, byCode } = useAccessLevels();
+
   const [users, setUsers] = useState<User[]>([]);
-  const [managementCapabilities, setManagementCapabilities] = useState<
-    Record<string, UserManagementCapabilities>
-  >({});
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [accessProfiles, setAccessProfiles] = useState<AccessProfile[]>([]);
-  const [appliedProfileId, setAppliedProfileId] = useState<string>('');
-  const [loading, setLoading] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalTab, setModalTab] = useState<'dados' | 'permissoes' | 'filiais'>('dados');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [resettingUser, setResettingUser] = useState<User | null>(null);
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmResetPassword, setConfirmResetPassword] = useState('');
-  const [resetLoading, setResetLoading] = useState(false);
-  const [showNewUserPassword, setShowNewUserPassword] = useState(false);
-  const [showResetPassword, setShowResetPassword] = useState(false);
-  const [showConfirmResetPassword, setShowConfirmResetPassword] = useState(false);
-  const [copiedPassword, setCopiedPassword] = useState(false);
-
-  const handleCopyPassword = useCallback((pwd: string) => {
-    navigator.clipboard.writeText(pwd).then(() => {
-      setCopiedPassword(true);
-      setTimeout(() => setCopiedPassword(false), 2000);
-    });
-  }, []);
-  const { levels: accessLevels, byCode: accessLevelsByCode } = useAccessLevels();
-
-  const getDefaultPermissions = (role: string) => {
-    const base = {
-      dashboard: true,
-      calculator: true,
-      simplified_calculator: true,
-      simplified_calculator_beta: false,
-      history: true,
-      clients: true,
-      agents: true,
-      goals: false,
-      priceLists: true,
-      branches: false,
-      users: false,
-      settings: false,
-      approvals: false,
-      savedFormulas: true,
-      produtosFormulados: false,
-      reports: true,
-      pricingReport: true,
-      commissionReport: true,
-      pricingBySeller: false,
-      managementReports: false,
-      calculator_profitabilityCheck: false,
-      calculator_extraProducts: false,
-      calculator_overrideGuaranteeDivergence: false,
-    };
-    if (role === 'master' || role === 'admin') {
-      const allCrud: Record<string, boolean> = {};
-      ['clients', 'agents', 'priceLists', 'branches', 'macro', 'micro'].forEach((resource) => {
-        allCrud[resource] = true;
-        allCrud[`${resource}_create`] = true;
-        allCrud[`${resource}_edit`] = true;
-        allCrud[`${resource}_delete`] = true;
-      });
-      const all: Record<string, boolean> = {
-        approvals_canApprove: true,
-        calculator_profitabilityCheck: true,
-        calculator_extraProducts: true,
-        calculator_overrideGuaranteeDivergence: true,
-        ...allCrud,
-      };
-      Object.keys(base).forEach((key) => {
-        all[key] = true;
-      });
-      return { ...all, creditCard: 'admin' };
-    }
-    if (role === 'manager') {
-      const allCrud: Record<string, boolean> = {};
-      ['clients', 'agents', 'priceLists', 'branches', 'macro', 'micro'].forEach((resource) => {
-        allCrud[resource] = true;
-        allCrud[`${resource}_create`] = true;
-        allCrud[`${resource}_edit`] = true;
-        allCrud[`${resource}_delete`] = true;
-      });
-      return {
-        ...base,
-        approvals: true,
-        approvals_canApprove: true,
-        reports: true,
-        pricingReport: true,
-        commissionReport: true,
-        pricingBySeller: true,
-        goals: true,
-        calculator_profitabilityCheck: true,
-        calculator_overrideGuaranteeDivergence: true,
-        creditCard: 'approver',
-        ...allCrud,
-      };
-    }
-    return { ...base, creditCard: 'none' };
-  };
-
-  const getDefaultPermissionsFromRole = (role: string) => {
-    const level = accessLevelsByCode.get(role);
-    if (level && Object.keys(level.default_permissions ?? {}).length > 0) {
-      return level.default_permissions;
-    }
-    return getDefaultPermissions(role);
-  };
-
-  const emptyFormData = () => ({
-    name: '',
-    email: '',
-    nickname: '',
-    idNumeric: 0,
-    password: '',
-    ativo: true,
-    role: 'user',
-    managedUserIds: [] as string[],
-    filiais_permitidas: [] as string[],
-    permissions: getDefaultPermissionsFromRole('user') as any,
+  const [profiles, setProfiles] = useState<AccessProfile[]>([]);
+  const [regions, setRegions] = useState<Region[]>([]);
+  const [links, setLinks] = useState<UserRegionLink[]>([]);
+  const [capabilities, setCapabilities] = useState<Record<string, UserManagementCapabilities>>({});
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState<{ user: User | null; draft: UserDraft } | null>(null);
+  const [resetting, setResetting] = useState<User | null>(null);
+  const [filters, setFilters] = useState<UserFilters>({
+    search: '',
+    role: '',
+    regionId: '',
+    situation: 'ativos',
   });
 
-  const [formData, setFormData] = useState(emptyFormData);
+  const accessLevels = levels.length > 0 ? levels : FALLBACK_LEVELS;
+  const levelName = useCallback(
+    (code: string) =>
+      byCode.get(code)?.name || FALLBACK_LEVELS.find((level) => level.code === code)?.name || code,
+    [byCode]
+  );
+  const defaultPermissionsFor = useCallback(
+    (role: string): Record<string, unknown> => {
+      const level = byCode.get(role);
+      return level && Object.keys(level.default_permissions ?? {}).length > 0
+        ? { ...(level.default_permissions as Record<string, unknown>) }
+        : fallbackPermissionsForRole(role);
+    },
+    [byCode]
+  );
 
-  useEffect(() => {
-    loadUsers();
-    getBranches().then(setBranches);
-    getAccessProfiles().then(setAccessProfiles);
-  }, []);
-
-  const loadUsers = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
-    const data = await getUsers();
-    setUsers(data);
-    setManagementCapabilities(await getUserManagementCapabilities(data.map((user) => user.id)));
-    setLoading(false);
-  };
-
-  const resetForm = () => {
-    setEditingId(null);
-    setAppliedProfileId('');
-    setFormData(emptyFormData());
-  };
-
-  const handleRoleChange = (role: string) => {
-    setAppliedProfileId('');
-    setFormData({ ...formData, role, permissions: getDefaultPermissionsFromRole(role) as any });
-  };
-
-  const toggleFilial = (filialId: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      filiais_permitidas: prev.filiais_permitidas.includes(filialId)
-        ? prev.filiais_permitidas.filter((id) => id !== filialId)
-        : [...prev.filiais_permitidas, filialId],
-    }));
-  };
-
-  const handleApplyProfile = (profileId: string) => {
-    setAppliedProfileId(profileId);
-    if (!profileId) return;
-    const profile = accessProfiles.find((p) => p.id === profileId);
-    if (!profile) return;
-    setFormData((prev) => ({
-      ...prev,
-      permissions: { ...prev.permissions, ...profile.permissions } as any,
-    }));
-  };
-
-  const saveUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (loading) return;
-    if (!formData.name || !formData.email || !formData.role) {
-      showError('Nome, e-mail e nível de acesso são obrigatórios.');
-      return;
-    }
-    const normalizedEmail = formData.email.trim().toLowerCase();
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(normalizedEmail)) {
-      showError('Informe um e-mail válido.');
-      return;
-    }
-    if (!editingId && !formData.password) {
-      showError('A senha é obrigatória para um novo usuário.');
-      return;
-    }
-    if (!editingId && formData.password.length < 8) {
-      showError('A senha deve ter no mínimo 8 caracteres.');
-      return;
-    }
-    setLoading(true);
+    setLoadError(null);
     try {
-      if (editingId) {
-        const existingUser = users.find((user) => user.id === editingId);
-        if (
-          existingUser?.role !== formData.role &&
-          !(await canChangeUserRole(editingId, formData.role))
-        ) {
-          throw new Error('Você não tem permissão para atribuir este nível de acesso.');
-        }
-        const updateResult = await adminUpdateAuthUser({
-          user_id: editingId,
-          name: formData.name,
-          email: normalizedEmail,
-          nickname: formData.nickname.trim() || formData.name.trim(),
-          role: formData.role,
-          ativo: formData.ativo,
-          managed_user_ids: formData.role === 'manager' ? formData.managedUserIds : [],
-          permissions: formData.permissions,
-          filiais_permitidas: formData.filiais_permitidas,
-          access_profile_id: appliedProfileId || undefined,
-        });
-        if (!updateResult.success)
-          throw new Error(updateResult.error || 'Erro ao atualizar usuário.');
-      } else {
-        const authResult = await createAuthUser({
-          email: normalizedEmail,
-          password: formData.password,
-          name: formData.name,
-          nickname: formData.nickname.trim() || formData.name.trim(),
-          role: formData.role,
-          ativo: formData.ativo,
-          requer_alteracao_senha: true,
-          managed_user_ids: formData.role === 'manager' ? formData.managedUserIds : [],
-          permissions: formData.permissions as Record<string, unknown>,
-          filiais_permitidas: formData.filiais_permitidas,
-          access_profile_id: appliedProfileId || undefined,
-        });
-        if (!authResult.success) {
-          showError(`Erro ao criar autenticação: ${authResult.error || 'Erro desconhecido'}`);
-          setLoading(false);
-          return;
-        }
-      }
-      await loadUsers();
-      showSuccess(editingId ? 'Usuário atualizado com sucesso!' : 'Usuário criado com sucesso!');
-      resetForm();
-      setModalOpen(false);
-    } catch (err: unknown) {
-      console.error('Erro ao salvar usuário:', err);
-      const msg: string = err instanceof Error ? err.message : '';
-      if (msg.includes('app_users_email_key') || msg.includes('duplicate key')) {
-        showError(
-          'Este e-mail já está cadastrado. Use um e-mail diferente ou edite o usuário existente.'
-        );
-      } else {
-        showError(`Erro ao salvar usuário: ${msg || 'Erro desconhecido'}`);
-      }
+      const [userList, branchList, profileList, regionList, linkList] = await Promise.all([
+        getUsers(),
+        getBranches(),
+        getAccessProfiles(),
+        listRegions().catch(() => [] as Region[]),
+        listUserRegions().catch(() => [] as UserRegionLink[]),
+      ]);
+      setUsers(userList);
+      setBranches(branchList);
+      setProfiles(profileList);
+      setRegions(regionList);
+      setLinks(linkList);
+      setCapabilities(await getUserManagementCapabilities(userList.map((user) => user.id)));
+    } catch (error) {
+      setLoadError(errorText(error) || 'Não foi possível carregar os usuários.');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const canEditUser = (targetUser: User): boolean => {
-    return managementCapabilities[targetUser.id]?.canManage === true;
-  };
+  useEffect(() => {
+    void load();
+  }, [load]);
 
-  const canDeleteUser = (targetUser: User): boolean => {
-    return managementCapabilities[targetUser.id]?.canDelete === true;
-  };
+  const rows = useMemo(() => buildUserRows(users, regions, links), [users, regions, links]);
+  const stats = useMemo(() => userStats(rows), [rows]);
+  const profileName = useCallback(
+    (id?: string) => profiles.find((profile) => profile.id === id)?.name || '',
+    [profiles]
+  );
+  const filtered = useMemo(
+    () =>
+      filterUserRows(rows, filters, (row) =>
+        [
+          levelName(row.user.role),
+          profileName(row.user.accessProfileId),
+          ...row.regions.map((r) => r.name),
+        ].join(' ')
+      ),
+    [rows, filters, levelName, profileName]
+  );
+  const pagination = usePagination(filtered, 12);
+  const regionUserCount = useMemo(
+    () =>
+      links.reduce<Record<string, number>>((acc, link) => {
+        acc[link.regionId] = (acc[link.regionId] || 0) + 1;
+        return acc;
+      }, {}),
+    [links]
+  );
 
-  const startEdit = (user: User) => {
-    if (!canEditUser(user)) {
-      showError('Apenas usuários Master podem editar outros usuários Master.');
+  const canManage = (user: User) => capabilities[user.id]?.canManage === true;
+  const canDelete = (user: User) => capabilities[user.id]?.canDelete === true;
+
+  const openNew = () =>
+    setForm({
+      user: null,
+      draft: {
+        name: '',
+        email: '',
+        nickname: '',
+        password: '',
+        role: 'user',
+        ativo: true,
+        managedUserIds: [],
+        filiais_permitidas: [],
+        permissions: defaultPermissionsFor('user'),
+        accessProfileId: '',
+        regionIds: [],
+        principalRegionId: '',
+      },
+    });
+
+  const openEdit = (row: UserRow) => {
+    if (!canManage(row.user)) {
+      showError('Seu nível não permite editar este usuário.');
       return;
     }
-    const basePerms = user.permissions || getDefaultPermissionsFromRole(user.role);
-    const carregamentoFilialIds = (basePerms as any)?.carregamento_filial_ids;
-    const autoAllFiliais =
-      (basePerms as any)?.carregamento_all_filiais ??
-      !(Array.isArray(carregamentoFilialIds) && carregamentoFilialIds.length > 0);
-    setEditingId(user.id);
-    setAppliedProfileId(user.accessProfileId || '');
-    setFormData({
-      name: user.name,
-      email: user.email,
-      nickname: user.nickname,
-      idNumeric: user.idNumeric,
-      password: '',
-      ativo: user.ativo,
-      role: user.role as any,
-      managedUserIds: user.managedUserIds || [],
-      filiais_permitidas: user.filiais_permitidas || [],
-      permissions: { ...(basePerms as object), carregamento_all_filiais: autoAllFiliais } as any,
+    const { user } = row;
+    const permissions = { ...(user.permissions || defaultPermissionsFor(user.role)) } as Record<
+      string,
+      unknown
+    >;
+    if (permissions.carregamento_all_filiais === undefined) {
+      const ids = permissions.carregamento_filial_ids;
+      permissions.carregamento_all_filiais = !(Array.isArray(ids) && ids.length > 0);
+    }
+    setForm({
+      user,
+      draft: {
+        name: user.name,
+        email: user.email,
+        nickname: user.nickname || '',
+        password: '',
+        role: user.role,
+        ativo: user.ativo,
+        managedUserIds: user.managedUserIds || [],
+        filiais_permitidas: user.filiais_permitidas || [],
+        permissions,
+        accessProfileId: user.accessProfileId || '',
+        regionIds: row.regions.map((region) => region.id),
+        principalRegionId: row.principalRegionId || '',
+      },
     });
-    setModalTab('dados');
-    setModalOpen(true);
   };
 
-  const handleDeleteUser = async (id: string) => {
-    const targetUser = users.find((u) => u.id === id);
-    if (targetUser && !canDeleteUser(targetUser)) {
-      showError('Você não tem permissão para excluir este usuário.');
+  const save = async (draft: UserDraft) => {
+    if (!form) return;
+    const editing = form.user;
+    setSaving(true);
+    try {
+      const email = draft.email.trim().toLowerCase();
+      const nickname = draft.nickname.trim() || draft.name.trim();
+      const managed = draft.role === 'manager' ? draft.managedUserIds : [];
+      let userId = editing?.id;
+      if (editing) {
+        if (editing.role !== draft.role && !(await canChangeUserRole(editing.id, draft.role))) {
+          throw new Error('Seu nível não permite atribuir este nível de acesso.');
+        }
+        const result = await adminUpdateAuthUser({
+          user_id: editing.id,
+          name: draft.name.trim(),
+          email,
+          nickname,
+          role: draft.role,
+          ativo: draft.ativo,
+          managed_user_ids: managed,
+          permissions: draft.permissions,
+          filiais_permitidas: draft.filiais_permitidas,
+          access_profile_id: draft.accessProfileId || undefined,
+        });
+        if (!result.success) throw new Error(result.error || 'Não foi possível salvar o usuário.');
+      } else {
+        const result = await createAuthUser({
+          email,
+          password: draft.password,
+          name: draft.name.trim(),
+          nickname,
+          role: draft.role,
+          ativo: draft.ativo,
+          requer_alteracao_senha: true,
+          managed_user_ids: managed,
+          permissions: draft.permissions,
+          filiais_permitidas: draft.filiais_permitidas,
+          access_profile_id: draft.accessProfileId || undefined,
+        });
+        if (!result.success) throw new Error(result.error || 'Não foi possível criar o usuário.');
+        userId = result.userId;
+      }
+
+      // Regiões: só grava se mudou (o banco confere quem pode).
+      const before = form.draft;
+      const principal = effectivePrincipal(draft.regionIds, draft.principalRegionId);
+      const regionsChanged =
+        [...draft.regionIds].sort().join() !== [...before.regionIds].sort().join() ||
+        principal !== effectivePrincipal(before.regionIds, before.principalRegionId);
+      let regionWarning = '';
+      if (userId && regionsChanged) {
+        try {
+          await setUserRegions(userId, draft.regionIds, principal || null);
+        } catch {
+          regionWarning = ' As regiões não foram salvas: seu usuário não tem permissão para isso.';
+        }
+      }
+
+      setForm(null);
+      await load();
+      if (regionWarning) showError(`Usuário salvo.${regionWarning}`);
+      else
+        showSuccess(
+          editing ? 'Usuário atualizado.' : 'Usuário criado. Ele troca a senha no primeiro acesso.'
+        );
+    } catch (error) {
+      const message = errorText(error);
+      showError(
+        /duplicate|already|exists|cadastrad/i.test(message)
+          ? 'Este e-mail ou apelido já está em uso.'
+          : message || 'Não foi possível salvar o usuário.'
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const resetPassword = async (password: string) => {
+    if (!resetting) return;
+    setSaving(true);
+    try {
+      const result = await adminUpdateAuthPassword(resetting.id, password);
+      if (!result.success) throw new Error(result.error || 'Não foi possível redefinir a senha.');
+      showSuccess(`Senha de ${resetting.name} redefinida.`);
+      setResetting(null);
+    } catch (error) {
+      showError(errorText(error) || 'Não foi possível redefinir a senha.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async (user: User) => {
+    if (!canDelete(user)) {
+      showError('Seu nível não permite excluir este usuário.');
       return;
     }
     const ok = await confirm({
-      title: 'Excluir Usuário',
-      message:
-        'Tem certeza que deseja excluir este usuário? Ele será removido do sistema de autenticação e não poderá mais fazer login. Esta ação não pode ser desfeita.',
+      title: 'Excluir usuário',
+      message: `Excluir ${user.name}? Ele não poderá mais entrar. Para só bloquear o acesso e manter o histórico, desative a conta em vez de excluir.`,
+      confirmLabel: 'Excluir',
       variant: 'danger',
     });
     if (!ok) return;
     try {
-      // Remove from auth.users (Edge Function) — also cleans app_users via the function
-      const authResult = await adminDeleteAuthUser(id);
-      if (!authResult.success) {
-        // If Edge Function fails (e.g. not deployed), fall back to app_users only deletion
-        await deleteUser(id);
-      }
-      showSuccess('Usuário excluído com sucesso!');
-      await loadUsers();
+      const result = await adminDeleteAuthUser(user.id);
+      if (!result.success) await deleteUser(user.id);
+      showSuccess('Usuário excluído.');
+      await load();
     } catch {
-      showError('Erro ao excluir usuário.');
+      showError('Não foi possível excluir o usuário.');
     }
   };
 
-  const handleNewUser = () => {
-    resetForm();
-    setModalTab('dados');
-    setModalOpen(true);
-  };
+  const setFilter = <K extends keyof UserFilters>(key: K, value: UserFilters[K]) =>
+    setFilters((current) => ({ ...current, [key]: value }));
 
-  const handleCloseModal = () => {
-    resetForm();
-    setModalOpen(false);
-  };
-
-  const filteredUsers = users.filter((u) => {
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    const branchNames = (u.filiais_permitidas || [])
-      .map((id) => branches.find((b) => b.id === id)?.name || '')
-      .join(' ')
-      .toLowerCase();
-    return (
-      u.name.toLowerCase().includes(q) ||
-      u.email.toLowerCase().includes(q) ||
-      (u.nickname || '').toLowerCase().includes(q) ||
-      (accessLevelsByCode.get(u.role)?.name || u.role).toLowerCase().includes(q) ||
-      (accessProfiles.find((profile) => profile.id === u.accessProfileId)?.name || '')
-        .toLowerCase()
-        .includes(q) ||
-      branchNames.includes(q)
-    );
-  });
-
-  // ---------------------------------------------------------------------------
-  // Modal
-  // ---------------------------------------------------------------------------
-  const renderModal = () => (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      onMouseDown={(event) => closeModalOnBackdrop(event, handleCloseModal, loading)}
-    >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200">
-          <h3 className="text-lg font-bold text-stone-800 flex items-center gap-2">
-            <UserIcon className="w-5 h-5 text-emerald-600" />
-            {editingId ? 'Editar Usuário' : 'Novo Usuário'}
-          </h3>
-          <button
-            type="button"
-            onClick={handleCloseModal}
-            className="text-stone-400 hover:text-stone-600 p-1"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex border-b border-stone-200 px-6 flex-shrink-0">
-          {(['dados', 'permissoes', 'filiais'] as const).map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              onClick={() => setModalTab(tab)}
-              className={`px-4 py-3 text-sm font-bold border-b-2 transition-colors -mb-px ${
-                modalTab === tab
-                  ? 'border-emerald-600 text-emerald-700'
-                  : 'border-transparent text-stone-500 hover:text-stone-700'
-              }`}
-            >
-              {tab === 'dados' ? '📋 Dados' : tab === 'permissoes' ? '🔑 Permissões' : '🏭 Filiais'}
-            </button>
-          ))}
-        </div>
-
-        {/* Body */}
-        <form onSubmit={saveUser} className="flex-1 overflow-y-auto flex flex-col">
-          <div className="flex-1 overflow-y-auto">
-            {/* Tab: Dados */}
-            {modalTab === 'dados' && (
-              <div className="p-6 space-y-5">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-stone-600 mb-1">
-                      Nome <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-stone-600 mb-1">
-                      E-mail <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-stone-600 mb-1">
-                      Usuário (Nickname) <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.nickname}
-                      onChange={(e) => setFormData({ ...formData, nickname: e.target.value })}
-                      className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                      placeholder="Ex: joao.silva"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-stone-600 mb-1">
-                      Senha {!editingId && <span className="text-red-500">*</span>}
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showNewUserPassword ? 'text' : 'password'}
-                        value={formData.password}
-                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                        className="w-full px-3 py-2 pr-20 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                        required={!editingId}
-                        placeholder={
-                          editingId ? 'Deixe em branco para manter' : 'Mínimo 6 caracteres'
-                        }
-                      />
-                      <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                        {!editingId && formData.password && (
-                          <button
-                            type="button"
-                            onClick={() => handleCopyPassword(formData.password)}
-                            className="p-1 text-stone-400 hover:text-emerald-600 transition-colors"
-                            title="Copiar senha"
-                          >
-                            {copiedPassword ? (
-                              <Check className="w-3.5 h-3.5 text-emerald-500" />
-                            ) : (
-                              <Copy className="w-3.5 h-3.5" />
-                            )}
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => setShowNewUserPassword((v) => !v)}
-                          className="p-1 text-stone-400 hover:text-stone-600 transition-colors"
-                          title={showNewUserPassword ? 'Ocultar senha' : 'Mostrar senha'}
-                        >
-                          {showNewUserPassword ? (
-                            <EyeOff className="w-3.5 h-3.5" />
-                          ) : (
-                            <Eye className="w-3.5 h-3.5" />
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                    {!editingId && <PasswordStrengthBar password={formData.password} />}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-stone-600 mb-1">
-                      Nível de Acesso
-                      <span
-                        className="ml-1 text-[10px] text-stone-400"
-                        title="Nível de Acesso define hierarquia; Perfil de Acesso aplica um conjunto de permissões."
-                      >
-                        (?)
-                      </span>
-                    </label>
-                    <select
-                      value={formData.role}
-                      onChange={(e) => handleRoleChange(e.target.value as any)}
-                      className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                    >
-                      {accessLevels.length > 0 ? (
-                        accessLevels.map((level) => (
-                          <option key={level.code} value={level.code}>
-                            {level.name}
-                          </option>
-                        ))
-                      ) : (
-                        <>
-                          <option value="user">Vendedor</option>
-                          <option value="manager">Gerente</option>
-                          <option value="admin">Administrador</option>
-                          <option value="master">Master</option>
-                        </>
-                      )}
-                    </select>
-                  </div>
-                  <div className="flex items-end pb-1">
-                    <label className="flex items-center space-x-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={formData.ativo}
-                        onChange={(e) => setFormData({ ...formData, ativo: e.target.checked })}
-                        className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
-                      />
-                      <span className="text-sm font-bold text-stone-700">Conta Ativa</span>
-                    </label>
-                  </div>
-                </div>
-
-                {formData.role === 'manager' && (
-                  <div className="pt-4 border-t border-stone-200">
-                    <label className="block text-sm font-bold text-stone-600 mb-3">
-                      Vendedores Gerenciados
-                    </label>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                      {users
-                        .filter((u) => u.role === 'user' && u.id !== editingId)
-                        .map((u) => (
-                          <label
-                            key={u.id}
-                            className="flex items-center space-x-2 p-2 rounded-lg border border-stone-200 hover:bg-stone-50 cursor-pointer transition-colors bg-white"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={formData.managedUserIds.includes(u.id)}
-                              onChange={(e) => {
-                                const newSelection = e.target.checked
-                                  ? [...formData.managedUserIds, u.id]
-                                  : formData.managedUserIds.filter((id) => id !== u.id);
-                                setFormData({ ...formData, managedUserIds: newSelection });
-                              }}
-                              className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
-                            />
-                            <span
-                              className="text-sm font-medium text-stone-700 truncate"
-                              title={u.name}
-                            >
-                              {u.name}
-                            </span>
-                          </label>
-                        ))}
-                      {users.filter((u) => u.role === 'user' && u.id !== editingId).length ===
-                        0 && (
-                        <span className="text-sm text-stone-500 italic col-span-full">
-                          Nenhum vendedor disponível
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Tab: Permissões */}
-            {modalTab === 'permissoes' && (
-              <div className="p-6 space-y-4">
-                {accessProfiles.length > 0 && (
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
-                    <label className="block text-sm font-bold text-stone-600 mb-2 flex items-center gap-1">
-                      <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                      Aplicar Perfil de Acesso
-                    </label>
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <select
-                        value={appliedProfileId}
-                        onChange={(e) => handleApplyProfile(e.target.value)}
-                        className="px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
-                      >
-                        <option value="">— Selecionar perfil —</option>
-                        {accessProfiles.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name}
-                            {p.description ? ` — ${p.description}` : ''}
-                          </option>
-                        ))}
-                      </select>
-                      {appliedProfileId && (
-                        <span className="text-xs text-emerald-700 bg-white border border-emerald-200 px-2 py-1 rounded font-medium">
-                          ✓ Perfil:{' '}
-                          <strong>
-                            {accessProfiles.find((p) => p.id === appliedProfileId)?.name}
-                          </strong>{' '}
-                          — editável abaixo
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-stone-400 mt-1">
-                      Permissões preenchidas automaticamente. Ajuste individualmente antes de
-                      salvar.
-                    </p>
-                  </div>
-                )}
-
-                {PERMISSION_GROUPS.map((group) => (
-                  <div
-                    key={group.title}
-                    className="border border-stone-200 rounded-xl overflow-hidden"
-                  >
-                    <div
-                      className={`${group.headerClass} px-4 py-2 text-xs font-bold uppercase tracking-wider`}
-                    >
-                      {group.title}
-                    </div>
-                    <div className="p-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
-                      {group.items.map((item) => {
-                        const val = !!(formData.permissions as any)[item.id];
-                        return (
-                          <button
-                            key={item.id}
-                            type="button"
-                            onClick={() =>
-                              setFormData({
-                                ...formData,
-                                permissions: { ...formData.permissions, [item.id]: !val },
-                              })
-                            }
-                            className={`flex items-center justify-between px-3 py-2 rounded-lg border transition-all text-xs font-bold ${
-                              val
-                                ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
-                                : 'bg-stone-50 border-stone-200 text-stone-400'
-                            }`}
-                          >
-                            {item.label}
-                            <div
-                              className={`w-2 h-2 rounded-full flex-shrink-0 ml-1 ${val ? 'bg-emerald-500' : 'bg-stone-300'}`}
-                            />
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-
-                {/* Credit Card */}
-                <div className="border border-purple-200 rounded-xl overflow-hidden">
-                  <div className="bg-purple-700 text-white px-4 py-2 text-xs font-bold uppercase tracking-wider">
-                    💳 Cartão de Crédito — Nível de Acesso
-                  </div>
-                  <div className="p-4">
-                    <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-2">
-                      Papel no módulo de Gastos
-                    </label>
-                    <select
-                      value={(formData.permissions as any).creditCard || 'none'}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          permissions: { ...formData.permissions, creditCard: e.target.value },
-                        })
-                      }
-                      className="w-full sm:w-72 px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 outline-none"
-                    >
-                      <option value="none">Sem acesso</option>
-                      <option value="viewer">Visualizador — só visualiza</option>
-                      <option value="launcher">Lançador — lança gastos</option>
-                      <option value="checker">Conferente — lança e confere</option>
-                      <option value="approver">Aprovador — lança, confere e aprova</option>
-                      <option value="admin">Administrador — acesso total ao módulo</option>
-                    </select>
-                    <p className="mt-2 text-xs text-stone-400">
-                      Controla o acesso ao módulo <strong>Gastos Cartão</strong> independente do
-                      nível global.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Carregamento filial access */}
-                {(formData.permissions as any)?.carregamento && (
-                  <div className="border border-amber-200 rounded-xl overflow-hidden">
-                    <div className="bg-amber-600 text-white px-4 py-2 text-xs font-bold uppercase tracking-wider">
-                      🏭 Acesso por Filial — Módulo Carregamento
-                    </div>
-                    <div className="p-4 space-y-3">
-                      <label className="flex items-center gap-2 cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          checked={!!(formData.permissions as any)?.carregamento_all_filiais}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              permissions: {
-                                ...formData.permissions,
-                                carregamento_all_filiais: e.target.checked,
-                                ...(e.target.checked ? { carregamento_filial_ids: [] } : {}),
-                              },
-                            })
-                          }
-                          className="rounded"
-                        />
-                        <span className="text-xs font-semibold text-stone-700">
-                          Acesso a todas as filiais
-                        </span>
-                      </label>
-                      {branches.length > 0 && (
-                        <div className="grid grid-cols-2 gap-2">
-                          <p className="col-span-2 text-xs text-stone-400">
-                            — ou selecione as filiais permitidas —
-                          </p>
-                          {branches.map((b) => {
-                            const isAllFiliais = !!(formData.permissions as any)
-                              ?.carregamento_all_filiais;
-                            const selectedIds: string[] =
-                              (formData.permissions as any)?.carregamento_filial_ids ?? [];
-                            const isSelected = selectedIds.includes(b.id);
-                            return (
-                              <label
-                                key={b.id}
-                                className={`flex items-center gap-2 p-2 rounded-lg border text-sm transition-colors ${
-                                  isAllFiliais
-                                    ? 'opacity-40 cursor-not-allowed border-stone-100 bg-stone-50'
-                                    : isSelected
-                                      ? 'cursor-pointer border-amber-400 bg-amber-50'
-                                      : 'cursor-pointer border-stone-200 hover:border-stone-300 hover:bg-stone-50'
-                                }`}
-                              >
-                                <input
-                                  type="checkbox"
-                                  disabled={isAllFiliais}
-                                  checked={isSelected}
-                                  onChange={() => {
-                                    if (isAllFiliais) return;
-                                    const current: string[] =
-                                      (formData.permissions as any)?.carregamento_filial_ids ?? [];
-                                    const updated = isSelected
-                                      ? current.filter((id) => id !== b.id)
-                                      : [...current, b.id];
-                                    setFormData({
-                                      ...formData,
-                                      permissions: {
-                                        ...formData.permissions,
-                                        carregamento_filial_ids: updated,
-                                      },
-                                    });
-                                  }}
-                                  className="rounded"
-                                />
-                                <span>
-                                  {b.id_numeric && (
-                                    <span className="text-stone-400 text-xs font-mono mr-1">
-                                      #{b.id_numeric}
-                                    </span>
-                                  )}
-                                  {b.name}
-                                </span>
-                              </label>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Tab: Filiais */}
-            {modalTab === 'filiais' && (
-              <div className="p-6">
-                <div className="mb-4">
-                  <h4 className="font-bold text-stone-700 text-sm flex items-center gap-2 mb-1">
-                    <Building2 className="w-4 h-4 text-stone-500" />
-                    Filiais Permitidas
-                  </h4>
-                  <p className="text-xs text-stone-400">
-                    Selecione as filiais que este usuário pode acessar. Deixe vazio para herdar de
-                    "Ver Todas as Filiais" (aba Permissões).
-                  </p>
-                </div>
-                {(formData.permissions as any)?.carregamento_all_filiais ? (
-                  <p className="px-4 py-3 text-xs text-amber-600 font-medium bg-amber-50 rounded-lg border border-amber-200">
-                    ⚠️ Este usuário já tem acesso a todas as filiais via permissão "Ver Todas as
-                    Filiais" (aba Permissões).
-                  </p>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2">
-                    {branches.length === 0 ? (
-                      <p className="col-span-2 text-xs text-stone-400">
-                        Nenhuma filial cadastrada.
-                      </p>
-                    ) : (
-                      branches.map((b) => (
-                        <label
-                          key={b.id}
-                          className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors text-sm ${
-                            formData.filiais_permitidas.includes(b.id)
-                              ? 'border-emerald-400 bg-emerald-50'
-                              : 'border-stone-200 hover:border-stone-300 hover:bg-stone-50'
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={formData.filiais_permitidas.includes(b.id)}
-                            onChange={() => toggleFilial(b.id)}
-                            className="rounded"
-                          />
-                          <span>
-                            {b.id_numeric && (
-                              <span className="text-stone-400 text-xs font-mono mr-1">
-                                #{b.id_numeric}
-                              </span>
-                            )}
-                            {b.name}
-                          </span>
-                        </label>
-                      ))
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Footer */}
-          <div className="px-6 py-4 border-t border-stone-100 flex justify-end gap-3 bg-stone-50/50 flex-shrink-0">
-            <button
-              type="button"
-              onClick={handleCloseModal}
-              className="px-6 py-2 border border-stone-300 rounded-lg font-bold text-stone-600 hover:bg-stone-50 transition-colors text-sm"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white px-8 py-2 rounded-lg font-bold transition-all shadow-md flex items-center text-sm"
-            >
-              {editingId ? <Save className="w-4 h-4 mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
-              {loading ? 'Salvando...' : editingId ? 'Salvar Alterações' : 'Criar Usuário'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-
-  const renderResetModal = () => {
-    if (!resettingUser) return null;
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200">
-            <h3 className="text-lg font-bold text-stone-800 flex items-center gap-2">
-              <KeyRound className="w-5 h-5 text-amber-500" />
-              Resetar Senha de Usuário
-            </h3>
-            <button
-              type="button"
-              onClick={() => {
-                setResettingUser(null);
-                setNewPassword('');
-              }}
-              className="text-stone-400 hover:text-stone-600 p-1"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              if (newPassword.length < 6) {
-                showError('A senha deve ter no mínimo 6 caracteres.');
-                return;
-              }
-              if (newPassword !== confirmResetPassword) {
-                showError('As senhas não coincidem. Verifique e tente novamente.');
-                return;
-              }
-              setResetLoading(true);
-              try {
-                const res = await adminUpdateAuthPassword(resettingUser.id, newPassword);
-                if (res.success) {
-                  showSuccess(`Senha de ${resettingUser.name} redefinida com sucesso!`);
-                  setResettingUser(null);
-                  setNewPassword('');
-                  setConfirmResetPassword('');
-                } else {
-                  showError(res.error || 'Erro ao redefinir senha.');
-                }
-              } catch (err: unknown) {
-                showError(err instanceof Error ? err.message : 'Erro ao redefinir senha.');
-              } finally {
-                setResetLoading(false);
-              }
-            }}
-            className="p-6 space-y-4"
-          >
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-700">
-              Você está alterando a senha do usuário <strong>{resettingUser.name}</strong> (
-              {resettingUser.email}). O usuário será obrigado a redefinir a senha no próximo acesso.
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-stone-600 mb-1">
-                Nova Senha <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <input
-                  type={showResetPassword ? 'text' : 'password'}
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full px-3 py-2 pr-10 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
-                  required
-                  placeholder="Mínimo 6 caracteres"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowResetPassword((v) => !v)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-stone-400 hover:text-stone-600"
-                  title={showResetPassword ? 'Ocultar senha' : 'Mostrar senha'}
-                >
-                  {showResetPassword ? (
-                    <EyeOff className="w-3.5 h-3.5" />
-                  ) : (
-                    <Eye className="w-3.5 h-3.5" />
-                  )}
-                </button>
-              </div>
-              <PasswordStrengthBar password={newPassword} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-stone-600 mb-1">
-                Confirmar Nova Senha <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <input
-                  type={showConfirmResetPassword ? 'text' : 'password'}
-                  value={confirmResetPassword}
-                  onChange={(e) => setConfirmResetPassword(e.target.value)}
-                  className={`w-full px-3 py-2 pr-10 border rounded-lg focus:ring-2 outline-none text-sm ${
-                    confirmResetPassword && newPassword !== confirmResetPassword
-                      ? 'border-red-400 focus:ring-red-400'
-                      : confirmResetPassword && newPassword === confirmResetPassword
-                        ? 'border-emerald-400 focus:ring-emerald-400'
-                        : 'border-stone-300 focus:ring-amber-500'
-                  }`}
-                  required
-                  placeholder="Repita a nova senha"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmResetPassword((v) => !v)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-stone-400 hover:text-stone-600"
-                  title={showConfirmResetPassword ? 'Ocultar senha' : 'Mostrar senha'}
-                >
-                  {showConfirmResetPassword ? (
-                    <EyeOff className="w-3.5 h-3.5" />
-                  ) : (
-                    <Eye className="w-3.5 h-3.5" />
-                  )}
-                </button>
-              </div>
-              {confirmResetPassword && newPassword !== confirmResetPassword && (
-                <p className="text-[10px] text-red-600 mt-1">As senhas não coincidem.</p>
-              )}
-              {confirmResetPassword && newPassword === confirmResetPassword && (
-                <p className="text-[10px] text-emerald-600 mt-1">✓ Senhas coincidem.</p>
-              )}
-            </div>
-            <div className="flex justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setResettingUser(null);
-                  setNewPassword('');
-                  setConfirmResetPassword('');
-                }}
-                className="px-4 py-2 border border-stone-300 rounded-lg text-sm font-bold text-stone-600 hover:bg-stone-50"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={
-                  resetLoading || (!!confirmResetPassword && newPassword !== confirmResetPassword)
-                }
-                className="px-6 py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white rounded-lg text-sm font-bold transition-all shadow-md flex items-center gap-2 justify-center"
-              >
-                {resetLoading ? 'Salvando...' : 'Redefinir Senha'}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    );
-  };
-
-  // ---------------------------------------------------------------------------
-  // Main render
-  // ---------------------------------------------------------------------------
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 pb-12">
       <ConfirmDialog
         isOpen={confirmState.isOpen}
         title={confirmState.title}
         message={confirmState.message}
+        confirmLabel={confirmState.confirmLabel}
+        cancelLabel={confirmState.cancelLabel}
         variant={confirmState.variant}
         onConfirm={handleConfirm}
         onCancel={handleCancel}
       />
 
-      {modalOpen && renderModal()}
-      {resettingUser && renderResetModal()}
-
-      {/* Header */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-stone-800 flex items-center gap-2">
-            <Users className="w-5 h-5 text-emerald-600" />
-            Usuários
-          </h2>
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-black text-stone-900 sm:text-3xl">Usuários</h1>
+          <p className="text-sm text-stone-500">
+            Quem acessa o sistema, com que nível, perfil e regiões.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          {hasUserPermission(currentUser, 'accessProfiles') && (
+            <button
+              type="button"
+              onClick={() => navigateInsideApp('/access_profiles')}
+              className="inline-flex h-11 items-center gap-2 rounded-xl border border-stone-200 bg-white px-4 text-sm font-bold text-stone-700 hover:bg-stone-50"
+            >
+              <ShieldCheck className="h-4 w-4" /> Perfis de acesso
+            </button>
+          )}
           <button
-            onClick={handleNewUser}
-            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-md"
+            type="button"
+            onClick={openNew}
+            className="inline-flex h-11 items-center gap-2 rounded-xl bg-emerald-700 px-4 text-sm font-black text-white hover:bg-emerald-800"
           >
-            <Plus className="w-4 h-4" />
-            Novo Usuário
+            <Plus className="h-4 w-4" /> Novo usuário
           </button>
         </div>
+      </header>
 
-        {/* Search bar */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Buscar por nome, e-mail, cargo ou filial…"
-            className="w-full pl-9 pr-4 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-          />
-        </div>
-      </div>
-
-      {/* User cards */}
-      {loading && !users.length ? (
-        <div className="text-center py-12 text-stone-400 italic text-sm">Carregando usuários…</div>
-      ) : filteredUsers.length === 0 ? (
-        <div className="bg-white rounded-xl border border-stone-200 p-12 text-center">
-          <Users className="w-10 h-10 text-stone-300 mx-auto mb-3" />
-          <p className="text-stone-500 font-medium">
-            {searchQuery ? 'Nenhum usuário encontrado para a busca.' : 'Nenhum usuário cadastrado.'}
-          </p>
-          {!searchQuery && (
-            <p className="text-stone-400 text-sm mt-1">
-              Clique em <strong>Novo Usuário</strong> para criar o primeiro.
-            </p>
-          )}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filteredUsers.map((user) => {
-            const initials = getInitials(user.name);
-            const accessProfile = accessProfiles.find(
-              (profile) => profile.id === user.accessProfileId
-            );
-            const accessLevelName = accessLevelsByCode.get(user.role)?.name || user.role;
-            const userBranches = (user.filiais_permitidas || [])
-              .map((id) => branches.find((b) => b.id === id)?.name)
-              .filter(Boolean) as string[];
-
-            return (
-              <div
-                key={user.id}
-                className={`bg-white rounded-xl border shadow-sm p-5 flex flex-col gap-3 transition-all hover:shadow-md cursor-pointer ${
-                  !user.ativo
-                    ? 'opacity-60 grayscale border-stone-200'
-                    : 'border-stone-200 hover:border-emerald-200'
-                }`}
-                onClick={() => startEdit(user)}
-              >
-                {/* Avatar + name + role */}
-                <div className="flex items-start gap-3">
-                  <div
-                    className={`w-11 h-11 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0 ${getAvatarBg(user.role)}`}
-                  >
-                    {initials}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-bold text-stone-800 truncate">{user.name}</p>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase flex-shrink-0 bg-emerald-100 text-emerald-700">
-                        {accessProfile?.name || 'Sem perfil'}
-                      </span>
-                    </div>
-                    <p className="text-xs text-stone-500 truncate">{user.email}</p>
-                    {user.nickname && <p className="text-xs text-stone-400">@{user.nickname}</p>}
-                    <p
-                      className={`mt-1 inline-flex px-2 py-0.5 rounded text-[10px] font-semibold ${getRoleBadgeClass(user.role)}`}
-                    >
-                      Nível: {accessLevelName}
-                    </p>
-                  </div>
-                  <div
-                    className={`w-2 h-2 rounded-full flex-shrink-0 mt-1 ${user.ativo ? 'bg-emerald-500' : 'bg-red-400'}`}
-                    title={user.ativo ? 'Ativo' : 'Inativo'}
-                  />
-                </div>
-
-                {/* Branches */}
-                {userBranches.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {userBranches.slice(0, 3).map((name) => (
-                      <span
-                        key={name}
-                        className="px-1.5 py-0.5 bg-stone-100 text-stone-600 rounded text-[10px] font-medium border border-stone-200 flex items-center gap-1"
-                      >
-                        <Building2 className="w-2.5 h-2.5" />
-                        {name}
-                      </span>
-                    ))}
-                    {userBranches.length > 3 && (
-                      <span className="px-1.5 py-0.5 bg-stone-100 text-stone-500 rounded text-[10px] font-medium border border-stone-200">
-                        +{userBranches.length - 3}
-                      </span>
-                    )}
-                  </div>
-                )}
-
-                {/* Actions row */}
-                <div
-                  className="flex justify-end gap-1 pt-1 border-t border-stone-100"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <span className="text-xs text-stone-400 mr-auto self-center font-mono">
-                    #{user.idNumeric}
-                  </span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setResettingUser(user);
-                    }}
-                    disabled={!canEditUser(user)}
-                    className={`p-1.5 rounded transition-colors ${canEditUser(user) ? 'text-stone-400 hover:text-amber-600 hover:bg-amber-50' : 'text-stone-200 cursor-not-allowed'}`}
-                    title={canEditUser(user) ? 'Resetar Senha' : 'Sem permissão para resetar senha'}
-                  >
-                    <KeyRound className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      startEdit(user);
-                    }}
-                    disabled={!canEditUser(user)}
-                    className={`p-1.5 rounded transition-colors ${canEditUser(user) ? 'text-stone-400 hover:text-emerald-600 hover:bg-emerald-50' : 'text-stone-200 cursor-not-allowed'}`}
-                    title={canEditUser(user) ? 'Editar' : 'Sem permissão para editar'}
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteUser(user.id);
-                    }}
-                    disabled={!canDeleteUser(user)}
-                    className={`p-1.5 rounded transition-colors ${canDeleteUser(user) ? 'text-stone-400 hover:text-red-500 hover:bg-red-50' : 'text-stone-200 cursor-not-allowed'}`}
-                    title={canDeleteUser(user) ? 'Excluir' : 'Sem permissão para excluir'}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+      {loadError && (
+        <div
+          role="alert"
+          className="flex flex-col gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <span className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4" /> {loadError}
+          </span>
+          <button
+            type="button"
+            onClick={() => void load()}
+            className="inline-flex h-10 items-center gap-2 rounded-xl bg-red-600 px-4 font-bold text-white"
+          >
+            <RefreshCw className="h-4 w-4" /> Tentar de novo
+          </button>
         </div>
       )}
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Kpi
+          label="Ativos"
+          value={stats.active}
+          hint={`de ${stats.total} cadastrados`}
+          tone="text-stone-900"
+        />
+        <Kpi
+          label="Sem região"
+          value={stats.withoutRegion}
+          hint="precisam de região para precificar"
+          tone={stats.withoutRegion > 0 ? 'text-red-600' : 'text-stone-900'}
+        />
+        <Kpi
+          label="Primeiro acesso"
+          value={stats.firstAccess}
+          hint="ainda não trocaram a senha"
+          tone="text-amber-600"
+        />
+        <Kpi
+          label="Inativos"
+          value={stats.inactive}
+          hint="sem acesso ao sistema"
+          tone="text-stone-500"
+        />
+      </div>
+
+      <section className="rounded-2xl border border-stone-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-2 border-b border-stone-100 p-3 lg:flex-row lg:items-center">
+          <label className="flex h-10 flex-1 items-center gap-2 rounded-xl border border-stone-200 px-3 focus-within:border-emerald-500">
+            <Search className="h-4 w-4 text-stone-400" />
+            <input
+              type="search"
+              value={filters.search}
+              onChange={(event) => setFilter('search', event.target.value)}
+              placeholder="Buscar por nome, apelido, e-mail, perfil ou região"
+              aria-label="Buscar usuário"
+              className="h-full w-full bg-transparent text-sm outline-none"
+            />
+          </label>
+          <div className="grid grid-cols-2 gap-2 sm:flex">
+            <select
+              aria-label="Filtrar por nível"
+              value={filters.role}
+              onChange={(event) => setFilter('role', event.target.value)}
+              className="h-10 rounded-xl border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-700"
+            >
+              <option value="">Nível: todos</option>
+              {accessLevels.map((level) => (
+                <option key={level.code} value={level.code}>
+                  {level.name}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label="Filtrar por região"
+              value={filters.regionId}
+              onChange={(event) => setFilter('regionId', event.target.value)}
+              className="h-10 rounded-xl border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-700"
+            >
+              <option value="">Região: todas</option>
+              <option value="none">Sem região</option>
+              {regions.map((region) => (
+                <option key={region.id} value={region.id}>
+                  {region.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div
+            role="radiogroup"
+            aria-label="Situação"
+            className="flex h-10 rounded-xl bg-stone-100 p-1 text-sm font-bold"
+          >
+            {(['ativos', 'inativos', 'todos'] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={filters.situation === value}
+                onClick={() => setFilter('situation', value)}
+                className={`flex-1 rounded-lg px-3 capitalize ${
+                  filters.situation === value
+                    ? 'bg-white text-emerald-800 shadow-sm'
+                    : 'text-stone-500'
+                }`}
+              >
+                {value}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="space-y-2 p-4" aria-busy="true">
+            {[1, 2, 3, 4].map((item) => (
+              <div key={item} className="h-14 animate-pulse rounded-xl bg-stone-100" />
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="p-10 text-center text-sm text-stone-500">
+            <Users className="mx-auto mb-2 h-8 w-8 text-stone-300" />
+            {rows.length === 0 ? 'Nenhum usuário cadastrado.' : 'Nenhum usuário com esses filtros.'}
+          </div>
+        ) : (
+          <>
+            <div className="hidden overflow-x-auto lg:block">
+              <table className="w-full text-left">
+                <thead className="text-[11px] font-bold uppercase tracking-wide text-stone-500">
+                  <tr>
+                    <th className="px-4 py-2">Usuário</th>
+                    <th className="px-4 py-2">Nível</th>
+                    <th className="px-4 py-2">Perfil</th>
+                    <th className="px-4 py-2">Regiões</th>
+                    <th className="px-4 py-2">Situação</th>
+                    <th className="px-4 py-2" aria-label="Ações" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagination.pageItems.map((row) => (
+                    <UserTableRow
+                      key={row.user.id}
+                      row={row}
+                      levelName={levelName(row.user.role)}
+                      profileName={profileName(row.user.accessProfileId)}
+                      canManage={canManage(row.user)}
+                      canDelete={canDelete(row.user)}
+                      onEdit={() => openEdit(row)}
+                      onPassword={() => setResetting(row.user)}
+                      onDelete={() => void remove(row.user)}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <ul className="divide-y divide-stone-100 lg:hidden">
+              {pagination.pageItems.map((row) => (
+                <UserCard
+                  key={row.user.id}
+                  row={row}
+                  levelName={levelName(row.user.role)}
+                  profileName={profileName(row.user.accessProfileId)}
+                  canManage={canManage(row.user)}
+                  canDelete={canDelete(row.user)}
+                  onEdit={() => openEdit(row)}
+                  onPassword={() => setResetting(row.user)}
+                  onDelete={() => void remove(row.user)}
+                />
+              ))}
+            </ul>
+          </>
+        )}
+      </section>
+
+      <Pagination
+        page={pagination.page}
+        totalPages={pagination.totalPages}
+        totalItems={pagination.totalItems}
+        firstItemNumber={pagination.firstItemNumber}
+        lastItemNumber={pagination.lastItemNumber}
+        pageSize={pagination.pageSize}
+        itemLabel="usuários"
+        onPageChange={pagination.setPage}
+        onPageSizeChange={pagination.setPageSize}
+      />
+
+      {form && (
+        <UserFormModal
+          initial={form.draft}
+          editing={form.user}
+          users={users}
+          branches={branches}
+          regions={regions}
+          regionUserCount={regionUserCount}
+          profiles={profiles}
+          accessLevels={accessLevels}
+          defaultPermissionsFor={defaultPermissionsFor}
+          saving={saving}
+          onSave={(draft) => void save(draft)}
+          onClose={() => !saving && setForm(null)}
+        />
+      )}
+      {resetting && (
+        <ResetPasswordModal
+          user={resetting}
+          saving={saving}
+          onSave={(password) => void resetPassword(password)}
+          onClose={() => !saving && setResetting(null)}
+        />
+      )}
     </div>
+  );
+}
+
+interface RowProps {
+  row: UserRow;
+  levelName: string;
+  profileName: string;
+  canManage: boolean;
+  canDelete: boolean;
+  onEdit: () => void;
+  onPassword: () => void;
+  onDelete: () => void;
+}
+
+function RegionChips({ row }: { row: UserRow }) {
+  if (row.user.role === 'master' || row.user.role === 'admin') {
+    return (
+      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
+        Todas
+      </span>
+    );
+  }
+  if (row.regions.length === 0) {
+    return needsRegion(row.user) ? (
+      <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-bold text-red-600">
+        Sem região
+      </span>
+    ) : null;
+  }
+  return (
+    <div className="flex flex-wrap gap-1">
+      {row.regions.map((region) => (
+        <span
+          key={region.id}
+          title={row.principalRegionId === region.id ? 'Região principal' : undefined}
+          className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
+            row.principalRegionId === region.id
+              ? 'bg-emerald-600 text-white'
+              : 'bg-emerald-50 text-emerald-700'
+          }`}
+        >
+          {row.principalRegionId === region.id && '★ '}
+          {region.name}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function Actions({
+  canManage,
+  canDelete,
+  onEdit,
+  onPassword,
+  onDelete,
+  name,
+}: Omit<RowProps, 'row' | 'levelName' | 'profileName'> & { name: string }) {
+  const base =
+    'inline-flex h-9 items-center gap-1.5 rounded-lg border border-stone-200 px-2.5 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-40';
+  return (
+    <span className="inline-flex gap-1">
+      <button
+        type="button"
+        onClick={onEdit}
+        disabled={!canManage}
+        className={`${base} text-stone-700 hover:bg-stone-50`}
+        aria-label={`Editar ${name}`}
+      >
+        <Pencil className="h-3.5 w-3.5" /> Editar
+      </button>
+      <button
+        type="button"
+        onClick={onPassword}
+        disabled={!canManage}
+        className={`${base} text-stone-600 hover:bg-amber-50`}
+        aria-label={`Redefinir senha de ${name}`}
+      >
+        <KeyRound className="h-3.5 w-3.5" /> Senha
+      </button>
+      <button
+        type="button"
+        onClick={onDelete}
+        disabled={!canDelete}
+        className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-stone-400 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30"
+        aria-label={`Excluir ${name}`}
+      >
+        <Trash2 className="h-4 w-4" />
+      </button>
+    </span>
+  );
+}
+
+function Avatar({ name }: { name: string }) {
+  return (
+    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-emerald-100 text-sm font-black text-emerald-800">
+      {initials(name)}
+    </span>
+  );
+}
+
+function UserTableRow({ row, levelName, profileName, ...actions }: RowProps) {
+  const status = STATUS_CHIP[row.status];
+  return (
+    <tr
+      className={`border-t border-stone-100 hover:bg-stone-50 ${row.user.ativo ? '' : 'opacity-70'}`}
+    >
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-3">
+          <Avatar name={row.user.name} />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-bold text-stone-900">{row.user.name}</p>
+            <p className="truncate text-xs text-stone-500">
+              {row.user.nickname ? `@${row.user.nickname} · ` : ''}
+              {row.user.email}
+            </p>
+          </div>
+        </div>
+      </td>
+      <td className="px-4 py-3">
+        <span
+          className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${ROLE_CHIP[row.user.role] || 'bg-blue-100 text-blue-700'}`}
+        >
+          {levelName}
+        </span>
+      </td>
+      <td className="px-4 py-3 text-sm text-stone-600">{profileName || '—'}</td>
+      <td className="px-4 py-3">
+        <RegionChips row={row} />
+      </td>
+      <td className="px-4 py-3">
+        <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${status.className}`}>
+          {status.label}
+        </span>
+      </td>
+      <td className="px-4 py-3 text-right">
+        <Actions {...actions} name={row.user.name} />
+      </td>
+    </tr>
+  );
+}
+
+function UserCard({ row, levelName, profileName, ...actions }: RowProps) {
+  const status = STATUS_CHIP[row.status];
+  return (
+    <li className={`space-y-2 p-4 ${row.user.ativo ? '' : 'opacity-70'}`}>
+      <div className="flex items-start gap-3">
+        <Avatar name={row.user.name} />
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-bold text-stone-900">{row.user.name}</p>
+          <p className="truncate text-xs text-stone-500">
+            {row.user.nickname ? `@${row.user.nickname}` : row.user.email}
+          </p>
+        </div>
+        <span
+          className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${status.className}`}
+        >
+          {status.label}
+        </span>
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5 text-xs">
+        <span
+          className={`rounded-full px-2 py-0.5 font-bold ${ROLE_CHIP[row.user.role] || 'bg-blue-100 text-blue-700'}`}
+        >
+          {levelName}
+        </span>
+        {profileName && <span className="text-stone-500">{profileName}</span>}
+      </div>
+      <RegionChips row={row} />
+      <div className="flex justify-end">
+        <Actions {...actions} name={row.user.name} />
+      </div>
+    </li>
   );
 }

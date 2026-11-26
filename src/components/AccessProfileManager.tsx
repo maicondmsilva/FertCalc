@@ -1,527 +1,430 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Save, X, ShieldCheck } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  AccessProfile,
-  getAccessProfiles,
+  AlertTriangle,
+  Copy,
+  Loader2,
+  Lock,
+  Plus,
+  RefreshCw,
+  ShieldCheck,
+  Trash2,
+} from 'lucide-react';
+import type { User } from '../types';
+import {
+  type AccessProfile,
   createAccessProfile,
-  updateAccessProfile,
   deleteAccessProfile,
+  getAccessProfiles,
+  updateAccessProfile,
 } from '../services/accessProfileService';
+import { getUsers, updateUser } from '../services/db';
 import { useToast } from './Toast';
 import { useConfirm } from '../hooks/useConfirm';
 import { ConfirmDialog } from './ui/ConfirmDialog';
-import { closeModalOnBackdrop } from '../utils/modalUtils';
+import PermissionEditor from './users/PermissionEditor';
+import { fieldClass } from './users/PasswordField';
+import {
+  countEnabled,
+  differencesFromProfile,
+  type PermissionMap,
+} from './users/permissionCatalog';
 
-// ---------------------------------------------------------------------------
-// Estrutura de módulos agrupados por área (espelha o UserManager)
-// ---------------------------------------------------------------------------
-interface PermissionItem {
-  id: string;
-  label: string;
+interface Draft {
+  id: string | null;
+  name: string;
+  description: string;
+  permissions: PermissionMap;
 }
 
-interface PermissionGroup {
-  title: string;
-  color: string;
-  headerClass: string;
-  items: PermissionItem[];
+const fromProfile = (profile: AccessProfile): Draft => ({
+  id: profile.id,
+  name: profile.name,
+  description: profile.description || '',
+  permissions: { ...profile.permissions },
+});
+
+const emptyDraft = (): Draft => ({ id: null, name: '', description: '', permissions: {} });
+
+/** Mensagem do banco em linguagem do usuário. */
+export function profileErrorMessage(error: unknown): string {
+  const text = error instanceof Error ? error.message : String(error || '');
+  if (/23505|duplicate|access_profiles_org_name_key/i.test(text))
+    return 'Já existe um perfil com esse nome.';
+  if (/42501|row-level|permission/i.test(text))
+    return 'Só administradores podem criar, editar ou excluir perfis.';
+  return 'Não foi possível salvar o perfil. Tente novamente.';
 }
 
-const PERMISSION_GROUPS: PermissionGroup[] = [
-  {
-    title: '📊 Painel',
-    color: 'emerald',
-    headerClass: 'bg-emerald-700 text-white',
-    items: [
-      { id: 'dashboard', label: 'Dashboard' },
-      { id: 'goals', label: 'Metas' },
-      { id: 'managementReports', label: 'Rel. Gerenciais' },
-    ],
-  },
-  {
-    title: '💬 Comunicação',
-    color: 'cyan',
-    headerClass: 'bg-cyan-700 text-white',
-    items: [{ id: 'chat_access', label: 'Acessar Chat Interno' }],
-  },
-  {
-    title: '🧮 Precificação',
-    color: 'blue',
-    headerClass: 'bg-blue-700 text-white',
-    items: [
-      { id: 'calculator', label: 'Calculadora' },
-      { id: 'simplified_calculator', label: 'Calculadora Simplificada' },
-      { id: 'simplified_calculator_beta', label: 'Calculadora Teste' },
-      { id: 'history', label: 'Situação / Precificações' },
-      { id: 'savedFormulas', label: 'Fórmulas Salvas' },
-      { id: 'produtosFormulados', label: 'Produtos Formulados' },
-      { id: 'pricingBySeller', label: 'Precificação por Vendedor' },
-      { id: 'calculator_savePricing', label: 'Salvar Precificação' },
-      { id: 'calculator_generatePDF', label: 'Gerar PDF' },
-      { id: 'calculator_saveFormula', label: 'Salvar Fórmula' },
-      { id: 'calculator_fertigranP', label: 'Comparador de Fórmulas' },
-      { id: 'calculator_profitabilityCheck', label: 'Análise de Rentabilidade' },
-      { id: 'calculator_extraProducts', label: 'Ver produtos extras fora da lista de preços' },
-      { id: 'calculator_overrideGuaranteeDivergence', label: 'Autorizar garantia divergente' },
-      { id: 'history_changeStatus', label: 'Alterar Status' },
-      { id: 'history_editPricing', label: 'Editar Precificação Existente' },
-      { id: 'savedFormulas_delete', label: 'Excluir Batidas Salvas' },
-      { id: 'savedFormulas_report', label: 'Gerar Relatório de Preços' },
-    ],
-  },
-  {
-    title: '✅ Aprovações',
-    color: 'teal',
-    headerClass: 'bg-teal-700 text-white',
-    items: [
-      { id: 'approvals', label: 'Aprovações' },
-      { id: 'approvals_canApprove', label: 'Aprovar / Reprovar' },
-    ],
-  },
-  {
-    title: '💳 Financeiro / Cartão',
-    color: 'purple',
-    headerClass: 'bg-purple-700 text-white',
-    items: [{ id: 'expenses', label: 'Gastos Cartão' }],
-  },
-  {
-    title: '🚛 Logística',
-    color: 'amber',
-    headerClass: 'bg-amber-600 text-white',
-    items: [
-      { id: 'carregamento', label: 'Carregamento (Visualizar)' },
-      { id: 'carregamento_solicitar_cotacao', label: 'Solicitar Cotação de Frete' },
-      { id: 'carregamento_tratar_cotacao', label: 'Tratar / Responder Cotações' },
-      { id: 'carregamento_aprovar_cotacao', label: 'Aprovar Cotações de Frete' },
-      { id: 'carregamento_liberar', label: 'Liberar Carregamento' },
-      { id: 'carregamento_logistica', label: 'Painel de Logística' },
-      { id: 'carregamento_informar_transportador', label: 'Informar Transportador (CIF)' },
-      { id: 'carregamento_relatorios', label: 'Relatórios Carregamento' },
-      { id: 'carregamento_cancelar', label: 'Cancelar Carregamentos' },
-      { id: 'carregamento_all_filiais', label: 'Ver Todas as Filiais' },
-      { id: 'carregamento_configurar_filiais', label: 'Configurar Filiais do Carregamento' },
-      { id: 'carregamento_admin', label: 'Admin do Módulo' },
-      { id: 'carregamento_ver_arquivadas', label: 'Ver Cotações Arquivadas' },
-    ],
-  },
-  {
-    title: '📋 Relatórios',
-    color: 'indigo',
-    headerClass: 'bg-indigo-700 text-white',
-    items: [
-      { id: 'reports', label: 'Relatórios' },
-      { id: 'pricingReport', label: 'Rel. Precificação' },
-      { id: 'commissionReport', label: 'Rel. Comissão' },
-    ],
-  },
-  {
-    title: '🗄️ Cadastros',
-    color: 'rose',
-    headerClass: 'bg-rose-700 text-white',
-    items: [
-      { id: 'clients', label: 'Clientes' },
-      { id: 'clients_create', label: 'Clientes — Criar' },
-      { id: 'clients_edit', label: 'Clientes — Editar' },
-      { id: 'clients_delete', label: 'Clientes — Excluir' },
-      { id: 'agents', label: 'Representantes' },
-      { id: 'agents_create', label: 'Representantes — Criar' },
-      { id: 'agents_edit', label: 'Representantes — Editar' },
-      { id: 'agents_delete', label: 'Representantes — Excluir' },
-      { id: 'priceLists', label: 'Listas de Preço' },
-      { id: 'priceLists_create', label: 'Listas — Criar' },
-      { id: 'priceLists_edit', label: 'Listas — Editar' },
-      { id: 'priceLists_delete', label: 'Listas — Excluir' },
-      { id: 'macro', label: 'Materiais Macro' },
-      { id: 'macro_create', label: 'Macro — Criar' },
-      { id: 'macro_edit', label: 'Macro — Editar' },
-      { id: 'macro_delete', label: 'Macro — Excluir' },
-      { id: 'micro', label: 'Materiais Micro' },
-      { id: 'micro_create', label: 'Micro — Criar' },
-      { id: 'micro_edit', label: 'Micro — Editar' },
-      { id: 'micro_delete', label: 'Micro — Excluir' },
-      { id: 'produtosFormulados', label: 'Produtos Formulados' },
-      { id: 'produtosFormulados_edit', label: 'Produtos Formulados — Editar' },
-    ],
-  },
-  {
-    title: '⚙️ Configurações',
-    color: 'stone',
-    headerClass: 'bg-stone-700 text-white',
-    items: [
-      { id: 'branches', label: 'Filiais' },
-      { id: 'branches_create', label: 'Filiais — Criar' },
-      { id: 'branches_edit', label: 'Filiais — Editar' },
-      { id: 'branches_delete', label: 'Filiais — Excluir' },
-      { id: 'settings', label: 'Personalização' },
-      { id: 'regions_manage', label: 'Regiões — Gerenciar' },
-      { id: 'users', label: 'Usuários' },
-      { id: 'accessProfiles', label: 'Perfis de Acesso' },
-      { id: 'alertas', label: 'Central de Alertas' },
-    ],
-  },
-];
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-function emptyPermissions(): Record<string, boolean> {
-  const perms: Record<string, boolean> = {};
-  PERMISSION_GROUPS.forEach((g) =>
-    g.items.forEach((item) => {
-      perms[item.id] = false;
-    })
-  );
-  return perms;
-}
-
-function countEnabled(permissions: Record<string, boolean | string>): number {
-  return Object.values(permissions).filter((v) => v === true).length;
-}
-
-// ---------------------------------------------------------------------------
-// Modal de criação / edição
-// ---------------------------------------------------------------------------
-interface ProfileModalProps {
-  initial: AccessProfile | null;
-  onSave: (name: string, description: string, permissions: Record<string, boolean>) => void;
-  onClose: () => void;
-  saving: boolean;
-}
-
-function ProfileModal({ initial, onSave, onClose, saving }: ProfileModalProps) {
-  const [name, setName] = useState(initial?.name ?? '');
-  const [description, setDescription] = useState(initial?.description ?? '');
-  const [permissions, setPermissions] = useState<Record<string, boolean>>(() => {
-    const base = emptyPermissions();
-    if (initial?.permissions) {
-      Object.entries(initial.permissions).forEach(([k, v]) => {
-        if (typeof v === 'boolean') base[k] = v;
-      });
-    }
-    return base;
-  });
-
-  const toggle = (id: string) => setPermissions((prev) => ({ ...prev, [id]: !prev[id] }));
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) return;
-    onSave(name.trim(), description.trim(), permissions);
-  };
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      onMouseDown={(event) => closeModalOnBackdrop(event, onClose, saving)}
-    >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200">
-          <h3 className="text-lg font-bold text-stone-800 flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-emerald-600" />
-            {initial ? 'Editar Perfil de Acesso' : 'Novo Perfil de Acesso'}
-          </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-stone-400 hover:text-stone-600 p-1"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Body */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* Name & Description */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-stone-600 mb-1">
-                Nome do Perfil <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
-                placeholder="Ex: Vendedor, Financeiro, Logística…"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-stone-600 mb-1">
-                Descrição (opcional)
-              </label>
-              <input
-                type="text"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
-                placeholder="Descrição breve do perfil"
-              />
-            </div>
-          </div>
-
-          {/* Permission groups */}
-          <div className="space-y-4">
-            <p className="text-xs font-bold text-stone-400 uppercase tracking-wider">
-              Permissões — selecione os módulos que este perfil deve ter acesso
-            </p>
-            {PERMISSION_GROUPS.map((group) => (
-              <div
-                key={group.title}
-                className={`border border-stone-200 rounded-xl overflow-hidden`}
-              >
-                <div
-                  className={`${group.headerClass} px-4 py-2 text-xs font-bold uppercase tracking-wider`}
-                >
-                  {group.title}
-                </div>
-                <div className="p-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {group.items.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => toggle(item.id)}
-                      className={`flex items-center justify-between px-3 py-2 rounded-lg border transition-all text-xs font-bold ${
-                        permissions[item.id]
-                          ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
-                          : 'bg-stone-50 border-stone-200 text-stone-400'
-                      }`}
-                    >
-                      {item.label}
-                      <div
-                        className={`w-2 h-2 rounded-full flex-shrink-0 ml-1 ${permissions[item.id] ? 'bg-emerald-500' : 'bg-stone-300'}`}
-                      />
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Footer buttons */}
-          <div className="flex justify-end gap-3 pt-2 border-t border-stone-100">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-6 py-2 border border-stone-300 rounded-lg font-bold text-stone-600 hover:bg-stone-50 transition-colors text-sm"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={saving || !name.trim()}
-              className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white px-8 py-2 rounded-lg font-bold transition-all shadow-md flex items-center text-sm"
-            >
-              <Save className="w-4 h-4 mr-2" />
-              {saving ? 'Salvando…' : initial ? 'Salvar Alterações' : 'Criar Perfil'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// AccessProfileManager — componente principal
-// ---------------------------------------------------------------------------
-export default function AccessProfileManager() {
+/**
+ * Perfis de acesso: modelos de permissões aplicados aos usuários.
+ * Lista à esquerda, editor à direita. Só admin/master alteram (o banco confere).
+ */
+export default function AccessProfileManager({ currentUser }: { currentUser?: User }) {
   const { showSuccess, showError } = useToast();
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
   const [profiles, setProfiles] = useState<AccessProfile[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState<AccessProfile | null>(null);
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const canEdit = !currentUser || currentUser.role === 'master' || currentUser.role === 'admin';
 
-  const loadProfiles = async () => {
+  const load = useCallback(async (selectId?: string | null) => {
     setLoading(true);
-    const data = await getAccessProfiles();
-    setProfiles(data);
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    loadProfiles();
+    setLoadError(null);
+    try {
+      const [profileList, userList] = await Promise.all([getAccessProfiles(), getUsers()]);
+      setProfiles(profileList);
+      setUsers(userList);
+      setDraft((current) => {
+        const id = selectId === undefined ? current?.id : selectId;
+        const chosen = profileList.find((profile) => profile.id === id) || profileList[0];
+        if (current && current.id === null && selectId === undefined) return current;
+        return chosen ? fromProfile(chosen) : null;
+      });
+    } catch {
+      setLoadError('Não foi possível carregar os perfis.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const openCreate = () => {
-    setEditing(null);
-    setModalOpen(true);
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const usersByProfile = useMemo(
+    () =>
+      users.reduce<Record<string, number>>((acc, user) => {
+        if (user.accessProfileId) acc[user.accessProfileId] = (acc[user.accessProfileId] || 0) + 1;
+        return acc;
+      }, {}),
+    [users]
+  );
+
+  const saved = draft?.id ? profiles.find((profile) => profile.id === draft.id) : undefined;
+  const dirty =
+    !!draft &&
+    (!saved ||
+      saved.name !== draft.name ||
+      (saved.description || '') !== draft.description ||
+      differencesFromProfile(draft.permissions, saved.permissions).length > 0);
+
+  const select = async (profile: AccessProfile) => {
+    if (draft?.id === profile.id) return;
+    if (dirty) {
+      const ok = await confirm({
+        title: 'Descartar alterações?',
+        message: 'O perfil aberto tem alterações não salvas.',
+        confirmLabel: 'Descartar',
+        variant: 'warning',
+      });
+      if (!ok) return;
+    }
+    setDraft(fromProfile(profile));
   };
 
-  const openEdit = (profile: AccessProfile) => {
-    setEditing(profile);
-    setModalOpen(true);
-  };
-
-  const handleSave = async (
-    name: string,
-    description: string,
-    permissions: Record<string, boolean>
-  ) => {
+  const save = async () => {
+    if (!draft) return;
+    const name = draft.name.trim();
+    if (name.length < 2) {
+      showError('Dê um nome ao perfil.');
+      return;
+    }
+    if (
+      profiles.some(
+        (profile) =>
+          profile.id !== draft.id && profile.name.trim().toLowerCase() === name.toLowerCase()
+      )
+    ) {
+      showError('Já existe um perfil com esse nome.');
+      return;
+    }
     setSaving(true);
     try {
-      if (editing) {
-        await updateAccessProfile(editing.id, { name, description, permissions });
-        showSuccess('Perfil atualizado com sucesso!');
-      } else {
-        await createAccessProfile({ name, description, permissions });
-        showSuccess('Perfil criado com sucesso!');
+      const payload = {
+        name,
+        description: draft.description.trim() || undefined,
+        permissions: draft.permissions as Record<string, boolean | string>,
+      };
+      // Quem usa o perfil sem ajustes próprios acompanha a mudança (se confirmar).
+      const followers = saved
+        ? users.filter(
+            (user) =>
+              user.accessProfileId === saved.id &&
+              differencesFromProfile(user.permissions as PermissionMap, saved.permissions)
+                .length === 0
+          )
+        : [];
+      const result = draft.id
+        ? await updateAccessProfile(draft.id, payload)
+        : await createAccessProfile(payload);
+      let updated = 0;
+      if (
+        followers.length > 0 &&
+        differencesFromProfile(draft.permissions, saved?.permissions).length > 0
+      ) {
+        const ok = await confirm({
+          title: 'Atualizar os usuários deste perfil?',
+          message: `${followers.length} usuário(s) usam "${name}" sem ajustes próprios. Aplicar as novas permissões a eles também? Quem tem ajustes próprios não muda.`,
+          confirmLabel: 'Atualizar usuários',
+          cancelLabel: 'Só o perfil',
+          variant: 'warning',
+        });
+        if (ok) {
+          for (const user of followers) {
+            try {
+              await updateUser(user.id, {
+                permissions: {
+                  ...(user.permissions || {}),
+                  ...draft.permissions,
+                } as User['permissions'],
+              });
+              updated += 1;
+            } catch {
+              // Sem permissão para algum usuário (hierarquia): segue com os demais.
+            }
+          }
+        }
       }
-      setModalOpen(false);
-      setEditing(null);
-      await loadProfiles();
-    } catch (err: unknown) {
-      console.error('[AccessProfileManager] handleSave error:', err);
-      const msg = err instanceof Error ? err.message : 'Erro desconhecido';
-      showError(`Erro ao salvar perfil: ${msg}`);
+      showSuccess(
+        draft.id
+          ? updated > 0
+            ? `Perfil salvo e ${updated} usuário(s) atualizado(s).`
+            : 'Perfil salvo.'
+          : 'Perfil criado.'
+      );
+      await load(result.id);
+    } catch (error) {
+      showError(profileErrorMessage(error));
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = async (profile: AccessProfile) => {
+  const duplicate = () => {
+    if (!draft) return;
+    setDraft({
+      id: null,
+      name: `${draft.name} (cópia)`,
+      description: draft.description,
+      permissions: { ...draft.permissions },
+    });
+  };
+
+  const remove = async () => {
+    if (!draft?.id) return;
+    const count = usersByProfile[draft.id] || 0;
     const ok = await confirm({
-      title: 'Excluir Perfil',
-      message: `Tem certeza que deseja excluir o perfil "${profile.name}"? Esta ação não pode ser desfeita.`,
+      title: 'Excluir perfil',
+      message:
+        count > 0
+          ? `${count} usuário(s) usam "${draft.name}". Eles mantêm as permissões que têm hoje, mas ficam sem perfil.`
+          : `Excluir o perfil "${draft.name}"?`,
+      confirmLabel: 'Excluir',
       variant: 'danger',
     });
     if (!ok) return;
     try {
-      await deleteAccessProfile(profile.id);
-      showSuccess('Perfil excluído com sucesso!');
-      await loadProfiles();
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Erro desconhecido';
-      showError(`Erro ao excluir perfil: ${msg}`);
+      await deleteAccessProfile(draft.id);
+      showSuccess('Perfil excluído.');
+      await load(null);
+    } catch (error) {
+      showError(profileErrorMessage(error));
     }
   };
 
+  const userCount = draft?.id ? usersByProfile[draft.id] || 0 : 0;
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 pb-12">
       <ConfirmDialog
         isOpen={confirmState.isOpen}
         title={confirmState.title}
         message={confirmState.message}
+        confirmLabel={confirmState.confirmLabel}
+        cancelLabel={confirmState.cancelLabel}
         variant={confirmState.variant}
         onConfirm={handleConfirm}
         onCancel={handleCancel}
       />
+      <header>
+        <h1 className="text-2xl font-black text-stone-900 sm:text-3xl">Perfis de acesso</h1>
+        <p className="text-sm text-stone-500">
+          Modelos de permissões. Ao aplicar um perfil, o usuário recebe estas permissões e pode ter
+          ajustes próprios.
+        </p>
+      </header>
 
-      {modalOpen && (
-        <ProfileModal
-          initial={editing}
-          onSave={handleSave}
-          onClose={() => {
-            setModalOpen(false);
-            setEditing(null);
-          }}
-          saving={saving}
-        />
+      {!canEdit && (
+        <p className="flex items-center gap-2 rounded-xl bg-stone-100 px-3 py-2 text-sm text-stone-600">
+          <Lock className="h-4 w-4" /> Somente leitura: só administradores alteram perfis.
+        </p>
       )}
 
-      {/* Header */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-stone-200">
-        <div className="flex items-center justify-between mb-1">
-          <h2 className="text-xl font-bold text-stone-800 flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-emerald-600" />
-            Perfis de Acesso
-          </h2>
+      {loadError && (
+        <div
+          role="alert"
+          className="flex items-center justify-between gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"
+        >
+          <span className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4" /> {loadError}
+          </span>
           <button
-            onClick={openCreate}
-            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-md"
+            type="button"
+            onClick={() => void load()}
+            className="inline-flex h-10 items-center gap-2 rounded-xl bg-red-600 px-4 font-bold text-white"
           >
-            <Plus className="w-4 h-4" />
-            Novo Perfil
+            <RefreshCw className="h-4 w-4" /> Tentar de novo
           </button>
         </div>
-        <p className="text-sm text-stone-500">
-          Crie e gerencie modelos de permissões que podem ser aplicados rapidamente ao cadastrar
-          usuários.
-        </p>
-      </div>
-
-      {/* Profile cards */}
-      {loading ? (
-        <div className="text-center py-12 text-stone-400 italic text-sm">Carregando perfis…</div>
-      ) : profiles.length === 0 ? (
-        <div className="bg-white rounded-xl border border-stone-200 p-12 text-center">
-          <ShieldCheck className="w-10 h-10 text-stone-300 mx-auto mb-3" />
-          <p className="text-stone-500 font-medium">Nenhum perfil de acesso cadastrado.</p>
-          <p className="text-stone-400 text-sm mt-1">
-            Clique em <strong>Novo Perfil</strong> para criar o primeiro.
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {profiles.map((profile) => {
-            const enabled = countEnabled(profile.permissions);
-            const total = Object.keys(profile.permissions).length;
-            return (
-              <div
-                key={profile.id}
-                className="bg-white rounded-xl border border-stone-200 shadow-sm p-5 flex flex-col gap-3"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <h3 className="font-bold text-stone-800 text-base">{profile.name}</h3>
-                    {profile.description && (
-                      <p className="text-xs text-stone-500 mt-0.5">{profile.description}</p>
-                    )}
-                  </div>
-                  <div className="flex gap-1 flex-shrink-0">
-                    <button
-                      onClick={() => openEdit(profile)}
-                      className="p-1.5 text-stone-400 hover:text-emerald-600 transition-colors"
-                      title="Editar perfil"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(profile)}
-                      className="p-1.5 text-stone-400 hover:text-red-500 transition-colors"
-                      title="Excluir perfil"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Stats */}
-                <div className="text-xs text-stone-500">
-                  <span className="font-bold text-emerald-600">{enabled}</span> de{' '}
-                  <span className="font-bold">{total}</span> permissões ativas
-                </div>
-
-                {/* Permission chips */}
-                <div className="flex flex-wrap gap-1">
-                  {PERMISSION_GROUPS.flatMap((g) => g.items)
-                    .filter((item) => profile.permissions[item.id] === true)
-                    .slice(0, 8)
-                    .map((item) => (
-                      <span
-                        key={item.id}
-                        className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded text-[10px] font-medium border border-emerald-200"
-                      >
-                        {item.label}
-                      </span>
-                    ))}
-                  {enabled > 8 && (
-                    <span className="px-1.5 py-0.5 bg-stone-100 text-stone-500 rounded text-[10px] font-medium border border-stone-200">
-                      +{enabled - 8} mais
-                    </span>
-                  )}
-                  {enabled === 0 && (
-                    <span className="text-xs text-stone-400 italic">Sem permissões ativas</span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
       )}
+
+      <div className="grid gap-5 lg:grid-cols-[300px_1fr]">
+        <aside className="h-fit rounded-2xl border border-stone-200 bg-white p-3">
+          <div className="mb-2 flex items-center justify-between px-1">
+            <p className="font-black text-stone-900">Perfis</p>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => setDraft(emptyDraft())}
+                className="inline-flex h-8 items-center gap-1 rounded-lg bg-emerald-700 px-2.5 text-xs font-black text-white hover:bg-emerald-800"
+              >
+                <Plus className="h-3.5 w-3.5" /> Novo
+              </button>
+            )}
+          </div>
+          {loading && profiles.length === 0 ? (
+            <div className="space-y-2" aria-busy="true">
+              {[1, 2, 3].map((item) => (
+                <div key={item} className="h-12 animate-pulse rounded-xl bg-stone-100" />
+              ))}
+            </div>
+          ) : profiles.length === 0 ? (
+            <p className="px-1 py-4 text-sm text-stone-500">Nenhum perfil cadastrado.</p>
+          ) : (
+            <ul className="space-y-1">
+              {profiles.map((profile) => {
+                const active = draft?.id === profile.id;
+                const count = usersByProfile[profile.id] || 0;
+                return (
+                  <li key={profile.id}>
+                    <button
+                      type="button"
+                      onClick={() => void select(profile)}
+                      aria-current={active}
+                      className={`w-full rounded-xl px-3 py-2.5 text-left transition-colors ${
+                        active ? 'bg-emerald-50 ring-1 ring-emerald-200' : 'hover:bg-stone-50'
+                      }`}
+                    >
+                      <span className="block text-sm font-bold text-stone-900">{profile.name}</span>
+                      <span className="block text-xs text-stone-500">
+                        {count} {count === 1 ? 'usuário' : 'usuários'} ·{' '}
+                        {countEnabled(profile.permissions)} permissões
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </aside>
+
+        {draft ? (
+          <section className="rounded-2xl border border-stone-200 bg-white p-4 sm:p-5">
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="flex items-center gap-2 text-lg font-black text-stone-900">
+                  <ShieldCheck className="h-5 w-5 text-emerald-600" />
+                  {draft.id ? draft.name || 'Perfil sem nome' : 'Novo perfil'}
+                </p>
+                <p className="text-sm text-stone-500">
+                  {draft.id
+                    ? `Usado por ${userCount} ${userCount === 1 ? 'usuário' : 'usuários'}. Ao salvar, você escolhe se quem usa o perfil sem ajustes próprios acompanha a mudança.`
+                    : 'Escolha as permissões e salve.'}
+                </p>
+              </div>
+              {canEdit && (
+                <div className="flex shrink-0 gap-2">
+                  {draft.id && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={duplicate}
+                        className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-stone-200 px-3 text-sm font-bold text-stone-700 hover:bg-stone-50"
+                      >
+                        <Copy className="h-4 w-4" /> Duplicar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void remove()}
+                        aria-label="Excluir perfil"
+                        className="grid h-10 w-10 place-items-center rounded-xl text-stone-400 hover:bg-red-50 hover:text-red-600"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void save()}
+                    disabled={saving || !dirty}
+                    className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-700 px-4 text-sm font-black text-white hover:bg-emerald-800 disabled:bg-stone-300"
+                  >
+                    {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                    {draft.id ? 'Salvar perfil' : 'Criar perfil'}
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="mb-4 grid gap-3 sm:grid-cols-2">
+              <div>
+                <label
+                  htmlFor="profile-name"
+                  className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-stone-500"
+                >
+                  Nome
+                </label>
+                <input
+                  id="profile-name"
+                  value={draft.name}
+                  disabled={!canEdit}
+                  onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+                  className={fieldClass}
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="profile-description"
+                  className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-stone-500"
+                >
+                  Descrição
+                </label>
+                <input
+                  id="profile-description"
+                  value={draft.description}
+                  disabled={!canEdit}
+                  onChange={(event) => setDraft({ ...draft, description: event.target.value })}
+                  placeholder="Para quem é este perfil"
+                  className={fieldClass}
+                />
+              </div>
+            </div>
+            <PermissionEditor
+              permissions={draft.permissions}
+              onChange={(permissions) => setDraft({ ...draft, permissions })}
+              disabled={!canEdit}
+            />
+          </section>
+        ) : (
+          !loading && (
+            <section className="grid place-items-center rounded-2xl border border-dashed border-stone-300 p-10 text-center text-sm text-stone-500">
+              {canEdit ? 'Crie o primeiro perfil com “Novo”.' : 'Nenhum perfil para mostrar.'}
+            </section>
+          )
+        )}
+      </div>
     </div>
   );
 }

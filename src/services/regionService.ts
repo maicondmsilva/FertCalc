@@ -16,14 +16,36 @@ export async function listRegions(): Promise<Region[]> {
   return (data || []).map(mapRegion);
 }
 
-/** Vínculos usuário ↔ região. */
-export async function listUserRegions(): Promise<{ userId: string; regionId: string }[]> {
-  const { data, error } = await supabase.from('user_regions').select('user_id, region_id');
+/** Vínculos usuário ↔ região (com a região principal de cada usuário). */
+export async function listUserRegions(): Promise<
+  { userId: string; regionId: string; principal: boolean }[]
+> {
+  const { data, error } = await supabase
+    .from('user_regions')
+    .select('user_id, region_id, principal');
   if (error) throw error;
   return (data || []).map((row) => ({
     userId: String(row.user_id),
     regionId: String(row.region_id),
+    principal: row.principal === true,
   }));
+}
+
+/**
+ * Salva as regiões de um usuário e a principal, numa só transação no banco.
+ * Com uma região só, ela vira a principal.
+ */
+export async function setUserRegions(
+  userId: string,
+  regionIds: string[],
+  principalRegionId: string | null
+): Promise<void> {
+  const { error } = await supabase.rpc('definir_regioes_usuario', {
+    p_user_id: userId,
+    p_region_ids: regionIds,
+    p_principal: principalRegionId || null,
+  });
+  if (error) throw error;
 }
 
 export interface RegionDraft {
