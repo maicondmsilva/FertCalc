@@ -1,195 +1,131 @@
-import React, { useState, useEffect } from 'react';
-import { Lock, Leaf, CheckCircle2 } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { CheckCircle2, Loader2 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { logger } from '../utils/logger';
+import AuthLayout from './auth/AuthLayout';
+import { AuthAlert, NewPasswordFields, SubmitButton } from './auth/AuthFields';
+import { newPasswordProblem } from './auth/passwordRules';
+import { passwordUpdateErrorMessage } from '../services/authService';
+
+/** Espera pelo link do e-mail antes de mostrar "link expirado". */
+const LINK_TIMEOUT_MS = 10_000;
 
 /**
- * Página de redefinição de senha — acessada pelo link enviado por e-mail.
- * Supabase Auth injeta automaticamente os tokens via fragment (#access_token=...)
- * quando o usuário clica no link de recuperação.
+ * Nova senha pelo link de recuperação enviado por e-mail. O Supabase Auth lê
+ * os dados do link e abre uma sessão de recuperação.
  */
 export default function ResetPassword() {
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [confirmation, setConfirmation] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
-  const [sessionReady, setSessionReady] = useState(false);
+  const [status, setStatus] = useState<'checking' | 'ready' | 'expired'>('checking');
 
   useEffect(() => {
-    // O Supabase Auth processa automaticamente o hash fragment (#access_token=...)
-    // e restaura a sessão. Esperamos o evento SIGNED_IN ou PASSWORD_RECOVERY.
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') {
-        setSessionReady(true);
-      }
+      if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') setStatus('ready');
     });
-
-    // Verificar se já existe sessão (caso o evento já tenha sido disparado)
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) setSessionReady(true);
+      if (session) setStatus('ready');
     });
-
+    const timer = setTimeout(
+      () => setStatus((current) => (current === 'checking' ? 'expired' : current)),
+      LINK_TIMEOUT_MS
+    );
     return () => {
+      clearTimeout(timer);
       subscription.unsubscribe();
     };
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-
-    if (password.length < 6) {
-      setError('A senha deve ter pelo menos 6 caracteres.');
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const problem = newPasswordProblem(password, confirmation);
+    if (problem) {
+      setError(problem);
       return;
     }
-
-    if (password !== confirmPassword) {
-      setError('As senhas não coincidem.');
-      return;
-    }
-
     setLoading(true);
-
+    setError('');
     try {
-      const { error: updateError } = await supabase.auth.updateUser({
-        password,
-      });
-
+      const { error: updateError } = await supabase.auth.updateUser({ password });
       if (updateError) {
         logger.warn('[ResetPassword] updateUser error:', updateError.message);
-        setError('Erro ao redefinir a senha. Tente novamente ou solicite um novo link.');
-      } else {
-        setSuccess(true);
-        // Deslogar para forçar login com a nova senha
-        await supabase.auth.signOut();
+        setError(passwordUpdateErrorMessage(updateError));
+        return;
       }
+      setSuccess(true);
+      // Sai da sessão de recuperação: o próximo acesso usa a nova senha.
+      await supabase.auth.signOut();
     } catch (err) {
       logger.error('[ResetPassword] Unexpected error:', err);
-      setError('Erro inesperado. Tente novamente.');
+      setError('Sem conexão com o servidor. Tente novamente.');
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-stone-100 px-4">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 border border-stone-200 transition-all duration-300">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-emerald-100 rounded-full mb-4">
-            <Leaf className="w-8 h-8 text-emerald-600" aria-hidden="true" />
-          </div>
-          <h1 className="text-3xl font-black text-stone-800 tracking-tight">
-            FertCalc <span className="text-emerald-600">Pro</span>
-          </h1>
-          <p className="text-stone-500 text-sm mt-2">Redefinir sua senha</p>
-        </div>
+  const goToLogin = (
+    <a
+      href="/"
+      className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-white text-[15px] font-black text-emerald-900 shadow-lg shadow-black/10 hover:bg-emerald-50"
+    >
+      Ir para o login
+    </a>
+  );
 
-        {success ? (
-          <div className="text-center space-y-6">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-emerald-100 rounded-full">
-              <CheckCircle2 className="w-8 h-8 text-emerald-600" />
-            </div>
-            <div>
-              <p className="text-lg font-bold text-stone-800 mb-2">Senha redefinida com sucesso!</p>
-              <p className="text-sm text-stone-500">
-                Agora você pode acessar o sistema com sua nova senha.
-              </p>
-            </div>
-            <a
-              href="/"
-              className="inline-block w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-lg transition-all shadow-lg shadow-emerald-200 text-center"
-            >
-              Ir para o Login
-            </a>
+  if (success) {
+    return (
+      <AuthLayout title="Senha alterada">
+        <div className="space-y-5">
+          <div className="flex items-start gap-3 rounded-2xl border border-emerald-300/40 bg-emerald-400/15 p-4 text-sm text-emerald-50">
+            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+            <p role="status">Pronto! Agora entre com a sua nova senha.</p>
           </div>
-        ) : !sessionReady ? (
-          <div className="text-center space-y-4">
-            <p className="text-stone-500 text-sm">Verificando seu link de recuperação...</p>
-            <div className="flex justify-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600" />
-            </div>
-            <p className="text-xs text-stone-400">
-              Se esta página não carregar em alguns segundos, o link pode ter expirado.{' '}
-              <a href="/" className="text-emerald-600 hover:text-emerald-700 font-bold">
-                Solicite um novo link
-              </a>
-              .
-            </p>
-          </div>
+          {goToLogin}
+        </div>
+      </AuthLayout>
+    );
+  }
+
+  if (status !== 'ready') {
+    return (
+      <AuthLayout title="Redefinir senha">
+        {status === 'checking' ? (
+          <p role="status" className="flex items-center gap-2 text-sm text-emerald-100/80">
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Verificando o link de
+            recuperação…
+          </p>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-6" noValidate>
-            {error && (
-              <div
-                role="alert"
-                className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100"
-              >
-                {error}
-              </div>
-            )}
-            <div>
-              <label
-                htmlFor="new-password"
-                className="block text-sm font-medium text-stone-700 mb-1"
-              >
-                Nova Senha
-              </label>
-              <div className="relative">
-                <Lock
-                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-stone-400 w-4 h-4"
-                  aria-hidden="true"
-                />
-                <input
-                  id="new-password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
-                  placeholder="Mínimo 6 caracteres"
-                  autoComplete="new-password"
-                  minLength={6}
-                  required
-                />
-              </div>
-            </div>
-            <div>
-              <label
-                htmlFor="confirm-password"
-                className="block text-sm font-medium text-stone-700 mb-1"
-              >
-                Confirmar Nova Senha
-              </label>
-              <div className="relative">
-                <Lock
-                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-stone-400 w-4 h-4"
-                  aria-hidden="true"
-                />
-                <input
-                  id="confirm-password"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
-                  placeholder="Repita a nova senha"
-                  autoComplete="new-password"
-                  minLength={6}
-                  required
-                />
-              </div>
-            </div>
-            <button
-              type="submit"
-              disabled={loading}
-              aria-busy={loading}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-bold py-3 rounded-lg transition-all shadow-lg shadow-emerald-200 active:scale-[0.98]"
-            >
-              {loading ? 'Redefinindo...' : 'Redefinir Senha'}
-            </button>
-          </form>
+          <div className="space-y-5">
+            <AuthAlert kind="error">
+              Este link expirou ou já foi usado. Peça um novo em “Esqueceu a senha?”.
+            </AuthAlert>
+            {goToLogin}
+          </div>
         )}
-      </div>
-    </div>
+      </AuthLayout>
+    );
+  }
+
+  return (
+    <AuthLayout title="Redefinir senha" subtitle="Escolha uma nova senha para sua conta.">
+      <form onSubmit={submit} className="space-y-5" noValidate>
+        {error && <AuthAlert kind="error">{error}</AuthAlert>}
+        <NewPasswordFields
+          password={password}
+          confirmation={confirmation}
+          onPasswordChange={setPassword}
+          onConfirmationChange={setConfirmation}
+          disabled={loading}
+        />
+        <SubmitButton loading={loading} loadingLabel="Salvando…">
+          Salvar nova senha
+        </SubmitButton>
+      </form>
+    </AuthLayout>
   );
 }

@@ -6,9 +6,86 @@
 
 import { supabase } from './supabase';
 import { Capacitor } from '@capacitor/core';
-import { getUserByEmail } from './db';
+import { mapUser } from './db';
 import type { User } from '../types';
 import { logger } from '../utils/logger';
+
+export const INVALID_CREDENTIALS = 'E-mail/usuário ou senha incorretos.';
+export const TOO_MANY_ATTEMPTS =
+  'Muitas tentativas seguidas. Aguarde alguns minutos e tente de novo.';
+
+/**
+ * Mensagem para o usuário. Credencial errada recebe sempre a mesma mensagem,
+ * sem dizer se o e-mail existe (antes dizia "Senha incorreta", o que confirmava
+ * que a conta existia).
+ */
+export function authErrorMessage(error: {
+  message?: string;
+  status?: number;
+  code?: string;
+}): string {
+  const message = String(error.message || '');
+  if (error.status === 429 || /rate limit|too many/i.test(message)) return TOO_MANY_ATTEMPTS;
+  if (
+    /invalid login credentials|invalid_credentials/i.test(message) ||
+    error.code === 'invalid_credentials'
+  )
+    return INVALID_CREDENTIALS;
+  if (/email not confirmed/i.test(message))
+    return 'E-mail não confirmado. Verifique sua caixa de entrada.';
+  if (/fetch|network/i.test(message)) return 'Sem conexão com o servidor. Verifique a internet.';
+  return 'Não foi possível entrar agora. Tente novamente.';
+}
+
+/** Perfil do app pelo id do usuário autenticado. */
+export async function getAppUserById(id: string): Promise<User | null> {
+  const { data, error } = await supabase.from('app_users').select('*').eq('id', id).maybeSingle();
+  if (error || !data) return null;
+  return mapUser(data);
+}
+
+/** Mensagem para falhas ao definir nova senha. */
+export function passwordUpdateErrorMessage(error: { message?: string; code?: string }): string {
+  const message = String(error.message || '');
+  if (error.code === 'same_password' || /different from the old|same.*password/i.test(message))
+    return 'A nova senha precisa ser diferente da atual.';
+  if (error.code === 'weak_password' || /weak|at least|characters/i.test(message))
+    return 'Senha fraca: use pelo menos 8 caracteres, com letras e números.';
+  if (/session|jwt|expired/i.test(message))
+    return 'Sua sessão expirou. Entre novamente ou solicite um novo link.';
+  if (/rate limit|too many/i.test(message)) return TOO_MANY_ATTEMPTS;
+  return 'Não foi possível salvar a nova senha. Tente novamente.';
+}
+
+/**
+ * Primeiro acesso: troca a senha, encerra a exigência (o banco confere que a
+ * senha mudou) e recarrega o perfil completo.
+ */
+export async function completeFirstAccess(
+  userId: string,
+  newPassword: string
+): Promise<{ user: User | null; error: string | null }> {
+  try {
+    const { error: passwordError } = await supabase.auth.updateUser({ password: newPassword });
+    if (passwordError) return { user: null, error: passwordUpdateErrorMessage(passwordError) };
+    const { error: flagError } = await supabase
+      .from('app_users')
+      .update({ requer_alteracao_senha: false })
+      .eq('id', userId);
+    if (flagError)
+      return {
+        user: null,
+        error: 'Senha salva, mas não foi possível concluir o primeiro acesso. Tente de novo.',
+      };
+    const user = await getAppUserById(userId);
+    if (!user)
+      return { user: null, error: 'Não foi possível recarregar seu perfil. Entre novamente.' };
+    return { user, error: null };
+  } catch (err) {
+    logger.error('[authService] completeFirstAccess:', err);
+    return { user: null, error: 'Sem conexão com o servidor. Tente novamente.' };
+  }
+}
 
 export interface AuthResult {
   user: User | null;
@@ -114,8 +191,9 @@ export async function signIn(email: string, password: string): Promise<AuthResul
         refresh_token?: string;
         error?: string;
       };
+      if (response.status === 429) return { user: null, error: TOO_MANY_ATTEMPTS };
       if (!response.ok || !body.access_token || !body.refresh_token) {
-        return { user: null, error: 'E-mail/usuário ou senha incorretos.' };
+        return { user: null, error: INVALID_CREDENTIALS };
       }
       const sessionResult = await supabase.auth.setSession({
         access_token: body.access_token,
@@ -127,26 +205,15 @@ export async function signIn(email: string, password: string): Promise<AuthResul
 
     if (error) {
       logger.warn('[authService] signIn error:', error.message);
-      if (error.message.includes('Invalid login credentials')) {
-        return { user: null, error: 'Senha incorreta. Verifique e tente novamente.' };
-      }
-      if (error.message.includes('Email not confirmed')) {
-        return { user: null, error: 'E-mail não confirmado. Verifique sua caixa de entrada.' };
-      }
-      return { user: null, error: 'Erro ao acessar o sistema. Tente novamente.' };
+      return { user: null, error: authErrorMessage(error) };
     }
 
     if (!data.user) {
-      return { user: null, error: 'Usuário não encontrado.' };
+      return { user: null, error: INVALID_CREDENTIALS };
     }
 
-    // Carrega perfil completo da tabela app_users
-    const profileEmail = data.user.email;
-    if (!profileEmail) {
-      await supabase.auth.signOut();
-      return { user: null, error: 'Perfil de usuário não encontrado. Contate o administrador.' };
-    }
-    const profile = await getUserByEmail(profileEmail);
+    // Perfil pelo id da sessão (o id do app_users é o mesmo do Supabase Auth).
+    const profile = await getAppUserById(data.user.id);
     if (!profile) {
       await supabase.auth.signOut();
       return { user: null, error: 'Perfil de usuário não encontrado. Contate o administrador.' };
@@ -214,9 +281,9 @@ export async function restoreSession(): Promise<User | null> {
     const {
       data: { session },
     } = await supabase.auth.getSession();
-    if (!session?.user?.email) return null;
+    if (!session?.user?.id) return null;
 
-    const profile = await getUserByEmail(session.user.email);
+    const profile = await getAppUserById(session.user.id);
     if (!profile || (!profile.ativo && profile.role !== 'master')) {
       await supabase.auth.signOut();
       return null;

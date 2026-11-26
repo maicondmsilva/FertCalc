@@ -27,6 +27,7 @@ export default function App() {
         isPasswordReset={isPasswordReset}
         onLogin={login}
         onPasswordChanged={updateCurrentUser}
+        onLogout={logout}
       >
         {(authenticatedUser) => (
           <React.Suspense

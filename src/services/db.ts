@@ -154,7 +154,7 @@ export async function deleteUser(id: string): Promise<void> {
   if (error) throw error;
 }
 
-function mapUser(data: Record<string, unknown>): User {
+export function mapUser(data: Record<string, unknown>): User {
   return {
     id: data.id,
     organizationId: data.organization_id,

@@ -4,14 +4,12 @@ const { getSessionMock } = vi.hoisted(() => ({
   getSessionMock: vi.fn(),
 }));
 
-const { signInWithPasswordMock, setSessionMock, signOutMock, getUserByEmailMock } = vi.hoisted(
-  () => ({
-    signInWithPasswordMock: vi.fn(),
-    setSessionMock: vi.fn(),
-    signOutMock: vi.fn(),
-    getUserByEmailMock: vi.fn(),
-  })
-);
+const { signInWithPasswordMock, setSessionMock, signOutMock, profileByIdMock } = vi.hoisted(() => ({
+  signInWithPasswordMock: vi.fn(),
+  setSessionMock: vi.fn(),
+  signOutMock: vi.fn(),
+  profileByIdMock: vi.fn(),
+}));
 
 vi.mock('./supabase', () => ({
   supabase: {
@@ -21,11 +19,19 @@ vi.mock('./supabase', () => ({
       setSession: setSessionMock,
       signOut: signOutMock,
     },
+    // Perfil: from('app_users').select('*').eq('id', id).maybeSingle()
+    from: () => ({
+      select: () => ({
+        eq: (_column: string, id: string) => ({
+          maybeSingle: async () => ({ data: await profileByIdMock(id), error: null }),
+        }),
+      }),
+    }),
   },
 }));
 
 vi.mock('./db', () => ({
-  getUserByEmail: getUserByEmailMock,
+  mapUser: (row: unknown) => row,
 }));
 
 vi.mock('../utils/logger', () => ({
@@ -39,8 +45,12 @@ import {
   adminDeleteAuthUser,
   adminUpdateAuthUser,
   createAuthUser,
+  authErrorMessage,
+  INVALID_CREDENTIALS,
+  passwordUpdateErrorMessage,
   restoreSession,
   signIn,
+  TOO_MANY_ATTEMPTS,
 } from './authService';
 
 describe('adminUpdateAuthUser', () => {
@@ -101,7 +111,7 @@ describe('signIn', () => {
     signInWithPasswordMock.mockReset();
     setSessionMock.mockReset();
     signOutMock.mockReset();
-    getUserByEmailMock.mockReset();
+    profileByIdMock.mockReset();
     vi.unstubAllGlobals();
   });
 
@@ -111,7 +121,7 @@ describe('signIn', () => {
       data: { user: { id: 'user-1', email: 'usuario@example.com' } },
       error: null,
     });
-    getUserByEmailMock.mockResolvedValue(profile);
+    profileByIdMock.mockResolvedValue(profile);
 
     const result = await signIn(' Usuario@Example.com ', 'senha-segura');
 
@@ -119,7 +129,7 @@ describe('signIn', () => {
       email: 'usuario@example.com',
       password: 'senha-segura',
     });
-    expect(getUserByEmailMock).toHaveBeenCalledAfter(signInWithPasswordMock);
+    expect(profileByIdMock).toHaveBeenCalledAfter(signInWithPasswordMock);
     expect(result).toEqual({ user: profile, error: null });
   });
 
@@ -135,7 +145,7 @@ describe('signIn', () => {
       data: { user: { id: 'user-1', email: 'usuario@example.com' } },
       error: null,
     });
-    getUserByEmailMock.mockResolvedValue({
+    profileByIdMock.mockResolvedValue({
       id: 'user-1',
       email: 'usuario@example.com',
       ativo: true,
@@ -149,7 +159,7 @@ describe('signIn', () => {
       access_token: 'access',
       refresh_token: 'refresh',
     });
-    expect(getUserByEmailMock).toHaveBeenCalledWith('usuario@example.com');
+    expect(profileByIdMock).toHaveBeenCalledWith('user-1');
     expect(result.error).toBeNull();
   });
 
@@ -158,7 +168,7 @@ describe('signIn', () => {
       data: { user: { id: 'auth-only', email: 'sem-perfil@example.com' } },
       error: null,
     });
-    getUserByEmailMock.mockResolvedValue(null);
+    profileByIdMock.mockResolvedValue(null);
 
     const result = await signIn('sem-perfil@example.com', 'senha-segura');
 
@@ -174,7 +184,7 @@ describe('signIn', () => {
       data: { user: { id: 'user-1', email: 'inativo@example.com' } },
       error: null,
     });
-    getUserByEmailMock.mockResolvedValue({
+    profileByIdMock.mockResolvedValue({
       id: 'user-1',
       email: 'inativo@example.com',
       ativo: false,
@@ -192,18 +202,18 @@ describe('restoreSession', () => {
   beforeEach(() => {
     getSessionMock.mockReset();
     signOutMock.mockReset();
-    getUserByEmailMock.mockReset();
+    profileByIdMock.mockReset();
   });
 
   it('restaura o perfil ativo associado à sessão Supabase', async () => {
     const profile = { id: 'user-1', email: 'usuario@example.com', ativo: true, role: 'user' };
     getSessionMock.mockResolvedValue({
-      data: { session: { user: { email: 'usuario@example.com' } } },
+      data: { session: { user: { id: 'user-1', email: 'usuario@example.com' } } },
     });
-    getUserByEmailMock.mockResolvedValue(profile);
+    profileByIdMock.mockResolvedValue(profile);
 
     await expect(restoreSession()).resolves.toBe(profile);
-    expect(getUserByEmailMock).toHaveBeenCalledWith('usuario@example.com');
+    expect(profileByIdMock).toHaveBeenCalledWith('user-1');
     expect(signOutMock).not.toHaveBeenCalled();
   });
 
@@ -212,9 +222,9 @@ describe('restoreSession', () => {
     ['perfil inativo', { id: 'user-1', email: 'usuario@example.com', ativo: false, role: 'user' }],
   ])('encerra a sessão restaurada quando há %s', async (_scenario, profile) => {
     getSessionMock.mockResolvedValue({
-      data: { session: { user: { email: 'usuario@example.com' } } },
+      data: { session: { user: { id: 'user-1', email: 'usuario@example.com' } } },
     });
-    getUserByEmailMock.mockResolvedValue(profile);
+    profileByIdMock.mockResolvedValue(profile);
 
     await expect(restoreSession()).resolves.toBeNull();
     expect(signOutMock).toHaveBeenCalledTimes(1);
@@ -224,7 +234,7 @@ describe('restoreSession', () => {
     getSessionMock.mockResolvedValue({ data: { session: null } });
 
     await expect(restoreSession()).resolves.toBeNull();
-    expect(getUserByEmailMock).not.toHaveBeenCalled();
+    expect(profileByIdMock).not.toHaveBeenCalled();
     expect(signOutMock).not.toHaveBeenCalled();
   });
 });
@@ -339,6 +349,35 @@ describe('adminDeleteAuthUser', () => {
     await expect(adminDeleteAuthUser('user-1')).resolves.toEqual({
       success: false,
       error: 'Authentication removed, but profile cleanup failed',
+    });
+  });
+});
+
+describe('mensagens de autenticação', () => {
+  it('credencial errada não revela se a conta existe', () => {
+    expect(authErrorMessage({ message: 'Invalid login credentials' })).toBe(INVALID_CREDENTIALS);
+    expect(INVALID_CREDENTIALS).not.toMatch(/senha incorreta/i);
+  });
+
+  it('muitas tentativas e sem conexão', () => {
+    expect(authErrorMessage({ status: 429, message: 'x' })).toBe(TOO_MANY_ATTEMPTS);
+    expect(authErrorMessage({ message: 'Request rate limit reached' })).toBe(TOO_MANY_ATTEMPTS);
+    expect(authErrorMessage({ message: 'Failed to fetch' })).toMatch(/conexão/);
+  });
+
+  it('erro de nova senha', () => {
+    expect(passwordUpdateErrorMessage({ code: 'same_password' })).toMatch(/diferente/);
+    expect(passwordUpdateErrorMessage({ code: 'weak_password' })).toMatch(/fraca/);
+  });
+
+  it('login com e-mail errado usa a mensagem genérica', async () => {
+    signInWithPasswordMock.mockResolvedValue({
+      data: { user: null },
+      error: { message: 'Invalid login credentials' },
+    });
+    await expect(signIn('alguem@example.com', 'x')).resolves.toEqual({
+      user: null,
+      error: INVALID_CREDENTIALS,
     });
   });
 });
