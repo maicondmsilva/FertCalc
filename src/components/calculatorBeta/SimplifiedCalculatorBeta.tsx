@@ -8,6 +8,8 @@ import {
   FlaskConical,
   MapPin,
   Plus,
+  Save,
+  UserRound,
 } from 'lucide-react';
 import type {
   Embalagem,
@@ -19,6 +21,7 @@ import type {
 } from '../../types';
 import { useCalculator } from '../../hooks/useCalculator';
 import BetaProfitabilityModal from './BetaProfitabilityModal';
+import BetaClientPicker from './BetaClientPicker';
 import { canCheckProfitability } from './profitabilityModel';
 import { useToast } from '../Toast';
 import { ProductPickerModal } from '../calculator/ProductPickerModal';
@@ -83,6 +86,12 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
     addTargetFormula,
     isSavingFormula,
     saveToFormulasList,
+    availableClients,
+    clientSearch,
+    setClientSearch,
+    savePricing,
+    isSavingPricing,
+    isLocked,
   } = calculator;
 
   const [embalagens, setEmbalagens] = useState<Embalagem[]>([]);
@@ -108,6 +117,9 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
     currentUser.role === 'master' || currentUser.role === 'admin' || currentUser.role === 'manager';
   const canCompareFormulas = isManagerOrAbove || permissions.calculator_fertigranP !== false;
   const canSaveFormula = isManagerOrAbove || permissions.calculator_saveFormula !== false;
+  // Mesma regra da calculadora oficial e do banco: gerente ou acima, ou a
+  // permissão "Salvar Precificação" não desligada.
+  const canSavePricing = isManagerOrAbove || permissions.calculator_savePricing !== false;
   const canProfitability = canCheckProfitability(currentUser);
   const [profitabilityCalcId, setProfitabilityCalcId] = useState<string | null>(null);
   const profitabilityIndex = calculations.findIndex((item) => item.id === profitabilityCalcId);
@@ -286,6 +298,27 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
 
       {/* Dados da batida */}
       <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm @3xl:p-5">
+        <div className="mb-4">
+          <label
+            htmlFor="beta-client"
+            className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-stone-500"
+          >
+            <UserRound className="h-4 w-4" /> Cliente
+            {canSavePricing && (
+              <span className="font-medium normal-case tracking-normal text-stone-400">
+                (obrigatório para salvar a precificação)
+              </span>
+            )}
+          </label>
+          <BetaClientPicker
+            clients={availableClients}
+            selected={factors.client}
+            search={clientSearch || ''}
+            onSearchChange={setClientSearch}
+            onSelect={(client) => setFactors((previous) => ({ ...previous, client }))}
+            disabled={Boolean(isLocked)}
+          />
+        </div>
         <div className="grid grid-cols-1 gap-4 @2xl:grid-cols-2">
           <label className="block">
             <span className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-stone-500">
@@ -549,6 +582,20 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
             >
               <Beaker className="h-4 w-4" />
               {isSavingFormula ? 'Salvando batida…' : 'Salvar nova batida'}
+            </button>
+          )}
+          {canSavePricing && (
+            <button
+              type="button"
+              onClick={() => void savePricing()}
+              disabled={
+                Boolean(isLocked) || !hasValidExchangeRate || isSavingPricing || selectedCount === 0
+              }
+              title={!factors.client?.id ? 'Escolha o cliente para salvar' : undefined}
+              className="inline-flex h-11 items-center gap-2 rounded-xl bg-emerald-700 px-4 text-sm font-black text-white shadow-sm hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-stone-300"
+            >
+              <Save className="h-4 w-4" />
+              {isSavingPricing ? 'Salvando precificação…' : 'Salvar precificação'}
             </button>
           )}
         </div>
