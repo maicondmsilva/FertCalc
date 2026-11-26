@@ -158,53 +158,63 @@ function GuaranteeTile({
   const badge = STATUS_BADGE[status];
   return (
     <div
-      className={`rounded-xl border px-3 py-2 ${large ? style.box : 'border-stone-200 bg-white'}`}
+      className={`rounded-xl border px-2.5 py-1.5 ${large ? style.box : 'border-stone-200 bg-white'}`}
       title={style.label}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className={`text-sm font-black ${style.text}`}>{nutrient}</span>
+        <span className={`text-xs font-black ${style.text}`}>{nutrient}</span>
         {badge && (
-          <span className={`flex items-center gap-0.5 text-xs font-bold ${badge.className}`}>
-            {status === 'met' && <Check className="h-3.5 w-3.5" />}
+          <span className={`flex items-center gap-0.5 text-[11px] font-bold ${badge.className}`}>
+            {status === 'met' && <Check className="h-3 w-3" />}
             <span className="hidden @2xl:inline">{badge.text}</span>
           </span>
         )}
       </div>
-      <p
-        className={`mt-0.5 font-black tabular-nums text-stone-900 ${large ? 'text-xl' : 'text-lg'}`}
-      >
-        {obtained === undefined ? '—' : formatGuarantee(obtained)}
-        <span className="ml-0.5 text-sm font-bold text-stone-400">%</span>
-      </p>
-      <p className="text-[11px] text-stone-500">
-        {Number(target) > 0 ? `alvo ${formatGuarantee(target)} %` : 'sem alvo'}
-      </p>
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="text-lg font-black tabular-nums text-stone-900">
+          {obtained === undefined ? '—' : formatGuarantee(obtained)}
+          <span className="ml-0.5 text-xs font-bold text-stone-400">%</span>
+        </p>
+        <span className="truncate text-[11px] text-stone-500">
+          {Number(target) > 0 ? `alvo ${formatGuarantee(target)}` : 'sem alvo'}
+        </span>
+      </div>
     </div>
   );
 }
 
-/** Micro que entrou na batida: cartão menor que os macros, só com a sigla. */
+/**
+ * Micro da batida: cartão menor que os macros, só com a sigla. Aparece o que
+ * entrou na batida e também o que tem alvo e ficou zerado.
+ */
 function MicroTile({ row }: { row: GuaranteeRow }) {
   const hasTarget = row.target > 0;
   const status = hasTarget ? getMicronutrientTargetStatus(row.target, row.obtained) : null;
   const tone =
     status === 'met'
       ? 'border-emerald-200 bg-emerald-50'
-      : hasTarget
-        ? 'border-amber-200 bg-amber-50'
-        : 'border-cyan-100 bg-cyan-50/60';
+      : !hasTarget
+        ? 'border-cyan-100 bg-cyan-50/60'
+        : row.obtained > 0
+          ? 'border-amber-200 bg-amber-50'
+          : 'border-red-200 bg-red-50';
   return (
-    <div className={`rounded-lg border px-2.5 py-1.5 ${tone}`}>
-      <div className="flex items-center justify-between gap-1">
-        <span className="text-xs font-black text-cyan-800">{row.label}</span>
-        {status === 'met' && <Check className="h-3 w-3 text-emerald-700" aria-label="no alvo" />}
+    <div
+      className={`rounded-lg border px-2 py-1 ${tone}`}
+      title={row.obtained > 0 ? undefined : 'Tem alvo, mas nenhum produto da batida tem este micro'}
+    >
+      <div className="flex items-baseline justify-between gap-1">
+        <span className="text-[11px] font-black text-cyan-800">{row.label}</span>
+        <span className="text-sm font-black tabular-nums text-stone-900">
+          {formatGuarantee(row.obtained)}
+          <span className="ml-0.5 text-[10px] font-bold text-stone-400">%</span>
+        </span>
       </div>
-      <p className="text-base font-black tabular-nums text-stone-900">
-        {formatGuarantee(row.obtained)}
-        <span className="ml-0.5 text-xs font-bold text-stone-400">%</span>
-      </p>
-      <p className="text-[10px] leading-tight text-stone-500">
-        {hasTarget ? `alvo ${formatGuarantee(row.target)} %` : 'sem alvo'}
+      <p className="flex items-center justify-end gap-0.5 text-[10px] leading-tight text-stone-500">
+        {status === 'met' && (
+          <Check className="h-2.5 w-2.5 text-emerald-700" aria-label="no alvo" />
+        )}
+        {hasTarget ? `alvo ${formatGuarantee(row.target)}` : 'sem alvo'}
       </p>
     </div>
   );
@@ -459,9 +469,9 @@ export default function BetaFormulaCard({
       magnesiumTarget,
     ]
   );
-  /** Micros que entraram na batida (com ou sem alvo), para os cartões menores. */
+  /** Micros que entraram na batida e os que têm alvo (mesmo zerados), nos cartões menores. */
   const microsInBatch = guaranteeBreakdown.filter(
-    (row) => row.kind === 'micro' && row.obtained > 0
+    (row) => row.kind === 'micro' && (row.obtained > 0 || row.target > 0)
   );
 
   const unpricedProducts = composition.rows.filter((row) => row.isUnpriced);
@@ -597,7 +607,7 @@ export default function BetaFormulaCard({
           </div>
         </header>
 
-        {/* Alvos: N-P-K e secundários na mesma linha; busca e categoria abaixo */}
+        {/* Alvos: N-P-K em cima; secundários, busca e categoria na linha de baixo */}
         {!isFreeProducts && (
           <div className="space-y-2">
             <div className="flex flex-wrap items-end gap-x-6 gap-y-2">
@@ -648,6 +658,8 @@ export default function BetaFormulaCard({
                   })}
                 </div>
               </div>
+            </div>
+            <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
               <div>
                 <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-stone-500">
                   Secundários alvo
@@ -683,9 +695,7 @@ export default function BetaFormulaCard({
                   })}
                 </div>
               </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative min-w-[200px] max-w-md flex-1">
+              <div className="relative min-w-[200px] max-w-sm flex-1">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
                 <input
                   type="text"
@@ -1091,7 +1101,7 @@ export default function BetaFormulaCard({
               />
             </div>
             {microsInBatch.length > 0 && (
-              <div className="mt-2 grid grid-cols-4 gap-1.5 @2xl:grid-cols-6 @4xl:grid-cols-8">
+              <div className="mt-1.5 grid grid-cols-4 gap-1.5 @2xl:grid-cols-6 @4xl:grid-cols-8 @6xl:grid-cols-10">
                 {microsInBatch.map((row) => (
                   <MicroTile key={row.key} row={row} />
                 ))}
