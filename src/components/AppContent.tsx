@@ -163,7 +163,7 @@ function AppContentRoute({
       return <UserManager currentUser={currentUser} />;
     }
     if (activeTab === 'access_profiles' && hasPermission('accessProfiles')) {
-      return <AccessProfileManager />;
+      return <AccessProfileManager currentUser={currentUser} />;
     }
     if (
       activeTab === 'alert_center' &&
