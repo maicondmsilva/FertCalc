@@ -11,6 +11,7 @@ import {
   type CalculationIssue,
 } from '../domain/pricing-engine';
 import { buildGuaranteeComparisons } from './guaranteeComparison';
+import { applyCategoryFilter } from './categoryFilter';
 
 const numeric = (value: unknown): number => Number(value) || 0;
 
@@ -133,22 +134,32 @@ export function buildFormulaComparisonAlternatives({
   reductions,
   incompatibilityRules,
 }: BuildFormulaComparisonAlternativesInput): FormulaComparisonAlternative[] {
-  const formula = buildReducedComparisonFormula(sourceCalculation, reductions);
+  // Sem redução, a comparação mira a MESMA fórmula-alvo do cálculo direto (antes
+  // usava o que a fórmula obteve, um pouco acima do alvo, e dava outro custo).
+  const hasReduction =
+    numeric(reductions.n) > 0 || numeric(reductions.p) > 0 || numeric(reductions.k) > 0;
+  const formula =
+    !hasReduction && sourceCalculation.formula
+      ? sourceCalculation.formula
+      : buildReducedComparisonFormula(sourceCalculation, reductions);
   const nutrientTarget = parseFormulaTarget(formula);
   const categoryById = new Map(categories.map((category) => [category.id, category]));
 
   return selectedCategoryIds.map((categoryId) => {
     const category = categoryById.get(categoryId);
-    const macros = buildComparisonMaterials({
-      available: availableMacros,
-      source: sourceCalculation.macros,
-      categoryIds: [categoryId],
-      includeCategoryCandidates: true,
-      preserveSourceSelection: false,
+    // Mesma montagem de produtos da troca de filtro: comparar com a categoria X
+    // dá o mesmo resultado que trocar o filtro para X e calcular.
+    const macros = applyCategoryFilter({
+      current: sourceCalculation.macros.length > 0 ? sourceCalculation.macros : availableMacros,
+      catalog: availableMacros,
+      category: categoryId,
+      type: 'macro',
     });
-    const micros = buildComparisonMaterials({
-      available: availableMicros,
-      source: sourceCalculation.micros,
+    const micros = applyCategoryFilter({
+      current: sourceCalculation.micros.length > 0 ? sourceCalculation.micros : availableMicros,
+      catalog: availableMicros,
+      category: categoryId,
+      type: 'micro',
     });
     const result = calculateTargetFormula({
       calculation: {

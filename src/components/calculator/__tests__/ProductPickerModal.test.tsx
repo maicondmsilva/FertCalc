@@ -380,4 +380,30 @@ describe('ProductPickerModal: busca por garantia e filtros', () => {
     expect(screen.getByText('Sulfato de Amônio')).toBeDefined();
     expect(screen.queryByText('KCL')).toBeNull();
   });
+
+  it('macro marcado à mão fora do filtro fica fixado (📌) e pode ser solto', () => {
+    const handleConfirm = vi.fn();
+    const catalog: any[] = [
+      { id: 'u', name: 'Ureia 45', n: 45, categories: ['c-ureia'], selected: false },
+      { id: 'n', name: 'Nitrato de Cálcio', n: 15, categories: ['c-nitrato'], selected: false },
+    ];
+    render(
+      <CalculatorSettingsModal
+        isOpen
+        onClose={vi.fn()}
+        formula={
+          { id: 'f9', formula: '14-00-19', macros: [], micros: [], category: 'c-ureia' } as any
+        }
+        globalMacros={catalog}
+        globalMicros={[]}
+        onConfirm={handleConfirm}
+      />
+    );
+    fireEvent.click(screen.getByText('Ureia 45'));
+    expect(screen.queryByText('📌 Fixado')).toBeNull();
+    fireEvent.click(screen.getByText('Nitrato de Cálcio'));
+    expect(screen.getByText('📌 Fixado')).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: /Limpar fixados \(1\)/ }));
+    expect(screen.queryByText('📌 Fixado')).toBeNull();
+  });
 });

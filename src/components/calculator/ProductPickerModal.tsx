@@ -28,6 +28,7 @@ import {
 import { TargetFormula, RawMaterial } from '../../types';
 import { microGuaranteePercentToKg } from '../../utils/microGuarantee';
 import { closeModalOnBackdrop } from '../../utils/modalUtils';
+import { belongsToCategory } from '../../utils/categoryFilter';
 import { useModalBackNavigation } from '../../hooks/useModalBackNavigation';
 import {
   applyTemporaryMaterialPrice,
@@ -123,6 +124,13 @@ export const ProductPickerModal: React.FC<ProductPickerModalProps> = ({
 
   if (!isOpen) return null;
 
+  /**
+   * Marcado à mão fica fixado (📌) e continua marcado ao trocar o filtro:
+   * qualquer micro, ou macro que não é da categoria escolhida.
+   */
+  const pinWhenManual = (material: RawMaterial, type: 'macro' | 'micro') =>
+    type === 'micro' || !belongsToCategory(material, localFormula?.category, 'macro');
+
   const handleSelectProduct = (productId: string, type: 'macro' | 'micro') => {
     if (!localFormula) return;
     if (
@@ -143,14 +151,16 @@ export const ProductPickerModal: React.FC<ProductPickerModalProps> = ({
     if (existing && !isSelected) {
       setLocalFormula({
         ...localFormula,
-        [arrKey]: savedArr.map((p) => (p.id === productId ? { ...p, selected: true } : p)),
+        [arrKey]: savedArr.map((p) =>
+          p.id === productId ? { ...p, selected: true, pinned: pinWhenManual(p, type) } : p
+        ),
       });
     } else if (isSelected) {
       // Personalizada só desmarca (sumiria, pois não está no cadastro); as demais saem da lista.
       setLocalFormula({
         ...localFormula,
         [arrKey]: existing?.isCustomMaterial
-          ? savedArr.map((p) => (p.id === productId ? { ...p, selected: false } : p))
+          ? savedArr.map((p) => (p.id === productId ? { ...p, selected: false, pinned: false } : p))
           : savedArr.filter((p) => p.id !== productId),
       });
     } else {
@@ -164,6 +174,7 @@ export const ProductPickerModal: React.FC<ProductPickerModalProps> = ({
             {
               ...globalP,
               selected: true,
+              pinned: pinWhenManual(globalP, type),
               minQty: globalP.minQuantity || 0,
               maxQty: globalP.maxQuantity || 0,
               quantity: 0,
@@ -211,6 +222,23 @@ export const ProductPickerModal: React.FC<ProductPickerModalProps> = ({
       .map((product) => ({ ...product, selected: selectAll }));
 
     setLocalFormula({ ...localFormula, [arrKey]: [...nextProducts, ...customProducts] });
+  };
+
+  const pinnedCount = localFormula
+    ? [...localFormula.macros, ...localFormula.micros].filter(
+        (material) => material.selected && material.pinned
+      ).length
+    : 0;
+
+  /** Solta os alfinetes: continuam marcados agora, mas voltam a seguir o filtro. */
+  const clearPinned = () => {
+    if (!localFormula) return;
+    const unpin = (list: RawMaterial[]) => list.map((material) => ({ ...material, pinned: false }));
+    setLocalFormula({
+      ...localFormula,
+      macros: unpin(localFormula.macros),
+      micros: unpin(localFormula.micros),
+    });
   };
 
   const handleConfirm = () => {
@@ -641,6 +669,14 @@ export const ProductPickerModal: React.FC<ProductPickerModalProps> = ({
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="font-bold text-stone-900">{p.name}</span>
                 {selected && <span className="sr-only">Selecionado</span>}
+                {selected && p.pinned && (
+                  <span
+                    title="Marcado à mão: continua marcado ao trocar o filtro"
+                    className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-bold text-sky-800"
+                  >
+                    📌 Fixado
+                  </span>
+                )}
                 {p.isCustomMaterial && (
                   <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-bold text-violet-800">
                     Personalizada
@@ -910,6 +946,16 @@ export const ProductPickerModal: React.FC<ProductPickerModalProps> = ({
                 {chip.id !== 'all' && ` (${counts[chip.id]})`}
               </button>
             ))}
+            {pinnedCount > 0 && (
+              <button
+                type="button"
+                onClick={clearPinned}
+                title="Os fixados voltam a seguir o filtro ao trocar de categoria"
+                className="shrink-0 whitespace-nowrap rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-800 hover:bg-sky-100"
+              >
+                📌 Limpar fixados ({pinnedCount})
+              </button>
+            )}
             <label className="ml-auto flex shrink-0 cursor-pointer items-center gap-2 whitespace-nowrap text-xs font-bold text-emerald-700">
               <input
                 type="checkbox"

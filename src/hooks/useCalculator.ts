@@ -60,6 +60,7 @@ import {
   hasFormulaTarget,
 } from '../domain/pricing-engine';
 import { getCalculationSaveBlockReason, validatePricingForSave } from '../utils/pricingValidation';
+import { applyCategoryFilter, belongsToCategory } from '../utils/categoryFilter';
 import {
   getPriceListCurrencySnapshot,
   hasValidPricingExchangeRate,
@@ -944,31 +945,31 @@ export function useCalculator({
             notClosed: undefined,
           };
 
-          // Se a mudança for na categoria, vamos auto-selecionar os produtos
+          // Troca de filtro: aplica a categoria à lista DESTA fórmula, mantendo
+          // mínimo/máximo, preços temporários, personalizadas e os produtos
+          // fixados à mão (📌). Mesma regra usada pela comparação.
           if (field === 'category') {
-            const isAll = value === 'all';
-
-            const newMacros = macros.map((m) => {
-              const isMatch = isAll ? !m.isPremiumLine : m.categories?.includes(value as string);
-              return {
-                ...m,
-                selected: !!isMatch,
-              };
+            const category = value as string;
+            updatedFormula.macros = applyCategoryFilter({
+              current: c.macros.length > 0 ? c.macros : macros,
+              catalog: macros,
+              category,
+              type: 'macro',
+            });
+            updatedFormula.micros = applyCategoryFilter({
+              current: c.micros.length > 0 ? c.micros : micros,
+              catalog: micros,
+              category,
+              type: 'micro',
             });
 
-            const newMicros = micros.map((m) => {
-              const isMatch = isAll ? false : m.categories?.includes(value as string);
-              return {
-                ...m,
-                selected: !!isMatch,
-              };
-            });
-
-            updatedFormula.macros = newMacros;
-            updatedFormula.micros = newMicros;
-
-            setMacros(newMacros);
-            setMicros(newMicros);
+            // Lista padrão para fórmulas novas (como antes): só a categoria do cadastro.
+            setMacros(
+              macros.map((m) => ({ ...m, selected: belongsToCategory(m, category, 'macro') }))
+            );
+            setMicros(
+              micros.map((m) => ({ ...m, selected: belongsToCategory(m, category, 'micro') }))
+            );
           }
 
           if (!hasFormulaTarget(updatedFormula.formula)) {
