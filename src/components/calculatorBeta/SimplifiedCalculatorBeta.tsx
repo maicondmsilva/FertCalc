@@ -8,6 +8,9 @@ import {
   FlaskConical,
   MapPin,
   Plus,
+  Save,
+  UserCheck,
+  UserRound,
 } from 'lucide-react';
 import type {
   Embalagem,
@@ -19,6 +22,7 @@ import type {
 } from '../../types';
 import { useCalculator } from '../../hooks/useCalculator';
 import BetaProfitabilityModal from './BetaProfitabilityModal';
+import BetaClientPicker from './BetaClientPicker';
 import { canCheckProfitability } from './profitabilityModel';
 import { useToast } from '../Toast';
 import { ProductPickerModal } from '../calculator/ProductPickerModal';
@@ -38,7 +42,7 @@ import {
   type FormulaComparisonAlternative,
 } from '../../utils/formulaComparison';
 import BetaFormulaCard from './BetaFormulaCard';
-import { filterPriceLists } from './betaCalculatorModel';
+import { agentCommissionProblem, filterPriceLists } from './betaCalculatorModel';
 
 interface SimplifiedCalculatorBetaProps {
   currentUser: AppUser;
@@ -83,6 +87,15 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
     addTargetFormula,
     isSavingFormula,
     saveToFormulasList,
+    availableClients,
+    clientSearch,
+    setClientSearch,
+    availableAgents,
+    agentSearch,
+    setAgentSearch,
+    savePricing,
+    isSavingPricing,
+    isLocked,
   } = calculator;
 
   const [embalagens, setEmbalagens] = useState<Embalagem[]>([]);
@@ -108,6 +121,12 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
     currentUser.role === 'master' || currentUser.role === 'admin' || currentUser.role === 'manager';
   const canCompareFormulas = isManagerOrAbove || permissions.calculator_fertigranP !== false;
   const canSaveFormula = isManagerOrAbove || permissions.calculator_saveFormula !== false;
+  // Mesma regra da calculadora oficial e do banco: gerente ou acima, ou a
+  // permissão "Salvar Precificação" não desligada.
+  const canSavePricing = isManagerOrAbove || permissions.calculator_savePricing !== false;
+  // Modo precificação: desligado por padrão; ligar/desligar só mostra ou esconde
+  // agente, cliente e o botão salvar — nada do que foi feito na tela se perde.
+  const [pricingMode, setPricingMode] = useState(false);
   const canProfitability = canCheckProfitability(currentUser);
   const [profitabilityCalcId, setProfitabilityCalcId] = useState<string | null>(null);
   const profitabilityIndex = calculations.findIndex((item) => item.id === profitabilityCalcId);
@@ -263,6 +282,9 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
   };
 
   const selectedCount = calculations.filter((calculation) => calculation.selected).length;
+  const commissionProblem = pricingMode
+    ? agentCommissionProblem(calculations, factors.agent)
+    : null;
 
   return (
     <div className="@container w-full space-y-5 pb-[max(3rem,env(safe-area-inset-bottom))]">
@@ -286,6 +308,91 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
 
       {/* Dados da batida */}
       <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm @3xl:p-5">
+        {canSavePricing && (
+          <div className="mb-4 space-y-3 border-b border-stone-100 pb-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={pricingMode}
+                  aria-label="Precificação"
+                  onClick={() => setPricingMode((current) => !current)}
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                    pricingMode ? 'bg-emerald-600' : 'bg-stone-300'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                      pricingMode ? 'translate-x-5' : 'translate-x-0.5'
+                    }`}
+                  />
+                </button>
+                <div>
+                  <p className="text-sm font-black text-stone-900">Precificação</p>
+                  <p className="text-xs text-stone-500">
+                    {pricingMode
+                      ? 'Informe agente e cliente para salvar a precificação.'
+                      : 'Ligue para informar agente e cliente e salvar a precificação.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+            {pricingMode && (
+              <div className="grid grid-cols-1 gap-3 @2xl:grid-cols-2">
+                <div>
+                  <label
+                    htmlFor="beta-agent"
+                    className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-stone-500"
+                  >
+                    <UserCheck className="h-4 w-4" /> Agente
+                    <span className="font-medium normal-case tracking-normal text-stone-400">
+                      (opcional; exige comissão)
+                    </span>
+                  </label>
+                  <BetaClientPicker
+                    noun="agente"
+                    inputId="beta-agent"
+                    clients={availableAgents}
+                    selected={factors.agent}
+                    search={agentSearch || ''}
+                    onSearchChange={setAgentSearch}
+                    onSelect={(agent) =>
+                      setFactors((previous) => ({ ...previous, agent: agent as never }))
+                    }
+                    disabled={Boolean(isLocked)}
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="beta-client"
+                    className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-stone-500"
+                  >
+                    <UserRound className="h-4 w-4" /> Cliente
+                    <span className="font-medium normal-case tracking-normal text-stone-400">
+                      (obrigatório)
+                    </span>
+                  </label>
+                  <BetaClientPicker
+                    clients={availableClients}
+                    selected={factors.client}
+                    search={clientSearch || ''}
+                    onSearchChange={setClientSearch}
+                    onSelect={(client) =>
+                      setFactors((previous) => ({ ...previous, client: client as never }))
+                    }
+                    disabled={Boolean(isLocked)}
+                  />
+                </div>
+                {commissionProblem && (
+                  <p className="text-xs font-semibold text-amber-700 @2xl:col-span-2" role="status">
+                    {commissionProblem}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
         <div className="grid grid-cols-1 gap-4 @2xl:grid-cols-2">
           <label className="block">
             <span className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-stone-500">
@@ -549,6 +656,26 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
             >
               <Beaker className="h-4 w-4" />
               {isSavingFormula ? 'Salvando batida…' : 'Salvar nova batida'}
+            </button>
+          )}
+          {canSavePricing && pricingMode && (
+            <button
+              type="button"
+              onClick={() => {
+                if (commissionProblem) {
+                  showError(commissionProblem);
+                  return;
+                }
+                void savePricing();
+              }}
+              disabled={
+                Boolean(isLocked) || !hasValidExchangeRate || isSavingPricing || selectedCount === 0
+              }
+              title={!factors.client?.id ? 'Escolha o cliente para salvar' : undefined}
+              className="inline-flex h-11 items-center gap-2 rounded-xl bg-emerald-700 px-4 text-sm font-black text-white shadow-sm hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-stone-300"
+            >
+              <Save className="h-4 w-4" />
+              {isSavingPricing ? 'Salvando precificação…' : 'Salvar precificação'}
             </button>
           )}
         </div>
