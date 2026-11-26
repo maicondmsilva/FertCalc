@@ -17,13 +17,14 @@ export default function App() {
   const navigate = useNavigate();
   const { activeModule, activeTab, isPasswordReset, isStandalone } = useAppRoute();
   const navigateHome = React.useCallback(() => navigate('/'), [navigate]);
-  const { currentUser, login, logout, updateCurrentUser } = useAuthSession(navigateHome);
+  const { currentUser, restoring, login, logout, updateCurrentUser } = useAuthSession(navigateHome);
 
   return (
     <>
       <NativeConnectionBanner />
       <AppAccessGate
         currentUser={currentUser}
+        restoring={restoring}
         isPasswordReset={isPasswordReset}
         onLogin={login}
         onPasswordChanged={updateCurrentUser}

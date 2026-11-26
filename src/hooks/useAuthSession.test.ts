@@ -33,7 +33,21 @@ describe('useAuthSession', () => {
     vi.mocked(restoreSession).mockResolvedValue(currentUser);
     const { result } = renderHook(() => useAuthSession(vi.fn()));
 
+    expect(result.current.restoring).toBe(true);
     await waitFor(() => expect(result.current.currentUser).toBe(currentUser));
+    expect(result.current.restoring).toBe(false);
+  });
+
+  it('sem sessão salva termina a conferência sem usuário', async () => {
+    const { result } = renderHook(() => useAuthSession(vi.fn()));
+    await waitFor(() => expect(result.current.restoring).toBe(false));
+    expect(result.current.currentUser).toBeNull();
+  });
+
+  it('erro ao conferir a sessão não deixa a tela carregando para sempre', async () => {
+    vi.mocked(restoreSession).mockRejectedValue(new Error('offline'));
+    const { result } = renderHook(() => useAuthSession(vi.fn()));
+    await waitFor(() => expect(result.current.restoring).toBe(false));
   });
 
   it('registra o login e volta para a página inicial', () => {
