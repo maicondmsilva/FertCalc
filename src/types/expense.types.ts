@@ -53,6 +53,8 @@ export interface CreditCardExpense {
   userName: string;
   periodMonth: number;
   periodYear: number;
+  /** Região do dono do gasto (preenchida sozinha). */
+  regionId?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }

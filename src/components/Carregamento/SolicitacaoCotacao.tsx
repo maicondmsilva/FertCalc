@@ -47,6 +47,8 @@ import {
 import { useToast } from '../Toast';
 import HistoricoModificacoes from '../HistoricoModificacoes';
 import AuditTimeline from '../AuditTimeline';
+import RegionFilterSelect, { matchesRegionFilter } from '../regions/RegionFilterSelect';
+import { useMyRegions } from '../../hooks/useMyRegions';
 import {
   defaultValidity,
   quoteValidity,
@@ -1275,6 +1277,8 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
     '' | 'aprovado' | 'cancelado'
   >('');
   const [filtroFinalizadasFilialId, setFiltroFinalizadasFilialId] = useState('');
+  const [filtroFinalizadasRegiao, setFiltroFinalizadasRegiao] = useState('');
+  const { all: regioesCotacao } = useMyRegions(currentUser);
   const [filtroFinalizadasSolicitante, setFiltroFinalizadasSolicitante] = useState('');
   const [filtroFinalizadasDataInicio, setFiltroFinalizadasDataInicio] = useState('');
   const [filtroFinalizadasDataFim, setFiltroFinalizadasDataFim] = useState('');
@@ -1458,6 +1462,9 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
     if (filtroFinalizadasFilialId) {
       list = list.filter((c) => c.filial_id === filtroFinalizadasFilialId);
     }
+    if (filtroFinalizadasRegiao) {
+      list = list.filter((c) => matchesRegionFilter(c.region_id, filtroFinalizadasRegiao));
+    }
     if (filtroFinalizadasSolicitante) {
       list = list.filter((c) =>
         (c.solicitante_nome ?? '')
@@ -1478,6 +1485,7 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
     cotacoesFinalizadas,
     filtroFinalizadasStatus,
     filtroFinalizadasFilialId,
+    filtroFinalizadasRegiao,
     filtroFinalizadasSolicitante,
     filtroFinalizadasDataInicio,
     filtroFinalizadasDataFim,
@@ -2419,6 +2427,19 @@ export default function SolicitacaoCotacao({ currentUser }: SolicitacaoCotacaoPr
                   ))}
                 </select>
               </div>
+              {regioesCotacao.length > 0 && (
+                <div>
+                  <span className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                    Região
+                  </span>
+                  <RegionFilterSelect
+                    regions={regioesCotacao}
+                    value={filtroFinalizadasRegiao}
+                    onChange={setFiltroFinalizadasRegiao}
+                    className="w-full px-3 py-1.5 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none bg-white"
+                  />
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
                   Solicitante

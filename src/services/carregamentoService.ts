@@ -55,6 +55,7 @@ function mapCarregamento(d: Record<string, unknown>): Carregamento {
     local_carregamento: undefined,
     pedido_venda_id: d.pedido_venda_id as string | undefined,
     pedido_venda_numero: d.pedido_venda_numero as string | undefined,
+    region_id: (d.region_id as string | null) ?? null,
     obs_cancelamento_parcial: d.obs_cancelamento_parcial as string | undefined,
     motivo_cancelamento_saldo: d.motivo_cancelamento_saldo as string | undefined,
     cancelado_por_id: d.cancelado_por_id as string | undefined,
@@ -219,6 +220,7 @@ export async function getCarregamentos(
       branches(*),
       transportadoras!carregamentos_transportadora_id_fkey(*),
       locais_carregamento(*),
+      regions(name),
       pedidos_venda!carregamentos_pedido_venda_id_fkey(
         cliente_nome_novo,
         produto_nome,
@@ -241,8 +243,10 @@ export async function getCarregamentos(
   if (!data) throw new Error('A consulta de carregamentos nao retornou dados.');
   return data.map((d) => {
     const pv = d.pedidos_venda as Record<string, unknown> | null;
+    const regiao = d.regions as { name?: string } | null;
     return {
       ...mapCarregamento(d),
+      regiao_nome: regiao?.name ?? undefined,
       filial: d.branches ? mapBranchToFilial(d.branches as Record<string, unknown>) : undefined,
       transportadora: d.transportadoras ? mapTransportadora(d.transportadoras) : undefined,
       local_carregamento: d.locais_carregamento
@@ -538,6 +542,8 @@ export async function getCarregamentosRelatorio(
     .order('criado_em', { ascending: false });
 
   if (filtros.filial_id) query = query.eq('filial_id', filtros.filial_id);
+  if (filtros.region_id === 'none') query = query.is('region_id', null);
+  else if (filtros.region_id) query = query.eq('region_id', filtros.region_id);
   if (filtros.tipo_frete) query = query.eq('tipo_frete', filtros.tipo_frete);
   if (filtros.status) query = query.eq('status', filtros.status);
   if (filtros.transportadora_id) query = query.eq('transportadora_id', filtros.transportadora_id);

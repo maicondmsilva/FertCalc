@@ -36,6 +36,7 @@ function mapExpense(d: Record<string, unknown>): CreditCardExpense {
     userName: d.user_name as string,
     periodMonth: d.period_month as number,
     periodYear: d.period_year as number,
+    regionId: (d.region_id as string | null) ?? null,
     createdAt: d.created_at as string | undefined,
     updatedAt: d.updated_at as string | undefined,
   };

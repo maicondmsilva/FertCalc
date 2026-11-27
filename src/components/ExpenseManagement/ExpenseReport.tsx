@@ -1,22 +1,77 @@
 import React from 'react';
 import { CreditCardExpense, CategoryBudgetStatus, ExpensePeriod } from '../../types/expense.types';
-import { AlertTriangle, TrendingUp } from 'lucide-react';
+import { AlertTriangle, MapPinned, TrendingUp } from 'lucide-react';
+import type { Region } from '../../types';
 
 interface ExpenseReportProps {
   expenses: CreditCardExpense[];
   budgetStatus: CategoryBudgetStatus[];
   period: ExpensePeriod;
+  regions?: Region[];
 }
 
-const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+export interface RegionTotal {
+  regionId: string | null;
+  name: string;
+  total: number;
+  count: number;
+}
 
-export default function ExpenseReport({ expenses, budgetStatus, period }: ExpenseReportProps) {
+/** Total de gastos por região (maior primeiro; "Sem região" no fim). */
+export function totalsByRegion(expenses: CreditCardExpense[], regions: Region[]): RegionTotal[] {
+  const names = new Map(regions.map((region) => [region.id, region.name]));
+  const acc = new Map<string, RegionTotal>();
+  expenses.forEach((expense) => {
+    const key = expense.regionId || '';
+    const current = acc.get(key) || {
+      regionId: expense.regionId || null,
+      name: expense.regionId ? names.get(expense.regionId) || 'Região removida' : 'Sem região',
+      total: 0,
+      count: 0,
+    };
+    current.total += expense.amount;
+    current.count += 1;
+    acc.set(key, current);
+  });
+  return [...acc.values()].sort((left, right) =>
+    !left.regionId ? 1 : !right.regionId ? -1 : right.total - left.total
+  );
+}
+
+const monthNames = [
+  'Janeiro',
+  'Fevereiro',
+  'Março',
+  'Abril',
+  'Maio',
+  'Junho',
+  'Julho',
+  'Agosto',
+  'Setembro',
+  'Outubro',
+  'Novembro',
+  'Dezembro',
+];
+
+export default function ExpenseReport({
+  expenses,
+  budgetStatus,
+  period,
+  regions = [],
+}: ExpenseReportProps) {
   const totalMonth = expenses.reduce((sum, e) => sum + e.amount, 0);
-  const totalApproved = expenses.filter(e => e.status === 'aprovado').reduce((sum, e) => sum + e.amount, 0);
-  const totalPending = expenses.filter(e => e.status === 'pendente' || e.status === 'conferido').reduce((sum, e) => sum + e.amount, 0);
-  const totalRejected = expenses.filter(e => e.status === 'rejeitado').reduce((sum, e) => sum + e.amount, 0);
+  const totalApproved = expenses
+    .filter((e) => e.status === 'aprovado')
+    .reduce((sum, e) => sum + e.amount, 0);
+  const totalPending = expenses
+    .filter((e) => e.status === 'pendente' || e.status === 'conferido')
+    .reduce((sum, e) => sum + e.amount, 0);
+  const totalRejected = expenses
+    .filter((e) => e.status === 'rejeitado')
+    .reduce((sum, e) => sum + e.amount, 0);
 
-  const overBudgetCategories = budgetStatus.filter(b => b.percentUsed > 100);
+  const overBudgetCategories = budgetStatus.filter((b) => b.percentUsed > 100);
+  const regionTotals = regions.length > 0 ? totalsByRegion(expenses, regions) : [];
 
   return (
     <div className="space-y-6">
@@ -65,12 +120,48 @@ export default function ExpenseReport({ expenses, budgetStatus, period }: Expens
             Categorias Acima do Orçamento
           </h3>
           <div className="space-y-2">
-            {overBudgetCategories.map(b => (
+            {overBudgetCategories.map((b) => (
               <div key={b.category.id} className="flex items-center justify-between text-sm">
                 <span className="text-red-700 font-medium">{b.category.name}</span>
                 <span className="text-red-600 font-bold">
-                  {b.totalSpent.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} / {b.budgetLimit.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} ({Math.round(b.percentUsed)}%)
+                  {b.totalSpent.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} /{' '}
+                  {b.budgetLimit.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} (
+                  {Math.round(b.percentUsed)}%)
                 </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {regionTotals.length > 0 && (
+        <div className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
+          <div className="p-5 border-b border-stone-100">
+            <h3 className="text-sm font-bold text-stone-700 uppercase tracking-wider flex items-center gap-2">
+              <MapPinned className="w-4 h-4 text-purple-600" />
+              Gastos por Região
+            </h3>
+          </div>
+          <div className="divide-y divide-stone-100">
+            {regionTotals.map((row) => (
+              <div key={row.regionId || 'none'} className="p-5">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <span className="text-sm font-bold text-stone-700">{row.name}</span>
+                    <span className="text-xs text-stone-400 ml-2">({row.count} itens)</span>
+                  </div>
+                  <span className="text-sm font-bold text-stone-800">
+                    {row.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </span>
+                </div>
+                <div className="w-full bg-stone-100 rounded-full h-2">
+                  <div
+                    className="h-2 rounded-full bg-purple-500"
+                    style={{
+                      width: `${totalMonth > 0 ? Math.round((row.total / totalMonth) * 100) : 0}%`,
+                    }}
+                  />
+                </div>
               </div>
             ))}
           </div>
@@ -80,7 +171,9 @@ export default function ExpenseReport({ expenses, budgetStatus, period }: Expens
       {/* Budget by Category */}
       <div className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
         <div className="p-5 border-b border-stone-100">
-          <h3 className="text-sm font-bold text-stone-700 uppercase tracking-wider">Gastos por Categoria</h3>
+          <h3 className="text-sm font-bold text-stone-700 uppercase tracking-wider">
+            Gastos por Categoria
+          </h3>
         </div>
         {budgetStatus.length === 0 ? (
           <div className="p-8 text-center text-stone-400 text-sm">
@@ -101,7 +194,11 @@ export default function ExpenseReport({ expenses, budgetStatus, period }: Expens
                     </span>
                     {b.budgetLimit > 0 && (
                       <span className="text-xs text-stone-400 ml-1">
-                        / {b.budgetLimit.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        /{' '}
+                        {b.budgetLimit.toLocaleString('pt-BR', {
+                          style: 'currency',
+                          currency: 'BRL',
+                        })}
                       </span>
                     )}
                   </div>
@@ -110,9 +207,11 @@ export default function ExpenseReport({ expenses, budgetStatus, period }: Expens
                   <div className="w-full bg-stone-100 rounded-full h-2">
                     <div
                       className={`h-2 rounded-full transition-all ${
-                        b.percentUsed > 100 ? 'bg-red-500' :
-                        b.percentUsed > 80 ? 'bg-amber-500' :
-                        'bg-emerald-500'
+                        b.percentUsed > 100
+                          ? 'bg-red-500'
+                          : b.percentUsed > 80
+                            ? 'bg-amber-500'
+                            : 'bg-emerald-500'
                       }`}
                       style={{ width: `${Math.min(b.percentUsed, 100)}%` }}
                     />

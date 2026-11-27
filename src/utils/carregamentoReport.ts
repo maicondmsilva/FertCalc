@@ -3,13 +3,14 @@ import autoTable from 'jspdf-autotable';
 import type { AppSettings } from '../types';
 import type { Carregamento, StatusCarregamento } from '../types/carregamento';
 
-export type CarregamentoGroupBy = 'nenhum' | 'transportadora' | 'status' | 'filial';
+export type CarregamentoGroupBy = 'nenhum' | 'transportadora' | 'status' | 'filial' | 'regiao';
 
 export const CARREGAMENTO_GROUP_LABEL: Record<CarregamentoGroupBy, string> = {
   nenhum: 'Sem agrupamento',
   transportadora: 'Por transportadora',
   status: 'Por status',
   filial: 'Por filial',
+  regiao: 'Por região',
 };
 
 export const CARREGAMENTO_STATUS_LABEL: Record<StatusCarregamento, string> = {
@@ -81,6 +82,8 @@ function groupLabel(item: Carregamento, by: CarregamentoGroupBy): string {
       return CARREGAMENTO_STATUS_LABEL[item.status] || item.status;
     case 'filial':
       return item.filial?.nome || 'Sem filial';
+    case 'regiao':
+      return item.regiao_nome || 'Sem região';
     default:
       return 'Todos os carregamentos';
   }

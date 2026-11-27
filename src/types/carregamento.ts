@@ -54,6 +54,10 @@ export interface Transportadora {
 export interface Carregamento {
   id: string;
   organization_id?: string;
+  /** Região (do pedido; sem pedido, a principal de quem criou). */
+  region_id?: string | null;
+  /** Nome da região (só nos relatórios). */
+  regiao_nome?: string;
   pedido_precificacao_id?: string;
   numero_carregamento: string;
   numero?: number;
@@ -178,6 +182,8 @@ export interface HistoricoCarregamento {
 // ── Filtros de Relatório ──────────────────────────────────────
 export interface FiltrosRelatorioCarregamento {
   filial_id?: string;
+  /** '' = todas, 'none' = sem região, ou o id da região. */
+  region_id?: string;
   tipo_frete?: TipoFrete | '';
   status?: StatusCarregamento | '';
   transportadora_id?: string;
@@ -222,6 +228,8 @@ export type StatusCotacaoSolicitada =
 export interface CotacaoSolicitada {
   id: string;
   organization_id?: string;
+  /** Região (do pedido/precificação; senão, a principal de quem solicitou). */
+  region_id?: string | null;
   numero_cotacao: string;
   solicitado_por?: string;
   solicitante_nome?: string;
