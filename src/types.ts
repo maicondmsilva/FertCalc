@@ -775,6 +775,13 @@ export interface PedidoVenda {
   local_entrega?: string;
   numero_contrato?: string;
   /** Vindos da carteira (consulta com junções) */
+  /** Entrega e carregamento herdados da precificação (endereço muda com histórico). */
+  local_carregamento_id?: string | null;
+  endereco_entrega?: string | null;
+  cidade_entrega?: string | null;
+  estado_entrega?: string | null;
+  maps_url?: string | null;
+  cotacao_frete_id?: string | null;
   /** Região dona do pedido (para mudar de região, cria-se um novo emitente). */
   region_id?: string | null;
   regiao_nome?: string;

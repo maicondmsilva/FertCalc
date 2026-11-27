@@ -1,3 +1,4 @@
+import { navigateInsideApp } from './notifications/NotificationCard';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Ban, ClipboardList, FileText, Plus, RefreshCw, Search } from 'lucide-react';
 import type { Branch, Client, PedidoVenda, PedidoVendaItem, PricingRecord, User } from '../types';
@@ -236,9 +237,11 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
         form.itens,
         form.request_id
       );
-      showSuccess('Carregamento solicitado.');
+      showSuccess('Carregamento solicitado. Abrindo no módulo Carregamento…');
       setPedidoCarregamento(null);
       await refreshAfterChange();
+      // O carregamento segue para o módulo Carregamento, já com a transportadora da cotação.
+      navigateInsideApp('/carregamento_visao_geral');
     } catch (err: unknown) {
       showError(
         err && typeof err === 'object' && 'message' in err
@@ -530,6 +533,7 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
               client={selectedClient}
               pricingCode={pricingCode}
               parentLabel={parentLabel}
+              filialNome={filiais.find((filial) => filial.id === selected.filial_id)?.nome}
               alerta={alerta}
               podeReceberAlerta={podeReceberAlerta}
               onSaveAlerta={(preferencia) => void saveAlerta(preferencia)}
