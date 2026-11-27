@@ -46,7 +46,7 @@ vi.mock('../../services/historicoPrecoService', () => ({ addHistoricoPrecos: vi.
 vi.mock('../../services/embalagensService', () => ({
   getEmbalagens: vi.fn().mockResolvedValue([]),
 }));
-vi.mock('../Calculator', () => ({ default: () => null }));
+vi.mock('../calculatorBeta/SimplifiedCalculatorBeta', () => ({ default: () => null }));
 
 import SavedFormulas from '../SavedFormulas';
 

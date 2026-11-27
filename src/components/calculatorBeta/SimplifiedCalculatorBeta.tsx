@@ -53,6 +53,15 @@ import {
 
 interface SimplifiedCalculatorBetaProps {
   currentUser: AppUser;
+  /** Dentro de Batidas Salvas: esconde o aviso de página de teste. */
+  embedded?: boolean;
+  /** Batida aberta a partir de Batidas Salvas (revisão). */
+  initialFormulaToLoad?: SavedFormula | null;
+  initialBranchId?: string;
+  initialLoadingLocationId?: string;
+  initialPriceListId?: string;
+  initialPriceListCurrency?: PriceListCurrency;
+  onSavedFormulaSuccess?: () => void;
 }
 
 /**
@@ -60,9 +69,29 @@ interface SimplifiedCalculatorBetaProps {
  * Usa o mesmo motor e as mesmas regras da página oficial (hook useCalculator),
  * mas com a interface redesenhada. Não salva precificação, somente batidas.
  */
-export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalculatorBetaProps) {
+export default function SimplifiedCalculatorBeta({
+  currentUser,
+  embedded = false,
+  initialFormulaToLoad,
+  initialBranchId,
+  initialLoadingLocationId,
+  initialPriceListId,
+  initialPriceListCurrency,
+  onSavedFormulaSuccess,
+}: SimplifiedCalculatorBetaProps) {
   const { showSuccess, showError } = useToast();
-  const calculator = useCalculator({ currentUser });
+  const calculator = useCalculator({
+    currentUser,
+    initialFormulaToLoad,
+    initialBranchId,
+    initialLoadingLocationId,
+    initialPriceListId,
+    initialPriceListCurrency,
+    onSavedFormulaSuccess,
+  });
+  // Revisão de batida salva: fórmula e micronutrientes protegidos (mesma regra da calculadora oficial).
+  const isSavedFormulaRevision = initialFormulaToLoad?.isRevisionFromSavedFormula === true;
+  const protectedMaterialIds = initialFormulaToLoad?.protectedMaterialIds || [];
   const {
     confirmState,
     handleConfirm,
@@ -330,23 +359,37 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
 
   return (
     <div className="@container w-full space-y-5 pb-[max(3rem,env(safe-area-inset-bottom))]">
-      {/* Cabeçalho da página */}
-      <div className="flex flex-col gap-3 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-3">
-          <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-violet-600 text-white">
-            <FlaskConical className="h-5 w-5" />
-          </span>
-          <div>
-            <p className="text-base font-black text-violet-950">Calculadora Teste</p>
-            <p className="text-sm text-violet-800">
-              Novo layout em avaliação. Usa as mesmas regras e preços da calculadora oficial.
-            </p>
-          </div>
+      {isSavedFormulaRevision && (
+        <div
+          role="note"
+          className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+        >
+          <p className="font-bold">Revisão de batida salva</p>
+          <p>
+            A fórmula e os micronutrientes estão protegidos. Ajuste somente as matérias-primas
+            permitidas e recalcule antes de gerar o relatório de preços.
+          </p>
         </div>
-        <span className="self-start rounded-full bg-white px-3 py-1 text-xs font-bold text-violet-700 sm:self-center">
-          Mg segue a regra de Ca e S
-        </span>
-      </div>
+      )}
+      {/* Cabeçalho da página */}
+      {!embedded && (
+        <div className="flex flex-col gap-3 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-violet-600 text-white">
+              <FlaskConical className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="text-base font-black text-violet-950">Calculadora Teste</p>
+              <p className="text-sm text-violet-800">
+                Novo layout em avaliação. Usa as mesmas regras e preços da calculadora oficial.
+              </p>
+            </div>
+          </div>
+          <span className="self-start rounded-full bg-white px-3 py-1 text-xs font-bold text-violet-700 sm:self-center">
+            Mg segue a regra de Ca e S
+          </span>
+        </div>
+      )}
 
       {/* Dados da batida */}
       <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm @3xl:p-5">
@@ -713,6 +756,7 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
               setIsFertigranPModalOpen(true);
             }}
             onDuplicate={() => duplicateCalculation(calculation)}
+            formulaLocked={isSavedFormulaRevision}
             onOpenProfitability={
               canProfitability ? () => setProfitabilityCalcId(calculation.id) : undefined
             }
@@ -751,7 +795,11 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
               className="inline-flex h-11 items-center gap-2 rounded-xl bg-stone-900 px-4 text-sm font-bold text-white hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Beaker className="h-4 w-4" />
-              {isSavingFormula ? 'Salvando batida…' : 'Salvar nova batida'}
+              {isSavingFormula
+                ? 'Salvando batida…'
+                : isSavedFormulaRevision
+                  ? 'Atualizar batida'
+                  : 'Salvar nova batida'}
             </button>
           )}
           {canSavePricing && pricingMode && (
@@ -814,7 +862,7 @@ export default function SimplifiedCalculatorBeta({ currentUser }: SimplifiedCalc
         globalMicros={micros}
         isMaterialsLoading={isMaterialsLoading}
         hasNoMaterialsInDatabase={hasNoMaterialsInDatabase}
-        protectedMaterialIds={[]}
+        protectedMaterialIds={protectedMaterialIds}
         currency={factors.priceListCurrency ?? 'BRL'}
         onConfirm={(updatedFormula) => {
           setCalculations((current) =>
