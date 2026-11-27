@@ -8,6 +8,7 @@ import {
   problemaNovaProposta,
   situacaoProposta,
   somarDias,
+  totaisExibidos,
 } from './propostaModel';
 
 const base = (over: Partial<Proposta>): Proposta =>
@@ -85,7 +86,14 @@ describe('propostaModel', () => {
       ],
       hoje
     );
-    expect(stats).toEqual({ vigentes: 2, vencendo: 1, aceitas: 1, conversao: 50 });
+    expect(stats).toEqual({
+      vigentes: 2,
+      vencendo: 1,
+      aceitas: 1,
+      conversao: 50,
+      valorAceito: 0,
+      toneladasAceitas: 0,
+    });
   });
 
   it('problemas ao criar', () => {
@@ -99,5 +107,21 @@ describe('propostaModel', () => {
     expect(problemaNovaProposta({ ...ok, validaAte: '2026-11-26' })).toMatch(/anterior a hoje/);
     expect(problemaNovaProposta({ ...ok, quantidadeItens: 0 })).toMatch(/ao menos uma/);
     expect(problemaNovaProposta({ ...ok, itensSemPreco: ['X'] })).toMatch(/Sem preço/);
+  });
+});
+
+describe('totaisExibidos', () => {
+  it('depois do aceite mostra o que o cliente aceitou', () => {
+    const proposta = {
+      valorTotal: 0,
+      toneladasTotal: 0,
+      aceite: { valor: 12500, toneladas: 12.5 },
+    };
+    expect(totaisExibidos(proposta)).toEqual({ valor: 12500, toneladas: 12.5, origem: 'aceite' });
+    expect(totaisExibidos({ valorTotal: 900, toneladasTotal: 1, aceite: null })).toEqual({
+      valor: 900,
+      toneladas: 1,
+      origem: 'proposta',
+    });
   });
 });

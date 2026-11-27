@@ -22,6 +22,13 @@ function erroProposta(error: { code?: string; message?: string } | null, fallbac
   return new Error(fallback);
 }
 
+/** Totais aceitos pelo cliente (a relação pode vir como objeto ou lista). */
+function resumoAceite(value: unknown): Proposta['aceite'] {
+  const resposta = (Array.isArray(value) ? value[0] : value) as Row | null | undefined;
+  if (!resposta || resposta.tipo !== 'aceite') return null;
+  return { valor: num(resposta.valor_total), toneladas: num(resposta.toneladas_total) };
+}
+
 export function mapProposta(row: Row): Proposta {
   const contagem = row.propostas_precos_itens as Array<{ count: number }> | undefined;
   return {
@@ -48,6 +55,7 @@ export function mapProposta(row: Row): Proposta {
     valorTotal: num(row.valor_total),
     toneladasTotal: num(row.toneladas_total),
     quantidadeItens: contagem?.[0]?.count ?? 0,
+    aceite: resumoAceite(row.propostas_precos_respostas),
     createdAt: String(row.created_at ?? ''),
     linkAbertoEm: optStr(row.link_aberto_em),
   };
@@ -110,7 +118,9 @@ const mapEvento = (row: Row): PropostaEvento => ({
 export async function listPropostas(): Promise<Proposta[]> {
   const { data, error } = await supabase
     .from('propostas_precos')
-    .select('*, propostas_precos_itens(count)')
+    .select(
+      '*, propostas_precos_itens(count), propostas_precos_respostas(tipo, valor_total, toneladas_total)'
+    )
     .order('created_at', { ascending: false })
     .limit(500);
   if (error) throw erroProposta(error, 'Não foi possível carregar as propostas.');
@@ -136,6 +146,10 @@ export async function getProposta(id: string): Promise<Proposta> {
   proposta.quantidadeItens = proposta.itens.length;
   proposta.eventos = eventos.error ? [] : (eventos.data || []).map((row) => mapEvento(row as Row));
   proposta.resposta = resposta.data ? mapResposta(resposta.data as Row) : null;
+  proposta.aceite =
+    proposta.resposta?.tipo === 'aceite'
+      ? { valor: proposta.resposta.valorTotal, toneladas: proposta.resposta.toneladasTotal }
+      : null;
   return proposta;
 }
 

@@ -33,6 +33,7 @@ import {
   formatNumeroProposta,
   hojeIso,
   situacaoProposta,
+  totaisExibidos,
   type PropostaFiltros,
 } from '../../utils/propostaModel';
 import {
@@ -328,11 +329,20 @@ export default function PropostasPanel({
 
   const situacaoAberta = aberta ? situacaoProposta(aberta) : null;
   const totaisAberta = aberta ? totaisProposta(aberta.itens || []) : null;
+  const nomeRegiao = (id?: string) =>
+    id ? regioes.find((region) => region.id === id)?.name || 'Região removida' : 'Sem região';
+  const aceitoPorItem = new Map(
+    (aberta?.resposta?.tipo === 'aceite' ? aberta.resposta.itens : []).map((item) => [
+      item.id,
+      item.quantidade,
+    ])
+  );
+  const exibidosAberta = aberta ? totaisExibidos(aberta) : null;
 
   return (
     <div className="space-y-5">
       {/* Indicadores */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         {[
           { label: 'Vigentes', value: stats.vigentes, tone: 'text-emerald-700' },
           { label: 'Vencem em até 3 dias', value: stats.vencendo, tone: 'text-amber-700' },
@@ -345,6 +355,15 @@ export default function PropostasPanel({
                 : `${stats.conversao.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`,
             tone: 'text-violet-700',
           },
+          {
+            label: 'Valor aceito',
+            value: stats.valorAceito > 0 ? moedaProposta(stats.valorAceito, 'BRL') : '—',
+            detail:
+              stats.toneladasAceitas > 0
+                ? `${stats.toneladasAceitas.toLocaleString('pt-BR', { maximumFractionDigits: 3 })} t aceitas`
+                : undefined,
+            tone: 'text-blue-700',
+          },
         ].map((card) => (
           <div
             key={card.label}
@@ -352,6 +371,9 @@ export default function PropostasPanel({
           >
             <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{card.label}</p>
             <p className={`mt-1 text-2xl font-black tabular-nums ${card.tone}`}>{card.value}</p>
+            {'detail' in card && card.detail && (
+              <p className="text-xs text-stone-500">{card.detail}</p>
+            )}
           </div>
         ))}
       </div>
@@ -436,8 +458,9 @@ export default function PropostasPanel({
                 <tr className="border-b border-stone-100 bg-stone-50 text-left text-xs font-bold uppercase tracking-wide text-stone-500">
                   <th className="px-4 py-3">Proposta</th>
                   <th className="px-4 py-3">Cliente</th>
+                  {regioes.length > 0 && <th className="px-4 py-3">Região</th>}
                   <th className="px-4 py-3">Válida até</th>
-                  <th className="px-4 py-3 text-right">Produtos</th>
+                  <th className="px-4 py-3 text-right">Volume</th>
                   <th className="px-4 py-3 text-right">Total</th>
                   <th className="px-4 py-3">Situação</th>
                 </tr>
@@ -472,17 +495,37 @@ export default function PropostasPanel({
                         <span className="text-xs text-stone-400">{proposta.clienteDocumento}</span>
                       )}
                     </td>
+                    {regioes.length > 0 && (
+                      <td className="px-4 py-3 text-stone-700">{nomeRegiao(proposta.regionId)}</td>
+                    )}
                     <td className="px-4 py-3 text-stone-700">
                       <ValidadeTexto proposta={proposta} />
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {proposta.quantidadeItens}
-                    </td>
-                    <td className="px-4 py-3 text-right font-semibold tabular-nums text-stone-800">
-                      {proposta.valorTotal > 0
-                        ? moedaProposta(proposta.valorTotal, proposta.moeda)
-                        : '—'}
-                    </td>
+                    {(() => {
+                      const totais = totaisExibidos(proposta);
+                      return (
+                        <>
+                          <td className="px-4 py-3 text-right tabular-nums">
+                            {totais.toneladas > 0
+                              ? `${totais.toneladas.toLocaleString('pt-BR', { maximumFractionDigits: 3 })} t`
+                              : '—'}
+                            <span className="block text-xs text-stone-400">
+                              {proposta.quantidadeItens} produto(s)
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right font-semibold tabular-nums text-stone-800">
+                            {totais.valor > 0 ? (
+                              moedaProposta(totais.valor, proposta.moeda)
+                            ) : (
+                              <span className="text-xs font-normal text-stone-400">só preço/t</span>
+                            )}
+                            {totais.origem === 'aceite' && (
+                              <span className="block text-xs font-bold text-blue-700">aceito</span>
+                            )}
+                          </td>
+                        </>
+                      );
+                    })()}
                     <td className="px-4 py-3">
                       <span className="inline-flex items-center gap-2">
                         <SituacaoBadge proposta={proposta} />
@@ -511,7 +554,7 @@ export default function PropostasPanel({
             role="dialog"
             aria-modal="true"
             aria-label={`Proposta ${formatNumeroProposta(aberta.numero)}`}
-            className="flex h-full w-full max-w-2xl flex-col overflow-hidden bg-stone-50 shadow-2xl"
+            className="flex h-full w-full max-w-3xl flex-col overflow-hidden bg-stone-50 shadow-2xl"
           >
             <header className="flex items-start justify-between gap-3 border-b border-stone-200 bg-white p-5">
               <div>
@@ -547,13 +590,33 @@ export default function PropostasPanel({
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {[
                   ['Válida até', <ValidadeTexto key="v" proposta={aberta} />],
-                  ['Local', aberta.localNome || '—'],
-                  ['Lista', aberta.priceListNome || '—'],
+                  ['Região', nomeRegiao(aberta.regionId)],
                   [
-                    'Total',
-                    totaisAberta && totaisAberta.valor > 0
-                      ? moedaProposta(totaisAberta.valor, aberta.moeda)
-                      : '—',
+                    'Local · Lista',
+                    [aberta.localNome, aberta.priceListNome].filter(Boolean).join(' · ') || '—',
+                  ],
+                  [
+                    exibidosAberta?.origem === 'aceite' ? 'Total aceito' : 'Total proposto',
+                    <span key="t">
+                      {exibidosAberta && exibidosAberta.valor > 0
+                        ? moedaProposta(exibidosAberta.valor, aberta.moeda)
+                        : 'só preço/t'}
+                      {exibidosAberta && exibidosAberta.toneladas > 0 && (
+                        <span className="block text-xs font-semibold text-stone-500">
+                          {exibidosAberta.toneladas.toLocaleString('pt-BR', {
+                            maximumFractionDigits: 3,
+                          })}{' '}
+                          t
+                        </span>
+                      )}
+                      {exibidosAberta?.origem === 'aceite' &&
+                        totaisAberta &&
+                        totaisAberta.valor > 0 && (
+                          <span className="block text-xs font-normal text-stone-400">
+                            proposto {moedaProposta(totaisAberta.valor, aberta.moeda)}
+                          </span>
+                        )}
+                    </span>,
                   ],
                 ].map(([label, value]) => (
                   <div
@@ -573,8 +636,10 @@ export default function PropostasPanel({
                   <thead>
                     <tr className="border-b border-stone-100 bg-stone-50 text-left text-xs font-bold uppercase tracking-wide text-stone-500">
                       <th className="px-3 py-2">Produto</th>
-                      <th className="px-3 py-2 text-right">Qtd.</th>
+                      <th className="px-3 py-2 text-right">Proposta</th>
+                      {aceitoPorItem.size > 0 && <th className="px-3 py-2 text-right">Aceito</th>}
                       <th className="px-3 py-2 text-right">Preço/t</th>
+                      <th className="px-3 py-2 text-right">Total</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -602,13 +667,31 @@ export default function PropostasPanel({
                               ? `${item.quantidadeSugerida.toLocaleString('pt-BR')} t`
                               : '—'}
                           </td>
+                          {aceitoPorItem.size > 0 && (
+                            <td className="px-3 py-2 text-right font-bold tabular-nums text-blue-700">
+                              {aceitoPorItem.get(item.id || '')
+                                ? `${aceitoPorItem.get(item.id || '')!.toLocaleString('pt-BR')} t`
+                                : 'não aceito'}
+                            </td>
+                          )}
                           <td className="px-3 py-2 text-right font-bold tabular-nums text-emerald-700">
                             {moedaProposta(item.precoTonelada, aberta.moeda)}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-stone-700">
+                            {(() => {
+                              const qtd =
+                                aceitoPorItem.size > 0
+                                  ? aceitoPorItem.get(item.id || '') || 0
+                                  : item.quantidadeSugerida || 0;
+                              return qtd > 0
+                                ? moedaProposta(qtd * item.precoTonelada, aberta.moeda)
+                                : '—';
+                            })()}
                           </td>
                         </tr>
                         {itemAberto === item.id && (
                           <tr className="bg-stone-50">
-                            <td colSpan={3} className="px-3 py-3">
+                            <td colSpan={aceitoPorItem.size > 0 ? 5 : 4} className="px-3 py-3">
                               <ItemDetalhe item={item} moeda={aberta.moeda} />
                             </td>
                           </tr>
