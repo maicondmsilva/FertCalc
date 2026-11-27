@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { notificationTarget } from '../../utils/notificationLinks';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, CheckCircle, Edit, ArrowRightLeft, Info, Trash2, Settings } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
@@ -23,7 +24,7 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
   unreadCount = 0,
   onMarkAsRead,
   onClearAll,
-  onSettings
+  onSettings,
 }) => {
   const getIcon = (type: string) => {
     switch (type) {
@@ -42,12 +43,13 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
   };
 
   const navigate = useNavigate();
-  
+
   const handleNotificationClick = (e: React.MouseEvent, notification: Notification) => {
     e.stopPropagation();
     onMarkAsRead(notification.id);
-    if (notification.action_url) {
-      navigate(notification.action_url);
+    const target = notificationTarget(notification);
+    if (target) {
+      navigate(target);
       onClose();
     }
   };
@@ -57,14 +59,14 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
       {isOpen && (
         <React.Fragment>
           {/* Backdrop for closing when clicking outside */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-40"
             onClick={onClose}
           />
-          
+
           <motion.div
             initial={{ opacity: 0, y: -10, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -82,7 +84,7 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
                   </span>
                 )}
               </h3>
-              <button 
+              <button
                 onClick={onClose}
                 className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
               >
@@ -99,7 +101,7 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
               ) : (
                 <ul className="divide-y divide-gray-100 dark:divide-gray-700">
                   {notifications.map((notification) => (
-                    <li 
+                    <li
                       key={notification.id}
                       onClick={(e) => handleNotificationClick(e, notification)}
                       className={`p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors ${
@@ -107,18 +109,23 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
                       }`}
                     >
                       <div className="flex space-x-3">
-                        <div className="flex-shrink-0 mt-1">
-                          {getIcon(notification.type)}
-                        </div>
+                        <div className="flex-shrink-0 mt-1">{getIcon(notification.type)}</div>
                         <div className="flex-1 min-w-0">
-                          <p className={`text-sm font-medium ${!notification.is_read ? 'text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300'}`}>
+                          <p
+                            className={`text-sm font-medium ${!notification.is_read ? 'text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300'}`}
+                          >
                             {notification.title}
                           </p>
-                          <p className={`text-sm mt-1 line-clamp-2 ${!notification.is_read ? 'text-gray-800 dark:text-gray-200' : 'text-gray-500 dark:text-gray-400'}`}>
+                          <p
+                            className={`text-sm mt-1 line-clamp-2 ${!notification.is_read ? 'text-gray-800 dark:text-gray-200' : 'text-gray-500 dark:text-gray-400'}`}
+                          >
                             {notification.message}
                           </p>
                           <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
-                            {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true, locale: ptBR })}
+                            {formatDistanceToNow(new Date(notification.created_at), {
+                              addSuffix: true,
+                              locale: ptBR,
+                            })}
                           </p>
                         </div>
                         {!notification.is_read && (
@@ -136,13 +143,13 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
             {/* Footer */}
             {(notifications.length > 0 || unreadCount > 0) && (
               <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 flex justify-between items-center text-sm">
-                <button 
+                <button
                   onClick={onClearAll}
                   className="text-gray-600 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 font-medium transition-colors"
                 >
                   Limpar Tudo
                 </button>
-                <button 
+                <button
                   onClick={() => {
                     if (onSettings) onSettings();
                     else navigate('/settings');

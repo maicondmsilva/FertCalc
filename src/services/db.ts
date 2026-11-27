@@ -4,6 +4,7 @@
  */
 
 import { APP_SETTINGS_UPDATED_EVENT } from '../utils/appSettingsEvents';
+import { defaultNotificationUrl } from '../utils/notificationLinks';
 import { emptyOnError } from './queryErrors';
 import { assertDeleted, toDeleteError } from '../utils/deleteErrors';
 import { supabase } from './supabase';
@@ -1701,7 +1702,13 @@ export async function createNotification(
     p_group_type: notification.type === 'pricing_transfer' ? 'TRANSFER' : 'SYSTEM',
     p_title: notification.title,
     p_message: notification.message,
-    p_action_url: null,
+    p_action_url:
+      notification.actionUrl ??
+      defaultNotificationUrl({
+        type: notification.type,
+        title: notification.title,
+        data_id: validDataId,
+      }),
     p_data_id: validDataId,
     p_metadata: validDataId ? { entityId: validDataId } : null,
   });
