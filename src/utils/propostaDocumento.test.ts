@@ -7,6 +7,8 @@ import {
   gerarExcelProposta,
   planilhaProposta,
   tamanhoLogoExcel,
+  vencimentoComum,
+  vencimentoItem,
   totaisProposta,
 } from './propostaDocumento';
 
@@ -125,5 +127,26 @@ describe('comprovante', () => {
     expect(texto).toContain('123.456.789-09');
     expect(texto).toContain('SOJA 04-14-08');
     expect(texto).toContain('200.1.2.3');
+  });
+});
+
+describe('vencimento', () => {
+  it('data, DDF e comum a todos', () => {
+    const venc = {
+      formulaNome: 'A',
+      precoTonelada: 1,
+      composicao: [],
+      fatores: { dueDate: '2027-04-30' },
+    };
+    const ddf = {
+      formulaNome: 'B',
+      precoTonelada: 1,
+      composicao: [],
+      fatores: { paymentCondition: 'ddf', ddfDias: 30, dueDate: '2026-12-27' },
+    };
+    expect(vencimentoItem(venc)).toBe('30/04/2027');
+    expect(vencimentoItem(ddf)).toBe('30 dias após carreg. (27/12/2026)');
+    expect(vencimentoComum([venc, venc])).toBe('30/04/2027');
+    expect(vencimentoComum([venc, ddf])).toBeNull();
   });
 });

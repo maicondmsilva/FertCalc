@@ -14,7 +14,7 @@ import {
   X,
 } from 'lucide-react';
 import type { AppSettings, User } from '../../types';
-import type { Proposta } from '../../types/proposta';
+import type { Proposta, PropostaItem } from '../../types/proposta';
 import {
   alterarValidadeProposta,
   cancelarProposta,
@@ -41,6 +41,7 @@ import {
   createPropostaPdf,
   moedaProposta,
   totaisProposta,
+  vencimentoItem,
 } from '../../utils/propostaDocumento';
 import { saveOrSharePdf } from '../../utils/pdfDelivery';
 import { useToast } from '../Toast';
@@ -91,6 +92,71 @@ function ValidadeTexto({ proposta }: { proposta: Proposta }) {
   );
 }
 
+/** Batida como fechou na proposta e as condições do produto. */
+function ItemDetalhe({ item, moeda }: { item: PropostaItem; moeda: 'BRL' | 'USD' }) {
+  const fatores = (item.fatores || {}) as Record<string, unknown>;
+  const num = (key: string) => Number(fatores[key]) || 0;
+  const linhas: Array<[string, string]> = [
+    ['Fator', num('factor') ? `${num('factor').toLocaleString('pt-BR')} ×` : '—'],
+    ['Desconto', num('discount') ? `${moedaProposta(num('discount'), moeda)}/t` : '—'],
+    ['Comissão', num('commission') ? `${num('commission').toLocaleString('pt-BR')}%` : '—'],
+    ['Alíquota', num('taxRate') ? `${num('taxRate').toLocaleString('pt-BR')}%` : '—'],
+    [
+      'Frete',
+      fatores.tipoFrete === 'FOB'
+        ? 'FOB'
+        : `CIF · ${moedaProposta(num('freight'), 'BRL')}/t${fatores.cotacaoFreteNumero ? ` (${String(fatores.cotacaoFreteNumero)})` : ''}`,
+    ],
+    ['Vencimento', vencimentoItem(item)],
+    [
+      'Juros',
+      num('monthlyInterestRate')
+        ? `${num('monthlyInterestRate').toLocaleString('pt-BR')}% a.m.${fatores.exemptCurrentMonth ? ' · mês atual isento' : ''}`
+        : '—',
+    ],
+    ['Embalagem', item.embalagem || '—'],
+  ];
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <div>
+        <p className="mb-1 text-xs font-bold uppercase tracking-wide text-stone-500">
+          Batida {item.formula?.targetFormula ? `· alvo ${item.formula.targetFormula}` : ''}
+        </p>
+        {item.composicao.length === 0 ? (
+          <p className="text-sm text-stone-500">Sem composição registrada.</p>
+        ) : (
+          <ul className="space-y-0.5 text-sm">
+            {item.composicao.map((material) => (
+              <li key={`${material.nome}-${material.tipo}`} className="flex justify-between gap-2">
+                <span>
+                  {material.nome}
+                  {material.tipo ? (
+                    <span className="text-xs text-stone-400"> · {material.tipo}</span>
+                  ) : null}
+                </span>
+                <span className="tabular-nums text-stone-700">
+                  {Math.round(material.kg).toLocaleString('pt-BR')} kg
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <div>
+        <p className="mb-1 text-xs font-bold uppercase tracking-wide text-stone-500">Condições</p>
+        <dl className="space-y-0.5 text-sm">
+          {linhas.map(([label, valor]) => (
+            <div key={label} className="flex justify-between gap-2">
+              <dt className="text-stone-500">{label}</dt>
+              <dd className="text-right text-stone-800">{valor}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </div>
+  );
+}
+
 /** Aba Propostas de Batidas Salvas: histórico, PDF/Excel, validade e cancelamento. */
 export default function PropostasPanel({
   currentUser,
@@ -114,6 +180,8 @@ export default function PropostasPanel({
   const [motivo, setMotivo] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [gerandoLink, setGerandoLink] = useState(false);
+  const [comComposicao, setComComposicao] = useState(false);
+  const [itemAberto, setItemAberto] = useState<string | null>(null);
 
   /** Copia o link do cliente ou abre o WhatsApp com a mensagem pronta. */
   const enviarLink = async (destino: 'copiar' | 'whatsapp') => {
@@ -202,14 +270,22 @@ export default function PropostasPanel({
     setGerando(formato);
     try {
       if (formato === 'pdf') {
-        const doc = createPropostaPdf({ proposta: aberta, itens: aberta.itens || [], settings });
+        const doc = createPropostaPdf({
+          proposta: { ...aberta, incluirComposicao: comComposicao },
+          itens: aberta.itens || [],
+          settings,
+        });
         await saveOrSharePdf(
           doc,
           `${formatNumeroProposta(aberta.numero)}.pdf`,
           'Proposta de preços'
         );
       } else {
-        await baixarExcelProposta(aberta, aberta.itens || [], settings);
+        await baixarExcelProposta(
+          { ...aberta, incluirComposicao: comComposicao },
+          aberta.itens || [],
+          settings
+        );
       }
       await registrarDocumentoProposta(aberta.id, formato).catch(() => {});
       setAberta(await getProposta(aberta.id).catch(() => aberta));
@@ -500,30 +576,47 @@ export default function PropostasPanel({
                   </thead>
                   <tbody>
                     {(aberta.itens || []).map((item) => (
-                      <tr key={item.id} className="border-b border-stone-100 last:border-0">
-                        <td className="px-3 py-2">
-                          <span className="block font-semibold text-stone-800">
-                            {item.formulaNome}
-                          </span>
-                          <span className="font-mono text-xs text-emerald-700">
-                            {[item.codigo, item.npk, item.embalagem].filter(Boolean).join(' · ')}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums">
-                          {item.quantidadeSugerida
-                            ? `${item.quantidadeSugerida.toLocaleString('pt-BR')} t`
-                            : '—'}
-                        </td>
-                        <td className="px-3 py-2 text-right font-bold tabular-nums text-emerald-700">
-                          {moedaProposta(item.precoTonelada, aberta.moeda)}
-                        </td>
-                      </tr>
+                      <React.Fragment key={item.id}>
+                        <tr
+                          className="cursor-pointer border-b border-stone-100 last:border-0 hover:bg-stone-50"
+                          onClick={() =>
+                            setItemAberto((atual) => (atual === item.id ? null : item.id || null))
+                          }
+                        >
+                          <td className="px-3 py-2">
+                            <span className="flex items-center gap-1 font-semibold text-stone-800">
+                              <span className="text-stone-400">
+                                {itemAberto === item.id ? '▾' : '▸'}
+                              </span>
+                              {item.formulaNome}
+                            </span>
+                            <span className="font-mono text-xs text-emerald-700">
+                              {[item.codigo, item.npk, item.embalagem].filter(Boolean).join(' · ')}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums">
+                            {item.quantidadeSugerida
+                              ? `${item.quantidadeSugerida.toLocaleString('pt-BR')} t`
+                              : '—'}
+                          </td>
+                          <td className="px-3 py-2 text-right font-bold tabular-nums text-emerald-700">
+                            {moedaProposta(item.precoTonelada, aberta.moeda)}
+                          </td>
+                        </tr>
+                        {itemAberto === item.id && (
+                          <tr className="bg-stone-50">
+                            <td colSpan={3} className="px-3 py-3">
+                              <ItemDetalhe item={item} moeda={aberta.moeda} />
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     ))}
                   </tbody>
                 </table>
               </div>
               <p className="text-xs text-stone-500">
-                Composição no PDF/Excel: {aberta.incluirComposicao ? 'sim' : 'não'}
+                Clique num produto para ver a batida e as condições.
                 {aberta.observacoes ? ` · Observações: ${aberta.observacoes}` : ''}
               </p>
 
@@ -719,6 +812,15 @@ export default function PropostasPanel({
                     Cancelar
                   </button>
                 )}
+              <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-stone-700">
+                <input
+                  type="checkbox"
+                  checked={comComposicao}
+                  onChange={(event) => setComComposicao(event.target.checked)}
+                  className="h-5 w-5 accent-emerald-600"
+                />
+                Mostrar a batida
+              </label>
               <button
                 type="button"
                 disabled={gerando !== null}

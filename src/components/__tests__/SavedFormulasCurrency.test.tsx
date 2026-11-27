@@ -49,6 +49,7 @@ vi.mock('../../services/embalagensService', () => ({
 }));
 vi.mock('../calculatorBeta/SimplifiedCalculatorBeta', () => ({ default: () => null }));
 vi.mock('../propostas/PropostasPanel', () => ({ default: () => null }));
+vi.mock('../propostas/NovaPropostaModal', () => ({ default: () => null }));
 vi.mock('../../services/propostaService', () => ({
   criarProposta: vi.fn(),
   getProposta: vi.fn(),

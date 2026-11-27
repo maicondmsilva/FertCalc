@@ -8,6 +8,17 @@ export interface PropostaComposicaoItem {
   tipo?: 'Macro' | 'Micro';
 }
 
+/** Batida como fechou na proposta: base da precificação depois do aceite. */
+export interface PropostaFormulaSnapshot {
+  targetFormula: string;
+  category?: string;
+  targetCa?: number;
+  targetS?: number;
+  targetMicros?: Record<string, number>;
+  macros: import('../types').RawMaterial[];
+  micros: import('../types').RawMaterial[];
+}
+
 export interface PropostaItem {
   id?: string;
   ordem?: number;
@@ -21,6 +32,7 @@ export interface PropostaItem {
   quantidadeSugerida?: number;
   composicao: PropostaComposicaoItem[];
   fatores?: Record<string, unknown>;
+  formula?: PropostaFormulaSnapshot;
 }
 
 export interface PropostaClienteDados {

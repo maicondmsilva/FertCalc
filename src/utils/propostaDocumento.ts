@@ -47,6 +47,25 @@ export function totaisProposta(itens: PropostaItem[]): PropostaTotais {
   );
 }
 
+/** Vencimento do pagamento de um produto (condição gravada na proposta). */
+export function vencimentoItem(item: PropostaItem): string {
+  const fatores = (item.fatores || {}) as {
+    paymentCondition?: string;
+    dueDate?: string;
+    ddfDias?: number;
+  };
+  if (fatores.paymentCondition === 'ddf' && Number(fatores.ddfDias) > 0) {
+    return `${fatores.ddfDias} dias após carreg.${fatores.dueDate ? ` (${formatDataBr(fatores.dueDate)})` : ''}`;
+  }
+  return fatores.dueDate ? formatDataBr(fatores.dueDate) : '—';
+}
+
+/** Vencimento comum a todos os produtos (ou null quando variam). */
+export function vencimentoComum(itens: PropostaItem[]): string | null {
+  const valores = [...new Set(itens.map(vencimentoItem))];
+  return valores.length === 1 && valores[0] !== '—' ? valores[0] : null;
+}
+
 /** Linhas da tabela de produtos (PDF e prévia). */
 export function linhasProdutosProposta(proposta: Proposta, itens: PropostaItem[]): string[][] {
   return itens.map((item, index) => {
@@ -56,6 +75,7 @@ export function linhasProdutosProposta(proposta: Proposta, itens: PropostaItem[]
       [item.formulaNome, item.codigo].filter(Boolean).join('\n'),
       item.npk || '—',
       item.embalagem || '—',
+      vencimentoItem(item),
       toneladas(quantidade),
       moedaProposta(item.precoTonelada, proposta.moeda),
       quantidade > 0 ? moedaProposta(quantidade * item.precoTonelada, proposta.moeda) : '—',
@@ -194,6 +214,7 @@ export function createPropostaPdf({
     proposta.moeda === 'USD'
       ? `Moeda: US$${proposta.taxaCambio ? ` · câmbio ${proposta.taxaCambio.toLocaleString('pt-BR')}` : ''}`
       : 'Moeda: R$',
+    vencimentoComum(itens) ? `Pagamento: ${vencimentoComum(itens)}` : 'Pagamento: ver por produto',
     `Vendedor: ${proposta.criadoPorNome || '—'}`,
   ]);
   const vx = pageWidth - margin - validadeWidth;
@@ -228,7 +249,7 @@ export function createPropostaPdf({
   const totais = totaisProposta(itens);
   autoTable(doc, {
     startY: top + boxHeight + 6,
-    head: [['#', 'Produto', 'NPK', 'Embalagem', 'Quantidade', `Preço/t`, 'Total']],
+    head: [['#', 'Produto', 'NPK', 'Embalagem', 'Vencimento', 'Qtd.', `Preço/t`, 'Total']],
     body: linhasProdutosProposta(proposta, itens),
     foot:
       totais.toneladas > 0
@@ -236,6 +257,7 @@ export function createPropostaPdf({
             [
               '',
               'Total',
+              '',
               '',
               '',
               toneladas(totais.toneladas),
@@ -258,7 +280,7 @@ export function createPropostaPdf({
     alternateRowStyles: { fillColor: [250, 250, 249] },
     didParseCell: (data) => {
       // Cabeçalho e total alinhados como a coluna.
-      const align = ['center', 'left', 'center', 'left', 'right', 'right', 'right'][
+      const align = ['center', 'left', 'center', 'left', 'center', 'right', 'right', 'right'][
         data.column.index
       ];
       if (data.section !== 'body') data.cell.styles.halign = align as 'left' | 'center' | 'right';
@@ -266,11 +288,12 @@ export function createPropostaPdf({
     columnStyles: {
       0: { cellWidth: 8, halign: 'center', textColor: MUTED },
       1: { fontStyle: 'bold' },
-      2: { cellWidth: 20, halign: 'center' },
-      3: { cellWidth: 26 },
-      4: { cellWidth: 24, halign: 'right' },
-      5: { cellWidth: 28, halign: 'right', fontStyle: 'bold', textColor: BRAND },
-      6: { cellWidth: 30, halign: 'right' },
+      2: { cellWidth: 18, halign: 'center' },
+      3: { cellWidth: 22 },
+      4: { cellWidth: 24, halign: 'center' },
+      5: { cellWidth: 20, halign: 'right' },
+      6: { cellWidth: 25, halign: 'right', fontStyle: 'bold', textColor: BRAND },
+      7: { cellWidth: 27, halign: 'right' },
     },
   });
   let cursorY =
@@ -383,9 +406,20 @@ export function planilhaProposta(
     ...(proposta.moeda === 'USD' ? [['Câmbio', proposta.taxaCambio ?? '']] : []),
     ['Emitida em', formatDataBr(proposta.createdAt)],
     ['Válida até', formatDataBr(proposta.validaAte)],
+    ['Pagamento', vencimentoComum(itens) || 'ver por produto'],
     ['Vendedor', proposta.criadoPorNome],
     [],
-    ['#', 'Produto', 'Código', 'NPK', 'Embalagem', 'Quantidade (t)', 'Preço por tonelada', 'Total'],
+    [
+      '#',
+      'Produto',
+      'Código',
+      'NPK',
+      'Embalagem',
+      'Vencimento',
+      'Quantidade (t)',
+      'Preço por tonelada',
+      'Total',
+    ],
     ...itens.map((item, index) => {
       const quantidade = item.quantidadeSugerida || 0;
       return [
@@ -394,6 +428,7 @@ export function planilhaProposta(
         item.codigo || '',
         item.npk || '',
         item.embalagem || '',
+        vencimentoItem(item),
         quantidade || null,
         item.precoTonelada,
         quantidade ? Math.round(quantidade * item.precoTonelada * 100) / 100 : null,
@@ -402,6 +437,7 @@ export function planilhaProposta(
     [
       '',
       'Total',
+      '',
       '',
       '',
       '',
@@ -495,6 +531,7 @@ export async function gerarExcelProposta(
     { width: 13 },
     { width: 11 },
     { width: 16 },
+    { width: 22 },
     { width: 15 },
     { width: 18 },
     { width: 18 },
@@ -563,6 +600,7 @@ export async function gerarExcelProposta(
         ? `US$${proposta.taxaCambio ? ` (câmbio ${proposta.taxaCambio.toLocaleString('pt-BR')})` : ''}`
         : 'R$',
     ],
+    ['Pagamento', vencimentoComum(itens) || 'ver vencimento por produto'],
     ['Vendedor', proposta.criadoPorNome],
   ];
   let row = 6;
@@ -575,7 +613,7 @@ export async function gerarExcelProposta(
       sheet.mergeCells(row, 1, row, 2);
       const valueCell = sheet.getCell(row, 3);
       valueCell.value = value;
-      sheet.mergeCells(row, 3, row, 8);
+      sheet.mergeCells(row, 3, row, 9);
       row += 1;
     });
 
@@ -588,6 +626,7 @@ export async function gerarExcelProposta(
     'Código',
     'NPK',
     'Embalagem',
+    'Vencimento',
     'Quantidade (t)',
     'Preço por tonelada',
     'Total',
@@ -609,14 +648,15 @@ export async function gerarExcelProposta(
       item.codigo || '',
       item.npk || '',
       item.embalagem || '',
+      vencimentoItem(item),
       quantidade || null,
       item.precoTonelada,
       quantidade ? Math.round(quantidade * item.precoTonelada * 100) / 100 : null,
     ];
-    linha.getCell(6).numFmt = '#,##0.000';
-    linha.getCell(7).numFmt = formatoMoeda;
+    linha.getCell(7).numFmt = '#,##0.000';
     linha.getCell(8).numFmt = formatoMoeda;
-    linha.getCell(7).font = { bold: true, color: { argb: HEX_BRAND } };
+    linha.getCell(9).numFmt = formatoMoeda;
+    linha.getCell(8).font = { bold: true, color: { argb: HEX_BRAND } };
     if (index % 2 === 1)
       linha.eachCell((cell) => {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF7F7F5' } };
@@ -626,12 +666,12 @@ export async function gerarExcelProposta(
   const totais = totaisProposta(itens);
   const totalRow = sheet.getRow(row);
   totalRow.getCell(2).value = 'Total';
-  totalRow.getCell(6).value = totais.toneladas || null;
-  totalRow.getCell(6).numFmt = '#,##0.000';
-  totalRow.getCell(8).value = totais.valor ? Math.round(totais.valor * 100) / 100 : null;
-  totalRow.getCell(8).numFmt = formatoMoeda;
+  totalRow.getCell(7).value = totais.toneladas || null;
+  totalRow.getCell(7).numFmt = '#,##0.000';
+  totalRow.getCell(9).value = totais.valor ? Math.round(totais.valor * 100) / 100 : null;
+  totalRow.getCell(9).numFmt = formatoMoeda;
   totalRow.font = { bold: true };
-  for (let col = 1; col <= 8; col += 1) {
+  for (let col = 1; col <= 9; col += 1) {
     totalRow.getCell(col).border = { top: { style: 'thin', color: { argb: 'FF57534E' } } };
   }
   void firstItemRow;
@@ -641,7 +681,7 @@ export async function gerarExcelProposta(
     sheet.getCell(row, 1).value = 'Observações';
     sheet.getCell(row, 1).font = { bold: true, color: { argb: 'FF92400E' } };
     row += 1;
-    sheet.mergeCells(row, 1, row + 2, 8);
+    sheet.mergeCells(row, 1, row + 2, 9);
     const obs = sheet.getCell(row, 1);
     obs.value = proposta.observacoes;
     obs.alignment = { wrapText: true, vertical: 'top' };
