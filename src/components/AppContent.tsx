@@ -108,7 +108,7 @@ function AppContentRoute({
     if (activeTab === 'history' && hasPermission('history')) {
       return <History onEdit={onEditPricing} currentUser={currentUser} />;
     }
-    if (activeTab === 'pedidos_venda' && hasPermission('history')) {
+    if (activeTab === 'pedidos_venda' && hasPermission('pedidosVenda')) {
       return <PedidosVenda currentUser={currentUser} />;
     }
     if (activeTab === 'goals' && hasPermission('goals')) return <Goals currentUser={currentUser} />;

@@ -24,7 +24,12 @@ import Pagination from './ui/Pagination';
 import { PedidosCarteiraTable } from './pedidosVenda/PedidosCarteiraTable';
 import { PedidoDetailPanel } from './pedidosVenda/PedidoDetailPanel';
 import { CancelamentosReportView } from './pedidosVenda/CancelamentosReportView';
-import { STATUS_LABEL, formatTon, pedidoLabel } from './pedidosVenda/pedidosVendaModel';
+import {
+  STATUS_LABEL,
+  formatTon,
+  pedidoLabel,
+  permissoesPedido,
+} from './pedidosVenda/pedidosVendaModel';
 
 const NovoPedidoVendaModal = React.lazy(() => import('./NovoPedidoVendaModal'));
 const EditarPedidoVendaModal = React.lazy(() => import('./EditarPedidoVendaModal'));
@@ -77,6 +82,8 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
 
   // Cadastros de apoio
   const [branches, setBranches] = useState<Branch[]>([]);
+  // Ações conforme as permissões de Pedidos de Venda (o banco também confere).
+  const permissoes = permissoesPedido(currentUser);
   const [filiais, setFiliais] = useState<Filial[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [pricingRecords, setPricingRecords] = useState<PricingRecord[]>([]);
@@ -324,13 +331,15 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
-          <button
-            type="button"
-            onClick={() => setShowNovoPedido(true)}
-            className="inline-flex h-11 items-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-emerald-700"
-          >
-            <Plus className="h-4 w-4" /> Novo pedido
-          </button>
+          {permissoes.criar && (
+            <button
+              type="button"
+              onClick={() => setShowNovoPedido(true)}
+              className="inline-flex h-11 items-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-emerald-700"
+            >
+              <Plus className="h-4 w-4" /> Novo pedido
+            </button>
+          )}
         </div>
       </header>
 
@@ -534,6 +543,7 @@ export default function PedidosVenda({ currentUser }: PedidosVendaProps) {
               pricingCode={pricingCode}
               parentLabel={parentLabel}
               filialNome={filiais.find((filial) => filial.id === selected.filial_id)?.nome}
+              permissoes={permissoes}
               alerta={alerta}
               podeReceberAlerta={podeReceberAlerta}
               onSaveAlerta={(preferencia) => void saveAlerta(preferencia)}

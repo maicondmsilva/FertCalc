@@ -67,6 +67,17 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     ],
   },
   {
+    id: 'pedidos',
+    title: 'Pedidos de venda',
+    items: [
+      { id: 'pedidosVenda', label: 'Pedidos de venda (ver)' },
+      { id: 'pedidosVenda_create', label: 'Pedidos — criar' },
+      { id: 'pedidosVenda_edit', label: 'Pedidos — editar (dados, endereço)' },
+      { id: 'pedidosVenda_cancel', label: 'Pedidos — cancelar / substituir' },
+      { id: 'pedidosVenda_delete', label: 'Pedidos — excluir' },
+    ],
+  },
+  {
     id: 'aprovacoes',
     title: 'Aprovações',
     items: [

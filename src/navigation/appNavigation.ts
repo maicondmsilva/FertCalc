@@ -167,7 +167,7 @@ export function getNavigationItems(
         id: 'pedidos_venda',
         label: 'Pedidos de Venda',
         icon: ClipboardList,
-        permission: 'history',
+        permission: 'pedidosVenda',
       },
       { id: 'approvals', label: 'Aprovações', icon: ShieldCheck, permission: 'approvals' },
       { id: 'goals', label: 'Metas', icon: Target, permission: 'goals' },

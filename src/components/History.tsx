@@ -1,4 +1,5 @@
 import { drawCompanyLogo } from '../utils/pdfBranding';
+import { permissoesPedido } from './pedidosVenda/pedidosVendaModel';
 import React, { useState, useEffect } from 'react';
 import { getCompanyDisplayName } from '../utils/companyBranding';
 import { PricingRecord, User as AppUser, AppSettings, Branch, PriceList } from '../types';
@@ -1072,7 +1073,7 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
                 >
                   <Copy className="w-5 h-5" />
                 </button>
-                {p.status !== 'Excluída' && (
+                {p.status !== 'Excluída' && permissoesPedido(currentUser).criar && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();

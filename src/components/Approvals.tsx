@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { permissoesPedido } from './pedidosVenda/pedidosVendaModel';
 import { logger } from '../utils/logger';
 import { PricingRecord, Goal, User as AppUser, AppSettings } from '../types';
 import {
@@ -703,17 +704,19 @@ export default function Approvals({ currentUser }: ApprovalsProps) {
                   >
                     <Eye className="w-4 h-4" />
                   </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setNovoPedidoPricing(p);
-                      setShowNovoPedido(true);
-                    }}
-                    className="p-2 text-emerald-600 hover:bg-emerald-100 rounded-full"
-                    title="Novo Pedido de Venda"
-                  >
-                    📋
-                  </button>
+                  {permissoesPedido(currentUser).criar && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setNovoPedidoPricing(p);
+                        setShowNovoPedido(true);
+                      }}
+                      className="p-2 text-emerald-600 hover:bg-emerald-100 rounded-full"
+                      title="Novo Pedido de Venda"
+                    >
+                      📋
+                    </button>
+                  )}
                   {canApprove && !canDecidePricing(currentUser, p) && (
                     <span
                       className="px-2 py-1 text-[11px] font-semibold text-stone-500"

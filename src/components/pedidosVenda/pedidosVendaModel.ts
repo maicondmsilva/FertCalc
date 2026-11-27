@@ -134,3 +134,25 @@ export function buildPedidoTimeline(
     (left, right) => new Date(right.date).getTime() - new Date(left.date).getTime()
   );
 }
+
+export interface PermissoesPedido {
+  ver: boolean;
+  criar: boolean;
+  editar: boolean;
+  cancelar: boolean;
+  excluir: boolean;
+}
+
+/** Permissões de Pedidos de Venda do usuário (admin/master: todas; o banco confere). */
+export function permissoesPedido(user: { role?: string; permissions?: unknown }): PermissoesPedido {
+  const admin = user.role === 'master' || user.role === 'admin';
+  const p = (user.permissions || {}) as Record<string, unknown>;
+  const tem = (key: string) => admin || p[key] === true;
+  return {
+    ver: tem('pedidosVenda'),
+    criar: tem('pedidosVenda_create'),
+    editar: tem('pedidosVenda_edit'),
+    cancelar: tem('pedidosVenda_cancel'),
+    excluir: tem('pedidosVenda_delete'),
+  };
+}
