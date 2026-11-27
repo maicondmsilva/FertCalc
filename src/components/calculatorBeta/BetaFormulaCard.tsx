@@ -70,6 +70,8 @@ interface BetaFormulaCardProps {
   onApplyComparisonAlternative: (alternative: FormulaComparisonAlternative) => void;
   onOpenReductionSimulation: () => void;
   onDuplicate: () => void;
+  /** Revisão de batida salva: fórmula alvo e modo não podem mudar. */
+  formulaLocked?: boolean;
   /** Abre a análise de rentabilidade; ausente quando o usuário não tem permissão. */
   onOpenProfitability?: () => void;
 }
@@ -234,6 +236,7 @@ export default function BetaFormulaCard({
   onApplyComparisonAlternative,
   onOpenReductionSimulation,
   onDuplicate,
+  formulaLocked = false,
   onOpenProfitability,
 }: BetaFormulaCardProps) {
   const {
@@ -606,7 +609,8 @@ export default function BetaFormulaCard({
                   key={mode}
                   type="button"
                   onClick={() => setCalculationMode(calculation.id, mode)}
-                  className={`rounded-lg px-3 py-1.5 text-sm font-bold transition-colors ${
+                  disabled={formulaLocked}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
                     active
                       ? 'bg-white text-stone-900 shadow-sm'
                       : 'text-stone-500 hover:text-stone-800'
@@ -661,6 +665,7 @@ export default function BetaFormulaCard({
                               );
                             }}
                             placeholder="00"
+                            disabled={formulaLocked}
                             aria-label={`${style.label} alvo`}
                             className={`w-full min-w-0 bg-transparent text-right text-lg font-black tabular-nums placeholder:text-stone-300 focus:outline-none ${style.text}`}
                           />

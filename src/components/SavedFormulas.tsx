@@ -59,7 +59,7 @@ import {
   getPriceListsForLoadingLocation,
   ReportCommercialFactors,
 } from '../utils/savedFormulaWorkflow';
-import Calculator from './Calculator';
+import SimplifiedCalculatorBeta from './calculatorBeta/SimplifiedCalculatorBeta';
 import { formatPricingMoney } from '../utils/pricingCurrency';
 import { listHasCurrency, projectPriceList } from '../utils/priceListCurrency';
 import { saveOrSharePdf } from '../utils/pdfDelivery';
@@ -1410,11 +1410,10 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
                 <X className="h-4 w-4" /> Fechar calculadora
               </button>
             </div>
-            <Calculator
+            <SimplifiedCalculatorBeta
               key={`${formulaInEditor.id}-${selectedLocalId}-${selectedPriceListId}-${listCurrency}`}
               currentUser={currentUser}
-              isSimplified
-              disableConditions
+              embedded
               initialFormulaToLoad={formulaInEditor}
               initialBranchId={locais.find((local) => local.id === selectedLocalId)?.filial_id}
               initialLoadingLocationId={selectedLocalId}
