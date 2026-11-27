@@ -48,6 +48,7 @@ import { useToast } from '../Toast';
 import { useMyRegions } from '../../hooks/useMyRegions';
 import RegionFilterSelect from '../regions/RegionFilterSelect';
 import { permissoesProposta } from './propostaPermissions';
+import { qrDaVerificacao, qrDoAceite } from './propostaQr';
 
 interface PropostasPanelProps {
   currentUser: User;
@@ -213,6 +214,7 @@ export default function PropostasPanel({
       moeda: aberta.moeda,
       resposta: aberta.resposta,
       settings,
+      ...(await qrDaVerificacao(aberta.resposta)),
     });
     await saveOrSharePdf(
       doc,
@@ -274,6 +276,7 @@ export default function PropostasPanel({
           proposta: { ...aberta, incluirComposicao: comComposicao },
           itens: aberta.itens || [],
           settings,
+          qrAceite: permissoes.criar ? await qrDoAceite(aberta) : undefined,
         });
         await saveOrSharePdf(
           doc,
@@ -635,6 +638,14 @@ export default function PropostasPanel({
                       : 'Recusada pelo cliente'}{' '}
                     em {new Date(aberta.resposta.respondidoEm).toLocaleString('pt-BR')}
                   </p>
+                  {aberta.resposta.codigoVerificacao && (
+                    <p className="mt-0.5 text-xs">
+                      Assinado eletronicamente · código{' '}
+                      <span className="font-mono font-bold">
+                        {aberta.resposta.codigoVerificacao}
+                      </span>
+                    </p>
+                  )}
                   {aberta.resposta.tipo === 'aceite' ? (
                     <ul className="mt-2 space-y-1">
                       {aberta.resposta.itens.map((item) => (

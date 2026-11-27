@@ -10,6 +10,7 @@ import { diasParaVencer, formatDataBr, formatNumeroProposta } from '../../utils/
 import { documentoValido, formatarDocumento } from '../../utils/documento';
 import { getCompanyDisplayName } from '../../utils/companyBranding';
 import { saveOrSharePdf } from '../../utils/pdfDelivery';
+import { qrDaVerificacao } from './propostaQr';
 
 const parseQtd = (value: string) => Number(value.replace(/\./g, '').replace(',', '.')) || 0;
 
@@ -119,6 +120,7 @@ export default function PropostaPublicaPage({ token }: { token: string }) {
         companyLogo: dados.empresa?.logo || '',
         showCompanyName: dados.empresa?.mostrarNome,
       },
+      ...(await qrDaVerificacao(dados.resposta)),
     });
     await saveOrSharePdf(
       doc,
@@ -193,6 +195,14 @@ export default function PropostaPublicaPage({ token }: { token: string }) {
                       ? `${proposta.vendedor} foi avisado(a).`
                       : 'O vendedor foi avisado.'}
                   </p>
+                  {resposta.codigoVerificacao && (
+                    <p className="mt-2 text-xs text-stone-500">
+                      Assinado eletronicamente · código de verificação{' '}
+                      <span className="font-mono font-bold text-stone-700">
+                        {resposta.codigoVerificacao}
+                      </span>
+                    </p>
+                  )}
                 </section>
                 {resposta.tipo === 'aceite' && (
                   <section className="rounded-2xl border border-stone-200 bg-white p-4 text-sm">

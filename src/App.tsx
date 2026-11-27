@@ -13,6 +13,9 @@ import NativeConnectionBanner from './components/NativeConnectionBanner';
 
 const AuthenticatedApp = React.lazy(() => import('./app/AuthenticatedApp'));
 const PropostaPublicaPage = React.lazy(() => import('./components/propostas/PropostaPublicaPage'));
+const VerificacaoAssinaturaPage = React.lazy(
+  () => import('./components/propostas/VerificacaoAssinaturaPage')
+);
 
 /** /proposta/<código>: página do cliente, sem login e sem o restante do sistema. */
 function propostaToken(pathname: string): string {
@@ -20,9 +23,32 @@ function propostaToken(pathname: string): string {
   return prefixo === 'proposta' && token ? decodeURIComponent(token) : '';
 }
 
+/** /verificar/<código>: conferência pública da assinatura do comprovante. */
+function codigoVerificacao(pathname: string): string {
+  const [, prefixo, codigo] = pathname.split('/');
+  return prefixo === 'verificar' && codigo ? decodeURIComponent(codigo) : '';
+}
+
 export default function App() {
   const { pathname } = useLocation();
   const token = propostaToken(pathname);
+  const codigo = codigoVerificacao(pathname);
+  if (codigo) {
+    return (
+      <React.Suspense
+        fallback={
+          <div
+            role="status"
+            className="flex min-h-screen items-center justify-center text-stone-500"
+          >
+            Verificando...
+          </div>
+        }
+      >
+        <VerificacaoAssinaturaPage codigo={codigo} />
+      </React.Suspense>
+    );
+  }
   if (token) {
     return (
       <React.Suspense
