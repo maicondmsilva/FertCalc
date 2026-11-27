@@ -14,6 +14,7 @@ const service = vi.hoisted(() => ({
 vi.mock('../../../services/registryService', () => service);
 vi.mock('../../Toast', () => ({ useToast: () => ({ showSuccess: vi.fn(), showError: vi.fn() }) }));
 vi.mock('../../../hooks/useModalBackNavigation', () => ({ useModalBackNavigation: () => {} }));
+vi.mock('../../../services/cepService', () => ({ buscarCep: vi.fn().mockResolvedValue(null) }));
 
 import ClientManager from '../../ClientManager';
 import AgentManager from '../../AgentManager';

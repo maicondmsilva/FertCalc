@@ -1,7 +1,8 @@
 import React, { useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { Address } from '../../types';
-import { formatCEP, lookupCEP } from '../../utils/formatters';
+import { CepServiceUnavailableError, formatCEP } from '../../utils/formatters';
+import { buscarCep } from '../../services/cepService';
 import { Field, fieldClass } from '../products/catalogUi';
 
 export const BRAZILIAN_STATES = [
@@ -63,12 +64,17 @@ export default function AddressFields({
     if (cep.replace(/\D/g, '').length !== 8) return;
     setLooking(true);
     try {
-      const found = await lookupCEP(cep);
+      const found = await buscarCep(cep);
       if (latestCep.current !== cep) return;
       if (found) onChange({ ...valueRef.current, ...found, cep });
       else setCepMessage('CEP não encontrado. Preencha o endereço manualmente.');
-    } catch {
-      if (latestCep.current === cep) setCepMessage('Não foi possível buscar o CEP agora.');
+    } catch (error) {
+      if (latestCep.current === cep)
+        setCepMessage(
+          error instanceof CepServiceUnavailableError
+            ? 'O serviço de CEP não respondeu. Preencha o endereço manualmente ou tente de novo.'
+            : 'Não foi possível buscar o CEP agora.'
+        );
     } finally {
       if (latestCep.current === cep) setLooking(false);
     }
