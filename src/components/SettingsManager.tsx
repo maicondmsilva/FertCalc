@@ -121,7 +121,12 @@ function Field({
   );
 }
 
-export default function SettingsManager() {
+export default function SettingsManager({
+  canEditCompany = true,
+}: {
+  /** O banco só deixa administradores gravarem a personalização. */
+  canEditCompany?: boolean;
+} = {}) {
   const { showSuccess, showError, showInfo } = useToast();
   const [section, setSection] = useState<SectionId>('empresa');
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
@@ -253,8 +258,14 @@ export default function SettingsManager() {
 
   const saveBar = (section === 'empresa' || section === 'precificacao') && (
     <div className="sticky bottom-0 mt-4 flex flex-col gap-2 rounded-xl border border-stone-200 bg-white/95 p-3 shadow-sm backdrop-blur sm:flex-row sm:items-center sm:justify-between">
-      <p className={`text-sm ${isDirty ? 'text-amber-700' : 'text-stone-400'}`}>
-        {isDirty ? 'Há alterações não salvas.' : 'Tudo salvo.'}
+      <p
+        className={`text-sm ${!canEditCompany ? 'text-red-700' : isDirty ? 'text-amber-700' : 'text-stone-400'}`}
+      >
+        {!canEditCompany
+          ? 'Somente administradores podem salvar estas configurações.'
+          : isDirty
+            ? 'Há alterações não salvas.'
+            : 'Tudo salvo.'}
       </p>
       <div className="flex gap-2">
         {isDirty && (
@@ -269,7 +280,7 @@ export default function SettingsManager() {
         <button
           type="button"
           onClick={() => void saveSettings()}
-          disabled={!isDirty || isSaving}
+          disabled={!canEditCompany || !isDirty || isSaving}
           className="flex items-center gap-2 px-5 py-2 rounded-lg bg-emerald-600 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
         >
           <Save className="w-4 h-4" />

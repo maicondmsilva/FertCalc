@@ -3,6 +3,7 @@
  * Central data access layer for all Supabase operations
  */
 
+import { APP_SETTINGS_UPDATED_EVENT } from '../utils/appSettingsEvents';
 import { emptyOnError } from './queryErrors';
 import { assertDeleted, toDeleteError } from '../utils/deleteErrors';
 import { supabase } from './supabase';
@@ -67,17 +68,25 @@ export async function saveAppSettings(settings: AppSettings): Promise<void> {
     default_factor_usd: settings.defaultFactorUSD ?? 0,
     updated_at: new Date().toISOString(),
   };
+  // .select() devolve as linhas gravadas: se o banco recusar em silêncio (sem
+  // permissão), nenhuma linha volta e avisamos em vez de dizer "salvo".
   const write = (values: Record<string, unknown>) =>
     existing?.id
-      ? supabase.from('app_settings').update(values).eq('id', existing.id)
-      : supabase.from('app_settings').insert(values);
-  let { error } = await write(payload);
+      ? supabase.from('app_settings').update(values).eq('id', existing.id).select('id')
+      : supabase.from('app_settings').insert(values).select('id');
+  let { data, error } = await write(payload);
   // Enquanto a migração da opção "mostrar nome" não estiver aplicada, salva o resto.
   if (error?.code === 'PGRST204' && /show_company_name/.test(error.message || '')) {
     const { show_company_name: _ignored, ...withoutShowName } = payload;
-    ({ error } = await write(withoutShowName));
+    ({ data, error } = await write(withoutShowName));
+  }
+  if (error?.code === '42501' || (!error && (!data || data.length === 0))) {
+    throw new Error('Somente administradores podem alterar a personalização da empresa.');
   }
   if (error) throw error;
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(APP_SETTINGS_UPDATED_EVENT));
+  }
 }
 
 // ============================================================

@@ -48,7 +48,25 @@ import {
   X,
   Archive,
   ArchiveRestore,
+  FileSpreadsheet,
+  ClipboardList,
 } from 'lucide-react';
+import PropostasPanel from './propostas/PropostasPanel';
+import { canCreatePropostas, permissoesProposta } from './propostas/propostaPermissions';
+import {
+  criarProposta,
+  getProposta,
+  registrarDocumentoProposta,
+} from '../services/propostaService';
+import type { NovaProposta, Proposta } from '../types/proposta';
+import {
+  VALIDADE_PADRAO_DIAS,
+  formatNumeroProposta,
+  hojeIso,
+  problemaNovaProposta,
+  somarDias,
+} from '../utils/propostaModel';
+import { baixarExcelProposta, createPropostaPdf } from '../utils/propostaDocumento';
 import { useToast } from './Toast';
 import { useConfirm } from '../hooks/useConfirm';
 import { ConfirmDialog } from './ui/ConfirmDialog';
@@ -79,8 +97,10 @@ interface ModalGerarRelatorioProps {
     f: SavedFormula,
     list: PriceList | undefined
   ) => { total: number; missingItems: string[] };
-  companyName: string;
+  settings: AppSettings;
   onClose: () => void;
+  /** Avisa a página para recarregar a aba Propostas. */
+  onPropostaCriada?: () => void;
 }
 
 const addDaysToReportDate = (date: string, days: number) => {
@@ -331,12 +351,17 @@ function ModalGerarRelatorio({
   selectedLocal,
   currentUser,
   getFormulaCost,
-  companyName,
+  settings,
   onClose,
+  onPropostaCriada,
 }: ModalGerarRelatorioProps) {
-  const { showError } = useToast();
+  const { showError, showSuccess } = useToast();
   const selectedFormulas = formulas.filter((f) => selectedIds.includes(f.id));
-  const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [generating, setGenerating] = useState<'pdf' | 'excel' | null>(null);
+  const generatingPdf = generating !== null;
+  const [validaAte, setValidaAte] = useState(() => somarDias(hojeIso(), VALIDADE_PADRAO_DIAS));
+  const [observacoes, setObservacoes] = useState('');
+  const [createdProposal, setCreatedProposal] = useState<Proposta | null>(null);
   const [applyToAll, setApplyToAll] = useState(true);
   const [includeComposicao, setIncludeComposicao] = useState(false);
   const [globalFactors, setGlobalFactors] = useState<ReportCommercialFactors>({
@@ -366,6 +391,9 @@ function ModalGerarRelatorio({
       setSelectedClient(null);
       setClientSearch('');
       setApplyToAll(true);
+      setValidaAte(somarDias(hojeIso(), VALIDADE_PADRAO_DIAS));
+      setObservacoes('');
+      setCreatedProposal(null);
       setGlobalFactors({ ...DEFAULT_REPORT_COMMERCIAL_FACTORS });
       setQuantities({});
       setPerFormulaFactors(
@@ -398,219 +426,149 @@ function ModalGerarRelatorio({
     });
   };
 
-  const handleGeneratePDF = async () => {
-    setGeneratingPdf(true);
+  const canCreateProposal = canCreatePropostas(currentUser);
+  const validityProblem = problemaNovaProposta({
+    validaAte,
+    quantidadeItens: selectedFormulas.length,
+    itensSemPreco: selectedFormulas
+      .filter((formula) => !(calcPrecoFinal(formula) > 0))
+      .map((formula) => formula.name),
+  });
+
+  /** Monta a fotografia dos preços que vira a proposta. */
+  const buildNovaProposta = (): NovaProposta => ({
+    clientId: selectedClient?.id,
+    clienteNome: selectedClient?.name || 'Cliente não informado',
+    clienteDocumento: selectedClient?.document || undefined,
+    clienteDados: {
+      documento: selectedClient?.document,
+      inscricaoEstadual: selectedClient?.stateRegistration || undefined,
+      fazenda: selectedClient?.fazenda || undefined,
+      cidade: selectedClient?.address?.city || undefined,
+      estado: selectedClient?.address?.state || undefined,
+    },
+    priceListId: selectedList?.id,
+    priceListNome: selectedList?.name,
+    localCarregamentoId: selectedLocal?.id,
+    localNome: selectedLocal?.nome,
+    moeda: reportCurrency,
+    taxaCambio: reportCurrency === 'USD' ? selectedList?.exchangeRate : undefined,
+    validaAte,
+    incluirComposicao: includeComposicao,
+    observacoes: observacoes.trim() || undefined,
+    itens: selectedFormulas.map((formula) => {
+      const reportFactors = getFactors(formula.id);
+      return {
+        savedFormulaId: formula.id,
+        codigo: formatId(formula.id_numeric, 'BAT-'),
+        formulaNome: formula.name,
+        npk: formula.targetFormula,
+        embalagem: reportFactors.embalagem_nome || undefined,
+        precoTonelada: Math.round(calcPrecoFinal(formula) * 100) / 100,
+        quantidadeSugerida:
+          Number(reportFactors.totalTons) > 0 ? Number(reportFactors.totalTons) : undefined,
+        composicao: [
+          ...formula.macros
+            .filter((material) => material.quantity > 0)
+            .map((material) => ({
+              nome: material.name,
+              kg: material.quantity,
+              tipo: 'Macro' as const,
+            })),
+          ...formula.micros
+            .filter((material) => material.quantity > 0)
+            .map((material) => ({
+              nome: material.name,
+              kg: material.quantity,
+              tipo: 'Micro' as const,
+            })),
+        ],
+        fatores: { ...reportFactors, priceListCurrency: reportCurrency },
+      };
+    }),
+  });
+
+  /** Mantém o histórico de preços dos produtos formulados (como antes). */
+  const registerPriceHistory = async () => {
+    const historyEntries = (
+      await Promise.all(
+        selectedFormulas.map(async (formula) => {
+          const product = await getProdutoFormuladoBySavedFormulaId(formula.id);
+          if (!product) return null;
+          const reportFactors = getFactors(formula.id);
+          const { total: baseCost } = getFormulaCost(formula, selectedList);
+          const finalPrice = calcPrecoFinal(formula);
+          return {
+            produto_formulado_id: product.id,
+            saved_formula_id: formula.id,
+            organization_id: formula.organizationId || currentUser.organizationId,
+            local_carregamento_id: selectedLocal?.id,
+            local_carregamento_nome: selectedLocal?.nome,
+            price_list_id: selectedList?.id,
+            price_list_name: selectedList?.name,
+            formula_nome: formula.name,
+            preco_base: baseCost,
+            preco_final: finalPrice,
+            moeda: reportCurrency,
+            taxa_cambio: reportCurrency === 'USD' ? selectedList?.exchangeRate : undefined,
+            preco_final_brl:
+              reportCurrency === 'USD'
+                ? finalPrice * Number(selectedList?.exchangeRate || 0)
+                : finalPrice,
+            quantidade_tons: reportFactors.totalTons,
+            valor_total: finalPrice * Number(reportFactors.totalTons || 0),
+            fatores_comerciais: {
+              ...reportFactors,
+              priceListCurrency: reportCurrency,
+              priceListExchangeRate: selectedList?.exchangeRate,
+            },
+            origem: 'relatorio_precos' as const,
+            registrado_por: currentUser.name,
+          };
+        })
+      )
+    ).filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+    await addHistoricoPrecos(historyEntries);
+  };
+
+  const handleGenerate = async (format: 'pdf' | 'excel') => {
+    if (validityProblem) {
+      showError(validityProblem);
+      return;
+    }
+    setGenerating(format);
     try {
-      const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
-        import('jspdf'),
-        import('jspdf-autotable'),
-      ]);
-      const doc = new jsPDF();
-      const now = new Date();
-      const dateStr = now.toLocaleDateString('pt-BR');
-
-      // Header Design (Premium Theme)
-      doc.setFillColor(16, 124, 65); // Forest green primary header accent bar
-      doc.rect(0, 0, 210, 8, 'F');
-
-      doc.setFontSize(20);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(16, 124, 65);
-      doc.text(companyName || '', 14, 22);
-
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(120, 120, 120);
-      doc.text(`RELATÓRIO DE PREÇOS — EMITIDO EM ${dateStr}`, 14, 28);
-
-      doc.setDrawColor(220, 220, 220);
-      doc.setLineWidth(0.5);
-      doc.line(14, 31, 196, 31);
-
-      let currentY = 36;
-
-      // Optional Client Details Card
-      if (selectedClient) {
-        // Draw background
-        doc.setFillColor(248, 250, 248);
-        doc.setDrawColor(220, 230, 220);
-        doc.roundedRect(14, currentY, 182, 30, 3, 3, 'FD');
-
-        // Client Title
-        doc.setFontSize(9);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(16, 124, 65);
-        doc.text('DADOS DO CLIENTE', 19, currentY + 6);
-
-        // Client Data columns
-        doc.setFontSize(8.5);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(60, 60, 60);
-
-        doc.text(`Razão Social / Nome: ${selectedClient.name}`, 19, currentY + 12);
-        doc.text(`CPF / CNPJ: ${selectedClient.document}`, 19, currentY + 18);
-        doc.text(`IE: ${selectedClient.stateRegistration || 'Isento'}`, 19, currentY + 24);
-
-        doc.text(`Fazenda: ${selectedClient.fazenda || '—'}`, 110, currentY + 12);
-        doc.text(
-          `Cidade / UF: ${selectedClient.address?.city || ''} / ${selectedClient.address?.state || ''}`,
-          110,
-          currentY + 18
+      // A proposta é criada uma vez; gerar o outro formato reaproveita a mesma.
+      let proposta = createdProposal;
+      if (!proposta) {
+        const id = await criarProposta(buildNovaProposta());
+        proposta = await getProposta(id);
+        setCreatedProposal(proposta);
+        void registerPriceHistory().catch(() => {});
+        showSuccess(`Proposta ${formatNumeroProposta(proposta.numero)} criada.`);
+        onPropostaCriada?.();
+      }
+      if (format === 'pdf') {
+        const doc = createPropostaPdf({ proposta, itens: proposta.itens || [], settings });
+        await saveOrSharePdf(
+          doc,
+          `${formatNumeroProposta(proposta.numero)}.pdf`,
+          'Proposta de preços'
         );
-
-        currentY += 36;
+      } else {
+        await baixarExcelProposta(proposta, proposta.itens || [], settings);
       }
-
-      // Main table
-      const tableBody: (string | number)[][] = selectedFormulas.map((formula) => {
-        const idFormatado = formatId(formula.id_numeric, 'BAT-');
-        const precoFinal = calcPrecoFinal(formula);
-        const reportFactors = getFactors(formula.id);
-        const totalSale = precoFinal * Number(reportFactors.totalTons || 0);
-        return [
-          idFormatado,
-          formula.name,
-          formula.targetFormula,
-          Number(reportFactors.totalTons) > 0
-            ? Number(reportFactors.totalTons).toLocaleString('pt-BR')
-            : '—',
-          precoFinal > 0 ? formatPricingMoney(precoFinal, reportCurrency) : '—',
-          totalSale > 0 ? formatPricingMoney(totalSale, reportCurrency) : '—',
-        ];
-      });
-
-      autoTable(doc, {
-        startY: currentY,
-        head: [['ID', 'Produto / Fórmula', 'NPK', 'Ton.', `Preço ${reportCurrency}/t`, 'Total']],
-        body: tableBody,
-        styles: { fontSize: 9, cellPadding: 4, font: 'helvetica' },
-        headStyles: { fillColor: [16, 124, 65], textColor: 255, fontStyle: 'bold' },
-        alternateRowStyles: { fillColor: [248, 250, 248] },
-        margin: { left: 14, right: 14 },
-      });
-
-      // If include composition
-      if (includeComposicao) {
-        selectedFormulas.forEach((formula) => {
-          const activeMacros = formula.macros.filter((m) => m.quantity > 0);
-          const activeMicros = formula.micros.filter((m) => m.quantity > 0);
-          if (activeMacros.length === 0 && activeMicros.length === 0) return;
-
-          const lastY = (doc as any).lastAutoTable?.finalY ?? currentY + 20;
-
-          // Page break if composition section is too low
-          if (lastY > 240) {
-            doc.addPage();
-            doc.setFillColor(16, 124, 65);
-            doc.rect(0, 0, 210, 8, 'F');
-          }
-
-          const compY = lastY > 240 ? 20 : lastY + 10;
-
-          doc.setFontSize(10);
-          doc.setFont('helvetica', 'bold');
-          doc.setTextColor(30, 30, 30);
-          doc.text(
-            `Detalhamento da Composição: ${formula.name} (${formula.targetFormula})`,
-            14,
-            compY
-          );
-
-          const composicaoBody = [
-            ...activeMacros.map((m) => [m.name, `${m.quantity.toFixed(0)} kg`, 'Macro']),
-            ...activeMicros.map((m) => [m.name, `${m.quantity.toFixed(0)} kg`, 'Micro']),
-          ];
-
-          autoTable(doc, {
-            startY: compY + 4,
-            head: [['Matéria-Prima Utilizada', 'Quantidade', 'Tipo de Nutriente']],
-            body: composicaoBody,
-            styles: { fontSize: 8, cellPadding: 3 },
-            headStyles: { fillColor: [80, 90, 80], textColor: 255 },
-            alternateRowStyles: { fillColor: [250, 250, 250] },
-            margin: { left: 14, right: 14 },
-          });
-        });
-      }
-
-      // Footer
-      const pageCount = (doc as any).internal.getNumberOfPages();
-      for (let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        const pageHeight = doc.internal.pageSize.height;
-
-        // Footer line separator
-        doc.setDrawColor(240, 240, 240);
-        doc.setLineWidth(0.5);
-        doc.line(14, pageHeight - 15, 196, pageHeight - 15);
-
-        doc.setFontSize(8);
-        doc.setFont('helvetica', 'italic');
-        doc.setTextColor(120);
-
-        doc.text(
-          'Este documento é um relatório comercial confidencial emitido por FertCalc.',
-          doc.internal.pageSize.width / 2,
-          pageHeight - 9,
-          {
-            align: 'center',
-          }
-        );
-        doc.text(`Pág. ${i}/${pageCount}`, doc.internal.pageSize.width - 14, pageHeight - 9, {
-          align: 'right',
-        });
-      }
-
-      const historyEntries = (
-        await Promise.all(
-          selectedFormulas.map(async (formula) => {
-            const product = await getProdutoFormuladoBySavedFormulaId(formula.id);
-            if (!product) return null;
-            const reportFactors = getFactors(formula.id);
-            const { total: baseCost } = getFormulaCost(formula, selectedList);
-            const finalPrice = calcPrecoFinal(formula);
-            return {
-              produto_formulado_id: product.id,
-              saved_formula_id: formula.id,
-              organization_id: formula.organizationId || currentUser.organizationId,
-              local_carregamento_id: selectedLocal?.id,
-              local_carregamento_nome: selectedLocal?.nome,
-              price_list_id: selectedList?.id,
-              price_list_name: selectedList?.name,
-              formula_nome: formula.name,
-              preco_base: baseCost,
-              preco_final: finalPrice,
-              moeda: reportCurrency,
-              taxa_cambio: reportCurrency === 'USD' ? selectedList?.exchangeRate : undefined,
-              preco_final_brl:
-                reportCurrency === 'USD'
-                  ? finalPrice * Number(selectedList?.exchangeRate || 0)
-                  : finalPrice,
-              quantidade_tons: reportFactors.totalTons,
-              valor_total: finalPrice * Number(reportFactors.totalTons || 0),
-              fatores_comerciais: {
-                ...reportFactors,
-                priceListCurrency: reportCurrency,
-                priceListExchangeRate: selectedList?.exchangeRate,
-              },
-              origem: 'relatorio_precos' as const,
-              registrado_por: currentUser.name,
-            };
-          })
-        )
-      ).filter((entry): entry is NonNullable<typeof entry> => entry !== null);
-      await addHistoricoPrecos(historyEntries);
-
-      await saveOrSharePdf(
-        doc,
-        `relatorio-precos-${dateStr.replace(/\//g, '-')}.pdf`,
-        'Relatório de preços'
+      void registrarDocumentoProposta(proposta.id, format).catch(() => {});
+    } catch (error) {
+      showError(
+        error instanceof Error && error.message
+          ? error.message
+          : format === 'pdf'
+            ? 'Não foi possível gerar o PDF.'
+            : 'Não foi possível gerar o Excel.'
       );
-      onClose();
-    } catch {
-      showError('Não foi possível gerar o relatório em PDF.');
     } finally {
-      setGeneratingPdf(false);
+      setGenerating(null);
     }
   };
 
@@ -622,7 +580,7 @@ function ModalGerarRelatorio({
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-stone-100 flex justify-between items-center">
           <div>
-            <h2 className="text-xl font-bold text-stone-800">Gerar Relatório de Preços</h2>
+            <h2 className="text-xl font-bold text-stone-800">Gerar proposta de preços</h2>
             <p className="text-sm text-stone-500 mt-1">
               {selectedFormulas.length} fórmula(s) selecionada(s)
             </p>
@@ -717,6 +675,33 @@ function ModalGerarRelatorio({
             )}
           </div>
 
+          {/* Proposta: validade e observações */}
+          <div className="grid grid-cols-1 gap-3 rounded-xl border border-stone-200 p-4 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
+            <label className="text-xs font-bold uppercase tracking-wide text-stone-500">
+              Válida até
+              <input
+                type="date"
+                value={validaAte}
+                min={hojeIso()}
+                disabled={Boolean(createdProposal)}
+                onChange={(event) => setValidaAte(event.target.value)}
+                className="mt-1 h-11 w-full rounded-xl border border-stone-300 px-3 text-sm font-semibold normal-case tracking-normal text-stone-800 disabled:bg-stone-100"
+              />
+            </label>
+            <label className="text-xs font-bold uppercase tracking-wide text-stone-500">
+              Observações para o cliente (opcional)
+              <textarea
+                value={observacoes}
+                disabled={Boolean(createdProposal)}
+                onChange={(event) => setObservacoes(event.target.value)}
+                rows={2}
+                maxLength={800}
+                placeholder="Ex.: preços FOB, condição de pagamento, frete sob consulta…"
+                className="mt-1 w-full rounded-xl border border-stone-300 px-3 py-2 text-sm normal-case tracking-normal text-stone-800 disabled:bg-stone-100"
+              />
+            </label>
+          </div>
+
           {/* Options */}
           <div className="flex flex-col gap-3">
             <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -738,7 +723,7 @@ function ModalGerarRelatorio({
                 className="w-4 h-4 accent-emerald-600"
               />
               <span className="text-sm font-medium text-stone-700">
-                Incluir composição de matérias-primas no relatório
+                Mostrar os produtos da batida (composição) no PDF e no Excel
               </span>
             </label>
           </div>
@@ -876,7 +861,19 @@ function ModalGerarRelatorio({
           </div>
         </div>
 
-        <div className="p-6 border-t border-stone-100 flex justify-end gap-3">
+        <div className="p-6 border-t border-stone-100 flex flex-wrap items-center justify-end gap-3">
+          {createdProposal ? (
+            <p className="mr-auto text-sm font-semibold text-emerald-700">
+              Proposta {formatNumeroProposta(createdProposal.numero)} criada. Ela fica na aba
+              Propostas.
+            </p>
+          ) : !canCreateProposal ? (
+            <p className="mr-auto text-sm font-semibold text-red-700" role="alert">
+              Seu usuário não tem a permissão “Propostas — criar”.
+            </p>
+          ) : validityProblem ? (
+            <p className="mr-auto text-sm font-semibold text-amber-700">{validityProblem}</p>
+          ) : null}
           <button
             onClick={onClose}
             className="px-4 py-2 text-sm font-medium text-stone-600 hover:text-stone-800 transition-colors"
@@ -884,12 +881,22 @@ function ModalGerarRelatorio({
             Cancelar
           </button>
           <button
-            onClick={() => void handleGeneratePDF()}
-            disabled={generatingPdf}
-            className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg flex items-center gap-2 transition-colors"
+            type="button"
+            onClick={() => void handleGenerate('excel')}
+            disabled={generatingPdf || !canCreateProposal || Boolean(validityProblem)}
+            className="px-5 py-2 border border-emerald-600 text-emerald-700 hover:bg-emerald-50 text-sm font-bold rounded-lg flex items-center gap-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            {generating === 'excel' ? 'Preparando…' : 'Gerar Excel'}
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleGenerate('pdf')}
+            disabled={generatingPdf || !canCreateProposal || Boolean(validityProblem)}
+            className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg flex items-center gap-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
           >
             <FileText className="w-4 h-4" />
-            {generatingPdf ? 'Preparando…' : 'Gerar PDF'}
+            {generating === 'pdf' ? 'Preparando…' : 'Gerar PDF'}
           </button>
         </div>
       </div>
@@ -903,6 +910,9 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
   const [formulas, setFormulas] = useState<SavedFormula[]>([]);
   const [archivedFormulas, setArchivedFormulas] = useState<SavedFormula[]>([]);
   const [view, setView] = useState<'ativas' | 'arquivadas'>('ativas');
+  const [pagina, setPagina] = useState<'batidas' | 'propostas'>('batidas');
+  const [propostasReloadKey, setPropostasReloadKey] = useState(0);
+  const podeVerPropostas = permissoesProposta(currentUser).ver;
   const [archivingId, setArchivingId] = useState<string | null>(null);
   const [priceLists, setPriceLists] = useState<PriceList[]>([]);
   const [locais, setLocais] = useState<LocalCarregamento[]>([]);
@@ -1161,7 +1171,7 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
 
   const openReport = () => {
     if (!selectedLocalId) {
-      showError('Selecione o local de carregamento para gerar o relatório.');
+      showError('Selecione o local de carregamento para gerar a proposta.');
       return;
     }
     if (!selectedList) {
@@ -1186,473 +1196,515 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
             Batidas Salvas
           </h2>
           <p className="text-[15px] text-stone-500">
-            Consulte as batidas, atualize a composição e gere relatórios de preços para clientes.
+            Consulte as batidas, atualize a composição e gere propostas de preços para clientes.
           </p>
         </div>
 
-        {/* Filtros */}
-        <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1.6fr]">
-            <label className="block">
-              <span className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-stone-500">
-                <MapPin className="h-4 w-4" /> Local de carregamento
-              </span>
-              <select
-                value={selectedLocalId}
-                onChange={(e) => setSelectedLocalId(e.target.value)}
-                className={selectClass}
+        {podeVerPropostas && (
+          <div
+            role="tablist"
+            aria-label="Seções de Batidas Salvas"
+            className="inline-flex rounded-xl bg-stone-200/70 p-1"
+          >
+            {(
+              [
+                ['batidas', 'Batidas', Beaker],
+                ['propostas', 'Propostas', ClipboardList],
+              ] as const
+            ).map(([value, label, Icon]) => (
+              <button
+                key={value}
+                type="button"
+                role="tab"
+                aria-selected={pagina === value}
+                onClick={() => setPagina(value)}
+                className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold transition-colors ${
+                  pagina === value
+                    ? 'bg-white text-stone-900 shadow-sm'
+                    : 'text-stone-500 hover:text-stone-800'
+                }`}
               >
-                <option value="">Selecione o local</option>
-                {locais.map((local) => (
-                  <option key={local.id} value={local.id}>
-                    {local.nome}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div>
-              <div className="mb-1.5 flex items-center justify-between gap-2">
-                <label
-                  htmlFor="saved-formulas-price-list"
-                  className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-stone-500"
-                >
-                  <Database className="h-4 w-4" /> Tabela de preços
+                <Icon className="h-4 w-4" /> {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {pagina === 'propostas' && podeVerPropostas ? (
+          <PropostasPanel
+            currentUser={currentUser}
+            settings={appSettings}
+            reloadKey={propostasReloadKey}
+          />
+        ) : (
+          <>
+            {/* Filtros */}
+            <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1.6fr]">
+                <label className="block">
+                  <span className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-stone-500">
+                    <MapPin className="h-4 w-4" /> Local de carregamento
+                  </span>
+                  <select
+                    value={selectedLocalId}
+                    onChange={(e) => setSelectedLocalId(e.target.value)}
+                    className={selectClass}
+                  >
+                    <option value="">Selecione o local</option>
+                    {locais.map((local) => (
+                      <option key={local.id} value={local.id}>
+                        {local.nome}
+                      </option>
+                    ))}
+                  </select>
                 </label>
+                <div>
+                  <div className="mb-1.5 flex items-center justify-between gap-2">
+                    <label
+                      htmlFor="saved-formulas-price-list"
+                      className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-stone-500"
+                    >
+                      <Database className="h-4 w-4" /> Tabela de preços
+                    </label>
+                    <div
+                      role="radiogroup"
+                      aria-label="Moeda da tabela de preços"
+                      className="inline-flex rounded-lg bg-stone-100 p-0.5"
+                    >
+                      {(
+                        [
+                          { value: 'BRL', label: 'R$' },
+                          { value: 'USD', label: 'US$' },
+                        ] as const
+                      ).map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          role="radio"
+                          aria-checked={listCurrency === option.value}
+                          onClick={() => setListCurrency(option.value)}
+                          className={`rounded-md px-2.5 py-0.5 text-xs font-bold transition-colors ${
+                            listCurrency === option.value
+                              ? option.value === 'USD'
+                                ? 'bg-blue-600 text-white shadow-sm'
+                                : 'bg-emerald-600 text-white shadow-sm'
+                              : 'text-stone-600 hover:bg-white'
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <select
+                    id="saved-formulas-price-list"
+                    value={selectedPriceListId}
+                    onChange={(e) => setSelectedPriceListId(e.target.value)}
+                    className={selectClass}
+                  >
+                    {compatiblePriceLists.length > 0 ? (
+                      compatiblePriceLists.map((list) => (
+                        <option key={list.id} value={list.id}>
+                          {list.name}
+                        </option>
+                      ))
+                    ) : (
+                      <option value="">
+                        {!selectedLocalId
+                          ? 'Selecione o local primeiro'
+                          : listCurrency === 'USD'
+                            ? 'Sem tabela em dólar para este local'
+                            : 'Sem tabela para este local'}
+                      </option>
+                    )}
+                  </select>
+                </div>
+                <label className="block md:col-span-2 xl:col-span-1">
+                  <span className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-stone-500">
+                    <Search className="h-4 w-4" /> Pesquisar
+                  </span>
+                  <input
+                    type="search"
+                    value={formulaSearch}
+                    onChange={(event) => setFormulaSearch(event.target.value)}
+                    placeholder="Nome, NPK, código BAT, produto ou marca…"
+                    className={selectClass}
+                  />
+                </label>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-stone-100 pt-4">
                 <div
-                  role="radiogroup"
-                  aria-label="Moeda da tabela de preços"
-                  className="inline-flex rounded-lg bg-stone-100 p-0.5"
+                  role="tablist"
+                  aria-label="Situação das batidas"
+                  className="inline-flex rounded-xl bg-stone-100 p-1"
                 >
                   {(
                     [
-                      { value: 'BRL', label: 'R$' },
-                      { value: 'USD', label: 'US$' },
+                      ['ativas', `Ativas (${formulas.length})`],
+                      ['arquivadas', `Arquivadas (${archivedFormulas.length})`],
                     ] as const
-                  ).map((option) => (
+                  ).map(([value, label]) => (
                     <button
-                      key={option.value}
+                      key={value}
                       type="button"
-                      role="radio"
-                      aria-checked={listCurrency === option.value}
-                      onClick={() => setListCurrency(option.value)}
-                      className={`rounded-md px-2.5 py-0.5 text-xs font-bold transition-colors ${
-                        listCurrency === option.value
-                          ? option.value === 'USD'
-                            ? 'bg-blue-600 text-white shadow-sm'
-                            : 'bg-emerald-600 text-white shadow-sm'
-                          : 'text-stone-600 hover:bg-white'
+                      role="tab"
+                      aria-selected={view === value}
+                      onClick={() => setView(value)}
+                      className={`rounded-lg px-4 py-2 text-sm font-bold transition-colors ${
+                        view === value
+                          ? 'bg-white text-stone-900 shadow-sm'
+                          : 'text-stone-500 hover:text-stone-800'
                       }`}
                     >
-                      {option.label}
+                      {label}
                     </button>
                   ))}
                 </div>
+                {view === 'ativas' && filteredFormulas.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={toggleSelectAll}
+                    className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-stone-600 hover:bg-stone-100"
+                  >
+                    {allSelected ? (
+                      <CheckSquare className="h-4 w-4 text-emerald-600" />
+                    ) : (
+                      <Square className="h-4 w-4" />
+                    )}
+                    {allSelected
+                      ? 'Desmarcar todas'
+                      : `Selecionar todas${normalizedSearch ? ' da busca' : ''} (${filteredFormulas.length})`}
+                  </button>
+                )}
               </div>
-              <select
-                id="saved-formulas-price-list"
-                value={selectedPriceListId}
-                onChange={(e) => setSelectedPriceListId(e.target.value)}
-                className={selectClass}
-              >
-                {compatiblePriceLists.length > 0 ? (
-                  compatiblePriceLists.map((list) => (
-                    <option key={list.id} value={list.id}>
-                      {list.name}
-                    </option>
-                  ))
-                ) : (
-                  <option value="">
-                    {!selectedLocalId
-                      ? 'Selecione o local primeiro'
-                      : listCurrency === 'USD'
-                        ? 'Sem tabela em dólar para este local'
-                        : 'Sem tabela para este local'}
-                  </option>
-                )}
-              </select>
-            </div>
-            <label className="block md:col-span-2 xl:col-span-1">
-              <span className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-stone-500">
-                <Search className="h-4 w-4" /> Pesquisar
-              </span>
-              <input
-                type="search"
-                value={formulaSearch}
-                onChange={(event) => setFormulaSearch(event.target.value)}
-                placeholder="Nome, NPK, código BAT, produto ou marca…"
-                className={selectClass}
-              />
-            </label>
-          </div>
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-stone-100 pt-4">
-            <div
-              role="tablist"
-              aria-label="Situação das batidas"
-              className="inline-flex rounded-xl bg-stone-100 p-1"
-            >
-              {(
-                [
-                  ['ativas', `Ativas (${formulas.length})`],
-                  ['arquivadas', `Arquivadas (${archivedFormulas.length})`],
-                ] as const
-              ).map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  role="tab"
-                  aria-selected={view === value}
-                  onClick={() => setView(value)}
-                  className={`rounded-lg px-4 py-2 text-sm font-bold transition-colors ${
-                    view === value
-                      ? 'bg-white text-stone-900 shadow-sm'
-                      : 'text-stone-500 hover:text-stone-800'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            {view === 'ativas' && filteredFormulas.length > 0 && (
-              <button
-                type="button"
-                onClick={toggleSelectAll}
-                className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-stone-600 hover:bg-stone-100"
-              >
-                {allSelected ? (
-                  <CheckSquare className="h-4 w-4 text-emerald-600" />
-                ) : (
-                  <Square className="h-4 w-4" />
-                )}
-                {allSelected
-                  ? 'Desmarcar todas'
-                  : `Selecionar todas${normalizedSearch ? ' da busca' : ''} (${filteredFormulas.length})`}
-              </button>
-            )}
-          </div>
-        </section>
+            </section>
 
-        {/* Barra de seleção */}
-        {view === 'ativas' && selectedFormulas.length > 0 && (
-          <section className="sticky top-2 z-20 flex flex-col gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/95 p-4 shadow-md backdrop-blur lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p className="text-[15px] font-black text-emerald-950">
-                {selectedFormulas.length} batida(s) selecionada(s)
-              </p>
-              <button
-                type="button"
-                onClick={() => setSelectedFormulas([])}
-                className="text-sm font-semibold text-emerald-800 underline-offset-2 hover:underline"
-              >
-                Limpar seleção
-              </button>
-            </div>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-              <label className="flex min-w-64 flex-col gap-1 text-xs font-bold uppercase tracking-wide text-emerald-800">
-                Revisar uma batida antes do relatório
-                <select
-                  value={formulaToUpdateId}
-                  onChange={(event) => setFormulaToUpdateId(event.target.value)}
-                  className="h-10 rounded-lg border border-emerald-300 bg-white px-3 text-sm font-medium normal-case tracking-normal text-stone-700"
-                >
-                  {selectedFormulas.map((id) => {
-                    const formula = formulas.find((item) => item.id === id);
-                    if (!formula) return null;
-                    const blocked = linhasDiferenciadas[formula.id] === true;
+            {/* Barra de seleção */}
+            {view === 'ativas' && selectedFormulas.length > 0 && (
+              <section className="sticky top-2 z-20 flex flex-col gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/95 p-4 shadow-md backdrop-blur lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                  <p className="text-[15px] font-black text-emerald-950">
+                    {selectedFormulas.length} batida(s) selecionada(s)
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedFormulas([])}
+                    className="text-sm font-semibold text-emerald-800 underline-offset-2 hover:underline"
+                  >
+                    Limpar seleção
+                  </button>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                  <label className="flex min-w-64 flex-col gap-1 text-xs font-bold uppercase tracking-wide text-emerald-800">
+                    Revisar uma batida antes do relatório
+                    <select
+                      value={formulaToUpdateId}
+                      onChange={(event) => setFormulaToUpdateId(event.target.value)}
+                      className="h-10 rounded-lg border border-emerald-300 bg-white px-3 text-sm font-medium normal-case tracking-normal text-stone-700"
+                    >
+                      {selectedFormulas.map((id) => {
+                        const formula = formulas.find((item) => item.id === id);
+                        if (!formula) return null;
+                        const blocked = linhasDiferenciadas[formula.id] === true;
+                        return (
+                          <option key={formula.id} value={formula.id} disabled={blocked}>
+                            {formula.name}
+                            {blocked ? ' — linha diferenciada' : ''}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const formula = formulas.find((item) => item.id === formulaToUpdateId);
+                      if (formula) openFormulaEditor(formula);
+                    }}
+                    disabled={!formulaToUpdateId}
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-emerald-300 bg-white px-4 text-sm font-bold text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Beaker className="h-4 w-4" /> Atualizar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openReport}
+                    disabled={!selectedLocalId || !selectedList}
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-stone-300"
+                  >
+                    <FileText className="h-4 w-4" /> Gerar proposta de preços
+                  </button>
+                </div>
+              </section>
+            )}
+
+            {formulaInEditor && (
+              <section className="rounded-2xl border-2 border-emerald-300 bg-stone-50 p-3 shadow-lg sm:p-5">
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-wider text-emerald-700">
+                      Atualização rápida da batida
+                    </p>
+                    <h3 className="text-lg font-bold text-stone-900">{formulaInEditor.name}</h3>
+                    <p className="text-sm text-stone-600">
+                      A calculadora foi aberta aqui com o local e a tabela de preços selecionados.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setFormulaInEditor(null)}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm font-bold text-stone-700 hover:bg-stone-100"
+                  >
+                    <X className="h-4 w-4" /> Fechar calculadora
+                  </button>
+                </div>
+                <SimplifiedCalculatorBeta
+                  key={`${formulaInEditor.id}-${selectedLocalId}-${selectedPriceListId}-${listCurrency}`}
+                  currentUser={currentUser}
+                  embedded
+                  initialFormulaToLoad={formulaInEditor}
+                  initialBranchId={locais.find((local) => local.id === selectedLocalId)?.filial_id}
+                  initialLoadingLocationId={selectedLocalId}
+                  initialPriceListId={selectedPriceListId}
+                  initialPriceListCurrency={listCurrency}
+                  onSavedFormulaSuccess={() => {
+                    setFormulaInEditor(null);
+                    void loadData();
+                  }}
+                />
+              </section>
+            )}
+
+            {filteredFormulas.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-stone-300 bg-white p-12 text-center">
+                <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-full bg-stone-100">
+                  {view === 'ativas' ? (
+                    <Save className="h-7 w-7 text-stone-400" />
+                  ) : (
+                    <Archive className="h-7 w-7 text-stone-400" />
+                  )}
+                </div>
+                <h3 className="mb-1 text-lg font-bold text-stone-800">
+                  {normalizedSearch
+                    ? 'Nenhuma batida encontrada para esta busca'
+                    : view === 'ativas'
+                      ? 'Nenhuma batida salva'
+                      : 'Nenhuma batida arquivada'}
+                </h3>
+                <p className="mx-auto max-w-md text-[15px] text-stone-500">
+                  {view === 'ativas'
+                    ? 'Na Calculadora, faça uma batida e clique em "Salvar nova batida".'
+                    : 'Batidas arquivadas aparecem aqui e podem ser restauradas a qualquer momento.'}
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {pagination.pageItems.map((formula) => {
+                    const results = getFormulaCost(formula, selectedList);
+                    const isArchived = view === 'arquivadas';
+                    const isSelected = !isArchived && selectedFormulas.includes(formula.id);
+                    const isLinhaDiferenciada = linhasDiferenciadas[formula.id] === true;
+                    const usedMaterials = [
+                      ...formula.macros
+                        .filter((m) => m.quantity > 0)
+                        .map((m) => ({ ...m, kind: 'macro' as const })),
+                      ...formula.micros
+                        .filter((m) => m.quantity > 0)
+                        .map((m) => ({ ...m, kind: 'micro' as const })),
+                    ];
+                    const microTargets = Object.entries(formula.targetMicros || {}).filter(
+                      ([, value]) => Number(value) > 0
+                    );
                     return (
-                      <option key={formula.id} value={formula.id} disabled={blocked}>
-                        {formula.name}
-                        {blocked ? ' — linha diferenciada' : ''}
-                      </option>
+                      <article
+                        key={formula.id}
+                        className={`flex flex-col overflow-hidden rounded-2xl border bg-white shadow-sm transition-all hover:shadow-md ${
+                          isSelected
+                            ? 'border-emerald-500 ring-2 ring-emerald-200'
+                            : isArchived
+                              ? 'border-stone-200 bg-stone-50/60'
+                              : 'border-stone-200'
+                        }`}
+                      >
+                        <header className="flex items-start gap-3 p-4 pb-3">
+                          {!isArchived && (
+                            <button
+                              type="button"
+                              onClick={() => toggleSelectFormula(formula.id)}
+                              aria-pressed={isSelected}
+                              aria-label={`Selecionar ${formula.name}`}
+                              className="mt-0.5 shrink-0 text-stone-400 hover:text-emerald-600"
+                            >
+                              {isSelected ? (
+                                <CheckSquare className="h-5 w-5 text-emerald-600" />
+                              ) : (
+                                <Square className="h-5 w-5" />
+                              )}
+                            </button>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="mb-1 flex flex-wrap items-center gap-1.5">
+                              {formula.id_numeric != null && (
+                                <span className="rounded-md bg-emerald-50 px-1.5 py-0.5 font-mono text-xs font-bold text-emerald-700">
+                                  {formatId(formula.id_numeric, 'BAT-')}
+                                </span>
+                              )}
+                              {isLinhaDiferenciada && (
+                                <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-xs font-bold text-amber-800">
+                                  <Star className="h-3 w-3" /> Linha diferenciada
+                                </span>
+                              )}
+                              {isArchived && formula.arquivadaEm && (
+                                <span className="rounded-md bg-stone-200 px-1.5 py-0.5 text-xs font-bold text-stone-700">
+                                  Arquivada em{' '}
+                                  {new Date(formula.arquivadaEm).toLocaleDateString('pt-BR')}
+                                </span>
+                              )}
+                            </div>
+                            <h3 className="text-[15px] font-bold leading-snug text-stone-900">
+                              {formula.name}
+                            </h3>
+                            <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-stone-500">
+                              <span className="inline-flex items-center gap-1">
+                                <UserIcon className="h-3 w-3" /> {formula.userName}
+                              </span>
+                              <span className="inline-flex items-center gap-1">
+                                <Calendar className="h-3 w-3" />
+                                {new Date(formula.date).toLocaleDateString('pt-BR')}
+                              </span>
+                            </p>
+                          </div>
+                          {canArchive && !isArchived && (
+                            <button
+                              type="button"
+                              onClick={() => void handleArchive(formula)}
+                              disabled={archivingId === formula.id}
+                              className="shrink-0 rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700 disabled:opacity-40"
+                              title="Arquivar batida"
+                              aria-label={`Arquivar ${formula.name}`}
+                            >
+                              <Archive className="h-4 w-4" />
+                            </button>
+                          )}
+                        </header>
+
+                        <div className="space-y-3 px-4 pb-4">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="rounded-lg bg-stone-900 px-2.5 py-1 font-mono text-[15px] font-bold text-white">
+                              {formula.targetFormula || '—'}
+                            </span>
+                            {microTargets.map(([name, value]) => (
+                              <span
+                                key={name}
+                                className="rounded-md border border-cyan-200 bg-cyan-50 px-1.5 py-0.5 text-xs font-bold text-cyan-800"
+                              >
+                                {name} {Number(value).toFixed(2)}%
+                              </span>
+                            ))}
+                          </div>
+
+                          <div className="rounded-xl border border-stone-100 bg-stone-50">
+                            <p className="flex justify-between border-b border-stone-100 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-stone-500">
+                              <span>Composição</span>
+                              <span>{usedMaterials.length} produto(s)</span>
+                            </p>
+                            <ul className="max-h-52 divide-y divide-stone-100 overflow-y-auto">
+                              {usedMaterials.map((material) => (
+                                <li
+                                  key={material.id}
+                                  className="flex items-center justify-between gap-2 px-3 py-1.5 text-sm"
+                                >
+                                  <span className="flex min-w-0 items-center gap-1.5 text-stone-700">
+                                    {material.kind === 'macro' ? (
+                                      <Package className="h-3.5 w-3.5 shrink-0 text-stone-400" />
+                                    ) : (
+                                      <Zap className="h-3.5 w-3.5 shrink-0 text-cyan-500" />
+                                    )}
+                                    <span className="truncate">{material.name}</span>
+                                  </span>
+                                  <span className="shrink-0 font-mono font-bold tabular-nums text-stone-900">
+                                    {Number(material.quantity).toLocaleString('pt-BR', {
+                                      maximumFractionDigits: 2,
+                                    })}{' '}
+                                    kg
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+
+                          {results.missingItems.length > 0 && selectedList && (
+                            <div className="flex items-start gap-2 rounded-lg border border-red-100 bg-red-50 p-2 text-xs text-red-700">
+                              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                              <span>
+                                <strong>Sem preço nesta tabela:</strong>{' '}
+                                {results.missingItems.join(', ')}.
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        <footer className="mt-auto flex items-end justify-between gap-3 border-t border-stone-100 bg-stone-50/70 px-4 py-3">
+                          <div>
+                            <p className="text-xs font-semibold text-stone-500">
+                              Custo por tonelada
+                            </p>
+                            <p className="text-lg font-black tabular-nums text-stone-900">
+                              {selectedList
+                                ? formatPricingMoney(results.total, selectedCurrency)
+                                : 'Selecione uma tabela'}
+                            </p>
+                          </div>
+                          {isArchived ? (
+                            canArchive && (
+                              <button
+                                type="button"
+                                onClick={() => void handleRestore(formula)}
+                                disabled={archivingId === formula.id}
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+                              >
+                                <ArchiveRestore className="h-4 w-4" /> Restaurar
+                              </button>
+                            )
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => openFormulaEditor(formula)}
+                              disabled={isLinhaDiferenciada || !selectedLocalId || !selectedList}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm font-bold text-stone-700 hover:border-emerald-500 hover:text-emerald-700 disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-400"
+                              title={
+                                isLinhaDiferenciada
+                                  ? 'A composição de produtos de linha diferenciada é protegida'
+                                  : !selectedLocalId
+                                    ? 'Selecione o local de carregamento'
+                                    : !selectedList
+                                      ? 'Não existe lista de preços vinculada ao local'
+                                      : 'Atualizar esta batida nesta página'
+                              }
+                            >
+                              <Beaker className="h-4 w-4" />
+                              {isLinhaDiferenciada ? 'Protegida' : 'Atualizar'}
+                            </button>
+                          )}
+                        </footer>
+                      </article>
                     );
                   })}
-                </select>
-              </label>
-              <button
-                type="button"
-                onClick={() => {
-                  const formula = formulas.find((item) => item.id === formulaToUpdateId);
-                  if (formula) openFormulaEditor(formula);
-                }}
-                disabled={!formulaToUpdateId}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-emerald-300 bg-white px-4 text-sm font-bold text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Beaker className="h-4 w-4" /> Atualizar
-              </button>
-              <button
-                type="button"
-                onClick={openReport}
-                disabled={!selectedLocalId || !selectedList}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-stone-300"
-              >
-                <FileText className="h-4 w-4" /> Gerar relatório de preços
-              </button>
-            </div>
-          </section>
-        )}
-
-        {formulaInEditor && (
-          <section className="rounded-2xl border-2 border-emerald-300 bg-stone-50 p-3 shadow-lg sm:p-5">
-            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-xs font-black uppercase tracking-wider text-emerald-700">
-                  Atualização rápida da batida
-                </p>
-                <h3 className="text-lg font-bold text-stone-900">{formulaInEditor.name}</h3>
-                <p className="text-sm text-stone-600">
-                  A calculadora foi aberta aqui com o local e a tabela de preços selecionados.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setFormulaInEditor(null)}
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm font-bold text-stone-700 hover:bg-stone-100"
-              >
-                <X className="h-4 w-4" /> Fechar calculadora
-              </button>
-            </div>
-            <SimplifiedCalculatorBeta
-              key={`${formulaInEditor.id}-${selectedLocalId}-${selectedPriceListId}-${listCurrency}`}
-              currentUser={currentUser}
-              embedded
-              initialFormulaToLoad={formulaInEditor}
-              initialBranchId={locais.find((local) => local.id === selectedLocalId)?.filial_id}
-              initialLoadingLocationId={selectedLocalId}
-              initialPriceListId={selectedPriceListId}
-              initialPriceListCurrency={listCurrency}
-              onSavedFormulaSuccess={() => {
-                setFormulaInEditor(null);
-                void loadData();
-              }}
-            />
-          </section>
-        )}
-
-        {filteredFormulas.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-stone-300 bg-white p-12 text-center">
-            <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-full bg-stone-100">
-              {view === 'ativas' ? (
-                <Save className="h-7 w-7 text-stone-400" />
-              ) : (
-                <Archive className="h-7 w-7 text-stone-400" />
-              )}
-            </div>
-            <h3 className="mb-1 text-lg font-bold text-stone-800">
-              {normalizedSearch
-                ? 'Nenhuma batida encontrada para esta busca'
-                : view === 'ativas'
-                  ? 'Nenhuma batida salva'
-                  : 'Nenhuma batida arquivada'}
-            </h3>
-            <p className="mx-auto max-w-md text-[15px] text-stone-500">
-              {view === 'ativas'
-                ? 'Na Calculadora, faça uma batida e clique em "Salvar nova batida".'
-                : 'Batidas arquivadas aparecem aqui e podem ser restauradas a qualquer momento.'}
-            </p>
-          </div>
-        ) : (
-          <>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {pagination.pageItems.map((formula) => {
-                const results = getFormulaCost(formula, selectedList);
-                const isArchived = view === 'arquivadas';
-                const isSelected = !isArchived && selectedFormulas.includes(formula.id);
-                const isLinhaDiferenciada = linhasDiferenciadas[formula.id] === true;
-                const usedMaterials = [
-                  ...formula.macros
-                    .filter((m) => m.quantity > 0)
-                    .map((m) => ({ ...m, kind: 'macro' as const })),
-                  ...formula.micros
-                    .filter((m) => m.quantity > 0)
-                    .map((m) => ({ ...m, kind: 'micro' as const })),
-                ];
-                const microTargets = Object.entries(formula.targetMicros || {}).filter(
-                  ([, value]) => Number(value) > 0
-                );
-                return (
-                  <article
-                    key={formula.id}
-                    className={`flex flex-col overflow-hidden rounded-2xl border bg-white shadow-sm transition-all hover:shadow-md ${
-                      isSelected
-                        ? 'border-emerald-500 ring-2 ring-emerald-200'
-                        : isArchived
-                          ? 'border-stone-200 bg-stone-50/60'
-                          : 'border-stone-200'
-                    }`}
-                  >
-                    <header className="flex items-start gap-3 p-4 pb-3">
-                      {!isArchived && (
-                        <button
-                          type="button"
-                          onClick={() => toggleSelectFormula(formula.id)}
-                          aria-pressed={isSelected}
-                          aria-label={`Selecionar ${formula.name}`}
-                          className="mt-0.5 shrink-0 text-stone-400 hover:text-emerald-600"
-                        >
-                          {isSelected ? (
-                            <CheckSquare className="h-5 w-5 text-emerald-600" />
-                          ) : (
-                            <Square className="h-5 w-5" />
-                          )}
-                        </button>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <div className="mb-1 flex flex-wrap items-center gap-1.5">
-                          {formula.id_numeric != null && (
-                            <span className="rounded-md bg-emerald-50 px-1.5 py-0.5 font-mono text-xs font-bold text-emerald-700">
-                              {formatId(formula.id_numeric, 'BAT-')}
-                            </span>
-                          )}
-                          {isLinhaDiferenciada && (
-                            <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-xs font-bold text-amber-800">
-                              <Star className="h-3 w-3" /> Linha diferenciada
-                            </span>
-                          )}
-                          {isArchived && formula.arquivadaEm && (
-                            <span className="rounded-md bg-stone-200 px-1.5 py-0.5 text-xs font-bold text-stone-700">
-                              Arquivada em{' '}
-                              {new Date(formula.arquivadaEm).toLocaleDateString('pt-BR')}
-                            </span>
-                          )}
-                        </div>
-                        <h3 className="text-[15px] font-bold leading-snug text-stone-900">
-                          {formula.name}
-                        </h3>
-                        <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-stone-500">
-                          <span className="inline-flex items-center gap-1">
-                            <UserIcon className="h-3 w-3" /> {formula.userName}
-                          </span>
-                          <span className="inline-flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
-                            {new Date(formula.date).toLocaleDateString('pt-BR')}
-                          </span>
-                        </p>
-                      </div>
-                      {canArchive && !isArchived && (
-                        <button
-                          type="button"
-                          onClick={() => void handleArchive(formula)}
-                          disabled={archivingId === formula.id}
-                          className="shrink-0 rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700 disabled:opacity-40"
-                          title="Arquivar batida"
-                          aria-label={`Arquivar ${formula.name}`}
-                        >
-                          <Archive className="h-4 w-4" />
-                        </button>
-                      )}
-                    </header>
-
-                    <div className="space-y-3 px-4 pb-4">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="rounded-lg bg-stone-900 px-2.5 py-1 font-mono text-[15px] font-bold text-white">
-                          {formula.targetFormula || '—'}
-                        </span>
-                        {microTargets.map(([name, value]) => (
-                          <span
-                            key={name}
-                            className="rounded-md border border-cyan-200 bg-cyan-50 px-1.5 py-0.5 text-xs font-bold text-cyan-800"
-                          >
-                            {name} {Number(value).toFixed(2)}%
-                          </span>
-                        ))}
-                      </div>
-
-                      <div className="rounded-xl border border-stone-100 bg-stone-50">
-                        <p className="flex justify-between border-b border-stone-100 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-stone-500">
-                          <span>Composição</span>
-                          <span>{usedMaterials.length} produto(s)</span>
-                        </p>
-                        <ul className="max-h-52 divide-y divide-stone-100 overflow-y-auto">
-                          {usedMaterials.map((material) => (
-                            <li
-                              key={material.id}
-                              className="flex items-center justify-between gap-2 px-3 py-1.5 text-sm"
-                            >
-                              <span className="flex min-w-0 items-center gap-1.5 text-stone-700">
-                                {material.kind === 'macro' ? (
-                                  <Package className="h-3.5 w-3.5 shrink-0 text-stone-400" />
-                                ) : (
-                                  <Zap className="h-3.5 w-3.5 shrink-0 text-cyan-500" />
-                                )}
-                                <span className="truncate">{material.name}</span>
-                              </span>
-                              <span className="shrink-0 font-mono font-bold tabular-nums text-stone-900">
-                                {Number(material.quantity).toLocaleString('pt-BR', {
-                                  maximumFractionDigits: 2,
-                                })}{' '}
-                                kg
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-
-                      {results.missingItems.length > 0 && selectedList && (
-                        <div className="flex items-start gap-2 rounded-lg border border-red-100 bg-red-50 p-2 text-xs text-red-700">
-                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                          <span>
-                            <strong>Sem preço nesta tabela:</strong>{' '}
-                            {results.missingItems.join(', ')}.
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    <footer className="mt-auto flex items-end justify-between gap-3 border-t border-stone-100 bg-stone-50/70 px-4 py-3">
-                      <div>
-                        <p className="text-xs font-semibold text-stone-500">Custo por tonelada</p>
-                        <p className="text-lg font-black tabular-nums text-stone-900">
-                          {selectedList
-                            ? formatPricingMoney(results.total, selectedCurrency)
-                            : 'Selecione uma tabela'}
-                        </p>
-                      </div>
-                      {isArchived ? (
-                        canArchive && (
-                          <button
-                            type="button"
-                            onClick={() => void handleRestore(formula)}
-                            disabled={archivingId === formula.id}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
-                          >
-                            <ArchiveRestore className="h-4 w-4" /> Restaurar
-                          </button>
-                        )
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => openFormulaEditor(formula)}
-                          disabled={isLinhaDiferenciada || !selectedLocalId || !selectedList}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm font-bold text-stone-700 hover:border-emerald-500 hover:text-emerald-700 disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-400"
-                          title={
-                            isLinhaDiferenciada
-                              ? 'A composição de produtos de linha diferenciada é protegida'
-                              : !selectedLocalId
-                                ? 'Selecione o local de carregamento'
-                                : !selectedList
-                                  ? 'Não existe lista de preços vinculada ao local'
-                                  : 'Atualizar esta batida nesta página'
-                          }
-                        >
-                          <Beaker className="h-4 w-4" />
-                          {isLinhaDiferenciada ? 'Protegida' : 'Atualizar'}
-                        </button>
-                      )}
-                    </footer>
-                  </article>
-                );
-              })}
-            </div>
-            <Pagination
-              page={pagination.page}
-              totalPages={pagination.totalPages}
-              totalItems={pagination.totalItems}
-              firstItemNumber={pagination.firstItemNumber}
-              lastItemNumber={pagination.lastItemNumber}
-              pageSize={pagination.pageSize}
-              itemLabel="batidas"
-              onPageChange={pagination.setPage}
-              onPageSizeChange={pagination.setPageSize}
-            />
+                </div>
+                <Pagination
+                  page={pagination.page}
+                  totalPages={pagination.totalPages}
+                  totalItems={pagination.totalItems}
+                  firstItemNumber={pagination.firstItemNumber}
+                  lastItemNumber={pagination.lastItemNumber}
+                  pageSize={pagination.pageSize}
+                  itemLabel="batidas"
+                  onPageChange={pagination.setPage}
+                  onPageSizeChange={pagination.setPageSize}
+                />
+              </>
+            )}
           </>
         )}
       </div>
@@ -1667,8 +1719,9 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
         selectedLocal={locais.find((local) => local.id === selectedLocalId)}
         currentUser={currentUser}
         getFormulaCost={getFormulaCost}
-        companyName={appSettings.companyName}
+        settings={appSettings}
         onClose={() => setIsReportModalOpen(false)}
+        onPropostaCriada={() => setPropostasReloadKey((value) => value + 1)}
       />
     </React.Fragment>
   );

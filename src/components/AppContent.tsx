@@ -158,7 +158,12 @@ function AppContentRoute({
     if (activeTab === 'branches' && hasPermission('branches')) {
       return <BranchManager currentUser={currentUser} />;
     }
-    if (activeTab === 'settings' && hasPermission('settings')) return <SettingsManager />;
+    if (activeTab === 'settings' && hasPermission('settings'))
+      return (
+        <SettingsManager
+          canEditCompany={currentUser.role === 'master' || currentUser.role === 'admin'}
+        />
+      );
     if (activeTab === 'users' && hasPermission('users')) {
       return <UserManager currentUser={currentUser} />;
     }
