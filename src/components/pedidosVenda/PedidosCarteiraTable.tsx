@@ -91,6 +91,7 @@ export function PedidosCarteiraTable({
                       {pedido.cliente_nome || 'Cliente não informado'}
                     </p>
                     <p className="truncate text-xs text-stone-500">
+                      {pedido.regiao_nome ? `${pedido.regiao_nome} · ` : ''}
                       {pedido.vendedor_nome ? `Vendedor: ${pedido.vendedor_nome}` : ''}
                       {pedido.cliente_ie ? ` · I.E. ${pedido.cliente_ie}` : ''}
                     </p>
@@ -167,6 +168,9 @@ export function PedidosCarteiraTable({
                   <p className="truncate text-sm font-semibold text-stone-700">
                     {pedido.cliente_nome || 'Cliente não informado'}
                   </p>
+                  {pedido.regiao_nome && (
+                    <p className="truncate text-xs text-stone-500">Região: {pedido.regiao_nome}</p>
+                  )}
                 </div>
                 <span
                   className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-bold ${STATUS_STYLE[pedido.status]}`}

@@ -11,6 +11,8 @@ import { getProdutosFormulados, ProdutoFormulado } from '../services/produtosFor
 import { getEmbalagens } from '../services/embalagensService';
 import { closeModalOnBackdrop } from '../utils/modalUtils';
 import { useToast } from './Toast';
+import PricingRegionField, { pricingRegionProblem } from './regions/PricingRegionField';
+import { defaultRegionId, useMyRegions } from '../hooks/useMyRegions';
 import {
   formatDatePtBr,
   getPricingDueDate,
@@ -20,7 +22,7 @@ import {
 
 interface NovoPedidoVendaModalProps {
   pricing?: PricingRecord | null;
-  currentUser: { id: string; name: string };
+  currentUser: { id: string; name: string; role?: string };
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -71,7 +73,9 @@ export default function NovoPedidoVendaModal({
 
   // Client autocomplete
   const [clientSearch, setClientSearch] = useState(pricing?.factors?.client?.name ?? '');
-  const [clientId, setClientId] = useState<string>('');
+  // O cliente da precificação já vem escolhido (antes só o nome era preenchido e o
+  // pedido era gravado sem cliente).
+  const [clientId, setClientId] = useState<string>(pricing?.factors?.client?.id ?? '');
   const [showClientDropdown, setShowClientDropdown] = useState(false);
   const clientInputRef = useRef<HTMLInputElement>(null);
 
@@ -94,6 +98,26 @@ export default function NovoPedidoVendaModal({
   const [valorFrete, setValorFrete] = useState<number | ''>(getInitialValorFrete(pricing));
 
   const [observacoes, setObservacoes] = useState('');
+
+  // Região: o pedido é registrado pela região. Vem da precificação; num novo
+  // emitente pode ir para outra região do usuário (é assim que o pedido muda de região).
+  const myRegions = useMyRegions(currentUser);
+  const orderRegions = useMemo(() => {
+    const pricingRegion = myRegions.all.find(
+      (region) => region.id === pricing?.regionId && region.ativo
+    );
+    const options =
+      pricingRegion && !myRegions.options.some((region) => region.id === pricingRegion.id)
+        ? [pricingRegion, ...myRegions.options]
+        : myRegions.options;
+    return { ...myRegions, options };
+  }, [myRegions, pricing?.regionId]);
+  const [regionId, setRegionId] = useState<string>(pricing?.regionId ?? '');
+  useEffect(() => {
+    if (orderRegions.loading || orderRegions.options.some((region) => region.id === regionId))
+      return;
+    setRegionId(defaultRegionId(orderRegions.options, orderRegions.principalId));
+  }, [orderRegions, regionId]);
   // Dados comerciais
   const [safra, setSafra] = useState('');
   const [previsaoEntrega, setPrevisaoEntrega] = useState('');
@@ -282,6 +306,11 @@ export default function NovoPedidoVendaModal({
       showError('Informe o número do pedido.');
       return;
     }
+    const regionProblem = pricingRegionProblem(orderRegions, regionId);
+    if (regionProblem) {
+      showError(regionProblem.replace('da precificação', 'do pedido'));
+      return;
+    }
     if (emitente === 'custom' && (!emitenteCustom || parseInt(emitenteCustom, 10) < 1)) {
       showError('Informe um emitente válido.');
       return;
@@ -325,6 +354,9 @@ export default function NovoPedidoVendaModal({
           data_pedido: dataPedido || undefined,
           data_vencimento: dataVencimento || undefined,
           cliente_id: clientId || undefined,
+          // Filial e região vêm da precificação; o banco confere e herda se faltar.
+          filial_id: pricing?.factors?.branchId || undefined,
+          region_id: regionId || undefined,
           quantidade_real: totalTon,
           preco_unitario: precoPrincipal,
           tipo_frete: tipoFrete,
@@ -458,6 +490,14 @@ export default function NovoPedidoVendaModal({
               </ul>
             )}
           </div>
+
+          <PricingRegionField
+            id="pedido-region"
+            regions={orderRegions}
+            value={regionId}
+            onChange={setRegionId}
+            disabled={saving}
+          />
 
           {/* Nº Pedido + Emitente */}
           <div className="grid grid-cols-2 gap-3">

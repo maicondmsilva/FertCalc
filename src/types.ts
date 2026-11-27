@@ -775,6 +775,9 @@ export interface PedidoVenda {
   local_entrega?: string;
   numero_contrato?: string;
   /** Vindos da carteira (consulta com junções) */
+  /** Região dona do pedido (para mudar de região, cria-se um novo emitente). */
+  region_id?: string | null;
+  regiao_nome?: string;
   vendedor_nome?: string;
   ultima_movimentacao?: string;
   itens?: PedidoVendaItem[];

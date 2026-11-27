@@ -113,6 +113,8 @@ function mapPedido(d: Record<string, unknown>): PedidoVenda {
     local_entrega: (d.local_entrega as string | null) ?? undefined,
     numero_contrato: (d.numero_contrato as string | null) ?? undefined,
     vendedor_nome: (d.vendedor_nome as string | null) ?? undefined,
+    region_id: (d.region_id as string | null) ?? null,
+    regiao_nome: (d.regiao_nome as string | null) ?? undefined,
     ultima_movimentacao: (d.ultima_movimentacao as string | null) ?? undefined,
   };
 }
@@ -406,6 +408,7 @@ export async function createPedidoVenda(
       previsao_entrega: pedido.previsao_entrega ?? null,
       local_entrega: pedido.local_entrega ?? null,
       numero_contrato: pedido.numero_contrato ?? null,
+      region_id: pedido.region_id ?? null,
     },
     p_itens: itens.map((item) => ({
       produto_nome: item.produto_nome,

@@ -242,6 +242,7 @@ export function PedidoDetailPanel({
               {client?.name || pedido.cliente_nome || 'Cliente não informado'}
             </p>
             <p className="text-xs text-stone-500">
+              {pedido.regiao_nome ? `Região: ${pedido.regiao_nome} · ` : ''}
               {pedido.vendedor_nome ? `Vendedor: ${pedido.vendedor_nome} · ` : ''}
               Pedido de {formatDate(pedido.data_pedido || pedido.criado_em)}
             </p>
