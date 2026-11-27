@@ -20,7 +20,7 @@ export function defaultRegionId(options: Region[], principalId: string): string 
 }
 
 /** Regiões do usuário logado, para a calculadora e as precificações. */
-export function useMyRegions(user: Pick<User, 'id' | 'role'>): MyRegions {
+export function useMyRegions(user: { id: string; role?: User['role'] | string }): MyRegions {
   const [state, setState] = useState<MyRegions>({
     options: [],
     all: [],
