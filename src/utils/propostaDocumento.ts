@@ -453,7 +453,7 @@ const HEX_BRAND = 'FF105E3A';
 /** Tamanho da logo no Excel mantendo a proporção (lê largura/altura do PNG). */
 export function tamanhoLogoExcel(base64: string, maxWidth = 150, maxHeight = 60) {
   try {
-    const bytes = atob(base64.slice(0, 64));
+    const bytes = globalThis.atob(base64.slice(0, 64));
     if (bytes.slice(1, 4) === 'PNG') {
       const read = (offset: number) =>
         ((bytes.charCodeAt(offset) << 24) |

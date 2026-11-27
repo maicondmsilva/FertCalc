@@ -97,7 +97,7 @@ describe('logo e nome da empresa', () => {
       137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 1, 44, 0, 0, 0, 100, 8, 6,
       0, 0, 0,
     ]);
-    const base64 = btoa(String.fromCharCode(...header));
+    const base64 = globalThis.btoa(String.fromCharCode(...header));
     expect(tamanhoLogoExcel(base64)).toEqual({ width: 150, height: 50 });
   });
 });
