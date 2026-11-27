@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { ActiveModule } from '../navigation/appNavigation';
 import type { AppSettings } from '../types';
-import { APP_SETTINGS_UPDATED_EVENT, getAppSettings } from '../services/db';
+import { getAppSettings } from '../services/db';
+import { APP_SETTINGS_UPDATED_EVENT } from '../utils/appSettingsEvents';
 import { getCheckedCount, getPendingCount } from '../services/expenseService';
 
 const DEFAULT_APP_SETTINGS: AppSettings = {

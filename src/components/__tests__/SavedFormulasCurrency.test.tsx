@@ -47,6 +47,12 @@ vi.mock('../../services/embalagensService', () => ({
   getEmbalagens: vi.fn().mockResolvedValue([]),
 }));
 vi.mock('../calculatorBeta/SimplifiedCalculatorBeta', () => ({ default: () => null }));
+vi.mock('../propostas/PropostasPanel', () => ({ default: () => null }));
+vi.mock('../../services/propostaService', () => ({
+  criarProposta: vi.fn(),
+  getProposta: vi.fn(),
+  registrarDocumentoProposta: vi.fn(),
+}));
 
 import SavedFormulas from '../SavedFormulas';
 

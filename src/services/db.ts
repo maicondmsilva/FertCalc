@@ -3,6 +3,7 @@
  * Central data access layer for all Supabase operations
  */
 
+import { APP_SETTINGS_UPDATED_EVENT } from '../utils/appSettingsEvents';
 import { emptyOnError } from './queryErrors';
 import { assertDeleted, toDeleteError } from '../utils/deleteErrors';
 import { supabase } from './supabase';
@@ -54,9 +55,6 @@ export async function getAppSettings(): Promise<AppSettings | null> {
     defaultFactorUSD: data.default_factor_usd == null ? 0 : Number(data.default_factor_usd),
   };
 }
-
-/** Evento disparado depois de salvar a Personalização (topo do sistema se atualiza). */
-export const APP_SETTINGS_UPDATED_EVENT = 'fertcalc:app-settings-updated';
 
 export async function saveAppSettings(settings: AppSettings): Promise<void> {
   const { data: existing } = await supabase.from('app_settings').select('id').limit(1).single();
