@@ -97,13 +97,25 @@ import { getNutrientes } from '../services/nutrientesService';
 /** Proposta aceita pelo cliente: vira uma precificação já preenchida. */
 export interface CalculatorProposalDraft {
   key: string;
-  formulas: Array<{ formula: SavedFormula; tons: number }>;
+  formulas: Array<{
+    formula: SavedFormula;
+    tons: number;
+    /** Condições comerciais gravadas na proposta para este produto. */
+    factors?: Partial<PricingFactors>;
+    /** Preço por tonelada enviado ao cliente (para conferir divergência). */
+    expectedPrice?: number;
+  }>;
+  /** Câmbio usado na proposta (lista em dólar). */
+  appliedExchangeRate?: number;
   clientId?: string;
   regionId?: string;
   loadingLocationId?: string;
   priceListId?: string;
   priceListCurrency?: PriceListCurrency;
 }
+
+/** Id das fórmulas abertas a partir de uma proposta (para comparar com o preço enviado). */
+export const proposalCalculationId = (index: number) => `proposta_${index}`;
 
 interface UseCalculatorProps {
   initialProposal?: CalculatorProposalDraft | null;
@@ -356,14 +368,16 @@ export function useCalculator({
       priceListId: initialProposal.priceListId,
       priceListCurrency: initialProposal.priceListCurrency,
       regionId: initialProposal.regionId,
+      appliedExchangeRate: initialProposal.appliedExchangeRate,
+      exchangeRateSource: initialProposal.appliedExchangeRate ? ('manual' as const) : undefined,
     };
     const defined = Object.fromEntries(
       Object.entries(shared).filter(([, value]) => value !== undefined && value !== '')
     );
     setFactors((prev) => ({ ...prev, ...defined }));
     setCalculations(
-      initialProposal.formulas.map(({ formula, tons }, index) => ({
-        id: `f_${Date.now()}_${index}`,
+      initialProposal.formulas.map(({ formula, tons, factors: itemFactors }, index) => ({
+        id: proposalCalculationId(index),
         savedFormulaId: formula.id,
         formula: formula.targetFormula,
         selected: true,
@@ -373,7 +387,13 @@ export function useCalculator({
         targetMicros: formula.targetMicros,
         modo_calculo: DEFAULT_CALCULATION_MODE,
         produtos_livres: [],
-        factors: { ...factors, ...defined, targetFormula: formula.targetFormula, totalTons: tons },
+        factors: {
+          ...factors,
+          ...defined,
+          ...(itemFactors || {}),
+          targetFormula: formula.targetFormula,
+          totalTons: tons,
+        },
         macros: formula.macros,
         micros: formula.micros,
       }))

@@ -1,38 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import {
-  getSavedFormulas,
-  getPriceLists,
-  getAppSettings,
-  getClients,
-  getBrands,
-} from '../services/db';
+import { getSavedFormulas, getPriceLists, getAppSettings, getBrands } from '../services/db';
 import { getLocaisAtivos } from '../services/locaisCarregamentoService';
-import {
-  getProdutoFormuladoBySavedFormulaId,
-  getProdutosFormulados,
-} from '../services/produtosFormuladosService';
+import { getProdutosFormulados } from '../services/produtosFormuladosService';
 import { setSavedFormulaArchived } from '../services/savedFormulaService';
 import Pagination from './ui/Pagination';
 import { usePagination } from '../hooks/usePagination';
-import { addHistoricoPrecos } from '../services/historicoPrecoService';
 import {
   SavedFormula,
   User,
   PriceList,
   PriceListCurrency,
   AppSettings,
-  Client,
-  Embalagem,
   Brand,
+  PricingFactors as SavedFormulaFactors,
 } from '../types';
-import { getEmbalagens } from '../services/embalagensService';
 import { LocalCarregamento } from '../types/carregamento';
 import { formatId } from '../utils/formatId';
-import { closeModalOnBackdrop } from '../utils/modalUtils';
 import {
   Beaker,
-  Trash2,
   Save,
   Calendar,
   Database,
@@ -49,863 +35,31 @@ import {
   X,
   Archive,
   ArchiveRestore,
-  FileSpreadsheet,
   ClipboardList,
 } from 'lucide-react';
 import PropostasPanel from './propostas/PropostasPanel';
-import { canCreatePropostas, permissoesProposta } from './propostas/propostaPermissions';
-import {
-  converterProposta,
-  criarProposta,
-  getProposta,
-  registrarDocumentoProposta,
-} from '../services/propostaService';
+import NovaPropostaModal from './propostas/NovaPropostaModal';
+import { permissoesProposta } from './propostas/propostaPermissions';
+import { converterProposta } from '../services/propostaService';
 import type { CalculatorProposalDraft } from '../hooks/useCalculator';
-import type { NovaProposta, Proposta } from '../types/proposta';
-import {
-  VALIDADE_PADRAO_DIAS,
-  formatNumeroProposta,
-  hojeIso,
-  problemaNovaProposta,
-  somarDias,
-} from '../utils/propostaModel';
-import { baixarExcelProposta, createPropostaPdf } from '../utils/propostaDocumento';
+import type { Proposta } from '../types/proposta';
+import { formatNumeroProposta } from '../utils/propostaModel';
 import { useToast } from './Toast';
 import { useConfirm } from '../hooks/useConfirm';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import {
-  calculateReportPrice,
-  DEFAULT_REPORT_COMMERCIAL_FACTORS,
   getFormulaUpdateProtection,
   getPriceListsForLoadingLocation,
-  ReportCommercialFactors,
 } from '../utils/savedFormulaWorkflow';
 import SimplifiedCalculatorBeta from './calculatorBeta/SimplifiedCalculatorBeta';
 import { formatPricingMoney } from '../utils/pricingCurrency';
 import { listHasCurrency, projectPriceList } from '../utils/priceListCurrency';
-import { saveOrSharePdf } from '../utils/pdfDelivery';
 
 interface SavedFormulasProps {
   currentUser: User;
 }
 
-interface ModalGerarRelatorioProps {
-  isOpen: boolean;
-  formulas: SavedFormula[];
-  selectedIds: string[];
-  selectedList: PriceList | undefined;
-  selectedLocal?: LocalCarregamento;
-  currentUser: User;
-  getFormulaCost: (
-    f: SavedFormula,
-    list: PriceList | undefined
-  ) => { total: number; missingItems: string[] };
-  settings: AppSettings;
-  onClose: () => void;
-  /** Avisa a página para recarregar a aba Propostas. */
-  onPropostaCriada?: () => void;
-}
-
-const addDaysToReportDate = (date: string, days: number) => {
-  if (!date) return '';
-  const result = new Date(`${date}T12:00:00`);
-  result.setDate(result.getDate() + Number(days || 0));
-  return result.toISOString().split('T')[0];
-};
-
-interface ReportFactorsFormProps {
-  id: string;
-  factors: ReportCommercialFactors;
-  embalagens: Embalagem[];
-  currency: PriceListCurrency;
-  exchangeRate?: number;
-  onChange: <K extends keyof ReportCommercialFactors>(
-    field: K,
-    value: ReportCommercialFactors[K]
-  ) => void;
-}
-
 const getListCurrency = (list?: PriceList): PriceListCurrency => list?.currency ?? 'BRL';
-
-function ReportFactorsForm({
-  id,
-  factors,
-  embalagens,
-  currency,
-  onChange,
-}: ReportFactorsFormProps) {
-  const selectedPackage = embalagens.find((item) => item.id === factors.embalagem_id);
-  const packageAdjustment = factors.embalagem_ajuste || 'nenhum';
-
-  const setPackageAdjustment = (adjustment: 'nenhum' | 'cobrar' | 'descontar') => {
-    onChange('embalagem_ajuste', adjustment);
-    if (!selectedPackage || adjustment === 'nenhum') {
-      onChange('embalagem_valor', 0);
-      return;
-    }
-    const registeredValue =
-      adjustment === 'cobrar'
-        ? Number(selectedPackage.valor_cobrar ?? selectedPackage.valor ?? 0)
-        : -Number(selectedPackage.valor_descontar ?? selectedPackage.valor ?? 0);
-    // Embalagem fica em reais por tonelada, também em listas em dólar.
-    onChange('embalagem_valor', registeredValue);
-  };
-
-  return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      <label className="text-xs font-medium text-stone-600">
-        Fator (×)
-        <input
-          type="number"
-          step="0.01"
-          value={factors.factor}
-          onChange={(event) => onChange('factor', Number(event.target.value || 0))}
-          className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2"
-        />
-      </label>
-      <label className="text-xs font-medium text-stone-600">
-        Desconto ({currency}/t)
-        <input
-          type="number"
-          step="0.01"
-          value={factors.discount || ''}
-          onChange={(event) => onChange('discount', Number(event.target.value || 0))}
-          className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2"
-        />
-      </label>
-      <label className="text-xs font-medium text-stone-600">
-        Alíquota (%)
-        <input
-          type="number"
-          step="0.01"
-          value={factors.taxRate || ''}
-          onChange={(event) => onChange('taxRate', Number(event.target.value || 0))}
-          className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2"
-        />
-      </label>
-      <label className="text-xs font-medium text-stone-600">
-        Comissão (%)
-        <input
-          type="number"
-          step="0.01"
-          value={factors.commission || ''}
-          onChange={(event) => onChange('commission', Number(event.target.value || 0))}
-          className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2"
-        />
-      </label>
-      <div className="text-xs font-medium text-stone-600">
-        Tipo de frete
-        <div className="mt-1 flex gap-2">
-          {(['CIF', 'FOB'] as const).map((type) => (
-            <button
-              key={type}
-              type="button"
-              onClick={() => onChange('tipoFrete', type)}
-              className={`flex-1 rounded-lg px-3 py-2 font-bold ${factors.tipoFrete === type ? 'bg-emerald-600 text-white' : 'bg-stone-100 text-stone-600'}`}
-            >
-              {type}
-            </button>
-          ))}
-        </div>
-      </div>
-      <label className="text-xs font-medium text-stone-600">
-        Frete (R$/t)
-        <input
-          type="number"
-          step="0.01"
-          value={factors.freight || ''}
-          onChange={(event) => onChange('freight', Number(event.target.value || 0))}
-          className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2"
-        />
-      </label>
-      <label className="text-xs font-medium text-stone-600">
-        Embalagem
-        <select
-          value={factors.embalagem_id || ''}
-          onChange={(event) => {
-            const embalagem = embalagens.find((item) => item.id === event.target.value);
-            onChange('embalagem_id', embalagem?.id || '');
-            onChange('embalagem_nome', embalagem?.nome || '');
-            onChange('embalagem_ajuste', 'nenhum');
-            onChange('embalagem_valor', 0);
-          }}
-          className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2"
-        >
-          <option value="">— Sem embalagem —</option>
-          {embalagens.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.nome}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="text-xs font-medium text-stone-600">
-        Ajuste da embalagem
-        <select
-          value={packageAdjustment}
-          disabled={!selectedPackage}
-          onChange={(event) =>
-            setPackageAdjustment(event.target.value as 'nenhum' | 'cobrar' | 'descontar')
-          }
-          className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 disabled:bg-stone-100"
-        >
-          <option value="nenhum">Sem ajuste</option>
-          <option value="cobrar" disabled={!selectedPackage?.cobrar}>
-            Cobrar
-          </option>
-          <option
-            value="descontar"
-            disabled={!(selectedPackage?.descontar ?? selectedPackage?.desconto)}
-          >
-            Descontar
-          </option>
-        </select>
-      </label>
-      <label className="text-xs font-medium text-stone-600">
-        Juros mensal (%)
-        <input
-          type="number"
-          step="0.01"
-          value={factors.monthlyInterestRate || ''}
-          onChange={(event) => onChange('monthlyInterestRate', Number(event.target.value || 0))}
-          className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2"
-        />
-      </label>
-      <div className="sm:col-span-2 lg:col-span-3">
-        <span className="text-xs font-medium text-stone-600">Condição de pagamento</span>
-        <div className="mt-1 flex flex-wrap gap-4">
-          <label className="flex items-center gap-2 text-xs">
-            <input
-              type="radio"
-              name={`payment-${id}`}
-              checked={(factors.paymentCondition || 'vencimento') === 'vencimento'}
-              onChange={() => onChange('paymentCondition', 'vencimento')}
-            />
-            Vencimento direto
-          </label>
-          <label className="flex items-center gap-2 text-xs">
-            <input
-              type="radio"
-              name={`payment-${id}`}
-              checked={factors.paymentCondition === 'ddf'}
-              onChange={() => onChange('paymentCondition', 'ddf')}
-            />
-            DDF
-          </label>
-        </div>
-      </div>
-      {(factors.paymentCondition || 'vencimento') === 'vencimento' ? (
-        <label className="text-xs font-medium text-stone-600">
-          Vencimento
-          <input
-            type="date"
-            value={factors.dueDate || ''}
-            onChange={(event) => onChange('dueDate', event.target.value)}
-            className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2"
-          />
-        </label>
-      ) : (
-        <>
-          <label className="text-xs font-medium text-stone-600">
-            Data de carregamento
-            <input
-              type="date"
-              value={factors.dataCarregamento || ''}
-              onChange={(event) => {
-                onChange('dataCarregamento', event.target.value);
-                onChange('dueDate', addDaysToReportDate(event.target.value, factors.ddfDias || 0));
-              }}
-              className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2"
-            />
-          </label>
-          <label className="text-xs font-medium text-stone-600">
-            Dias DDF
-            <input
-              type="number"
-              min="0"
-              value={factors.ddfDias || ''}
-              onChange={(event) => {
-                const days = Number(event.target.value || 0);
-                onChange('ddfDias', days);
-                onChange('dueDate', addDaysToReportDate(factors.dataCarregamento || '', days));
-              }}
-              className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2"
-            />
-          </label>
-        </>
-      )}
-      <label className="flex items-center gap-2 text-xs font-medium text-stone-600">
-        <input
-          type="checkbox"
-          checked={factors.exemptCurrentMonth}
-          onChange={(event) => onChange('exemptCurrentMonth', event.target.checked)}
-        />
-        Isentar juros do mês atual
-      </label>
-    </div>
-  );
-}
-
-function ModalGerarRelatorio({
-  isOpen,
-  formulas,
-  selectedIds,
-  selectedList,
-  selectedLocal,
-  currentUser,
-  getFormulaCost,
-  settings,
-  onClose,
-  onPropostaCriada,
-}: ModalGerarRelatorioProps) {
-  const { showError, showSuccess } = useToast();
-  const selectedFormulas = formulas.filter((f) => selectedIds.includes(f.id));
-  const [generating, setGenerating] = useState<'pdf' | 'excel' | null>(null);
-  const generatingPdf = generating !== null;
-  const [validaAte, setValidaAte] = useState(() => somarDias(hojeIso(), VALIDADE_PADRAO_DIAS));
-  const [observacoes, setObservacoes] = useState('');
-  const [createdProposal, setCreatedProposal] = useState<Proposta | null>(null);
-  const [applyToAll, setApplyToAll] = useState(true);
-  const [includeComposicao, setIncludeComposicao] = useState(false);
-  const [globalFactors, setGlobalFactors] = useState<ReportCommercialFactors>({
-    ...DEFAULT_REPORT_COMMERCIAL_FACTORS,
-  });
-  const [perFormulaFactors, setPerFormulaFactors] = useState<
-    Record<string, ReportCommercialFactors>
-  >({});
-  // Quantidade (t) de cada produto do relatório. Opcional: sem quantidade, o
-  // relatório mostra só o preço por tonelada.
-  const [quantities, setQuantities] = useState<Record<string, string>>({});
-
-  const [clients, setClients] = useState<Client[]>([]);
-  const [embalagens, setEmbalagens] = useState<Embalagem[]>([]);
-  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
-  const [clientSearch, setClientSearch] = useState('');
-  const [showClientResults, setShowClientResults] = useState(false);
-
-  useEffect(() => {
-    if (isOpen) {
-      void Promise.all([getClients(), getEmbalagens(true)])
-        .then(([nextClients, nextEmbalagens]) => {
-          setClients(nextClients);
-          setEmbalagens(nextEmbalagens);
-        })
-        .catch(() => {});
-      setSelectedClient(null);
-      setClientSearch('');
-      setApplyToAll(true);
-      setValidaAte(somarDias(hojeIso(), VALIDADE_PADRAO_DIAS));
-      setObservacoes('');
-      setCreatedProposal(null);
-      setGlobalFactors({ ...DEFAULT_REPORT_COMMERCIAL_FACTORS });
-      setQuantities({});
-      setPerFormulaFactors(
-        Object.fromEntries(
-          formulas
-            .filter((formula) => selectedIds.includes(formula.id))
-            .map((formula) => [formula.id, { ...DEFAULT_REPORT_COMMERCIAL_FACTORS }])
-        )
-      );
-    }
-  }, [isOpen, formulas, selectedIds]);
-
-  if (!isOpen) return null;
-
-  const getQuantity = (formulaId: string) =>
-    Number((quantities[formulaId] || '').replace(',', '.')) || 0;
-  const getFactors = (formulaId: string): ReportCommercialFactors => ({
-    ...(applyToAll
-      ? globalFactors
-      : perFormulaFactors[formulaId] || DEFAULT_REPORT_COMMERCIAL_FACTORS),
-    totalTons: getQuantity(formulaId),
-  });
-  const reportCurrency = getListCurrency(selectedList);
-
-  const calcPrecoFinal = (formula: SavedFormula): number => {
-    const { total } = getFormulaCost(formula, selectedList);
-    return calculateReportPrice(total, getFactors(formula.id), new Date(), {
-      currency: reportCurrency,
-      exchangeRate: selectedList?.exchangeRate,
-    });
-  };
-
-  const canCreateProposal = canCreatePropostas(currentUser);
-  const validityProblem = problemaNovaProposta({
-    validaAte,
-    quantidadeItens: selectedFormulas.length,
-    itensSemPreco: selectedFormulas
-      .filter((formula) => !(calcPrecoFinal(formula) > 0))
-      .map((formula) => formula.name),
-  });
-
-  /** Monta a fotografia dos preços que vira a proposta. */
-  const buildNovaProposta = (): NovaProposta => ({
-    clientId: selectedClient?.id,
-    clienteNome: selectedClient?.name || 'Cliente não informado',
-    clienteDocumento: selectedClient?.document || undefined,
-    clienteDados: {
-      documento: selectedClient?.document,
-      inscricaoEstadual: selectedClient?.stateRegistration || undefined,
-      fazenda: selectedClient?.fazenda || undefined,
-      cidade: selectedClient?.address?.city || undefined,
-      estado: selectedClient?.address?.state || undefined,
-    },
-    priceListId: selectedList?.id,
-    priceListNome: selectedList?.name,
-    localCarregamentoId: selectedLocal?.id,
-    localNome: selectedLocal?.nome,
-    moeda: reportCurrency,
-    taxaCambio: reportCurrency === 'USD' ? selectedList?.exchangeRate : undefined,
-    validaAte,
-    incluirComposicao: includeComposicao,
-    observacoes: observacoes.trim() || undefined,
-    itens: selectedFormulas.map((formula) => {
-      const reportFactors = getFactors(formula.id);
-      return {
-        savedFormulaId: formula.id,
-        codigo: formatId(formula.id_numeric, 'BAT-'),
-        formulaNome: formula.name,
-        npk: formula.targetFormula,
-        embalagem: reportFactors.embalagem_nome || undefined,
-        precoTonelada: Math.round(calcPrecoFinal(formula) * 100) / 100,
-        quantidadeSugerida:
-          Number(reportFactors.totalTons) > 0 ? Number(reportFactors.totalTons) : undefined,
-        composicao: [
-          ...formula.macros
-            .filter((material) => material.quantity > 0)
-            .map((material) => ({
-              nome: material.name,
-              kg: material.quantity,
-              tipo: 'Macro' as const,
-            })),
-          ...formula.micros
-            .filter((material) => material.quantity > 0)
-            .map((material) => ({
-              nome: material.name,
-              kg: material.quantity,
-              tipo: 'Micro' as const,
-            })),
-        ],
-        fatores: { ...reportFactors, priceListCurrency: reportCurrency },
-      };
-    }),
-  });
-
-  /** Mantém o histórico de preços dos produtos formulados (como antes). */
-  const registerPriceHistory = async () => {
-    const historyEntries = (
-      await Promise.all(
-        selectedFormulas.map(async (formula) => {
-          const product = await getProdutoFormuladoBySavedFormulaId(formula.id);
-          if (!product) return null;
-          const reportFactors = getFactors(formula.id);
-          const { total: baseCost } = getFormulaCost(formula, selectedList);
-          const finalPrice = calcPrecoFinal(formula);
-          return {
-            produto_formulado_id: product.id,
-            saved_formula_id: formula.id,
-            organization_id: formula.organizationId || currentUser.organizationId,
-            local_carregamento_id: selectedLocal?.id,
-            local_carregamento_nome: selectedLocal?.nome,
-            price_list_id: selectedList?.id,
-            price_list_name: selectedList?.name,
-            formula_nome: formula.name,
-            preco_base: baseCost,
-            preco_final: finalPrice,
-            moeda: reportCurrency,
-            taxa_cambio: reportCurrency === 'USD' ? selectedList?.exchangeRate : undefined,
-            preco_final_brl:
-              reportCurrency === 'USD'
-                ? finalPrice * Number(selectedList?.exchangeRate || 0)
-                : finalPrice,
-            quantidade_tons: reportFactors.totalTons,
-            valor_total: finalPrice * Number(reportFactors.totalTons || 0),
-            fatores_comerciais: {
-              ...reportFactors,
-              priceListCurrency: reportCurrency,
-              priceListExchangeRate: selectedList?.exchangeRate,
-            },
-            origem: 'relatorio_precos' as const,
-            registrado_por: currentUser.name,
-          };
-        })
-      )
-    ).filter((entry): entry is NonNullable<typeof entry> => entry !== null);
-    await addHistoricoPrecos(historyEntries);
-  };
-
-  const handleGenerate = async (format: 'pdf' | 'excel') => {
-    if (validityProblem) {
-      showError(validityProblem);
-      return;
-    }
-    setGenerating(format);
-    try {
-      // A proposta é criada uma vez; gerar o outro formato reaproveita a mesma.
-      let proposta = createdProposal;
-      if (!proposta) {
-        const id = await criarProposta(buildNovaProposta());
-        proposta = await getProposta(id);
-        setCreatedProposal(proposta);
-        void registerPriceHistory().catch(() => {});
-        showSuccess(`Proposta ${formatNumeroProposta(proposta.numero)} criada.`);
-        onPropostaCriada?.();
-      }
-      if (format === 'pdf') {
-        const doc = createPropostaPdf({ proposta, itens: proposta.itens || [], settings });
-        await saveOrSharePdf(
-          doc,
-          `${formatNumeroProposta(proposta.numero)}.pdf`,
-          'Proposta de preços'
-        );
-      } else {
-        await baixarExcelProposta(proposta, proposta.itens || [], settings);
-      }
-      void registrarDocumentoProposta(proposta.id, format).catch(() => {});
-    } catch (error) {
-      showError(
-        error instanceof Error && error.message
-          ? error.message
-          : format === 'pdf'
-            ? 'Não foi possível gerar o PDF.'
-            : 'Não foi possível gerar o Excel.'
-      );
-    } finally {
-      setGenerating(null);
-    }
-  };
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      onMouseDown={(event) => closeModalOnBackdrop(event, onClose, generatingPdf)}
-    >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-stone-100 flex justify-between items-center">
-          <div>
-            <h2 className="text-xl font-bold text-stone-800">Gerar proposta de preços</h2>
-            <p className="text-sm text-stone-500 mt-1">
-              {selectedFormulas.length} fórmula(s) selecionada(s)
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-stone-400 hover:text-stone-600 transition-colors text-xl font-bold"
-          >
-            ✕
-          </button>
-        </div>
-
-        <div className="p-6 space-y-6">
-          {/* Client Search Autocomplete */}
-          <div className="relative border border-stone-200 rounded-xl p-4 bg-stone-50">
-            <label className="text-xs font-bold text-stone-500 uppercase tracking-widest block mb-1 flex items-center gap-1">
-              <span>👤</span> Buscar Cliente (Opcional - sairá no relatório)
-            </label>
-            <div className="relative">
-              <Search className="absolute left-3 top-2.5 w-4 h-4 text-stone-400" />
-              <input
-                type="text"
-                value={clientSearch}
-                onChange={(e) => {
-                  setClientSearch(e.target.value);
-                  setShowClientResults(true);
-                }}
-                onFocus={() => setShowClientResults(true)}
-                onBlur={() => {
-                  setTimeout(() => setShowClientResults(false), 250);
-                }}
-                placeholder="Pesquisar cliente por nome ou CPF/CNPJ..."
-                className="w-full pl-9 pr-4 py-2 border border-stone-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
-              />
-            </div>
-            {showClientResults && clientSearch.trim() && (
-              <div className="absolute z-50 left-4 right-4 mt-1 bg-white border border-stone-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
-                {(() => {
-                  const term = clientSearch.toLowerCase().trim();
-                  const filtered = clients.filter(
-                    (c) => c.name.toLowerCase().includes(term) || c.document.includes(term)
-                  );
-                  if (filtered.length === 0) {
-                    return <p className="p-2 text-xs text-stone-400">Nenhum cliente encontrado</p>;
-                  }
-                  return filtered.map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedClient(c);
-                        setClientSearch(c.name);
-                        setShowClientResults(false);
-                      }}
-                      className="w-full text-left px-4 py-2 hover:bg-stone-50 border-b border-stone-100 last:border-0 text-xs flex flex-col"
-                    >
-                      <span className="font-bold text-stone-800">{c.name}</span>
-                      <span className="text-[10px] text-stone-500">
-                        Doc: {c.document} IE: {c.stateRegistration || 'Isento'} | Fazenda:{' '}
-                        {c.fazenda || '—'}
-                      </span>
-                    </button>
-                  ));
-                })()}
-              </div>
-            )}
-            {selectedClient && (
-              <div className="mt-3 p-3 bg-emerald-50 border border-emerald-250 rounded-xl text-xs text-emerald-800 flex justify-between items-center">
-                <div>
-                  <p className="font-bold">✓ {selectedClient.name}</p>
-                  <p className="text-[10px] text-emerald-600 mt-0.5">
-                    Doc: {selectedClient.document} IE:{' '}
-                    {selectedClient.stateRegistration || 'Isento'} | Fazenda:{' '}
-                    {selectedClient.fazenda || '—'}
-                  </p>
-                  <p className="text-[10px] text-emerald-600">
-                    Cidade/UF: {selectedClient.address?.city || ''} /{' '}
-                    {selectedClient.address?.state || ''}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedClient(null);
-                    setClientSearch('');
-                  }}
-                  className="text-red-500 hover:text-red-700 font-bold ml-2 text-xs shrink-0"
-                >
-                  Remover
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Proposta: validade e observações */}
-          <div className="grid grid-cols-1 gap-3 rounded-xl border border-stone-200 p-4 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
-            <label className="text-xs font-bold uppercase tracking-wide text-stone-500">
-              Válida até
-              <input
-                type="date"
-                value={validaAte}
-                min={hojeIso()}
-                disabled={Boolean(createdProposal)}
-                onChange={(event) => setValidaAte(event.target.value)}
-                className="mt-1 h-11 w-full rounded-xl border border-stone-300 px-3 text-sm font-semibold normal-case tracking-normal text-stone-800 disabled:bg-stone-100"
-              />
-            </label>
-            <label className="text-xs font-bold uppercase tracking-wide text-stone-500">
-              Observações para o cliente (opcional)
-              <textarea
-                value={observacoes}
-                disabled={Boolean(createdProposal)}
-                onChange={(event) => setObservacoes(event.target.value)}
-                rows={2}
-                maxLength={800}
-                placeholder="Ex.: preços FOB, condição de pagamento, frete sob consulta…"
-                className="mt-1 w-full rounded-xl border border-stone-300 px-3 py-2 text-sm normal-case tracking-normal text-stone-800 disabled:bg-stone-100"
-              />
-            </label>
-          </div>
-
-          {/* Options */}
-          <div className="flex flex-col gap-3">
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={applyToAll}
-                onChange={(event) => setApplyToAll(event.target.checked)}
-                className="w-4 h-4 accent-emerald-600"
-              />
-              <span className="text-sm font-medium text-stone-700">
-                Aplicar os mesmos fatores a todas as formulações
-              </span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={includeComposicao}
-                onChange={(e) => setIncludeComposicao(e.target.checked)}
-                className="w-4 h-4 accent-emerald-600"
-              />
-              <span className="text-sm font-medium text-stone-700">
-                Mostrar os produtos da batida (composição) no PDF e no Excel
-              </span>
-            </label>
-          </div>
-
-          {applyToAll ? (
-            <div className="rounded-xl border border-stone-200 bg-stone-50 p-4">
-              <h3 className="mb-3 text-sm font-bold uppercase tracking-wider text-stone-700">
-                Fatores comerciais
-              </h3>
-              <ReportFactorsForm
-                id="all"
-                factors={globalFactors}
-                embalagens={embalagens}
-                currency={reportCurrency}
-                exchangeRate={selectedList?.exchangeRate}
-                onChange={(field, value) =>
-                  setGlobalFactors((current) => ({ ...current, [field]: value }))
-                }
-              />
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {selectedFormulas.map((formula) => (
-                <div
-                  key={formula.id}
-                  className="rounded-xl border border-stone-200 bg-stone-50 p-4"
-                >
-                  <h3 className="mb-3 text-sm font-bold text-stone-700">
-                    {formatId(formula.id_numeric, 'BAT-')} — {formula.name}
-                  </h3>
-                  <ReportFactorsForm
-                    id={formula.id}
-                    factors={perFormulaFactors[formula.id] || DEFAULT_REPORT_COMMERCIAL_FACTORS}
-                    embalagens={embalagens}
-                    currency={reportCurrency}
-                    exchangeRate={selectedList?.exchangeRate}
-                    onChange={(field, value) =>
-                      setPerFormulaFactors((current) => ({
-                        ...current,
-                        [formula.id]: {
-                          ...(current[formula.id] || DEFAULT_REPORT_COMMERCIAL_FACTORS),
-                          [field]: value,
-                        },
-                      }))
-                    }
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Produtos do relatório: quantidade por produto e prévia */}
-          <div className="overflow-hidden rounded-xl border border-emerald-200">
-            <div className="flex flex-wrap items-center justify-between gap-2 bg-emerald-50 px-4 py-3">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-emerald-800">
-                Produtos do relatório
-              </h3>
-              <span className="text-xs text-emerald-700">
-                Quantidade opcional: sem ela, o relatório mostra só o preço por tonelada.
-              </span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-stone-100 text-xs font-bold uppercase tracking-wide text-stone-500">
-                    <th className="px-4 py-2 text-left">Produto</th>
-                    <th className="px-4 py-2 text-left">Quantidade (t)</th>
-                    <th className="px-4 py-2 text-right">Preço {reportCurrency}/t</th>
-                    <th className="px-4 py-2 text-right">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedFormulas.map((formula) => {
-                    const precoFinal = calcPrecoFinal(formula);
-                    const quantity = getQuantity(formula.id);
-                    return (
-                      <tr key={formula.id} className="border-b border-stone-100 last:border-0">
-                        <td className="px-4 py-2">
-                          <span className="block font-semibold text-stone-800">{formula.name}</span>
-                          <span className="font-mono text-xs text-emerald-700">
-                            {formatId(formula.id_numeric, 'BAT-')} · {formula.targetFormula}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2">
-                          <input
-                            type="text"
-                            inputMode="decimal"
-                            value={quantities[formula.id] || ''}
-                            onChange={(event) => {
-                              const raw = event.target.value;
-                              if (!/^\d*(?:[.,]\d{0,3})?$/.test(raw)) return;
-                              setQuantities((current) => ({ ...current, [formula.id]: raw }));
-                            }}
-                            placeholder="—"
-                            aria-label={`Quantidade em toneladas de ${formula.name}`}
-                            className="h-10 w-28 rounded-lg border border-stone-300 px-3 text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                          />
-                        </td>
-                        <td className="px-4 py-2 text-right font-bold tabular-nums text-emerald-700">
-                          {precoFinal > 0 ? formatPricingMoney(precoFinal, reportCurrency) : '—'}
-                        </td>
-                        <td className="px-4 py-2 text-right tabular-nums text-stone-700">
-                          {precoFinal > 0 && quantity > 0
-                            ? formatPricingMoney(precoFinal * quantity, reportCurrency)
-                            : '—'}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-                <tfoot>
-                  <tr className="bg-stone-50 font-bold">
-                    <td className="px-4 py-2 text-stone-700">Total</td>
-                    <td className="px-4 py-2 tabular-nums text-stone-700">
-                      {selectedFormulas
-                        .reduce((total, formula) => total + getQuantity(formula.id), 0)
-                        .toLocaleString('pt-BR', { maximumFractionDigits: 3 })}{' '}
-                      t
-                    </td>
-                    <td />
-                    <td className="px-4 py-2 text-right tabular-nums text-emerald-800">
-                      {formatPricingMoney(
-                        selectedFormulas.reduce(
-                          (total, formula) =>
-                            total + calcPrecoFinal(formula) * getQuantity(formula.id),
-                          0
-                        ),
-                        reportCurrency
-                      )}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <div className="p-6 border-t border-stone-100 flex flex-wrap items-center justify-end gap-3">
-          {createdProposal ? (
-            <p className="mr-auto text-sm font-semibold text-emerald-700">
-              Proposta {formatNumeroProposta(createdProposal.numero)} criada. Ela fica na aba
-              Propostas.
-            </p>
-          ) : !canCreateProposal ? (
-            <p className="mr-auto text-sm font-semibold text-red-700" role="alert">
-              Seu usuário não tem a permissão “Propostas — criar”.
-            </p>
-          ) : validityProblem ? (
-            <p className="mr-auto text-sm font-semibold text-amber-700">{validityProblem}</p>
-          ) : null}
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-stone-600 hover:text-stone-800 transition-colors"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleGenerate('excel')}
-            disabled={generatingPdf || !canCreateProposal || Boolean(validityProblem)}
-            className="px-5 py-2 border border-emerald-600 text-emerald-700 hover:bg-emerald-50 text-sm font-bold rounded-lg flex items-center gap-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <FileSpreadsheet className="w-4 h-4" />
-            {generating === 'excel' ? 'Preparando…' : 'Gerar Excel'}
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleGenerate('pdf')}
-            disabled={generatingPdf || !canCreateProposal || Boolean(validityProblem)}
-            className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg flex items-center gap-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <FileText className="w-4 h-4" />
-            {generating === 'pdf' ? 'Preparando…' : 'Gerar PDF'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
   const { showSuccess, showError } = useToast();
@@ -1189,16 +343,43 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
   const abrirPrecificacaoDaProposta = (proposta: Proposta) => {
     const aceitos = proposta.resposta?.tipo === 'aceite' ? proposta.resposta.itens : [];
     const todas = [...formulas, ...archivedFormulas];
-    const encontrados = aceitos
-      .map((item) => ({
-        formula: todas.find((formula) => formula.id === item.savedFormulaId),
-        tons: item.quantidade,
-        nome: item.nome,
-      }))
-      .filter((item) => item.tons > 0);
-    const faltando = encontrados.filter((item) => !item.formula).map((item) => item.nome);
-    const validos = encontrados.filter(
-      (item): item is { formula: SavedFormula; tons: number; nome: string } => Boolean(item.formula)
+    const montados = aceitos
+      .filter((aceito) => aceito.quantidade > 0)
+      .map((aceito) => {
+        const item = (proposta.itens || []).find((entry) => entry.id === aceito.id);
+        const fotografia = item?.formula;
+        // A batida como fechou na proposta; propostas antigas usam a batida atual.
+        const formula: SavedFormula | undefined = fotografia
+          ? {
+              id: item?.savedFormulaId || aceito.savedFormulaId || aceito.id,
+              userId: currentUser.id,
+              userName: currentUser.name,
+              name: item?.formulaNome || aceito.nome,
+              date: proposta.createdAt,
+              targetFormula: fotografia.targetFormula,
+              category: fotografia.category as SavedFormula['category'],
+              targetCa: fotografia.targetCa,
+              targetS: fotografia.targetS,
+              targetMicros: fotografia.targetMicros,
+              macros: fotografia.macros,
+              micros: fotografia.micros,
+            }
+          : todas.find((entry) => entry.id === aceito.savedFormulaId);
+        const { totalTons: _ignorado, ...condicoes } = (item?.fatores || {}) as Record<
+          string,
+          unknown
+        >;
+        return {
+          nome: aceito.nome,
+          formula,
+          tons: aceito.quantidade,
+          factors: condicoes as Partial<SavedFormulaFactors>,
+          expectedPrice: item?.precoTonelada ?? aceito.precoTonelada,
+        };
+      });
+    const faltando = montados.filter((item) => !item.formula).map((item) => item.nome);
+    const validos = montados.filter(
+      (item): item is (typeof montados)[number] & { formula: SavedFormula } => Boolean(item.formula)
     );
     if (validos.length === 0) {
       showError('As batidas desta proposta não estão mais disponíveis para precificar.');
@@ -1212,12 +393,18 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
       proposta,
       draft: {
         key: `${proposta.id}-${Date.now()}`,
-        formulas: validos.map(({ formula, tons }) => ({ formula, tons })),
+        formulas: validos.map(({ formula, tons, factors, expectedPrice }) => ({
+          formula,
+          tons,
+          factors,
+          expectedPrice,
+        })),
         clientId: proposta.clientId,
         regionId: proposta.regionId,
         loadingLocationId: proposta.localCarregamentoId,
         priceListId: proposta.priceListId,
         priceListCurrency: proposta.moeda,
+        appliedExchangeRate: proposta.moeda === 'USD' ? proposta.taxaCambio : undefined,
       },
     });
     setPagina('batidas');
@@ -1819,10 +1006,9 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
 
       <ConfirmDialog {...confirmState} onConfirm={handleConfirm} onCancel={handleCancel} />
 
-      <ModalGerarRelatorio
+      <NovaPropostaModal
         isOpen={isReportModalOpen}
-        formulas={formulas}
-        selectedIds={selectedFormulas}
+        formulas={formulas.filter((formula) => selectedFormulas.includes(formula.id))}
         selectedList={selectedList}
         selectedLocal={locais.find((local) => local.id === selectedLocalId)}
         currentUser={currentUser}
@@ -1830,6 +1016,10 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
         settings={appSettings}
         onClose={() => setIsReportModalOpen(false)}
         onPropostaCriada={() => setPropostasReloadKey((value) => value + 1)}
+        onVerPropostas={() => {
+          setIsReportModalOpen(false);
+          setPagina('propostas');
+        }}
       />
     </React.Fragment>
   );

@@ -25,6 +25,8 @@ export type ReportCommercialFactors = Pick<
   | 'embalagem_nome'
   | 'embalagem_valor'
   | 'embalagem_ajuste'
+  | 'cotacaoFreteId'
+  | 'cotacaoFreteNumero'
 >;
 
 export const DEFAULT_REPORT_COMMERCIAL_FACTORS: ReportCommercialFactors = {

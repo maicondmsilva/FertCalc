@@ -22,7 +22,11 @@ import type {
   User as AppUser,
   RawMaterial,
 } from '../../types';
-import { useCalculator, type CalculatorProposalDraft } from '../../hooks/useCalculator';
+import {
+  proposalCalculationId,
+  useCalculator,
+  type CalculatorProposalDraft,
+} from '../../hooks/useCalculator';
 import BetaProfitabilityModal from './BetaProfitabilityModal';
 import BetaClientPicker from './BetaClientPicker';
 import PricingRegionField, { pricingRegionProblem } from '../regions/PricingRegionField';
@@ -49,6 +53,7 @@ import BetaFormulaCard from './BetaFormulaCard';
 import {
   agentCommissionProblem,
   filterPriceLists,
+  formatMoney,
   pricingBranchOptions,
 } from './betaCalculatorModel';
 
@@ -101,6 +106,20 @@ export default function SimplifiedCalculatorBeta({
   // Revisão de batida salva: fórmula e micronutrientes protegidos (mesma regra da calculadora oficial).
   const isSavedFormulaRevision = initialFormulaToLoad?.isRevisionFromSavedFormula === true;
   const protectedMaterialIds = initialFormulaToLoad?.protectedMaterialIds || [];
+  // Proposta aceita: confere se o preço calculado agora bate com o enviado ao cliente.
+  const proposalDivergences = (initialProposal?.formulas || [])
+    .map((item, index) => {
+      const calculation = calculator.calculations.find(
+        (entry) => entry.id === proposalCalculationId(index)
+      );
+      const current = calculation?.summary?.finalPrice;
+      if (current == null || item.expectedPrice == null) return null;
+      const difference = Math.round((current - item.expectedPrice) * 100) / 100;
+      return Math.abs(difference) >= 0.01
+        ? { name: item.formula.name, expected: item.expectedPrice, current, difference }
+        : null;
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null);
   const {
     confirmState,
     handleConfirm,
@@ -368,6 +387,26 @@ export default function SimplifiedCalculatorBeta({
 
   return (
     <div className="@container w-full space-y-5 pb-[max(3rem,env(safe-area-inset-bottom))]">
+      {initialProposal && proposalDivergences.length > 0 && (
+        <div
+          role="alert"
+          className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"
+        >
+          <p className="font-bold">Preço diferente do enviado ao cliente</p>
+          <p>
+            A lista de preço ou alguma condição mudou depois da proposta. Confira antes de salvar:
+          </p>
+          <ul className="mt-1 list-disc pl-5">
+            {proposalDivergences.map((item) => (
+              <li key={item.name}>
+                {item.name}: proposta {formatMoney(item.expected, listCurrency)}/t · agora{' '}
+                {formatMoney(item.current, listCurrency)}/t ({item.difference > 0 ? '+' : ''}
+                {formatMoney(item.difference, listCurrency)})
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {isSavedFormulaRevision && (
         <div
           role="note"

@@ -90,6 +90,10 @@ export function mapPropostaItem(row: Row): PropostaItem {
     quantidadeSugerida: optNum(row.quantidade_sugerida),
     composicao: Array.isArray(row.composicao) ? (row.composicao as PropostaComposicaoItem[]) : [],
     fatores: (row.fatores as Record<string, unknown>) || {},
+    formula:
+      row.formula && typeof row.formula === 'object' && 'targetFormula' in (row.formula as Row)
+        ? (row.formula as unknown as PropostaItem['formula'])
+        : undefined,
   };
 }
 
@@ -162,6 +166,7 @@ export async function criarProposta(nova: NovaProposta): Promise<string> {
       quantidade_sugerida: item.quantidadeSugerida ?? null,
       composicao: item.composicao,
       fatores: item.fatores || {},
+      formula: item.formula || {},
     })),
   });
   if (error || !data) throw erroProposta(error, 'Não foi possível criar a proposta.');
