@@ -286,3 +286,14 @@ export async function getMinhasCotacoesDisponiveis(
   if (!userId) return [];
   return getCotacoesAprovadasByCliente(userId, clienteId);
 }
+
+/** Uma cotação pelo id (o banco limita ao que o usuário pode ver). */
+export async function getCotacaoById(id: string): Promise<CotacaoSolicitada | null> {
+  const { data, error } = await supabase
+    .from('cotacoes_solicitadas')
+    .select(SELECT_FIELDS)
+    .eq('id', id)
+    .maybeSingle();
+  if (error || !data) return null;
+  return mapCotacaoSolicitada(data as Record<string, unknown>);
+}

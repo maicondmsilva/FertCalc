@@ -9,6 +9,7 @@ import {
   type PedidoVendaAuditEntry,
 } from '../../services/pedidosVendaService';
 import HistoricoCarregamentosPedido from '../HistoricoCarregamentosPedido';
+import EntregaCarregamento from './EntregaCarregamento';
 import { useToast } from '../Toast';
 import {
   STATUS_LABEL,
@@ -28,6 +29,7 @@ interface PedidoDetailPanelProps {
   client?: Client;
   pricingCode?: string;
   parentLabel?: string;
+  filialNome?: string;
   alerta: PedidoSaldoAlertaPreferencia;
   podeReceberAlerta: boolean;
   onSaveAlerta: (preferencia: PedidoSaldoAlertaPreferencia) => void;
@@ -181,6 +183,7 @@ export function PedidoDetailPanel({
   client,
   pricingCode,
   parentLabel,
+  filialNome,
   alerta,
   podeReceberAlerta,
   onSaveAlerta,
@@ -419,6 +422,17 @@ export function PedidoDetailPanel({
             })}
           </section>
         )}
+
+        <EntregaCarregamento
+          pedido={pedido}
+          filialNome={filialNome}
+          podeAlterar={ativo}
+          ultimaAlteracao={(() => {
+            const entry = audit.find((item) => /^Endereço de entrega alterado/i.test(item.motivo));
+            return entry ? { data: entry.criado_em, motivo: entry.motivo } : undefined;
+          })()}
+          onChanged={onChanged}
+        />
 
         <DadosComerciais pedido={pedido} onSaved={onChanged} />
 

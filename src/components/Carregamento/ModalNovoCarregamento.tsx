@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { PedidoVenda, PedidoVendaItem } from '../../types';
 import { AlertTriangle, Plus, X, Search, Pencil } from 'lucide-react';
-import { Carregamento, Filial, LocalCarregamento } from '../../types/carregamento';
+import {
+  Carregamento,
+  CotacaoSolicitada,
+  Filial,
+  LocalCarregamento,
+} from '../../types/carregamento';
+import { getCotacaoById } from '../../services/cotacaoSolicitadaService';
 import { getFiliais } from '../../services/carregamentoService';
 import { getPricingRecords } from '../../services/db';
 import { getPedidosVenda, getPedidoVendaItens } from '../../services/pedidosVendaService';
@@ -56,12 +62,16 @@ export function ModalNovoCarregamento({
       quantidade_total: pedidoVinculado?.saldo_disponivel
         ? String(pedidoVinculado.saldo_disponivel)
         : '',
-      filial_id: '',
-      local_carregamento_id: '',
-      data_prevista_carregamento: '',
+      // Pedido vinculado: filial, local e previsão já vêm dele.
+      filial_id: pedidoVinculado?.filial_id || '',
+      local_carregamento_id: pedidoVinculado?.local_carregamento_id || '',
+      data_prevista_carregamento: pedidoVinculado?.previsao_entrega || '',
       observacoes: '',
       pedido_venda_id: pedidoVinculado?.id || '',
-      pedido_venda_numero: pedidoVinculado?.numero_pedido || '',
+      pedido_venda_numero: pedidoVinculado
+        ? pedidoVinculado.barra_pedido ||
+          `${pedidoVinculado.numero_pedido}/${pedidoVinculado.emitente ?? 1}`
+        : '',
       precificacao_id: pedidoVinculado?.precificacao_id || '',
       cliente_nome: pedidoVinculado?.cliente_nome || '',
       valor_frete:
@@ -74,6 +84,15 @@ export function ModalNovoCarregamento({
     };
   });
   const [saving, setSaving] = useState(false);
+  // Aberto de dentro de um pedido: sem busca, tudo vem do pedido.
+  const pedidoFixo = Boolean(pedidoVinculado && !isEditMode);
+  const [cotacaoPedido, setCotacaoPedido] = useState<CotacaoSolicitada | null>(null);
+  useEffect(() => {
+    if (!pedidoFixo || !pedidoVinculado?.cotacao_frete_id) return;
+    getCotacaoById(pedidoVinculado.cotacao_frete_id)
+      .then(setCotacaoPedido)
+      .catch(() => setCotacaoPedido(null));
+  }, [pedidoFixo, pedidoVinculado?.cotacao_frete_id]);
   const [pedidoSearch, setPedidoSearch] = useState(pedidoVinculado?.numero_pedido || '');
   const [allPedidos, setAllPedidos] = useState<EnrichedPedido[]>([]);
   const [pedidoResults, setPedidoResults] = useState<EnrichedPedido[]>([]);
@@ -363,7 +382,8 @@ export function ModalNovoCarregamento({
               </>
             ) : (
               <>
-                <Plus className="w-5 h-5 text-amber-600" /> Novo Carregamento
+                <Plus className="w-5 h-5 text-amber-600" />{' '}
+                {pedidoFixo ? 'Solicitar carregamento' : 'Novo Carregamento'}
               </>
             )}
           </h3>
@@ -372,99 +392,157 @@ export function ModalNovoCarregamento({
           </button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
-          {/* Pedido de Venda / Precificação search */}
-          <div>
-            <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
-              Pedido de Venda / Precificação
-            </label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
-              <input
-                type="text"
-                value={pedidoSearch}
-                onChange={(e) => {
-                  setPedidoSearch(e.target.value);
-                }}
-                placeholder="Buscar por cliente, nº pedido ou nº precificação..."
-                className="w-full pl-9 pr-4 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
-              />
-            </div>
-            {pedidoResults.length > 0 && (
-              <div className="absolute z-10 mt-1 bg-white border border-stone-200 rounded-xl shadow-lg max-h-56 overflow-y-auto w-full">
-                {pedidoResults.map((p) => (
-                  <button
-                    key={p.id ?? `pricing-${p.precificacao_id}`}
-                    type="button"
-                    onClick={() => selectPedido(p)}
-                    className="w-full text-left px-4 py-3 hover:bg-amber-50 transition-colors text-sm border-b border-stone-100 last:border-0"
-                  >
-                    {p._source === 'pricing' ? (
-                      <>
-                        <p className="font-bold text-stone-800">
-                          Precificação #{p.pricing?.formattedCod || p.pricing?.cod || '—'}
-                        </p>
-                        <p className="text-stone-500 text-xs">
-                          {p.clientName || '—'} · Vendedor: {p.pricing?.userName || '—'}
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <p className="font-bold text-stone-800">
-                          {p.barra_pedido || p.numero_pedido || '—'}
-                        </p>
-                        <p className="text-stone-500 text-xs">
-                          {p.clientName || '—'} · COD: {p.pricing?.formattedCod || '—'}
-                        </p>
-                      </>
-                    )}
-                  </button>
-                ))}
+          {pedidoFixo && pedidoVinculado && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3 rounded-xl bg-stone-900 px-4 py-3 text-white">
+                <div className="min-w-0">
+                  <p className="font-mono text-lg font-black">Pedido {form.pedido_venda_numero}</p>
+                  <p className="truncate text-xs text-stone-300">
+                    {[
+                      pedidoVinculado.cliente_nome,
+                      pedidoVinculado.regiao_nome && `Região ${pedidoVinculado.regiao_nome}`,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </p>
+                </div>
+                <span className="shrink-0 rounded-full bg-white/15 px-2.5 py-1 text-xs font-bold">
+                  vinculado
+                </span>
               </div>
-            )}
-            {form.cliente_nome && (
-              <div className="flex items-center justify-between mt-1">
-                <p className="text-xs text-emerald-600 font-medium">
-                  ✓ Vinculado: {form.cliente_nome}
-                  {form.pedido_venda_numero && (
-                    <span className="ml-1 text-stone-500">({form.pedido_venda_numero})</span>
-                  )}
-                  {selectedPedidoVenda?.saldo_disponivel != null && (
-                    <span className="ml-1 text-stone-500">
-                      ·{' '}
-                      {selectedPedidoVenda.saldo_disponivel.toLocaleString('pt-BR', {
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 3,
-                      })}{' '}
-                      ton disponíveis
-                    </span>
-                  )}
+              <div className="grid gap-2 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 text-sm text-emerald-950 sm:grid-cols-2">
+                <p>
+                  <span className="block text-[11px] font-bold uppercase text-emerald-700">
+                    Frete
+                  </span>
+                  {form.tipo_frete}
+                  {cotacaoPedido?.valor_frete_unitario != null
+                    ? ` · R$ ${cotacaoPedido.valor_frete_unitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/t`
+                    : form.valor_frete
+                      ? ` · R$ ${Number(form.valor_frete).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/t`
+                      : ''}
                 </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setForm((prev) => ({
-                      ...prev,
-                      pedido_venda_id: '',
-                      pedido_venda_numero: '',
-                      precificacao_id: '',
-                      cliente_nome: '',
-                      _freteAutoDetectado: false,
-                      _freteOrigem: undefined,
-                      itens: [],
-                    }));
-                    setSelectedPedidoVenda(null);
-                    setPedidoItens([]);
-                    setItensCarregamento([]);
-                    setCarregandoPedidoItens(false);
-                    setPedidoSearch('');
-                  }}
-                  className="text-xs text-stone-400 hover:text-red-500 transition-colors"
-                >
-                  ✕ Desvincular
-                </button>
+                <p>
+                  <span className="block text-[11px] font-bold uppercase text-emerald-700">
+                    Transportadora
+                    {cotacaoPedido ? ` (da cotação ${cotacaoPedido.numero_cotacao})` : ''}
+                  </span>
+                  {cotacaoPedido?.transportadora?.nome ||
+                    cotacaoPedido?.transportadora_nome ||
+                    'Definida no Carregamento'}
+                </p>
+                <p className="sm:col-span-2">
+                  <span className="block text-[11px] font-bold uppercase text-emerald-700">
+                    Endereço de entrega
+                  </span>
+                  {[
+                    pedidoVinculado.endereco_entrega,
+                    [pedidoVinculado.cidade_entrega, pedidoVinculado.estado_entrega]
+                      .filter(Boolean)
+                      .join('/'),
+                  ]
+                    .filter(Boolean)
+                    .join(' · ') || 'Não informado no pedido'}
+                </p>
               </div>
-            )}
-          </div>
+            </div>
+          )}
+
+          {/* Pedido de Venda / Precificação search */}
+          {!pedidoFixo && (
+            <div>
+              <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
+                Pedido de Venda / Precificação
+              </label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+                <input
+                  type="text"
+                  value={pedidoSearch}
+                  onChange={(e) => {
+                    setPedidoSearch(e.target.value);
+                  }}
+                  placeholder="Buscar por cliente, nº pedido ou nº precificação..."
+                  className="w-full pl-9 pr-4 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                />
+              </div>
+              {pedidoResults.length > 0 && (
+                <div className="absolute z-10 mt-1 bg-white border border-stone-200 rounded-xl shadow-lg max-h-56 overflow-y-auto w-full">
+                  {pedidoResults.map((p) => (
+                    <button
+                      key={p.id ?? `pricing-${p.precificacao_id}`}
+                      type="button"
+                      onClick={() => selectPedido(p)}
+                      className="w-full text-left px-4 py-3 hover:bg-amber-50 transition-colors text-sm border-b border-stone-100 last:border-0"
+                    >
+                      {p._source === 'pricing' ? (
+                        <>
+                          <p className="font-bold text-stone-800">
+                            Precificação #{p.pricing?.formattedCod || p.pricing?.cod || '—'}
+                          </p>
+                          <p className="text-stone-500 text-xs">
+                            {p.clientName || '—'} · Vendedor: {p.pricing?.userName || '—'}
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="font-bold text-stone-800">
+                            {p.barra_pedido || p.numero_pedido || '—'}
+                          </p>
+                          <p className="text-stone-500 text-xs">
+                            {p.clientName || '—'} · COD: {p.pricing?.formattedCod || '—'}
+                          </p>
+                        </>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {form.cliente_nome && (
+                <div className="flex items-center justify-between mt-1">
+                  <p className="text-xs text-emerald-600 font-medium">
+                    ✓ Vinculado: {form.cliente_nome}
+                    {form.pedido_venda_numero && (
+                      <span className="ml-1 text-stone-500">({form.pedido_venda_numero})</span>
+                    )}
+                    {selectedPedidoVenda?.saldo_disponivel != null && (
+                      <span className="ml-1 text-stone-500">
+                        ·{' '}
+                        {selectedPedidoVenda.saldo_disponivel.toLocaleString('pt-BR', {
+                          minimumFractionDigits: 0,
+                          maximumFractionDigits: 3,
+                        })}{' '}
+                        ton disponíveis
+                      </span>
+                    )}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForm((prev) => ({
+                        ...prev,
+                        pedido_venda_id: '',
+                        pedido_venda_numero: '',
+                        precificacao_id: '',
+                        cliente_nome: '',
+                        _freteAutoDetectado: false,
+                        _freteOrigem: undefined,
+                        itens: [],
+                      }));
+                      setSelectedPedidoVenda(null);
+                      setPedidoItens([]);
+                      setItensCarregamento([]);
+                      setCarregandoPedidoItens(false);
+                      setPedidoSearch('');
+                    }}
+                    className="text-xs text-stone-400 hover:text-red-500 transition-colors"
+                  >
+                    ✕ Desvincular
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           {form.pedido_venda_id && pedidoItens.length > 0 && (
             <div className="border border-stone-200 rounded-xl p-4 space-y-3 bg-stone-50/60">
@@ -596,6 +674,7 @@ export function ModalNovoCarregamento({
               </label>
               <select
                 value={form.filial_id}
+                disabled={pedidoFixo && Boolean(pedidoVinculado?.filial_id)}
                 onChange={(e) => setForm({ ...form, filial_id: e.target.value })}
                 className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm"
               >
@@ -768,7 +847,13 @@ export function ModalNovoCarregamento({
               disabled={saving || todosItensEsgotados}
               className="px-5 py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white rounded-lg text-sm font-bold transition-colors"
             >
-              {saving ? 'Salvando...' : isEditMode ? 'Salvar Alterações' : 'Criar Carregamento'}
+              {saving
+                ? 'Salvando...'
+                : isEditMode
+                  ? 'Salvar Alterações'
+                  : pedidoFixo
+                    ? 'Solicitar e abrir no Carregamento'
+                    : 'Criar Carregamento'}
             </button>
           </div>
         </form>

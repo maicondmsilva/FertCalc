@@ -114,6 +114,12 @@ function mapPedido(d: Record<string, unknown>): PedidoVenda {
     numero_contrato: (d.numero_contrato as string | null) ?? undefined,
     vendedor_nome: (d.vendedor_nome as string | null) ?? undefined,
     region_id: (d.region_id as string | null) ?? null,
+    local_carregamento_id: (d.local_carregamento_id as string | null) ?? null,
+    endereco_entrega: (d.endereco_entrega as string | null) ?? null,
+    cidade_entrega: (d.cidade_entrega as string | null) ?? null,
+    estado_entrega: (d.estado_entrega as string | null) ?? null,
+    maps_url: (d.maps_url as string | null) ?? null,
+    cotacao_frete_id: (d.cotacao_frete_id as string | null) ?? null,
     regiao_nome: (d.regiao_nome as string | null) ?? undefined,
     ultima_movimentacao: (d.ultima_movimentacao as string | null) ?? undefined,
   };
@@ -818,6 +824,30 @@ export async function executarCancelamentoDefinitivo(
 export async function syncPedidoVendaStatus(pedidoVendaId: string): Promise<void> {
   const { error } = await supabase.rpc('recalcular_pedido_venda', {
     p_pedido_id: pedidoVendaId,
+  });
+  if (error) throw error;
+}
+
+export interface NovoEnderecoEntrega {
+  endereco: string;
+  cidade?: string;
+  estado?: string;
+  maps_url?: string;
+  motivo: string;
+}
+
+/** Altera o endereço de entrega do pedido; o banco grava o histórico com o motivo. */
+export async function alterarEnderecoEntrega(
+  pedidoId: string,
+  novo: NovoEnderecoEntrega
+): Promise<void> {
+  const { error } = await supabase.rpc('alterar_endereco_entrega_pedido', {
+    p_pedido_id: pedidoId,
+    p_endereco: novo.endereco.trim(),
+    p_cidade: novo.cidade?.trim() || null,
+    p_estado: novo.estado?.trim() || null,
+    p_maps_url: novo.maps_url?.trim() || null,
+    p_motivo: novo.motivo.trim(),
   });
   if (error) throw error;
 }

@@ -55,6 +55,7 @@ import {
 } from '../../utils/quoteValidity';
 import { subscribeToOrderLoadingChanges } from '../../services/orderLoadingSubscription';
 import { closeModalOnBackdrop } from '../../utils/modalUtils';
+import { sanitizeUrl } from '../../utils/sanitizeUrl';
 
 // ─────────────────────────────────────────────────────────────
 //  Props
@@ -115,16 +116,6 @@ function formatDate(iso?: string) {
 function formatCurrency(value?: number) {
   if (value == null) return '—';
   return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
-
-function sanitizeUrl(url?: string): string {
-  if (!url) return '';
-  try {
-    const parsed = new URL(url.trim());
-    return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? parsed.href : '';
-  } catch {
-    return '';
-  }
 }
 
 // ─────────────────────────────────────────────────────────────
