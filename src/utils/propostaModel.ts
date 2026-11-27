@@ -101,7 +101,23 @@ export function estatisticasPropostas(propostas: Proposta[], hoje: string = hoje
     ).length,
     aceitas,
     conversao: decididas > 0 ? (aceitas / decididas) * 100 : null,
+    valorAceito: propostas.reduce((total, proposta) => total + (proposta.aceite?.valor || 0), 0),
+    toneladasAceitas: propostas.reduce(
+      (total, proposta) => total + (proposta.aceite?.toneladas || 0),
+      0
+    ),
   };
+}
+
+/**
+ * Totais exibidos: depois do aceite, o que o cliente aceitou (quantidades
+ * dele); antes, o que foi proposto (pode ser só preço/t, sem quantidade).
+ */
+export function totaisExibidos(
+  proposta: Pick<Proposta, 'aceite' | 'valorTotal' | 'toneladasTotal'>
+): { valor: number; toneladas: number; origem: 'aceite' | 'proposta' } {
+  if (proposta.aceite) return { ...proposta.aceite, origem: 'aceite' };
+  return { valor: proposta.valorTotal, toneladas: proposta.toneladasTotal, origem: 'proposta' };
 }
 
 /** Problema que impede criar a proposta (ou null). */

@@ -106,6 +106,8 @@ export interface Proposta {
   eventos?: PropostaEvento[];
   resposta?: PropostaResposta | null;
   linkAbertoEm?: string;
+  /** Totais do que o cliente aceitou (quando aceita). */
+  aceite?: { valor: number; toneladas: number } | null;
 }
 
 /** Dados para criar uma proposta (a fotografia dos preços daquele momento). */
