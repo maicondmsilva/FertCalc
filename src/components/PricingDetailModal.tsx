@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { permissoesPedido } from './pedidosVenda/pedidosVendaModel';
 import {
   PricingRecord,
   User,
@@ -987,7 +988,7 @@ export default function PricingDetailModal({
                 Pedido: {pedidoVenda.barra_pedido || pedidoVenda.numero_pedido || '—'}
               </div>
             )}
-            {!pedidoVenda && (
+            {!pedidoVenda && permissoesPedido(currentUser).criar && (
               <button
                 onClick={() => setShowNovoPedidoModal(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition-all active:scale-95 text-sm"

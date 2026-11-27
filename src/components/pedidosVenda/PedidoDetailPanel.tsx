@@ -30,6 +30,8 @@ interface PedidoDetailPanelProps {
   pricingCode?: string;
   parentLabel?: string;
   filialNome?: string;
+  /** O que o usuário pode fazer (o banco confere). Sem informar: tudo liberado. */
+  permissoes?: { editar: boolean; cancelar: boolean };
   alerta: PedidoSaldoAlertaPreferencia;
   podeReceberAlerta: boolean;
   onSaveAlerta: (preferencia: PedidoSaldoAlertaPreferencia) => void;
@@ -52,7 +54,15 @@ function Info({ label, value }: { label: string; value?: React.ReactNode }) {
   );
 }
 
-function DadosComerciais({ pedido, onSaved }: { pedido: PedidoVenda; onSaved: () => void }) {
+function DadosComerciais({
+  pedido,
+  onSaved,
+  podeEditar = true,
+}: {
+  pedido: PedidoVenda;
+  onSaved: () => void;
+  podeEditar?: boolean;
+}) {
   const { showSuccess, showError } = useToast();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -98,7 +108,7 @@ function DadosComerciais({ pedido, onSaved }: { pedido: PedidoVenda; onSaved: ()
     <section className="space-y-3">
       <div className="flex items-center justify-between">
         <h3 className={sectionTitle}>Dados comerciais</h3>
-        {!editing && pedido.status !== 'cancelado' && (
+        {!editing && podeEditar && pedido.status !== 'cancelado' && (
           <button
             type="button"
             onClick={() => setEditing(true)}
@@ -184,6 +194,7 @@ export function PedidoDetailPanel({
   pricingCode,
   parentLabel,
   filialNome,
+  permissoes = { editar: true, cancelar: true },
   alerta,
   podeReceberAlerta,
   onSaveAlerta,
@@ -270,14 +281,16 @@ export function PedidoDetailPanel({
               <Truck className="h-4 w-4" /> Solicitar carregamento
             </button>
           )}
-          <button
-            type="button"
-            onClick={onEdit}
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-stone-300 px-3 text-sm font-bold text-stone-700 hover:bg-stone-50"
-          >
-            <Pencil className="h-4 w-4" /> Editar
-          </button>
-          {ativo && (
+          {permissoes.editar && (
+            <button
+              type="button"
+              onClick={onEdit}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-stone-300 px-3 text-sm font-bold text-stone-700 hover:bg-stone-50"
+            >
+              <Pencil className="h-4 w-4" /> Editar
+            </button>
+          )}
+          {ativo && permissoes.cancelar && (
             <>
               <button
                 type="button"
@@ -426,7 +439,7 @@ export function PedidoDetailPanel({
         <EntregaCarregamento
           pedido={pedido}
           filialNome={filialNome}
-          podeAlterar={ativo}
+          podeAlterar={ativo && permissoes.editar}
           ultimaAlteracao={(() => {
             const entry = audit.find((item) => /^Endereço de entrega alterado/i.test(item.motivo));
             return entry ? { data: entry.criado_em, motivo: entry.motivo } : undefined;
@@ -434,7 +447,7 @@ export function PedidoDetailPanel({
           onChanged={onChanged}
         />
 
-        <DadosComerciais pedido={pedido} onSaved={onChanged} />
+        <DadosComerciais pedido={pedido} onSaved={onChanged} podeEditar={permissoes.editar} />
 
         {/* Pedido */}
         <section className="space-y-3">
