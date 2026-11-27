@@ -5,6 +5,7 @@ import {
   createPropostaPdf,
   gerarExcelProposta,
   planilhaProposta,
+  tamanhoLogoExcel,
   totaisProposta,
 } from './propostaDocumento';
 
@@ -71,5 +72,32 @@ describe('propostaDocumento', () => {
     const book = new ExcelJS.Workbook();
     await book.xlsx.load(buffer);
     expect(book.worksheets.map((sheet) => sheet.name)).toEqual(['Proposta', 'Composição']);
+  });
+});
+
+describe('logo e nome da empresa', () => {
+  it('nome some do PDF quando a Personalização manda mostrar só a logo', () => {
+    // PNG 1x1 transparente.
+    const logo =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+    const pdf = (show: boolean) =>
+      createPropostaPdf({
+        proposta,
+        itens,
+        settings: { companyName: 'EMPRESA XYZ', companyLogo: logo, showCompanyName: show },
+        hoje: '2026-11-27',
+      }).output();
+    expect(pdf(true)).toContain('EMPRESA XYZ');
+    expect(pdf(false)).not.toContain('EMPRESA XYZ');
+  });
+
+  it('tamanho da logo no Excel mantém a proporção do PNG', () => {
+    // Cabeçalho PNG de 300x100.
+    const header = new Uint8Array([
+      137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 1, 44, 0, 0, 0, 100, 8, 6,
+      0, 0, 0,
+    ]);
+    const base64 = btoa(String.fromCharCode(...header));
+    expect(tamanhoLogoExcel(base64)).toEqual({ width: 150, height: 50 });
   });
 });

@@ -3,6 +3,7 @@ import autoTable from 'jspdf-autotable';
 import type { AppSettings } from '../types';
 import type { Proposta, PropostaItem } from '../types/proposta';
 import { drawCompanyLogo } from './pdfBranding';
+import { getCompanyDisplayName } from './companyBranding';
 import {
   diasParaVencer,
   formatDataBr,
@@ -65,7 +66,7 @@ export function linhasProdutosProposta(proposta: Proposta, itens: PropostaItem[]
 interface PropostaPdfInput {
   proposta: Proposta;
   itens: PropostaItem[];
-  settings?: Pick<AppSettings, 'companyLogo' | 'companyName'> | null;
+  settings?: Pick<AppSettings, 'companyLogo' | 'companyName' | 'showCompanyName'> | null;
   hoje?: string;
   now?: Date;
 }
@@ -121,13 +122,20 @@ export function createPropostaPdf({
     });
     textX = used > 0 ? margin + 46 : margin;
   }
+  // Nome ao lado da logo só se a Personalização mandar mostrar (sem logo, sempre).
+  const nomeEmpresa = getCompanyDisplayName(settings ?? undefined);
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(15);
-  doc.text(settings?.companyName || 'Proposta comercial', textX, 15);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text('Proposta de preços', textX, 21);
+  if (nomeEmpresa) {
+    doc.setFontSize(15);
+    doc.text(nomeEmpresa, textX, 15);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text('Proposta de preços', textX, 21);
+  } else {
+    doc.setFontSize(14);
+    doc.text('Proposta de preços', textX, 17.5);
+  }
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
   doc.text(numero, pageWidth - margin, 14, { align: 'right' });
@@ -424,7 +432,7 @@ export function planilhaProposta(
 export async function baixarExcelProposta(
   proposta: Proposta,
   itens: PropostaItem[],
-  settings?: Pick<AppSettings, 'companyLogo' | 'companyName'> | null
+  settings?: Pick<AppSettings, 'companyLogo' | 'companyName' | 'showCompanyName'> | null
 ) {
   const buffer = await gerarExcelProposta(proposta, itens, settings);
   const blob = new Blob([buffer], {
@@ -442,16 +450,41 @@ export async function baixarExcelProposta(
 
 const HEX_BRAND = 'FF105E3A';
 
+/** Tamanho da logo no Excel mantendo a proporção (lê largura/altura do PNG). */
+export function tamanhoLogoExcel(base64: string, maxWidth = 150, maxHeight = 60) {
+  try {
+    const bytes = atob(base64.slice(0, 64));
+    if (bytes.slice(1, 4) === 'PNG') {
+      const read = (offset: number) =>
+        ((bytes.charCodeAt(offset) << 24) |
+          (bytes.charCodeAt(offset + 1) << 16) |
+          (bytes.charCodeAt(offset + 2) << 8) |
+          bytes.charCodeAt(offset + 3)) >>>
+        0;
+      const width = read(16);
+      const height = read(20);
+      if (width > 0 && height > 0) {
+        const scale = Math.min(maxWidth / width, maxHeight / height);
+        return { width: Math.round(width * scale), height: Math.round(height * scale) };
+      }
+    }
+  } catch {
+    // Sem leitura do tamanho: usa a caixa padrão.
+  }
+  return { width: maxWidth, height: maxHeight };
+}
+
 /** Monta o arquivo .xlsx (logo, cabeçalho, produtos formatados e composição opcional). */
 export async function gerarExcelProposta(
   proposta: Proposta,
   itens: PropostaItem[],
-  settings?: Pick<AppSettings, 'companyLogo' | 'companyName'> | null,
+  settings?: Pick<AppSettings, 'companyLogo' | 'companyName' | 'showCompanyName'> | null,
   hoje: string = hojeIso()
 ): Promise<ArrayBuffer> {
   const { default: ExcelJS } = await import('exceljs');
   const book = new ExcelJS.Workbook();
   book.creator = settings?.companyName || 'FertCalc';
+  const nomeEmpresa = getCompanyDisplayName(settings ?? undefined);
   const sheet = book.addWorksheet('Proposta', {
     pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1 },
     views: [{ showGridLines: false }],
@@ -478,24 +511,42 @@ export async function gerarExcelProposta(
       base64: match[2],
       extension: match[1].toLowerCase().startsWith('jp') ? 'jpeg' : 'png',
     });
-    sheet.addImage(imageId, { tl: { col: 0, row: 0 }, ext: { width: 150, height: 60 } });
+    sheet.addImage(imageId, { tl: { col: 0, row: 0 }, ext: tamanhoLogoExcel(match[2]) });
     tituloCol = 3;
   }
   for (let row = 1; row <= 4; row += 1) sheet.getRow(row).height = 16;
-  const titulo = sheet.getCell(1, tituloCol);
-  titulo.value = settings?.companyName || 'Proposta de preços';
-  titulo.font = { bold: true, size: 15, color: { argb: HEX_BRAND } };
-  const sub = sheet.getCell(2, tituloCol);
-  sub.value = `Proposta de preços ${formatNumeroProposta(proposta.numero)}`;
-  sub.font = { bold: true, size: 11 };
-  const emitida = sheet.getCell(3, tituloCol);
-  emitida.value = `Emitida em ${formatDataBr(proposta.createdAt)} · Válida até ${formatDataBr(proposta.validaAte)}`;
-  emitida.font = { size: 10, color: { argb: 'FF6E6964' } };
-  if (vencida) {
-    const aviso = sheet.getCell(4, tituloCol);
-    aviso.value = MARCA_DAGUA_VENCIDA;
-    aviso.font = { bold: true, size: 12, color: { argb: 'FFB91C1C' } };
-  }
+  // Nome da empresa só se a Personalização mandar mostrar (sem logo, sempre).
+  const cabecalho: Array<[string, Partial<import('exceljs').Font>]> = [
+    ...(nomeEmpresa
+      ? [
+          [nomeEmpresa, { bold: true, size: 15, color: { argb: HEX_BRAND } }] as [
+            string,
+            Partial<import('exceljs').Font>,
+          ],
+        ]
+      : []),
+    [
+      `Proposta de preços ${formatNumeroProposta(proposta.numero)}`,
+      { bold: true, size: nomeEmpresa ? 11 : 14 },
+    ],
+    [
+      `Emitida em ${formatDataBr(proposta.createdAt)} · Válida até ${formatDataBr(proposta.validaAte)}`,
+      { size: 10, color: { argb: 'FF6E6964' } },
+    ],
+    ...(vencida
+      ? [
+          [MARCA_DAGUA_VENCIDA, { bold: true, size: 12, color: { argb: 'FFB91C1C' } }] as [
+            string,
+            Partial<import('exceljs').Font>,
+          ],
+        ]
+      : []),
+  ];
+  cabecalho.forEach(([texto, fonte], index) => {
+    const cell = sheet.getCell(index + 1, tituloCol);
+    cell.value = texto;
+    cell.font = fonte;
+  });
 
   // Dados do cliente e condições.
   const dados = proposta.clienteDados || {};
