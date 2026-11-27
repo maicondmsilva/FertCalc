@@ -15,13 +15,14 @@ import {
 } from 'lucide-react';
 import type {
   Embalagem,
+  PricingRecord,
   PriceListCurrency,
   SavedFormula,
   TargetFormula,
   User as AppUser,
   RawMaterial,
 } from '../../types';
-import { useCalculator } from '../../hooks/useCalculator';
+import { useCalculator, type CalculatorProposalDraft } from '../../hooks/useCalculator';
 import BetaProfitabilityModal from './BetaProfitabilityModal';
 import BetaClientPicker from './BetaClientPicker';
 import PricingRegionField, { pricingRegionProblem } from '../regions/PricingRegionField';
@@ -62,6 +63,10 @@ interface SimplifiedCalculatorBetaProps {
   initialPriceListId?: string;
   initialPriceListCurrency?: PriceListCurrency;
   onSavedFormulaSuccess?: () => void;
+  /** Proposta aceita pelo cliente: abre já no modo precificação, preenchida. */
+  initialProposal?: CalculatorProposalDraft | null;
+  /** Depois de salvar a precificação (ex.: ligar à proposta). */
+  onSaveSuccess?: (record: PricingRecord) => void;
 }
 
 /**
@@ -78,6 +83,8 @@ export default function SimplifiedCalculatorBeta({
   initialPriceListId,
   initialPriceListCurrency,
   onSavedFormulaSuccess,
+  initialProposal,
+  onSaveSuccess,
 }: SimplifiedCalculatorBetaProps) {
   const { showSuccess, showError } = useToast();
   const calculator = useCalculator({
@@ -88,6 +95,8 @@ export default function SimplifiedCalculatorBeta({
     initialPriceListId,
     initialPriceListCurrency,
     onSavedFormulaSuccess,
+    initialProposal,
+    onSaveSuccess,
   });
   // Revisão de batida salva: fórmula e micronutrientes protegidos (mesma regra da calculadora oficial).
   const isSavedFormulaRevision = initialFormulaToLoad?.isRevisionFromSavedFormula === true;
@@ -163,7 +172,7 @@ export default function SimplifiedCalculatorBeta({
   const canSavePricing = isManagerOrAbove || permissions.calculator_savePricing !== false;
   // Modo precificação: desligado por padrão; ligar/desligar só mostra ou esconde
   // agente, cliente e o botão salvar — nada do que foi feito na tela se perde.
-  const [pricingMode, setPricingMode] = useState(false);
+  const [pricingMode, setPricingMode] = useState(Boolean(initialProposal));
   const canProfitability = canCheckProfitability(currentUser);
   const [profitabilityCalcId, setProfitabilityCalcId] = useState<string | null>(null);
   const profitabilityIndex = calculations.findIndex((item) => item.id === profitabilityCalcId);

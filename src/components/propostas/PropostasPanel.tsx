@@ -2,6 +2,10 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   CalendarClock,
+  Calculator,
+  Copy,
+  Download,
+  MessageCircle,
   FileSpreadsheet,
   FileText,
   Loader2,
@@ -15,8 +19,10 @@ import {
   alterarValidadeProposta,
   cancelarProposta,
   getProposta,
+  linkProposta,
   listPropostas,
   registrarDocumentoProposta,
+  urlPropostaCliente,
 } from '../../services/propostaService';
 import {
   SITUACAO_PROPOSTA,
@@ -31,6 +37,7 @@ import {
 } from '../../utils/propostaModel';
 import {
   baixarExcelProposta,
+  createComprovantePdf,
   createPropostaPdf,
   moedaProposta,
   totaisProposta,
@@ -46,6 +53,8 @@ interface PropostasPanelProps {
   settings: AppSettings;
   /** Muda quando uma proposta nova é criada, para recarregar a lista. */
   reloadKey?: number;
+  /** Abre a calculadora preenchida com o que o cliente aceitou. */
+  onGerarPrecificacao?: (proposta: Proposta) => void;
 }
 
 const inputClass =
@@ -81,7 +90,12 @@ function ValidadeTexto({ proposta }: { proposta: Proposta }) {
 }
 
 /** Aba Propostas de Batidas Salvas: histórico, PDF/Excel, validade e cancelamento. */
-export default function PropostasPanel({ currentUser, settings, reloadKey }: PropostasPanelProps) {
+export default function PropostasPanel({
+  currentUser,
+  settings,
+  reloadKey,
+  onGerarPrecificacao,
+}: PropostasPanelProps) {
   const { showError, showSuccess } = useToast();
   const permissoes = permissoesProposta(currentUser);
   const { all: regioes } = useMyRegions(currentUser);
@@ -96,6 +110,45 @@ export default function PropostasPanel({ currentUser, settings, reloadKey }: Pro
   const [novaValidade, setNovaValidade] = useState('');
   const [motivo, setMotivo] = useState('');
   const [salvando, setSalvando] = useState(false);
+  const [gerandoLink, setGerandoLink] = useState(false);
+
+  /** Copia o link do cliente ou abre o WhatsApp com a mensagem pronta. */
+  const enviarLink = async (destino: 'copiar' | 'whatsapp') => {
+    if (!aberta) return;
+    setGerandoLink(true);
+    try {
+      const url = urlPropostaCliente(await linkProposta(aberta.id));
+      const mensagem = `Olá! Segue a proposta de preços ${formatNumeroProposta(aberta.numero)}, válida até ${formatDataBr(aberta.validaAte)}. Escolha os produtos e as quantidades e confirme por aqui: ${url}`;
+      if (destino === 'copiar') {
+        await navigator.clipboard.writeText(url);
+        showSuccess('Link copiado. Envie ao cliente.');
+      } else {
+        window.open(`https://wa.me/?text=${encodeURIComponent(mensagem)}`, '_blank', 'noopener');
+      }
+      setAberta(await getProposta(aberta.id).catch(() => aberta));
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Não foi possível gerar o link.');
+    } finally {
+      setGerandoLink(false);
+    }
+  };
+
+  const baixarComprovante = async () => {
+    if (!aberta?.resposta) return;
+    const doc = createComprovantePdf({
+      numero: aberta.numero,
+      clienteNome: aberta.clienteNome,
+      vendedor: aberta.criadoPorNome,
+      moeda: aberta.moeda,
+      resposta: aberta.resposta,
+      settings,
+    });
+    await saveOrSharePdf(
+      doc,
+      `comprovante-${formatNumeroProposta(aberta.numero)}.pdf`,
+      'Comprovante da proposta'
+    );
+  };
 
   const carregar = useCallback(async () => {
     setLoading(true);
@@ -463,6 +516,80 @@ export default function PropostasPanel({ currentUser, settings, reloadKey }: Pro
                 {aberta.observacoes ? ` · Observações: ${aberta.observacoes}` : ''}
               </p>
 
+              {/* Resposta do cliente pelo link */}
+              {aberta.resposta ? (
+                <div
+                  className={`rounded-xl border p-4 text-sm ${
+                    aberta.resposta.tipo === 'aceite'
+                      ? 'border-blue-200 bg-blue-50 text-blue-900'
+                      : 'border-red-200 bg-red-50 text-red-900'
+                  }`}
+                >
+                  <p className="font-bold">
+                    {aberta.resposta.tipo === 'aceite'
+                      ? 'Aceita pelo cliente'
+                      : 'Recusada pelo cliente'}{' '}
+                    em {new Date(aberta.resposta.respondidoEm).toLocaleString('pt-BR')}
+                  </p>
+                  {aberta.resposta.tipo === 'aceite' ? (
+                    <ul className="mt-2 space-y-1">
+                      {aberta.resposta.itens.map((item) => (
+                        <li key={item.id} className="flex justify-between gap-3">
+                          <span>{item.nome}</span>
+                          <b className="tabular-nums">
+                            {item.quantidade.toLocaleString('pt-BR')} t ·{' '}
+                            {moedaProposta(item.quantidade * item.precoTonelada, aberta.moeda)}
+                          </b>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    aberta.resposta.motivo && (
+                      <p className="mt-1">Motivo: {aberta.resposta.motivo}</p>
+                    )
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void baixarComprovante()}
+                    className="mt-3 inline-flex h-10 items-center gap-2 rounded-xl bg-white px-3 text-sm font-bold text-stone-700 ring-1 ring-stone-200 hover:bg-stone-50"
+                  >
+                    <Download className="h-4 w-4" /> Comprovante (PDF)
+                  </button>
+                </div>
+              ) : (
+                situacaoAberta === 'vigente' &&
+                permissoes.criar && (
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                    <p className="text-sm font-bold text-emerald-900">Enviar para o cliente</p>
+                    <p className="text-xs text-emerald-800">
+                      O cliente abre o link, escolhe produtos e quantidades e aceita ou recusa com o
+                      CPF/CNPJ.
+                      {aberta.linkAbertoEm
+                        ? ` Aberto pelo cliente em ${new Date(aberta.linkAbertoEm).toLocaleString('pt-BR')}.`
+                        : ''}
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={gerandoLink}
+                        onClick={() => void enviarLink('copiar')}
+                        className="inline-flex h-10 items-center gap-2 rounded-xl bg-white px-3 text-sm font-bold text-emerald-800 ring-1 ring-emerald-200 hover:bg-emerald-100 disabled:opacity-60"
+                      >
+                        <Copy className="h-4 w-4" /> Copiar link
+                      </button>
+                      <button
+                        type="button"
+                        disabled={gerandoLink}
+                        onClick={() => void enviarLink('whatsapp')}
+                        className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-600 px-3 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-60"
+                      >
+                        <MessageCircle className="h-4 w-4" /> Enviar no WhatsApp
+                      </button>
+                    </div>
+                  </div>
+                )
+              )}
+
               {/* Alterar validade / cancelar */}
               {acao && (
                 <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
@@ -542,6 +669,18 @@ export default function PropostasPanel({ currentUser, settings, reloadKey }: Pro
             </div>
 
             <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-stone-200 bg-white p-4">
+              {aberta.status === 'aceita' && onGerarPrecificacao && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onGerarPrecificacao(aberta);
+                    setAberta(null);
+                  }}
+                  className="mr-auto inline-flex h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-bold text-white hover:bg-blue-700"
+                >
+                  <Calculator className="h-4 w-4" /> Gerar precificação
+                </button>
+              )}
               {situacaoAberta === 'vigente' && permissoes.editar && (
                 <button
                   type="button"
