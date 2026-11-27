@@ -35,6 +35,7 @@ export interface Notification {
   title: string;
   message: string;
   action_url?: string;
+  data_id?: string;
   is_read: boolean;
   created_at: string;
   metadata?: NotificationPayload;

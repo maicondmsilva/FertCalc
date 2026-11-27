@@ -673,6 +673,8 @@ export interface Notification {
     | 'pricing_transfer'
     | 'pricing_deletion_request';
   dataId?: string;
+  /** Página aberta ao clicar no aviso; sem ele, vale o padrão do tipo. */
+  actionUrl?: string;
 }
 
 export interface NavItem {

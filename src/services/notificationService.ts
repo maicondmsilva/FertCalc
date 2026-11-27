@@ -129,7 +129,7 @@ export const notifyPricingCreated = async (pricing: PricingRecord, vendedor: Use
       group_type: NotificationGroup.PRICING,
       title: 'Nova Precificação',
       message: `${vendedor.name} criou precificação para ${clientName}`,
-      action_url: `/calculator?id=${pricing.id}`,
+      action_url: `/history?pricing=${pricing.id}`,
       metadata: { pricingId: pricing.id },
     });
   }
@@ -146,7 +146,7 @@ export const notifyPricingEdited = async (pricing: PricingRecord, vendedor: User
       group_type: NotificationGroup.PRICING,
       title: 'Precificação Editada',
       message: `Precificação editada por ${vendedor.name} para o cliente ${clientName}`,
-      action_url: `/calculator?id=${pricing.id}`,
+      action_url: `/history?pricing=${pricing.id}`,
       metadata: { pricingId: pricing.id },
     });
   }
@@ -181,7 +181,7 @@ export const notifyTransferInitiated = async (
     group_type: NotificationGroup.TRANSFER,
     title: 'Precificação Transferida',
     message: `Precificação transferida para você por ${currentVendedor.name}`,
-    action_url: `/calculator?id=${pricing.id}`,
+    action_url: `/history?pricing=${pricing.id}`,
     metadata: { pricingId: pricing.id, fromUserId: currentVendedor.id },
   });
 
@@ -194,7 +194,7 @@ export const notifyTransferInitiated = async (
       group_type: NotificationGroup.TRANSFER,
       title: 'Transferência de Precificação',
       message: `${currentVendedor.name} transferiu precificação para ${targetVendorName}`,
-      action_url: `/calculator?id=${pricing.id}`,
+      action_url: `/history?pricing=${pricing.id}`,
       metadata: { pricingId: pricing.id, targetVendorId },
     });
   }
@@ -289,7 +289,7 @@ export const notifyNovoCarregamento = async (
       group_type: NotificationGroup.CARREGAMENTO,
       title: 'Novo Carregamento',
       message: `${solicitanteNome} criou o carregamento ${numeroCarregamento}`,
-      action_url: '/carregamento',
+      action_url: '/carregamento_visao_geral',
       metadata: { numero: numeroCarregamento },
     });
   }
@@ -306,7 +306,7 @@ export const notifyCarregamentoAprovado = async (
     group_type: NotificationGroup.CARREGAMENTO,
     title: 'Carregamento Aprovado',
     message: `Seu carregamento ${numeroCarregamento} foi aprovado por ${aprovadorNome}`,
-    action_url: '/carregamento',
+    action_url: '/carregamento_visao_geral',
     metadata: { numero: numeroCarregamento },
   });
 };
@@ -322,7 +322,7 @@ export const notifyCarregamentoEditado = async (
     group_type: NotificationGroup.CARREGAMENTO,
     title: 'Carregamento Editado',
     message: `Seu carregamento ${numeroCarregamento} foi editado por ${editorNome}`,
-    action_url: '/carregamento',
+    action_url: '/carregamento_visao_geral',
     metadata: { numero: numeroCarregamento },
   });
 };
@@ -339,7 +339,7 @@ export const notifyCarregamentoExcluido = async (
       group_type: NotificationGroup.CARREGAMENTO,
       title: 'Carregamento Excluído',
       message: `O carregamento ${numeroCarregamento} foi excluído por ${exclusorNome}`,
-      action_url: '/carregamento',
+      action_url: '/carregamento_visao_geral',
       metadata: { numero: numeroCarregamento },
     });
   }
@@ -371,7 +371,7 @@ export const notifyCarregamentoEditadoPeloSolicitante = async (
       group_type: NotificationGroup.CARREGAMENTO,
       title: 'Carregamento Editado pelo Solicitante',
       message: `${solicitanteNome} editou o carregamento ${numeroCarregamento}`,
-      action_url: '/carregamento',
+      action_url: '/carregamento_visao_geral',
       metadata: { numero: numeroCarregamento },
     });
   }
@@ -389,7 +389,7 @@ export const notifyCarregamentoExcluidoPeloSolicitante = async (
       group_type: NotificationGroup.CARREGAMENTO,
       title: 'Carregamento Excluído pelo Solicitante',
       message: `${solicitanteNome} excluiu o carregamento ${numeroCarregamento}`,
-      action_url: '/carregamento',
+      action_url: '/carregamento_visao_geral',
       metadata: { numero: numeroCarregamento },
     });
   }

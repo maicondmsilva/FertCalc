@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import type { PriceList, User } from '../../types';
 
 const material = (id: string, price: number, priceUSD?: number) =>
@@ -58,7 +59,11 @@ import SavedFormulas from '../SavedFormulas';
 
 describe('Batidas Salvas: moeda da tabela de preços', () => {
   it('em US$ mostra só as listas que têm preço em dólar', async () => {
-    render(<SavedFormulas currentUser={{ id: 'u1', role: 'user', permissions: {} } as User} />);
+    render(
+      <MemoryRouter>
+        <SavedFormulas currentUser={{ id: 'u1', role: 'user', permissions: {} } as User} />
+      </MemoryRouter>
+    );
     const select = (await screen.findByLabelText(/Tabela de preços/i, {
       selector: 'select',
     })) as HTMLSelectElement;

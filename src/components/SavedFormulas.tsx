@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   getSavedFormulas,
   getPriceLists,
@@ -912,7 +913,16 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
   const [formulas, setFormulas] = useState<SavedFormula[]>([]);
   const [archivedFormulas, setArchivedFormulas] = useState<SavedFormula[]>([]);
   const [view, setView] = useState<'ativas' | 'arquivadas'>('ativas');
-  const [pagina, setPagina] = useState<'batidas' | 'propostas'>('batidas');
+  // Aviso clicado (?aba=propostas&proposta=<id>): abre a aba e a proposta.
+  const location = useLocation();
+  const linkParams = new URLSearchParams(location.search);
+  const propostaDoLink = linkParams.get('proposta');
+  const [pagina, setPagina] = useState<'batidas' | 'propostas'>(
+    linkParams.get('aba') === 'propostas' ? 'propostas' : 'batidas'
+  );
+  useEffect(() => {
+    if (new URLSearchParams(location.search).get('aba') === 'propostas') setPagina('propostas');
+  }, [location.search]);
   const [propostasReloadKey, setPropostasReloadKey] = useState(0);
   const podeVerPropostas = permissoesProposta(currentUser).ver;
   // Precificação a partir de uma proposta aceita pelo cliente.
@@ -1281,6 +1291,7 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
             settings={appSettings}
             reloadKey={propostasReloadKey}
             onGerarPrecificacao={abrirPrecificacaoDaProposta}
+            abrirPropostaId={propostaDoLink}
           />
         ) : (
           <>

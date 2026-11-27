@@ -7,10 +7,7 @@ interface NotificationBellProps {
   onBellClick: () => void;
 }
 
-export const NotificationBell: React.FC<NotificationBellProps> = ({ 
-  unreadCount, 
-  onBellClick 
-}) => {
+export const NotificationBell: React.FC<NotificationBellProps> = ({ unreadCount, onBellClick }) => {
   const controls = useAnimation();
   const [prevCount, setPrevCount] = useState(unreadCount);
 
@@ -19,7 +16,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
       // Animate rotation (wiggle effect) when new notifications arrive
       controls.start({
         rotate: [0, -15, 15, -15, 15, 0],
-        transition: { duration: 0.5 }
+        transition: { duration: 0.5 },
       });
     }
     setPrevCount(unreadCount);
@@ -30,9 +27,9 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
       <motion.div animate={controls}>
         <Bell className="w-6 h-6 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white transition-colors" />
       </motion.div>
-      
+
       {unreadCount > 0 && (
-        <motion.span 
+        <motion.span
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
           className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow"

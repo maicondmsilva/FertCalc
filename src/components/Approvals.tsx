@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { permissoesPedido } from './pedidosVenda/pedidosVendaModel';
 import { logger } from '../utils/logger';
 import { PricingRecord, Goal, User as AppUser, AppSettings } from '../types';
@@ -51,9 +52,18 @@ interface ApprovalsProps {
 export default function Approvals({ currentUser }: ApprovalsProps) {
   const { showSuccess, showError } = useToast();
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
+  // Aviso clicado (?aba=goals, guarantees, deletions): abre direto na aba certa.
+  const location = useLocation();
+  const abaDoLink = new URLSearchParams(location.search).get('aba');
   const [activeTab, setActiveTab] = useState<'pricings' | 'guarantees' | 'goals' | 'deletions'>(
-    'pricings'
+    abaDoLink === 'goals' || abaDoLink === 'guarantees' || abaDoLink === 'deletions'
+      ? abaDoLink
+      : 'pricings'
   );
+  useEffect(() => {
+    if (abaDoLink === 'goals' || abaDoLink === 'guarantees' || abaDoLink === 'deletions')
+      setActiveTab(abaDoLink);
+  }, [abaDoLink]);
   const [allPricings, setAllPricings] = useState<PricingRecord[]>([]);
   const [search, setSearch] = useState('');
   const [onlyDecidable, setOnlyDecidable] = useState(false);

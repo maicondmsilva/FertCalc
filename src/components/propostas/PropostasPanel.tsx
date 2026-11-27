@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   CalendarClock,
@@ -55,6 +55,8 @@ interface PropostasPanelProps {
   reloadKey?: number;
   /** Abre a calculadora preenchida com o que o cliente aceitou. */
   onGerarPrecificacao?: (proposta: Proposta) => void;
+  /** Proposta a abrir assim que a aba carrega (aviso clicado). */
+  abrirPropostaId?: string | null;
 }
 
 const inputClass =
@@ -95,6 +97,7 @@ export default function PropostasPanel({
   settings,
   reloadKey,
   onGerarPrecificacao,
+  abrirPropostaId,
 }: PropostasPanelProps) {
   const { showError, showSuccess } = useToast();
   const permissoes = permissoesProposta(currentUser);
@@ -180,6 +183,14 @@ export default function PropostasPanel({
       setAbrindoId(null);
     }
   };
+  // Aviso clicado: abre a proposta indicada no endereço (uma vez).
+  const abertaDoLinkRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!abrirPropostaId || abertaDoLinkRef.current === abrirPropostaId) return;
+    abertaDoLinkRef.current = abrirPropostaId;
+    void abrir(abrirPropostaId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abrirPropostaId]);
 
   const recarregarAberta = async (id: string) => {
     await carregar();

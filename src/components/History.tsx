@@ -1,6 +1,7 @@
 import { drawCompanyLogo } from '../utils/pdfBranding';
 import { permissoesPedido } from './pedidosVenda/pedidosVendaModel';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { getCompanyDisplayName } from '../utils/companyBranding';
 import { PricingRecord, User as AppUser, AppSettings, Branch, PriceList } from '../types';
 import {
@@ -100,6 +101,19 @@ export default function History({ onEdit, currentUser }: HistoryProps) {
   useEffect(() => {
     loadData();
   }, [currentUser]);
+
+  // Aviso clicado (?pricing=<id>): abre a precificação assim que a lista carrega.
+  const location = useLocation();
+  const openedFromLinkRef = useRef<string | null>(null);
+  useEffect(() => {
+    const id = new URLSearchParams(location.search).get('pricing');
+    if (!id || openedFromLinkRef.current === id || pricings.length === 0) return;
+    const found = pricings.find((pricing) => pricing.id === id);
+    if (found) {
+      openedFromLinkRef.current = id;
+      setSelectedPricing(found);
+    }
+  }, [location.search, pricings]);
 
   useEffect(() => {
     Promise.all([getLocaisAtivos(), getBranches(), getPriceLists()])

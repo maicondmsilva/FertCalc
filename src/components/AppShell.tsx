@@ -164,7 +164,12 @@ export default function AppShell({
         <AnimatePresence>
           {activeToasts.map((toast) => (
             <div key={toast.id} className="pointer-events-auto">
-              <NotificationCard notification={toast} onClose={onRemoveToast} autoClose={true} />
+              <NotificationCard
+                notification={toast}
+                onClose={onRemoveToast}
+                onOpen={(item) => onMarkNotificationRead(item.id)}
+                autoClose={true}
+              />
             </div>
           ))}
         </AnimatePresence>

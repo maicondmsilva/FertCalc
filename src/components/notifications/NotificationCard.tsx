@@ -1,11 +1,24 @@
 import React, { useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { X, CheckCircle, Edit, ArrowRightLeft, Info, Trash2 } from 'lucide-react';
+import {
+  X,
+  CheckCircle,
+  Edit,
+  ArrowRightLeft,
+  Info,
+  Trash2,
+  Truck,
+  ThumbsDown,
+  ClipboardCheck,
+} from 'lucide-react';
+import { notificationTarget } from '../../utils/notificationLinks';
 import { Notification, NotificationType } from '../../types/notification.types';
 
 interface NotificationCardProps {
   notification: Notification;
   onClose: (id: string) => void;
+  /** Ao clicar no card: marcar como lido (o card também fecha). */
+  onOpen?: (notification: Notification) => void;
   autoClose?: boolean;
 }
 
@@ -27,8 +40,10 @@ export function navigateInsideApp(url: string): void {
 export const NotificationCard: React.FC<NotificationCardProps> = ({
   notification,
   onClose,
+  onOpen,
   autoClose = true,
 }) => {
+  const target = notificationTarget(notification);
   useEffect(() => {
     if (autoClose) {
       const timer = setTimeout(() => {
@@ -68,8 +83,36 @@ export const NotificationCard: React.FC<NotificationCardProps> = ({
           icon: <ArrowRightLeft className="w-5 h-5 text-yellow-500" />,
           text: 'text-yellow-800 dark:text-yellow-300',
         };
+      case 'PROPOSTA_ACEITA':
+        return {
+          bg: 'bg-emerald-50 dark:bg-emerald-900/20',
+          border: 'border-emerald-500',
+          icon: <ClipboardCheck className="w-5 h-5 text-emerald-600" />,
+          text: 'text-emerald-800 dark:text-emerald-300',
+        };
+      case 'PROPOSTA_RECUSADA':
+        return {
+          bg: 'bg-red-50 dark:bg-red-900/20',
+          border: 'border-red-500',
+          icon: <ThumbsDown className="w-5 h-5 text-red-500" />,
+          text: 'text-red-800 dark:text-red-300',
+        };
       case NotificationType.SYSTEM_INFO:
       default:
+        if (notification.group_type === 'CARREGAMENTO')
+          return {
+            bg: 'bg-amber-50 dark:bg-amber-900/20',
+            border: 'border-amber-500',
+            icon: <Truck className="w-5 h-5 text-amber-600" />,
+            text: 'text-amber-900 dark:text-amber-300',
+          };
+        if (notification.type === 'pricing_approval' || notification.type === 'goal_approval')
+          return {
+            bg: 'bg-blue-50 dark:bg-blue-900/20',
+            border: 'border-blue-500',
+            icon: <CheckCircle className="w-5 h-5 text-blue-500" />,
+            text: 'text-blue-800 dark:text-blue-300',
+          };
         return {
           bg: 'bg-gray-50 dark:bg-gray-800',
           border: 'border-gray-500',
@@ -82,7 +125,9 @@ export const NotificationCard: React.FC<NotificationCardProps> = ({
   const style = getStyle();
 
   const handleClick = () => {
-    if (notification.action_url) navigateInsideApp(notification.action_url);
+    onOpen?.(notification);
+    onClose(notification.id);
+    if (target) navigateInsideApp(target);
   };
 
   const handleCloseClick = (e: React.MouseEvent) => {
@@ -116,7 +161,7 @@ export const NotificationCard: React.FC<NotificationCardProps> = ({
           <X className="w-4 h-4" />
         </button>
       </div>
-      {notification.action_url && (
+      {target && (
         <div className="mt-2 text-right">
           <span className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline">
             Visualizar
