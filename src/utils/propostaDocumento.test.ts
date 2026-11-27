@@ -150,3 +150,29 @@ describe('vencimento', () => {
     expect(vencimentoComum([venc, ddf])).toBeNull();
   });
 });
+
+describe('assinatura eletrônica no comprovante', () => {
+  it('traz o código de verificação, o resumo e o endereço de conferência', () => {
+    const texto = createComprovantePdf({
+      numero: 5,
+      clienteNome: 'Cliente A',
+      vendedor: 'Maria',
+      moeda: 'BRL',
+      resposta: {
+        tipo: 'aceite',
+        documento: '12345678909',
+        itens: [],
+        valorTotal: 0,
+        toneladasTotal: 0,
+        respondidoEm: '2026-11-27T14:32:00Z',
+        codigoVerificacao: '7694-CBC6-B7F7',
+        hashAssinatura: 'abc123',
+      },
+      urlVerificacao: 'https://app/verificar/7694-CBC6-B7F7',
+    }).output();
+    expect(texto).toContain('ASSINADO ELETRONICAMENTE');
+    expect(texto).toContain('7694-CBC6-B7F7');
+    expect(texto).toContain('abc123');
+    expect(texto).toContain('https://app/verificar/7694-CBC6-B7F7');
+  });
+});

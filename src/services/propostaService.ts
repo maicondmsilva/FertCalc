@@ -73,6 +73,8 @@ export function mapResposta(row: Row): PropostaResposta {
     ip: optStr(row.ip),
     userAgent: optStr(row.user_agent),
     respondidoEm: String(row.respondido_em ?? row.respondidoEm ?? ''),
+    codigoVerificacao: optStr(row.codigo_verificacao ?? row.codigoVerificacao),
+    hashAssinatura: optStr(row.hash_assinatura ?? row.hashAssinatura),
   };
 }
 
@@ -264,4 +266,33 @@ export async function responderProposta(input: {
     p_motivo: input.motivo || null,
   });
   if (error) throw erroProposta(error, 'Não foi possível registrar a resposta.');
+}
+
+/** Endereço público de verificação da assinatura (QR code do comprovante). */
+export const urlVerificacaoAssinatura = (codigo: string, origin: string = window.location.origin) =>
+  `${origin}/verificar/${encodeURIComponent(codigo)}`;
+
+export interface VerificacaoAssinatura {
+  encontrada: boolean;
+  integra?: boolean;
+  empresa?: { nome?: string; logo?: string; mostrarNome?: boolean };
+  codigo?: string;
+  hash?: string;
+  proposta?: string;
+  cliente?: string;
+  documento?: string;
+  resposta?: 'aceite' | 'recusa';
+  respondidoEm?: string;
+  moeda?: 'BRL' | 'USD';
+  valorTotal?: number;
+  toneladas?: number;
+  itens?: Array<{ nome: string; quantidade: number; precoTonelada: number }>;
+}
+
+export async function verificarAssinatura(codigo: string): Promise<VerificacaoAssinatura> {
+  const { data, error } = await supabase.rpc('verificar_assinatura_proposta', {
+    p_codigo: codigo,
+  });
+  if (error) throw erroProposta(error, 'Não foi possível verificar a assinatura.');
+  return (data || { encontrada: false }) as VerificacaoAssinatura;
 }

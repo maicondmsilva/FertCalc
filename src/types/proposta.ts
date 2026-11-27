@@ -71,6 +71,9 @@ export interface PropostaResposta {
   ip?: string;
   userAgent?: string;
   respondidoEm: string;
+  /** Assinatura eletrônica: código público de verificação e resumo SHA-256. */
+  codigoVerificacao?: string;
+  hashAssinatura?: string;
 }
 
 export interface Proposta {

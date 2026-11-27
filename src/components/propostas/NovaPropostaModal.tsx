@@ -58,6 +58,7 @@ import { closeModalOnBackdrop } from '../../utils/modalUtils';
 import { useMyRegions, defaultRegionId } from '../../hooks/useMyRegions';
 import { useToast } from '../Toast';
 import { canCreatePropostas } from './propostaPermissions';
+import { qrDoAceite } from './propostaQr';
 
 interface NovaPropostaModalProps {
   isOpen: boolean;
@@ -388,7 +389,12 @@ export default function NovaPropostaModal({
     const comEscolha = { ...salva, incluirComposicao: comComposicao };
     try {
       if (formato === 'pdf') {
-        const doc = createPropostaPdf({ proposta: comEscolha, itens: salva.itens || [], settings });
+        const doc = createPropostaPdf({
+          proposta: comEscolha,
+          itens: salva.itens || [],
+          settings,
+          qrAceite: await qrDoAceite(salva),
+        });
         await saveOrSharePdf(
           doc,
           `${formatNumeroProposta(salva.numero)}.pdf`,

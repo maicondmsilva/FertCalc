@@ -89,6 +89,8 @@ interface PropostaPdfInput {
   settings?: Pick<AppSettings, 'companyLogo' | 'companyName' | 'showCompanyName'> | null;
   hoje?: string;
   now?: Date;
+  /** QR code (data URL) do link de aceite para o cliente responder pelo celular. */
+  qrAceite?: string;
 }
 
 function desenharMarcaDagua(doc: jsPDF) {
@@ -119,6 +121,7 @@ export function createPropostaPdf({
   settings,
   hoje = hojeIso(),
   now = new Date(),
+  qrAceite,
 }: PropostaPdfInput): jsPDF {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -358,6 +361,39 @@ export function createPropostaPdf({
     doc.setFontSize(8.5);
     doc.setTextColor(...INK);
     doc.text(linhas, margin + 3, cursorY + 16);
+    cursorY += 6 + altura;
+  }
+
+  // QR code do aceite (só para proposta vigente).
+  if (qrAceite && !vencida) {
+    const qrSize = 30;
+    if (cursorY + qrSize + 26 > pageHeight - 18) {
+      doc.addPage();
+      cursorY = 6;
+    }
+    const top = cursorY + 10;
+    doc.setDrawColor(231, 229, 228);
+    doc.roundedRect(margin, top, pageWidth - margin * 2, qrSize + 6, 2, 2, 'S');
+    try {
+      doc.addImage(qrAceite, 'PNG', margin + 3, top + 3, qrSize, qrSize, undefined, 'FAST');
+    } catch {
+      // Sem a imagem, o restante do PDF segue normal.
+    }
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(...BRAND);
+    doc.text('Aceite pelo celular', margin + qrSize + 8, top + 11);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(...INK);
+    doc.text(
+      doc.splitTextToSize(
+        'Aponte a câmera para o QR code, escolha os produtos e as quantidades e confirme com o CPF/CNPJ. A resposta fica registrada com assinatura eletrônica.',
+        pageWidth - margin * 2 - qrSize - 14
+      ) as string[],
+      margin + qrSize + 8,
+      top + 17
+    );
   }
 
   // Rodapé e marca d'água em todas as páginas.
@@ -717,6 +753,13 @@ export async function gerarExcelProposta(
   return (await book.xlsx.writeBuffer()) as ArrayBuffer;
 }
 
+const formatarDocumentoPdf = (doc: string) =>
+  doc.length === 11
+    ? doc.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
+    : doc.length === 14
+      ? doc.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5')
+      : doc;
+
 export interface ComprovanteInput {
   numero: number;
   clienteNome: string;
@@ -725,6 +768,10 @@ export interface ComprovanteInput {
   resposta: import('../types/proposta').PropostaResposta;
   settings?: Pick<AppSettings, 'companyLogo' | 'companyName' | 'showCompanyName'> | null;
   now?: Date;
+  /** QR code (data URL) que abre a página de verificação da assinatura. */
+  qrVerificacao?: string;
+  /** Endereço da página de verificação (impresso junto ao QR code). */
+  urlVerificacao?: string;
 }
 
 /** Comprovante do aceite (ou da recusa) feito pelo cliente pelo link. */
@@ -736,6 +783,8 @@ export function createComprovantePdf({
   resposta,
   settings,
   now = new Date(),
+  qrVerificacao,
+  urlVerificacao,
 }: ComprovanteInput): jsPDF {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -827,10 +876,70 @@ export function createComprovantePdf({
       styles: { fontSize: 9, cellPadding: 2.4, textColor: INK },
       headStyles: { fillColor: BRAND, textColor: 255 },
       footStyles: { fillColor: [245, 245, 244], textColor: INK, fontStyle: 'bold' },
+      didParseCell: (data) => {
+        if (data.section !== 'body' && data.column.index >= 2) data.cell.styles.halign = 'right';
+      },
       columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' } },
     });
     cursorY =
       (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? cursorY;
+  }
+
+  // Bloco de assinatura eletrônica com código de verificação e QR code.
+  if (resposta.codigoVerificacao) {
+    const altura = 46;
+    if (cursorY + altura + 12 > pageHeight - 18) {
+      doc.addPage();
+      cursorY = 10;
+    }
+    const top = cursorY + 8;
+    doc.setFillColor(...BRAND_LIGHT);
+    doc.setDrawColor(187, 222, 200);
+    doc.roundedRect(margin, top, pageWidth - margin * 2, altura, 2, 2, 'FD');
+    const qrSize = 38;
+    const qrX = pageWidth - margin - qrSize - 4;
+    if (qrVerificacao) {
+      try {
+        doc.addImage(qrVerificacao, 'PNG', qrX, top + 4, qrSize, qrSize, undefined, 'FAST');
+      } catch {
+        // Sem a imagem, o código abaixo continua valendo para conferir.
+      }
+    }
+    const textoLargura = qrX - margin - 8;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(...BRAND);
+    doc.text('ASSINADO ELETRONICAMENTE', margin + 4, top + 7);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(...INK);
+    const linhasAssinatura = [
+      `Identificação: CPF/CNPJ ${formatarDocumentoPdf(resposta.documento)}`,
+      `Data e hora: ${Number.isNaN(new Date(resposta.respondidoEm).getTime()) ? '—' : new Date(resposta.respondidoEm).toLocaleString('pt-BR')}${resposta.ip ? ` · IP ${resposta.ip}` : ''}`,
+      `Código de verificação: ${resposta.codigoVerificacao}`,
+    ];
+    linhasAssinatura.forEach((linha, index) => doc.text(linha, margin + 4, top + 13 + index * 4.6));
+    doc.setFontSize(6.5);
+    doc.setTextColor(...MUTED);
+    doc.text(
+      doc.splitTextToSize(
+        `Resumo SHA-256: ${resposta.hashAssinatura || '—'}`,
+        textoLargura
+      ) as string[],
+      margin + 4,
+      top + 28
+    );
+    if (urlVerificacao) {
+      doc.text(
+        doc.splitTextToSize(
+          `Confira a autenticidade em ${urlVerificacao} ou aponte a câmera para o QR code.`,
+          textoLargura
+        ) as string[],
+        margin + 4,
+        top + 37
+      );
+    }
+    cursorY = top + altura;
   }
 
   doc.setFont('helvetica', 'normal');
@@ -838,11 +947,11 @@ export function createComprovantePdf({
   doc.setTextColor(...MUTED);
   doc.text(
     doc.splitTextToSize(
-      'Resposta registrada pelo link enviado ao cliente. Data, hora, IP e aparelho foram gravados no momento da confirmação.',
+      'Resposta registrada pelo link enviado ao cliente. O conteúdo aceito (produtos, quantidades, preços, data, hora, IP e aparelho) foi resumido em SHA-256; qualquer alteração posterior é detectada na verificação.',
       pageWidth - margin * 2
     ) as string[],
     margin,
-    cursorY + 10
+    cursorY + 8
   );
   doc.line(margin, pageHeight - 13, pageWidth - margin, pageHeight - 13);
   doc.text(
