@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import type {
   NovaProposta,
+  PropostaResposta,
   Proposta,
   PropostaComposicaoItem,
   PropostaEvento,
@@ -48,6 +49,30 @@ export function mapProposta(row: Row): Proposta {
     toneladasTotal: num(row.toneladas_total),
     quantidadeItens: contagem?.[0]?.count ?? 0,
     createdAt: String(row.created_at ?? ''),
+    linkAbertoEm: optStr(row.link_aberto_em),
+  };
+}
+
+export function mapResposta(row: Row): PropostaResposta {
+  return {
+    tipo: row.tipo === 'recusa' ? 'recusa' : 'aceite',
+    documento: String(row.documento ?? ''),
+    motivo: optStr(row.motivo),
+    itens: Array.isArray(row.itens)
+      ? (row.itens as Row[]).map((item) => ({
+          id: String(item.id ?? ''),
+          nome: String(item.nome ?? ''),
+          npk: optStr(item.npk),
+          savedFormulaId: optStr(item.savedFormulaId),
+          precoTonelada: num(item.precoTonelada),
+          quantidade: num(item.quantidade),
+        }))
+      : [],
+    valorTotal: num(row.valor_total ?? row.valorTotal),
+    toneladasTotal: num(row.toneladas_total ?? row.toneladasTotal),
+    ip: optStr(row.ip),
+    userAgent: optStr(row.user_agent),
+    respondidoEm: String(row.respondido_em ?? row.respondidoEm ?? ''),
   };
 }
 
@@ -87,7 +112,7 @@ export async function listPropostas(): Promise<Proposta[]> {
 }
 
 export async function getProposta(id: string): Promise<Proposta> {
-  const [cabecalho, itens, eventos] = await Promise.all([
+  const [cabecalho, itens, eventos, resposta] = await Promise.all([
     supabase.from('propostas_precos').select('*').eq('id', id).single(),
     supabase.from('propostas_precos_itens').select('*').eq('proposta_id', id).order('ordem'),
     supabase
@@ -95,6 +120,7 @@ export async function getProposta(id: string): Promise<Proposta> {
       .select('*')
       .eq('proposta_id', id)
       .order('created_at', { ascending: false }),
+    supabase.from('propostas_precos_respostas').select('*').eq('proposta_id', id).maybeSingle(),
   ]);
   if (cabecalho.error || !cabecalho.data)
     throw erroProposta(cabecalho.error, 'Proposta não encontrada.');
@@ -103,6 +129,7 @@ export async function getProposta(id: string): Promise<Proposta> {
   proposta.itens = (itens.data || []).map((row) => mapPropostaItem(row as Row));
   proposta.quantidadeItens = proposta.itens.length;
   proposta.eventos = eventos.error ? [] : (eventos.data || []).map((row) => mapEvento(row as Row));
+  proposta.resposta = resposta.data ? mapResposta(resposta.data as Row) : null;
   return proposta;
 }
 
@@ -158,4 +185,78 @@ export async function cancelarProposta(id: string, motivo: string) {
 /** Registra no histórico que o PDF/Excel foi gerado (falha aqui não impede o arquivo). */
 export async function registrarDocumentoProposta(id: string, formato: 'pdf' | 'excel') {
   await supabase.rpc('registrar_documento_proposta', { p_id: id, p_formato: formato });
+}
+
+/** Endereço público da proposta para o cliente. */
+export const urlPropostaCliente = (token: string, origin: string = window.location.origin) =>
+  `${origin}/proposta/${encodeURIComponent(token)}`;
+
+/** Código do link da proposta (cria na primeira vez). */
+export async function linkProposta(id: string): Promise<string> {
+  const { data, error } = await supabase.rpc('link_proposta', { p_id: id });
+  if (error || !data) throw erroProposta(error, 'Não foi possível gerar o link.');
+  return String(data);
+}
+
+/** Liga a precificação salva à proposta aceita. */
+export async function converterProposta(id: string, pricingId: string) {
+  const { error } = await supabase.rpc('converter_proposta', {
+    p_id: id,
+    p_pricing_id: pricingId,
+  });
+  if (error) throw erroProposta(error, 'Não foi possível ligar a precificação à proposta.');
+}
+
+// ─── Página pública (cliente, sem login) ────────────────────────────────
+
+export interface PropostaPublica {
+  encontrada: boolean;
+  empresa?: { nome?: string; logo?: string; mostrarNome?: boolean };
+  proposta?: {
+    numero: number;
+    clienteNome: string;
+    vendedor: string;
+    localNome?: string;
+    moeda: 'BRL' | 'USD';
+    validaAte: string;
+    observacoes?: string;
+    situacao: string;
+    podeResponder: boolean;
+  };
+  itens?: Array<{
+    id: string;
+    nome: string;
+    npk?: string;
+    embalagem?: string;
+    precoTonelada: number;
+    quantidadeSugerida?: number;
+  }>;
+  resposta?: PropostaResposta | null;
+}
+
+export async function getPropostaPublica(token: string): Promise<PropostaPublica> {
+  const { data, error } = await supabase.rpc('proposta_publica', { p_token: token });
+  if (error) throw erroProposta(error, 'Não foi possível abrir a proposta.');
+  const result = (data || { encontrada: false }) as PropostaPublica & { resposta?: Row | null };
+  return {
+    ...result,
+    resposta: result.resposta ? mapResposta(result.resposta as unknown as Row) : null,
+  };
+}
+
+export async function responderProposta(input: {
+  token: string;
+  tipo: 'aceite' | 'recusa';
+  documento: string;
+  itens: Array<{ id: string; quantidade: number }>;
+  motivo?: string;
+}) {
+  const { error } = await supabase.rpc('responder_proposta', {
+    p_token: input.token,
+    p_tipo: input.tipo,
+    p_documento: input.documento,
+    p_itens: input.itens,
+    p_motivo: input.motivo || null,
+  });
+  if (error) throw erroProposta(error, 'Não foi possível registrar a resposta.');
 }

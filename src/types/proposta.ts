@@ -39,6 +39,28 @@ export interface PropostaEvento {
   createdAt: string;
 }
 
+export interface PropostaRespostaItem {
+  id: string;
+  nome: string;
+  npk?: string;
+  savedFormulaId?: string;
+  precoTonelada: number;
+  quantidade: number;
+}
+
+/** Resposta do cliente pelo link (aceite ou recusa). */
+export interface PropostaResposta {
+  tipo: 'aceite' | 'recusa';
+  documento: string;
+  motivo?: string;
+  itens: PropostaRespostaItem[];
+  valorTotal: number;
+  toneladasTotal: number;
+  ip?: string;
+  userAgent?: string;
+  respondidoEm: string;
+}
+
 export interface Proposta {
   id: string;
   numero: number;
@@ -67,6 +89,8 @@ export interface Proposta {
   createdAt: string;
   itens?: PropostaItem[];
   eventos?: PropostaEvento[];
+  resposta?: PropostaResposta | null;
+  linkAbertoEm?: string;
 }
 
 /** Dados para criar uma proposta (a fotografia dos preços daquele momento). */

@@ -94,7 +94,19 @@ import { getSavedFormulaCompositionKey } from '../utils/savedFormulaWorkflow';
 import { setCalculationBatchSelection } from '../utils/calculationSelection';
 import { getNutrientes } from '../services/nutrientesService';
 
+/** Proposta aceita pelo cliente: vira uma precificação já preenchida. */
+export interface CalculatorProposalDraft {
+  key: string;
+  formulas: Array<{ formula: SavedFormula; tons: number }>;
+  clientId?: string;
+  regionId?: string;
+  loadingLocationId?: string;
+  priceListId?: string;
+  priceListCurrency?: PriceListCurrency;
+}
+
 interface UseCalculatorProps {
+  initialProposal?: CalculatorProposalDraft | null;
   initialData?: PricingRecord | null;
   initialFormulaToLoad?: SavedFormula | null;
   initialBranchId?: string;
@@ -113,6 +125,7 @@ const DEFAULT_LOCAL_NAME = 'CARREGAMENTO UBERABA';
 const PURE_PRODUCT_WEIGHT = 1000;
 
 export function useCalculator({
+  initialProposal,
   initialData,
   initialFormulaToLoad,
   initialBranchId,
@@ -334,6 +347,60 @@ export function useCalculator({
     initialPriceListId,
     initialPriceListCurrency,
   ]);
+
+  // Proposta aceita: uma fórmula por produto aceito, com as toneladas do cliente.
+  useEffect(() => {
+    if (!initialProposal || initialProposal.formulas.length === 0) return;
+    const shared = {
+      local_carregamento_id: initialProposal.loadingLocationId,
+      priceListId: initialProposal.priceListId,
+      priceListCurrency: initialProposal.priceListCurrency,
+      regionId: initialProposal.regionId,
+    };
+    const defined = Object.fromEntries(
+      Object.entries(shared).filter(([, value]) => value !== undefined && value !== '')
+    );
+    setFactors((prev) => ({ ...prev, ...defined }));
+    setCalculations(
+      initialProposal.formulas.map(({ formula, tons }, index) => ({
+        id: `f_${Date.now()}_${index}`,
+        savedFormulaId: formula.id,
+        formula: formula.targetFormula,
+        selected: true,
+        category: formula.category ?? 'all',
+        targetCa: formula.targetCa,
+        targetS: formula.targetS,
+        targetMicros: formula.targetMicros,
+        modo_calculo: DEFAULT_CALCULATION_MODE,
+        produtos_livres: [],
+        factors: { ...factors, ...defined, targetFormula: formula.targetFormula, totalTons: tons },
+        macros: formula.macros,
+        micros: formula.micros,
+      }))
+    );
+    setFormulaProductSelections({});
+    setFormulaProductSnapshots({});
+    // Só quando chega uma proposta nova.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialProposal?.key]);
+
+  const proposalClientApplied = useRef<string | null>(null);
+
+  // Cliente da proposta: aplicado quando a lista de clientes chega.
+  useEffect(() => {
+    if (!initialProposal?.clientId || proposalClientApplied.current === initialProposal.key) return;
+    const client = availableClients.find((item) => item.id === initialProposal.clientId);
+    if (!client) return;
+    proposalClientApplied.current = initialProposal.key;
+    setFactors((prev) => ({ ...prev, client }));
+    setCalculations((current) =>
+      current.map((calculation) => ({
+        ...calculation,
+        factors: { ...calculation.factors, client },
+      }))
+    );
+    setClientSearch(client.name);
+  }, [initialProposal, availableClients]);
 
   useEffect(() => {
     const loadData = async () => {

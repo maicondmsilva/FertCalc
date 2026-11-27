@@ -54,10 +54,12 @@ import {
 import PropostasPanel from './propostas/PropostasPanel';
 import { canCreatePropostas, permissoesProposta } from './propostas/propostaPermissions';
 import {
+  converterProposta,
   criarProposta,
   getProposta,
   registrarDocumentoProposta,
 } from '../services/propostaService';
+import type { CalculatorProposalDraft } from '../hooks/useCalculator';
 import type { NovaProposta, Proposta } from '../types/proposta';
 import {
   VALIDADE_PADRAO_DIAS,
@@ -913,6 +915,11 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
   const [pagina, setPagina] = useState<'batidas' | 'propostas'>('batidas');
   const [propostasReloadKey, setPropostasReloadKey] = useState(0);
   const podeVerPropostas = permissoesProposta(currentUser).ver;
+  // Precificação a partir de uma proposta aceita pelo cliente.
+  const [propostaEmPrecificacao, setPropostaEmPrecificacao] = useState<{
+    proposta: Proposta;
+    draft: CalculatorProposalDraft;
+  } | null>(null);
   const [archivingId, setArchivingId] = useState<string | null>(null);
   const [priceLists, setPriceLists] = useState<PriceList[]>([]);
   const [locais, setLocais] = useState<LocalCarregamento[]>([]);
@@ -1169,6 +1176,44 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
     filteredFormulas.length > 0 &&
     filteredFormulas.every((formula) => selectedFormulas.includes(formula.id));
 
+  const abrirPrecificacaoDaProposta = (proposta: Proposta) => {
+    const aceitos = proposta.resposta?.tipo === 'aceite' ? proposta.resposta.itens : [];
+    const todas = [...formulas, ...archivedFormulas];
+    const encontrados = aceitos
+      .map((item) => ({
+        formula: todas.find((formula) => formula.id === item.savedFormulaId),
+        tons: item.quantidade,
+        nome: item.nome,
+      }))
+      .filter((item) => item.tons > 0);
+    const faltando = encontrados.filter((item) => !item.formula).map((item) => item.nome);
+    const validos = encontrados.filter(
+      (item): item is { formula: SavedFormula; tons: number; nome: string } => Boolean(item.formula)
+    );
+    if (validos.length === 0) {
+      showError('As batidas desta proposta não estão mais disponíveis para precificar.');
+      return;
+    }
+    if (faltando.length > 0) {
+      showError(`Sem a batida cadastrada (ficaram de fora): ${faltando.join(', ')}.`);
+    }
+    setFormulaInEditor(null);
+    setPropostaEmPrecificacao({
+      proposta,
+      draft: {
+        key: `${proposta.id}-${Date.now()}`,
+        formulas: validos.map(({ formula, tons }) => ({ formula, tons })),
+        clientId: proposta.clientId,
+        regionId: proposta.regionId,
+        loadingLocationId: proposta.localCarregamentoId,
+        priceListId: proposta.priceListId,
+        priceListCurrency: proposta.moeda,
+      },
+    });
+    setPagina('batidas');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const openReport = () => {
     if (!selectedLocalId) {
       showError('Selecione o local de carregamento para gerar a proposta.');
@@ -1235,6 +1280,7 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
             currentUser={currentUser}
             settings={appSettings}
             reloadKey={propostasReloadKey}
+            onGerarPrecificacao={abrirPrecificacaoDaProposta}
           />
         ) : (
           <>
@@ -1470,6 +1516,57 @@ export default function SavedFormulas({ currentUser }: SavedFormulasProps) {
                   onSavedFormulaSuccess={() => {
                     setFormulaInEditor(null);
                     void loadData();
+                  }}
+                />
+              </section>
+            )}
+
+            {propostaEmPrecificacao && (
+              <section className="rounded-2xl border-2 border-blue-300 bg-stone-50 p-3 shadow-lg sm:p-5">
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-wider text-blue-700">
+                      Precificação a partir do aceite
+                    </p>
+                    <h3 className="text-lg font-bold text-stone-900">
+                      {formatNumeroProposta(propostaEmPrecificacao.proposta.numero)} ·{' '}
+                      {propostaEmPrecificacao.proposta.clienteNome}
+                    </h3>
+                    <p className="text-sm text-stone-600">
+                      Produtos e quantidades que o cliente aceitou. Calcule, confira e salve a
+                      precificação; ela fica ligada à proposta.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPropostaEmPrecificacao(null)}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm font-bold text-stone-700 hover:bg-stone-100"
+                  >
+                    <X className="h-4 w-4" /> Fechar calculadora
+                  </button>
+                </div>
+                <SimplifiedCalculatorBeta
+                  key={propostaEmPrecificacao.draft.key}
+                  currentUser={currentUser}
+                  embedded
+                  initialProposal={propostaEmPrecificacao.draft}
+                  onSaveSuccess={(record) => {
+                    const { proposta } = propostaEmPrecificacao;
+                    void converterProposta(proposta.id, record.id)
+                      .then(() => {
+                        showSuccess(
+                          `Precificação salva e ligada à ${formatNumeroProposta(proposta.numero)}.`
+                        );
+                        setPropostaEmPrecificacao(null);
+                        setPropostasReloadKey((value) => value + 1);
+                      })
+                      .catch((error: unknown) =>
+                        showError(
+                          error instanceof Error
+                            ? error.message
+                            : 'Precificação salva, mas não foi possível ligar à proposta.'
+                        )
+                      );
                   }}
                 />
               </section>

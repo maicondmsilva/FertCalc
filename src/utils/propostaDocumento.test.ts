@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Proposta, PropostaItem } from '../types/proposta';
 import {
   MARCA_DAGUA_VENCIDA,
+  createComprovantePdf,
   createPropostaPdf,
   gerarExcelProposta,
   planilhaProposta,
@@ -99,5 +100,30 @@ describe('logo e nome da empresa', () => {
     ]);
     const base64 = globalThis.btoa(String.fromCharCode(...header));
     expect(tamanhoLogoExcel(base64)).toEqual({ width: 150, height: 50 });
+  });
+});
+
+describe('comprovante', () => {
+  it('traz o CPF formatado, os produtos aceitos e o total', () => {
+    const texto = createComprovantePdf({
+      numero: 5,
+      clienteNome: 'Cliente A',
+      vendedor: 'Maria',
+      moeda: 'BRL',
+      resposta: {
+        tipo: 'aceite',
+        documento: '12345678909',
+        itens: [{ id: 'i', nome: 'SOJA 04-14-08', precoTonelada: 1000, quantidade: 12.5 }],
+        valorTotal: 12500,
+        toneladasTotal: 12.5,
+        ip: '200.1.2.3',
+        respondidoEm: '2026-11-27T14:32:00Z',
+      },
+      settings: null,
+    }).output();
+    expect(texto).toContain('Comprovante de aceite');
+    expect(texto).toContain('123.456.789-09');
+    expect(texto).toContain('SOJA 04-14-08');
+    expect(texto).toContain('200.1.2.3');
   });
 });

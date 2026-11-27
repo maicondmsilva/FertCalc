@@ -676,3 +676,139 @@ export async function gerarExcelProposta(
 
   return (await book.xlsx.writeBuffer()) as ArrayBuffer;
 }
+
+export interface ComprovanteInput {
+  numero: number;
+  clienteNome: string;
+  vendedor: string;
+  moeda: 'BRL' | 'USD';
+  resposta: import('../types/proposta').PropostaResposta;
+  settings?: Pick<AppSettings, 'companyLogo' | 'companyName' | 'showCompanyName'> | null;
+  now?: Date;
+}
+
+/** Comprovante do aceite (ou da recusa) feito pelo cliente pelo link. */
+export function createComprovantePdf({
+  numero,
+  clienteNome,
+  vendedor,
+  moeda,
+  resposta,
+  settings,
+  now = new Date(),
+}: ComprovanteInput): jsPDF {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 14;
+  const aceite = resposta.tipo === 'aceite';
+
+  doc.setFillColor(...BRAND);
+  doc.rect(0, 0, pageWidth, 30, 'F');
+  let textX = margin;
+  if (settings?.companyLogo) {
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(margin, 6, 40, 18, 2, 2, 'F');
+    const used = drawCompanyLogo(doc, settings, {
+      x: margin + 2,
+      y: 7,
+      maxWidth: 36,
+      maxHeight: 16,
+    });
+    textX = used > 0 ? margin + 46 : margin;
+  }
+  const nomeEmpresa = getCompanyDisplayName(settings ?? undefined);
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.text(
+    aceite ? 'Comprovante de aceite' : 'Comprovante de recusa',
+    textX,
+    nomeEmpresa ? 14 : 17.5
+  );
+  if (nomeEmpresa) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text(nomeEmpresa, textX, 20);
+  }
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(13);
+  doc.text(formatNumeroProposta(numero), pageWidth - margin, 15, { align: 'right' });
+
+  const quando = new Date(resposta.respondidoEm);
+  const linhas: Array<[string, string]> = [
+    ['Cliente', clienteNome],
+    [
+      'CPF/CNPJ informado',
+      resposta.documento.length === 11
+        ? resposta.documento.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
+        : resposta.documento.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5'),
+    ],
+    ['Resposta', aceite ? 'Aceite da proposta' : 'Recusa da proposta'],
+    ['Data e hora', Number.isNaN(quando.getTime()) ? '—' : quando.toLocaleString('pt-BR')],
+    ['Vendedor', vendedor || '—'],
+    ...(resposta.ip ? ([['IP', resposta.ip]] as Array<[string, string]>) : []),
+    ...(resposta.userAgent ? ([['Aparelho', resposta.userAgent]] as Array<[string, string]>) : []),
+    ...(resposta.motivo ? ([['Motivo', resposta.motivo]] as Array<[string, string]>) : []),
+  ];
+  autoTable(doc, {
+    startY: 38,
+    body: linhas,
+    theme: 'plain',
+    margin: { left: margin, right: margin },
+    styles: { fontSize: 9, cellPadding: 1.8, textColor: INK },
+    columnStyles: { 0: { cellWidth: 45, fontStyle: 'bold', textColor: MUTED } },
+  });
+  let cursorY =
+    (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 80;
+
+  if (aceite && resposta.itens.length > 0) {
+    autoTable(doc, {
+      startY: cursorY + 6,
+      head: [['Produto', 'NPK', 'Quantidade', 'Preço/t', 'Total']],
+      body: resposta.itens.map((item) => [
+        item.nome,
+        item.npk || '—',
+        toneladas(item.quantidade),
+        moedaProposta(item.precoTonelada, moeda),
+        moedaProposta(item.precoTonelada * item.quantidade, moeda),
+      ]),
+      foot: [
+        [
+          'Total',
+          '',
+          toneladas(resposta.toneladasTotal),
+          '',
+          moedaProposta(resposta.valorTotal, moeda),
+        ],
+      ],
+      theme: 'striped',
+      margin: { left: margin, right: margin },
+      styles: { fontSize: 9, cellPadding: 2.4, textColor: INK },
+      headStyles: { fillColor: BRAND, textColor: 255 },
+      footStyles: { fillColor: [245, 245, 244], textColor: INK, fontStyle: 'bold' },
+      columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' } },
+    });
+    cursorY =
+      (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? cursorY;
+  }
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(...MUTED);
+  doc.text(
+    doc.splitTextToSize(
+      'Resposta registrada pelo link enviado ao cliente. Data, hora, IP e aparelho foram gravados no momento da confirmação.',
+      pageWidth - margin * 2
+    ) as string[],
+    margin,
+    cursorY + 10
+  );
+  doc.line(margin, pageHeight - 13, pageWidth - margin, pageHeight - 13);
+  doc.text(
+    `${formatNumeroProposta(numero)} · emitido em ${now.toLocaleString('pt-BR')}`,
+    margin,
+    pageHeight - 8
+  );
+  return doc;
+}
