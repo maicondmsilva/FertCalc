@@ -5,12 +5,10 @@ import { screen, fireEvent, waitFor } from '@testing-library/dom';
 import type { Address } from '../../../types';
 
 const lookup = vi.hoisted(() => vi.fn());
-vi.mock('../../../utils/formatters', async (original) => ({
-  ...(await original<typeof import('../../../utils/formatters')>()),
-  lookupCEP: lookup,
-}));
+vi.mock('../../../services/cepService', () => ({ buscarCep: lookup }));
 
 import AddressFields from '../AddressFields';
+import { CepServiceUnavailableError } from '../../../utils/formatters';
 import { emptyAddress } from '../registryModel';
 
 function Harness() {
@@ -44,5 +42,12 @@ describe('AddressFields', () => {
     render(<Harness />);
     fireEvent.change(screen.getByLabelText('CEP'), { target: { value: '00000000' } });
     expect(await screen.findByText(/CEP não encontrado/)).toBeTruthy();
+  });
+
+  it('avisa quando o serviço de CEP não responde', async () => {
+    lookup.mockRejectedValue(new CepServiceUnavailableError());
+    render(<Harness />);
+    fireEvent.change(screen.getByLabelText('CEP'), { target: { value: '75900000' } });
+    await waitFor(() => expect(screen.getByText(/serviço de CEP não respondeu/i)).toBeTruthy());
   });
 });

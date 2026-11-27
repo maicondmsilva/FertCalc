@@ -36,11 +36,34 @@ export const formatCEP = (value: string) => {
   return cleanValue.replace(/(\d{5})(\d{1,3})/, '$1-$2').replace(/(-\d{3})\d+?$/, '$1');
 };
 
+/** Os serviços de CEP não responderam (rede/serviço fora do ar), diferente de "não encontrado". */
+export class CepServiceUnavailableError extends Error {
+  constructor() {
+    super('Serviço de CEP indisponível');
+    this.name = 'CepServiceUnavailableError';
+  }
+}
+
+async function fetchJsonWithTimeout(url: string, timeoutMs = 4000) {
+  const controller = new globalThis.AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) return { answered: response.status < 500, data: null };
+    return { answered: true, data: (await response.json()) as Record<string, unknown> };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Busca direta nos serviços públicos (plano B quando a função do servidor falha).
+ * null = CEP não encontrado; CepServiceUnavailableError = nenhum serviço respondeu.
+ */
 export const lookupCEP = async (cep: string) => {
   const cleanCEP = cep.replace(/\D/g, '');
   if (cleanCEP.length !== 8) return null;
 
-  // Try multiple providers for redundancy
   const providers = [
     {
       url: `https://viacep.com.br/ws/${cleanCEP}/json/`,
@@ -55,28 +78,32 @@ export const lookupCEP = async (cep: string) => {
             },
     },
     {
-      url: `https://cep.awesomeapi.com.br/json/${cleanCEP}`,
-      parse: (data: Record<string, unknown>) => ({
-        street: data.address as string,
-        neighborhood: data.district as string,
-        city: data.city as string,
-        state: data.state as string,
-      }),
+      url: `https://brasilapi.com.br/api/cep/v2/${cleanCEP}`,
+      parse: (data: Record<string, unknown>) =>
+        data.city
+          ? {
+              street: data.street as string,
+              neighborhood: data.neighborhood as string,
+              city: data.city as string,
+              state: data.state as string,
+            }
+          : null,
     },
   ];
 
+  let anyAnswered = false;
   for (const provider of providers) {
     try {
-      const response = await fetch(provider.url);
-      if (!response.ok) continue;
-      const data = await response.json();
-      const result = provider.parse(data);
-      if (result) return result;
+      const { answered, data } = await fetchJsonWithTimeout(provider.url);
+      anyAnswered = anyAnswered || answered;
+      const result = data ? provider.parse(data) : null;
+      if (result?.city) return result;
     } catch (error) {
       logger.warn(`CEP lookup failed for ${provider.url}:`, error);
     }
   }
 
+  if (!anyAnswered) throw new CepServiceUnavailableError();
   return null;
 };
 
