@@ -25,6 +25,8 @@ import {
   StatusCarregamento,
 } from '../../types/carregamento';
 import AcompanhamentoOperacional from './AcompanhamentoOperacional';
+import RegionFilterSelect, { matchesRegionFilter } from '../regions/RegionFilterSelect';
+import { useMyRegions } from '../../hooks/useMyRegions';
 import {
   StatusBadge,
   canEditDeleteCarregamento,
@@ -379,6 +381,10 @@ export function VisaoGeral({
   // Uma lista só, separada por etapa, com busca e paginação.
   const [etapa, setEtapa] = useState<EtapaCarregamento>('pendentes');
   const [busca, setBusca] = useState('');
+  // Região: filtro e nome na busca (o acesso continua por filial).
+  const { all: regioes } = useMyRegions(currentUser);
+  const [regiao, setRegiao] = useState('');
+  const nomeRegiao = (id?: string | null) => regioes.find((r) => r.id === id)?.name;
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(12);
   const porEtapa = useMemo(() => {
@@ -398,6 +404,7 @@ export function VisaoGeral({
     const termo = busca.trim().toLocaleLowerCase('pt-BR');
     return carregamentos.filter((c) => {
       if (atual.status.length > 0 && !atual.status.includes(c.status)) return false;
+      if (!matchesRegionFilter(c.region_id, regiao)) return false;
       if (!termo) return true;
       return [
         c.numero_carregamento,
@@ -407,13 +414,15 @@ export function VisaoGeral({
         c.pedido_produto_nome,
         c.transportadora?.nome,
         c.filial?.nome,
+        nomeRegiao(c.region_id),
       ]
         .filter(Boolean)
         .join(' ')
         .toLocaleLowerCase('pt-BR')
         .includes(termo);
     });
-  }, [carregamentos, etapa, busca]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carregamentos, etapa, busca, regiao, regioes]);
   const totalPages = Math.max(1, Math.ceil(filtrados.length / pageSize));
   const paginaAtual = Math.min(page, totalPages);
   const visiveis = filtrados.slice((paginaAtual - 1) * pageSize, paginaAtual * pageSize);
@@ -499,20 +508,30 @@ export function VisaoGeral({
               </button>
             ))}
           </div>
-          <label className="relative block">
-            <span className="sr-only">Buscar carregamento</span>
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
-            <input
-              type="search"
-              value={busca}
-              onChange={(event) => {
-                setBusca(event.target.value);
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <label className="relative block flex-1">
+              <span className="sr-only">Buscar carregamento</span>
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+              <input
+                type="search"
+                value={busca}
+                onChange={(event) => {
+                  setBusca(event.target.value);
+                  setPage(1);
+                }}
+                placeholder="Número, pedido, cliente, produto, transportadora, filial ou região"
+                className="h-11 w-full rounded-xl border border-stone-300 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+              />
+            </label>
+            <RegionFilterSelect
+              regions={regioes}
+              value={regiao}
+              onChange={(value) => {
+                setRegiao(value);
                 setPage(1);
               }}
-              placeholder="Número, pedido, cliente, produto, transportadora ou filial"
-              className="h-11 w-full rounded-xl border border-stone-300 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
-          </label>
+          </div>
         </div>
         {loading ? (
           <div className="flex justify-center py-12">

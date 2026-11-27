@@ -8,6 +8,7 @@ import ExpenseReport from './ExpenseReport';
 import ExpenseCategoryManager from './ExpenseCategoryManager';
 import { CreditCardExpense } from '../../types/expense.types';
 import { CreditCard } from 'lucide-react';
+import { useMyRegions } from '../../hooks/useMyRegions';
 
 interface ExpenseDashboardProps {
   currentUser: User;
@@ -38,6 +39,8 @@ export default function ExpenseDashboard({
     rejectExpense,
     refetch,
   } = useExpenses(currentUser.id, currentUser.name);
+
+  const { all: regions } = useMyRegions(currentUser);
 
   const monthNames = [
     'Janeiro',
@@ -152,7 +155,12 @@ export default function ExpenseDashboard({
       )}
 
       {view === 'relatorios' && (
-        <ExpenseReport expenses={expenses} budgetStatus={budgetStatus} period={period} />
+        <ExpenseReport
+          expenses={expenses}
+          budgetStatus={budgetStatus}
+          period={period}
+          regions={regions}
+        />
       )}
 
       {view === 'categorias' && (

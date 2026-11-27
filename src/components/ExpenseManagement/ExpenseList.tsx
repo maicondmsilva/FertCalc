@@ -6,6 +6,8 @@ import { useExpensePermissions } from '../../hooks/useExpensePermissions';
 import { useConfirm } from '../../hooks/useConfirm';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { closeModalOnBackdrop } from '../../utils/modalUtils';
+import RegionFilterSelect, { matchesRegionFilter } from '../regions/RegionFilterSelect';
+import { useMyRegions } from '../../hooks/useMyRegions';
 
 interface ExpenseListProps {
   expenses: CreditCardExpense[];
@@ -49,6 +51,8 @@ export default function ExpenseList({
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<ExpenseStatus | ''>('');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [regionFilter, setRegionFilter] = useState('');
+  const { all: regions } = useMyRegions(currentUser);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectObservation, setRejectObservation] = useState('');
 
@@ -62,7 +66,8 @@ export default function ExpenseList({
       (e.cardName && e.cardName.toLowerCase().includes(search.toLowerCase()));
     const matchStatus = !statusFilter || e.status === statusFilter;
     const matchCategory = !categoryFilter || e.categoryId === categoryFilter;
-    return matchSearch && matchStatus && matchCategory;
+    const matchRegion = matchesRegionFilter(e.regionId, regionFilter);
+    return matchSearch && matchStatus && matchCategory && matchRegion;
   });
 
   const handleReject = (id: string) => {
@@ -118,6 +123,12 @@ export default function ExpenseList({
             </option>
           ))}
         </select>
+        <RegionFilterSelect
+          regions={regions}
+          value={regionFilter}
+          onChange={setRegionFilter}
+          className="px-4 py-2.5 border border-stone-200 rounded-xl text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none bg-white"
+        />
       </div>
 
       {/* Table */}

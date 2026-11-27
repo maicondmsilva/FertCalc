@@ -12,6 +12,8 @@ import { TabelaCarregamentos } from './VisaoGeral';
 import { STATUS_LABEL, fmtBRL } from './shared';
 import { getAppSettings } from '../../services/db';
 import { useToast } from '../Toast';
+import type { Region } from '../../types';
+import RegionFilterSelect from '../regions/RegionFilterSelect';
 import {
   CARREGAMENTO_GROUP_LABEL,
   buildCarregamentoSheetRows,
@@ -24,9 +26,11 @@ import {
 export function RelatoriosCarregamento({
   filiais,
   transportadoras,
+  regioes = [],
 }: {
   filiais: Filial[];
   transportadoras: Transportadora[];
+  regioes?: Region[];
 }) {
   const [filtros, setFiltros] = useState<FiltrosRelatorioCarregamento>({});
   const [dados, setDados] = useState<Carregamento[]>([]);
@@ -57,6 +61,9 @@ export function RelatoriosCarregamento({
     const parts = [
       filtros.filial_id
         ? `Filial: ${filiais.find((f) => f.id === filtros.filial_id)?.nome ?? ''}`
+        : '',
+      filtros.region_id
+        ? `Região: ${filtros.region_id === 'none' ? 'Sem região' : (regioes.find((r) => r.id === filtros.region_id)?.name ?? '')}`
         : '',
       filtros.transportadora_id
         ? `Transportadora: ${transportadoras.find((t) => t.id === filtros.transportadora_id)?.nome ?? ''}`
@@ -123,6 +130,17 @@ export function RelatoriosCarregamento({
               ))}
             </select>
           </div>
+          {regioes.length > 0 && (
+            <div>
+              <span className="block text-xs font-bold text-stone-500 uppercase mb-1">Região</span>
+              <RegionFilterSelect
+                regions={regioes}
+                value={filtros.region_id ?? ''}
+                onChange={(value) => setFiltros({ ...filtros, region_id: value || undefined })}
+                className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none bg-white"
+              />
+            </div>
+          )}
           <div>
             <label className="block text-xs font-bold text-stone-500 uppercase mb-1">
               Tipo de Frete
@@ -222,22 +240,24 @@ export function RelatoriosCarregamento({
                 role="radiogroup"
                 aria-label="Agrupar relatório"
               >
-                {(Object.keys(CARREGAMENTO_GROUP_LABEL) as CarregamentoGroupBy[]).map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    role="radio"
-                    aria-checked={groupBy === option}
-                    onClick={() => setGroupBy(option)}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-bold ${
-                      groupBy === option
-                        ? 'bg-white text-stone-900 shadow-sm'
-                        : 'text-stone-500 hover:text-stone-700'
-                    }`}
-                  >
-                    {CARREGAMENTO_GROUP_LABEL[option]}
-                  </button>
-                ))}
+                {(Object.keys(CARREGAMENTO_GROUP_LABEL) as CarregamentoGroupBy[])
+                  .filter((option) => option !== 'regiao' || regioes.length > 0)
+                  .map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      role="radio"
+                      aria-checked={groupBy === option}
+                      onClick={() => setGroupBy(option)}
+                      className={`rounded-lg px-3 py-1.5 text-xs font-bold ${
+                        groupBy === option
+                          ? 'bg-white text-stone-900 shadow-sm'
+                          : 'text-stone-500 hover:text-stone-700'
+                      }`}
+                    >
+                      {CARREGAMENTO_GROUP_LABEL[option]}
+                    </button>
+                  ))}
               </div>
             </div>
             <div className="flex gap-2">

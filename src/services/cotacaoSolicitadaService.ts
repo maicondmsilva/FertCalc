@@ -92,6 +92,7 @@ function mapCotacaoSolicitada(d: Record<string, unknown>): CotacaoSolicitada {
     cotado_em: d.cotado_em as string | undefined,
     aprovado_em: d.aprovado_em as string | undefined,
     validade_ate: (d.validade_ate as string | null | undefined) ?? null,
+    region_id: (d.region_id as string | null) ?? null,
     precificacao_id: d.precificacao_id as string | undefined,
     criado_em: d.criado_em as string,
     atualizado_em: d.atualizado_em as string,

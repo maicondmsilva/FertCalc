@@ -51,6 +51,7 @@ import { ModalNovoCarregamento } from './ModalNovoCarregamento';
 import { RelatoriosCarregamento } from './RelatoriosCarregamento';
 import { TransportadoraManager } from './TransportadoraManager';
 import { VisaoGeral } from './VisaoGeral';
+import { useMyRegions } from '../../hooks/useMyRegions';
 import {
   CarregamentoFormData,
   CarregamentoModuleProps,
@@ -68,6 +69,7 @@ export default function CarregamentoModule({
   const [carregamentos, setCarregamentos] = useState<Carregamento[]>([]);
   const [carregamentosLogistica, setCarregamentosLogistica] = useState<Carregamento[]>([]);
   const [filiais, setFiliais] = useState<Filial[]>([]);
+  const { all: regioesCarregamento } = useMyRegions(currentUser);
   const [transportadoras, setTransportadoras] = useState<Transportadora[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [pedidos, setPedidos] = useState<PedidoVenda[]>([]);
@@ -611,7 +613,11 @@ export default function CarregamentoModule({
       )}
       {view === 'calendario' && <CalendarioCarregamentos currentUser={currentUser} />}
       {view === 'relatorios' && (
-        <RelatoriosCarregamento filiais={filiais} transportadoras={transportadoras} />
+        <RelatoriosCarregamento
+          filiais={filiais}
+          transportadoras={transportadoras}
+          regioes={regioesCarregamento}
+        />
       )}
       {view === 'transportadoras' && (
         <div className="bg-white rounded-xl border border-stone-200 shadow-sm p-5">
